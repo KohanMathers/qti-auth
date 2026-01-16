@@ -1,0 +1,20 @@
+{
+  "name": "qti-auth-worker",
+  "version": "1.0.0",
+  "description": "QTI Auth System - UK Online Safety Act Compliant",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create qti_auth",
+    "db:migrate": "wrangler d1 execute qti_auth --file=./schema.sql",
+    "db:migrate:local": "wrangler d1 execute qti_auth --local --file=./schema.sql",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.22.0"
+  }
+}

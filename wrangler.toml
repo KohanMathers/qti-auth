@@ -1,0 +1,39 @@
+# Wrangler Configuration for QTI Auth System
+name = "qti-auth"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "qti_auth"
+database_id = "fee04853-d8d0-4d7f-9adc-d2f74e18c850"
+
+# Environment variables (set via wrangler secrets)
+# Run these commands:
+# wrangler secret put JWT_SECRET
+# wrangler secret put GOOGLE_CLIENT_ID
+# wrangler secret put GOOGLE_CLIENT_SECRET
+# wrangler secret put GITHUB_CLIENT_ID
+# wrangler secret put GITHUB_CLIENT_SECRET
+# wrangler secret put DISCORD_CLIENT_ID
+# wrangler secret put DISCORD_CLIENT_SECRET
+# wrangler secret put EMAIL_SERVICE_API_KEY
+
+[vars]
+ENVIRONMENT = "production"
+FRONTEND_URL = "https://account.quietterminal.co.uk"
+API_URL = "https://auth.quietterminal.co.uk"
+
+# Rate limiting (optional - use Cloudflare Rate Limiting rules instead)
+# [[unsafe.bindings]]
+# name = "RATE_LIMITER"
+# type = "rate-limit"
+
+# Routes
+[[routes]]
+pattern = "auth.quietterminal.co.uk/*"
+zone_name = "quietterminal.co.uk"
+
+[build]
+command = "npm install"

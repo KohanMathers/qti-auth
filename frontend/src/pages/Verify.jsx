@@ -1,0 +1,124 @@
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+function useQuery() {
+    return new URLSearchParams(useLocation().search);
+}
+
+function Verify({ setUser }) {
+    const query = useQuery();
+    const navigate = useNavigate();
+    const [status, setStatus] = useState('verifying');
+    const [message, setMessage] = useState('Verifying...');
+
+    useEffect(() => {
+        const token = query.get('token');
+
+        if (!token) {
+            setStatus('error');
+            setMessage('No token provided');
+            setTimeout(() => navigate('/login'), 2000);
+            return;
+        }
+
+        // JWT from OAuth starts with 'eyJ', UUID from magic link doesn't
+        if (token.startsWith('eyJ')) {
+            localStorage.setItem('qti_token', token);
+
+            // Fetch full user profile from /me endpoint
+            fetch('https://auth.quietterminal.co.uk/me', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.user && setUser) {
+                        setUser(data.user);
+                    }
+                })
+                .catch(e => {
+                    console.error('Failed to fetch user profile:', e);
+                    // Fallback to JWT decode if /me fails
+                    try {
+                        const payload = JSON.parse(atob(token.split('.')[1]));
+                        if (setUser) {
+                            setUser({
+                                id: payload.user_id,
+                                username: payload.username,
+                                username_original: payload.username,
+                                role: payload.role,
+                                is_child: payload.is_child
+                            });
+                        }
+                    } catch (err) {
+                        console.error('Failed to decode JWT:', err);
+                    }
+                });
+
+            setStatus('success');
+            setMessage('Signed in successfully! Redirecting...');
+            setTimeout(() => navigate('/dashboard'), 1000);
+        } else {
+            // Verify magic link token with backend
+            fetch('https://auth.quietterminal.co.uk/auth/email/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.token) {
+                        localStorage.setItem('qti_token', data.token);
+
+                        // Fetch full user profile from /me endpoint
+                        fetch('https://auth.quietterminal.co.uk/me', {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${data.token}`
+                            }
+                        })
+                            .then(res => res.json())
+                            .then(userData => {
+                                if (userData.user && setUser) {
+                                    setUser(userData.user);
+                                }
+                            })
+                            .catch(e => {
+                                console.error('Failed to fetch user profile:', e);
+                            });
+
+                        setStatus('success');
+                        setMessage('Email verified! Redirecting...');
+                        setTimeout(() => {
+                            if (data.needs_username) {
+                                navigate('/claim-username');
+                            } else {
+                                navigate('/dashboard');
+                            }
+                        }, 1000);
+                    } else {
+                        setStatus('error');
+                        setMessage(data.error || 'Verification failed');
+                    }
+                })
+                .catch(err => {
+                    setStatus('error');
+                    setMessage('Failed to verify. Please try again.');
+                });
+        }
+    }, [query, navigate]);
+
+
+    return (
+        <div className="auth-container">
+            <div className="auth-box">
+                <h1>Verification</h1>
+                <p className={status === 'error' ? 'error-message' : 'message'}>{message}</p>
+            </div>
+        </div>
+    );
+}
+
+export default Verify;
