@@ -3395,46 +3395,6 @@ app.post('/admin/users/:userId/force-reauth', authMiddleware, adminMiddleware, a
   return c.json({ message: 'User sessions revoked, re-authentication required', sessions_revoked: result.meta?.changes || 0 });
 });
 
-// Change user role
-app.post('/admin/users/:userId/role', authMiddleware, adminMiddleware, async (c) => {
-  const admin = c.get('user');
-  const userId = c.req.param('userId');
-  const { role, reason } = await c.req.json();
-  const db = c.env.DB;
-  const ip = getClientIP(c);
-
-  if (!role || !['user', 'admin'].includes(role)) {
-    return c.json({ error: 'Invalid role' }, 400);
-  }
-
-  // Prevent self-demotion
-  if (userId === admin.user_id && role !== 'admin') {
-    return c.json({ error: 'Cannot change your own role' }, 400);
-  }
-
-  // Check user exists
-  const { results: users } = await db.prepare('SELECT id, role FROM users WHERE id = ?').bind(userId).all();
-  if (users.length === 0) {
-    return c.json({ error: 'User not found' }, 404);
-  }
-
-  const oldRole = users[0].role;
-  if (oldRole === role) {
-    return c.json({ error: `User already has role: ${role}` }, 400);
-  }
-
-  // Update role
-  await db.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?').bind(role, now(), userId).run();
-
-  // Log admin action
-  await db.prepare(`
-    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
-    VALUES (?, ?, 'change_role', ?, 'user', ?, ?, ?)
-  `).bind(generateId(), admin.user_id, userId, JSON.stringify({ old_role: oldRole, new_role: role, reason }), ip, now()).run();
-
-  return c.json({ message: `User role changed to ${role}`, old_role: oldRole, new_role: role });
-});
-
 // ============================================================================
 // ADMIN AUDIT LOG ROUTES
 // ============================================================================
