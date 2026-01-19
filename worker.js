@@ -24,6 +24,12 @@ const CONFIG = {
 
   // UK OSA - Report SLA
   REPORT_REVIEW_SLA: 24 * 60 * 60, // 24 hours
+
+  // Session security
+  MAX_SESSIONS_PER_USER: 10, // Limit concurrent sessions per user
+  LEGACY_TOKEN_DEADLINE: 1737331200, // 2025-01-20 00:00:00 UTC - after this, legacy tokens are rejected
+  SECURITY_EVENT_RATE_LIMIT: 10, // Max security events per user per hour
+  SECURITY_ALERT_RATE_LIMIT: 3, // Max security alert emails per user per hour
 };
 
 // Report types aligned with UK OSA priority offences
@@ -180,18 +186,43 @@ async function hashToken(token) {
 // ============================================================================
 
 // Extract /24 subnet from IP address (e.g., "192.168.1.100" -> "192.168.1")
+// For IPv6, extracts /48 subnet properly handling compressed addresses
 function getIPSubnet(ip) {
   if (!ip || ip === 'unknown') return 'unknown';
+
   // Handle IPv4
   const parts = ip.split('.');
   if (parts.length === 4) {
     return parts.slice(0, 3).join('.');
   }
-  // Handle IPv6 - use first 48 bits (3 groups)
-  const ipv6Parts = ip.split(':');
-  if (ipv6Parts.length >= 3) {
-    return ipv6Parts.slice(0, 3).join(':');
+
+  // Handle IPv6 - expand compressed addresses and use first 48 bits (3 groups)
+  // First, check if it's an IPv4-mapped IPv6 address (::ffff:192.168.1.1)
+  if (ip.toLowerCase().startsWith('::ffff:')) {
+    const ipv4Part = ip.substring(7);
+    const ipv4Parts = ipv4Part.split('.');
+    if (ipv4Parts.length === 4) {
+      return ipv4Parts.slice(0, 3).join('.');
+    }
   }
+
+  // Expand compressed IPv6 address
+  let expanded = ip;
+  if (ip.includes('::')) {
+    const [left, right] = ip.split('::');
+    const leftParts = left ? left.split(':') : [];
+    const rightParts = right ? right.split(':') : [];
+    const missing = 8 - leftParts.length - rightParts.length;
+    const middle = Array(missing).fill('0000');
+    expanded = [...leftParts, ...middle, ...rightParts].join(':');
+  }
+
+  // Normalize each group to 4 digits and take first 3 groups for /48
+  const groups = expanded.split(':');
+  if (groups.length >= 3) {
+    return groups.slice(0, 3).map(g => g.padStart(4, '0')).join(':');
+  }
+
   return ip;
 }
 
@@ -354,9 +385,22 @@ function validateSessionFingerprint(session, currentFingerprint) {
   };
 }
 
-// Log security event
+// Log security event with rate limiting to prevent DoS via event flooding
 async function logSecurityEvent(db, eventType, sessionId, userId, ip, country, details) {
   try {
+    // Rate limit security events per user (max 10 per hour)
+    if (userId) {
+      const hourAgo = now() - 3600;
+      const { results } = await db.prepare(
+        'SELECT COUNT(*) as count FROM session_security_events WHERE user_id = ? AND created_at > ?'
+      ).bind(userId, hourAgo).all();
+
+      if (results[0].count >= CONFIG.SECURITY_EVENT_RATE_LIMIT) {
+        console.warn(`Security event rate limit exceeded for user ${userId}`);
+        return; // Skip logging to prevent table bloat
+      }
+    }
+
     await db.prepare(`
       INSERT INTO session_security_events (id, session_id, user_id, event_type, ip_address, ip_country, details, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -366,9 +410,29 @@ async function logSecurityEvent(db, eventType, sessionId, userId, ip, country, d
   }
 }
 
-// Send security alert email (for suspicious activity)
+// Send security alert email (for suspicious activity) with rate limiting
 async function sendSecurityAlert(c, user, eventType, details) {
   if (!c.env.EMAIL_SERVICE_API_KEY || !user.email) return;
+
+  const db = c.env.DB;
+
+  // Rate limit security alert emails per user (max 3 per hour)
+  try {
+    const rateCheck = await checkRateLimit(
+      db,
+      `security_alert:${user.email}`,
+      CONFIG.SECURITY_ALERT_RATE_LIMIT,
+      3600
+    );
+
+    if (!rateCheck.allowed) {
+      console.warn(`Security alert rate limit exceeded for ${user.email}`);
+      return; // Skip sending to prevent email flooding
+    }
+  } catch (e) {
+    console.error('Failed to check security alert rate limit:', e);
+    // Continue anyway - better to potentially spam than miss a real alert
+  }
 
   try {
     await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -472,9 +536,29 @@ async function createSecureSession(c, user, authMethod) {
 
   // Create session record
   const sessionId = generateId();
-  const userAgentHash = fingerprint.userAgent ? await hashToken(fingerprint.userAgent) : null;
+  // Fix: Check fingerprint.userAgent is truthy before hashing
+  const userAgentHash = fingerprint.userAgent
+    ? await hashToken(fingerprint.userAgent)
+    : null;
 
   try {
+    // Enforce session limit per user - delete oldest sessions if at limit
+    const { results: existingSessions } = await db.prepare(`
+      SELECT id FROM user_sessions
+      WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+      ORDER BY created_at ASC
+    `).bind(user.id, now()).all();
+
+    if (existingSessions.length >= CONFIG.MAX_SESSIONS_PER_USER) {
+      // Revoke oldest sessions to make room
+      const sessionsToRevoke = existingSessions.slice(0, existingSessions.length - CONFIG.MAX_SESSIONS_PER_USER + 1);
+      for (const oldSession of sessionsToRevoke) {
+        await db.prepare(
+          'UPDATE user_sessions SET revoked_at = ?, flag_reason = ? WHERE id = ?'
+        ).bind(now(), 'session_limit_exceeded', oldSession.id).run();
+      }
+    }
+
     await db.prepare(`
       INSERT INTO user_sessions (
         id, user_id, token_hash,
@@ -542,19 +626,31 @@ const authMiddleware = async (c, next) => {
 
     const payload = await verify(token, CONFIG.JWT_SECRET);
     const db = c.env.DB;
+    const currentTime = now();
 
     // Look up session by token hash
     const tokenHash = await hashToken(token);
     const { results: sessions } = await db.prepare(
       'SELECT * FROM user_sessions WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?'
-    ).bind(tokenHash, now()).all();
+    ).bind(tokenHash, currentTime).all();
 
     // If no session found, this is a legacy token or session was revoked
     if (sessions.length === 0) {
+      // Check if legacy token deadline has passed
+      if (currentTime > CONFIG.LEGACY_TOKEN_DEADLINE) {
+        return c.json({
+          error: 'Session expired. Please sign in again.',
+          code: 'LEGACY_TOKEN_EXPIRED',
+          requires_reauth: true,
+        }, 401);
+      }
+
       // For backwards compatibility during migration, allow tokens without session records
-      // but flag them for re-auth on next opportunity
+      // but indicate re-auth is needed soon
       c.set('user', payload);
+      c.set('session', null);
       c.set('session_trust', 'legacy');
+      c.set('legacy_reauth_recommended', true);
       await next();
       return;
     }
@@ -574,24 +670,27 @@ const authMiddleware = async (c, next) => {
 
       if (validation.trustLevel === 'suspicious') {
         // Different country - send email alert and block
-        await logSecurityEvent(db, 'country_change', session.id, payload.user_id,
-          currentFingerprint.ip, currentFingerprint.ipCountry, {
+        // Use a single atomic update to prevent race conditions
+        const updateResult = await db.prepare(
+          'UPDATE user_sessions SET revoked_at = ?, trust_level = ?, flag_reason = ? WHERE id = ? AND revoked_at IS NULL'
+        ).bind(currentTime, 'blocked', 'country_mismatch', session.id).run();
+
+        // Only log and send alert if we actually revoked the session (race condition guard)
+        if (updateResult.meta?.changes > 0) {
+          await logSecurityEvent(db, 'country_change', session.id, payload.user_id,
+            currentFingerprint.ip, currentFingerprint.ipCountry, {
+              originalCountry: session.ip_country,
+              newCountry: currentFingerprint.ipCountry,
+              validation: validation.matchDetails,
+            });
+
+          // Send security alert email
+          await sendSecurityAlert(c, user, 'Suspicious login from different country', {
+            ip: currentFingerprint.ip,
+            country: currentFingerprint.ipCountry,
             originalCountry: session.ip_country,
-            newCountry: currentFingerprint.ipCountry,
-            validation: validation.matchDetails,
           });
-
-        // Send security alert email
-        await sendSecurityAlert(c, user, 'Suspicious login from different country', {
-          ip: currentFingerprint.ip,
-          country: currentFingerprint.ipCountry,
-          originalCountry: session.ip_country,
-        });
-
-        // Revoke the session
-        await db.prepare(
-          'UPDATE user_sessions SET revoked_at = ?, trust_level = ?, flag_reason = ? WHERE id = ?'
-        ).bind(now(), 'blocked', 'country_mismatch', session.id).run();
+        }
 
         return c.json({
           error: 'Session blocked due to suspicious activity',
@@ -614,25 +713,23 @@ const authMiddleware = async (c, next) => {
       }, 401);
     }
 
-    // Valid session - update last_active_at
-    await db.prepare(
-      'UPDATE user_sessions SET last_active_at = ? WHERE id = ?'
-    ).bind(now(), session.id).run();
+    // Valid session - update last_active_at and handle partial trust in one query to reduce race conditions
+    if (validation.trustLevel === 'partial' && session.trust_level !== 'partial') {
+      await db.prepare(
+        'UPDATE user_sessions SET last_active_at = ?, trust_level = ?, flagged_at = ?, flag_reason = ? WHERE id = ?'
+      ).bind(currentTime, 'partial', currentTime, validation.reason, session.id).run();
 
-    // If partial match, flag the session but allow
-    if (validation.trustLevel === 'partial') {
-      if (session.trust_level !== 'partial') {
-        await db.prepare(
-          'UPDATE user_sessions SET trust_level = ?, flagged_at = ?, flag_reason = ? WHERE id = ?'
-        ).bind('partial', now(), validation.reason, session.id).run();
-
-        await logSecurityEvent(db, 'ip_change', session.id, payload.user_id,
-          currentFingerprint.ip, currentFingerprint.ipCountry, {
-            originalIP: session.ip_address,
-            newIP: currentFingerprint.ip,
-            validation: validation.matchDetails,
-          });
-      }
+      await logSecurityEvent(db, 'ip_change', session.id, payload.user_id,
+        currentFingerprint.ip, currentFingerprint.ipCountry, {
+          originalIP: session.ip_address,
+          newIP: currentFingerprint.ip,
+          validation: validation.matchDetails,
+        });
+    } else {
+      // Just update last_active_at
+      await db.prepare(
+        'UPDATE user_sessions SET last_active_at = ? WHERE id = ?'
+      ).bind(currentTime, session.id).run();
     }
 
     c.set('user', payload);
@@ -2035,6 +2132,109 @@ app.post('/admin/users/:userId/revoke-sessions', authMiddleware, adminMiddleware
 });
 
 // ============================================================================
+// DATABASE CLEANUP ROUTES
+// ============================================================================
+
+// Cleanup expired/stale data - should be called by a scheduled job (e.g., Cloudflare Cron Trigger)
+// Can also be triggered manually by admins
+app.post('/admin/cleanup', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const currentTime = now();
+  const results = {
+    expired_sessions: 0,
+    old_security_events: 0,
+    expired_oauth_states: 0,
+    expired_oauth_temp: 0,
+    old_rate_limits: 0,
+    expired_email_tokens: 0,
+  };
+
+  try {
+    // 1. Delete expired sessions (keep revoked sessions for audit, but delete truly expired ones after 30 days)
+    const thirtyDaysAgo = currentTime - (30 * 24 * 60 * 60);
+    const expiredSessions = await db.prepare(
+      'DELETE FROM user_sessions WHERE expires_at < ? OR (revoked_at IS NOT NULL AND revoked_at < ?)'
+    ).bind(thirtyDaysAgo, thirtyDaysAgo).run();
+    results.expired_sessions = expiredSessions.meta?.changes || 0;
+
+    // 2. Delete old security events (keep for 90 days for audit)
+    const ninetyDaysAgo = currentTime - (90 * 24 * 60 * 60);
+    const oldEvents = await db.prepare(
+      'DELETE FROM session_security_events WHERE created_at < ?'
+    ).bind(ninetyDaysAgo).run();
+    results.old_security_events = oldEvents.meta?.changes || 0;
+
+    // 3. Delete expired OAuth states (older than 1 hour)
+    const oneHourAgo = currentTime - 3600;
+    const expiredOauthStates = await db.prepare(
+      'DELETE FROM oauth_states WHERE created_at < ?'
+    ).bind(oneHourAgo).run();
+    results.expired_oauth_states = expiredOauthStates.meta?.changes || 0;
+
+    // 4. Delete expired OAuth temp data (older than 1 hour)
+    const expiredOauthTemp = await db.prepare(
+      'DELETE FROM oauth_temp WHERE created_at < ?'
+    ).bind(oneHourAgo).run();
+    results.expired_oauth_temp = expiredOauthTemp.meta?.changes || 0;
+
+    // 5. Delete old rate limit entries (older than 24 hours)
+    const oneDayAgo = currentTime - (24 * 60 * 60);
+    const oldRateLimits = await db.prepare(
+      'DELETE FROM mail_rate_limits WHERE timestamp < ?'
+    ).bind(oneDayAgo).run();
+    results.old_rate_limits = oldRateLimits.meta?.changes || 0;
+
+    // 6. Delete expired email tokens (older than 24 hours - they expire after 15 min but keep for debugging)
+    const expiredEmailTokens = await db.prepare(
+      'DELETE FROM email_tokens WHERE expires_at < ?'
+    ).bind(oneDayAgo).run();
+    results.expired_email_tokens = expiredEmailTokens.meta?.changes || 0;
+
+  } catch (e) {
+    console.error('Cleanup error:', e);
+    return c.json({ error: 'Cleanup failed', details: e.message }, 500);
+  }
+
+  return c.json({
+    message: 'Cleanup completed',
+    deleted: results,
+    timestamp: currentTime,
+  });
+});
+
+// Scheduled cleanup handler for Cloudflare Cron Triggers
+// Add to wrangler.toml: [triggers] crons = ["0 3 * * *"]  # Run at 3 AM daily
+async function handleScheduled(event, env, ctx) {
+  const db = env.DB;
+  const currentTime = Math.floor(Date.now() / 1000);
+
+  try {
+    // Same cleanup logic as the admin endpoint
+    const thirtyDaysAgo = currentTime - (30 * 24 * 60 * 60);
+    await db.prepare(
+      'DELETE FROM user_sessions WHERE expires_at < ? OR (revoked_at IS NOT NULL AND revoked_at < ?)'
+    ).bind(thirtyDaysAgo, thirtyDaysAgo).run();
+
+    const ninetyDaysAgo = currentTime - (90 * 24 * 60 * 60);
+    await db.prepare(
+      'DELETE FROM session_security_events WHERE created_at < ?'
+    ).bind(ninetyDaysAgo).run();
+
+    const oneHourAgo = currentTime - 3600;
+    await db.prepare('DELETE FROM oauth_states WHERE created_at < ?').bind(oneHourAgo).run();
+    await db.prepare('DELETE FROM oauth_temp WHERE created_at < ?').bind(oneHourAgo).run();
+
+    const oneDayAgo = currentTime - (24 * 60 * 60);
+    await db.prepare('DELETE FROM mail_rate_limits WHERE timestamp < ?').bind(oneDayAgo).run();
+    await db.prepare('DELETE FROM email_tokens WHERE expires_at < ?').bind(oneDayAgo).run();
+
+    console.log('Scheduled cleanup completed successfully');
+  } catch (e) {
+    console.error('Scheduled cleanup failed:', e);
+  }
+}
+
+// ============================================================================
 // GAME STATS ROUTES
 // ============================================================================
 
@@ -2849,4 +3049,7 @@ app.get('/health', (c) => {
 // EXPORT
 // ============================================================================
 
-export default app;
+export default {
+  fetch: app.fetch,
+  scheduled: handleScheduled,
+};

@@ -126,6 +126,8 @@ CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions(token_h
 CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_ip ON user_sessions(ip_address);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_trust ON user_sessions(trust_level);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_revoked ON user_sessions(revoked_at);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user_active ON user_sessions(user_id, revoked_at, expires_at);
 
 -- Session security events (audit trail)
 CREATE TABLE IF NOT EXISTS session_security_events (
