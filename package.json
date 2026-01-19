@@ -1,7 +1,7 @@
 {
   "name": "qti-auth-worker",
   "version": "1.0.0",
-  "description": "QTI Auth System - UK Online Safety Act Compliant",
+  "description": "QTI Auth System - Serverless authentication for QTI Games",
   "private": true,
   "scripts": {
     "dev": "wrangler dev",

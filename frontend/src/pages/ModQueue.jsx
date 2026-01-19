@@ -313,12 +313,12 @@ function ModQueue({ user }) {
               </form>
 
               <div className="compliance-note">
-                <p><strong>UK OSA Compliance:</strong></p>
+                <p><strong>Moderation Guidelines:</strong></p>
                 <ul>
-                  <li>Reports must be reviewed within 24 hours</li>
-                  <li>All actions are logged for Ofcom audit</li>
+                  <li>Reports should be reviewed within 24 hours</li>
+                  <li>All actions are logged for audit purposes</li>
                   <li>Urgent/high priority reports take precedence</li>
-                  <li>Document reasoning for compliance purposes</li>
+                  <li>Document reasoning for each action taken</li>
                 </ul>
               </div>
             </>

@@ -42,7 +42,7 @@ function Terms() {
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>2.2 Age Verification</h3>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              We verify your age at registration to comply with the UK Online Safety Act. If you are under 18:
+              We verify your age at registration. If you are under 18:
             </p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
               <li>Your account will be flagged as a child account</li>
@@ -306,7 +306,7 @@ function Terms() {
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
               <li>Provide and improve our Services</li>
               <li>Enforce these Terms and Community Guidelines</li>
-              <li>Comply with legal obligations (UK Online Safety Act, GDPR)</li>
+              <li>Comply with legal obligations (GDPR and applicable laws)</li>
               <li>Prevent fraud and abuse</li>
               <li>Communicate with you about the Services</li>
             </ul>
@@ -493,16 +493,16 @@ function Terms() {
           <section style={{ marginBottom: '2rem' }}>
             <h2 style={{ fontSize: '1.4rem', marginBottom: '1rem', color: 'var(--primary)' }}>15. Specific Legal Notices</h2>
 
-            <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>15.1 UK Online Safety Act Compliance</h3>
+            <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>15.1 Safety Measures</h3>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              These Terms are designed to comply with the UK Online Safety Act 2023. We:
+              We implement the following safety measures:
             </p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
-              <li>Verify user ages at registration</li>
-              <li>Provide enhanced protections for child users</li>
-              <li>Maintain systems to detect and remove illegal content</li>
-              <li>Review user reports within 24 hours</li>
-              <li>Maintain audit logs for regulatory compliance</li>
+              <li>Age verification at registration</li>
+              <li>Enhanced protections for child users</li>
+              <li>Systems to detect and remove harmful content</li>
+              <li>Timely review of user reports</li>
+              <li>Comprehensive audit logs</li>
             </ul>
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>15.2 GDPR Compliance</h3>

@@ -1,5 +1,11 @@
-// QTI Auth Worker - UK OSA Compliant
-// Cloudflare Workers + D1
+/**
+ * QTI Auth Worker
+ * Cloudflare Workers + D1 API
+ *
+ * Serverless authentication API for QTI Games.
+ * Handles user authentication, session management, content moderation,
+ * game statistics, and Minecraft account linking.
+ */
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -22,8 +28,7 @@ const CONFIG = {
   MAX_USERNAME_CHANGES_PER_YEAR: 3,
   ADMIN_PREFIX: 'QTI_',
 
-  // UK OSA - Report SLA
-  REPORT_REVIEW_SLA: 24 * 60 * 60, // 24 hours
+  REPORT_REVIEW_SLA: 24 * 60 * 60,
 
   // Session security
   MAX_SESSIONS_PER_USER: 10, // Limit concurrent sessions per user
@@ -32,7 +37,6 @@ const CONFIG = {
   SECURITY_ALERT_RATE_LIMIT: 3, // Max security alert emails per user per hour
 };
 
-// Report types aligned with UK OSA priority offences
 const REPORT_TYPES = {
   ILLEGAL_CONTENT: 'illegal_content',
   HARMFUL_TO_CHILD: 'harmful_to_child',
@@ -1724,7 +1728,7 @@ app.post('/logout', authMiddleware, async (c) => {
 });
 
 // ============================================================================
-// REPORTING ROUTES (UK OSA COMPLIANCE)
+// REPORTING ROUTES
 // ============================================================================
 
 app.post('/report/user', authMiddleware, async (c) => {

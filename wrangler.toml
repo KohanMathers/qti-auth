@@ -37,3 +37,6 @@ zone_name = "quietterminal.co.uk"
 
 [build]
 command = "npm install"
+
+[triggers]
+crons = ["0 *3 * * *"]
