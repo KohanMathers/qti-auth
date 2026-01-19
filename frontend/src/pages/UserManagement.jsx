@@ -333,7 +333,7 @@ function UserManagement({ user }) {
                   </div>
                 </div>
 
-                {userDetails.user.is_banned && (
+                {!!userDetails.user.is_banned && (
                   <div className="detail-section warning-section">
                     <h3>Ban Information</h3>
                     <div className="detail-grid">
@@ -349,7 +349,7 @@ function UserManagement({ user }) {
                   </div>
                 )}
 
-                {userDetails.user.is_locked && (
+                {!!userDetails.user.is_locked && (
                   <div className="detail-section warning-section">
                     <h3>Lock Information</h3>
                     <div className="detail-grid">
@@ -388,7 +388,7 @@ function UserManagement({ user }) {
                           <div className="history-body">
                             <p><strong>By:</strong> {action.moderator_username || 'System'}</p>
                             <p><strong>Reason:</strong> {action.reason}</p>
-                            {action.duration && (
+                            {!!action.duration && (
                               <p><strong>Duration:</strong> {Math.round(action.duration / 86400)} days</p>
                             )}
                           </div>
@@ -403,7 +403,7 @@ function UserManagement({ user }) {
                 <div className="action-section">
                   <h3>Actions</h3>
                   <div className="action-buttons-grid">
-                    {!userDetails.user.is_banned && !userDetails.user.is_locked && (
+                    {userDetails.user.role !== 'admin' && !userDetails.user.is_banned && !userDetails.user.is_locked && (
                       <>
                         <button
                           className="btn-danger"
@@ -419,7 +419,7 @@ function UserManagement({ user }) {
                         </button>
                       </>
                     )}
-                    {userDetails.user.is_banned && (
+                    {userDetails.user.role !== 'admin' && !!userDetails.user.is_banned && (
                       <button
                         className="btn-success"
                         onClick={() => setActionModal('unban')}
@@ -427,7 +427,7 @@ function UserManagement({ user }) {
                         Unban User
                       </button>
                     )}
-                    {userDetails.user.is_locked && (
+                    {userDetails.user.role !== 'admin' && !!userDetails.user.is_locked && (
                       <button
                         className="btn-success"
                         onClick={() => setActionModal('unlock')}
@@ -435,12 +435,14 @@ function UserManagement({ user }) {
                         Unlock Account
                       </button>
                     )}
-                    <button
-                      className="btn-secondary"
-                      onClick={handleForceReauth}
-                    >
-                      Force Re-auth
-                    </button>
+                    {userDetails.user.role !== 'admin' && (
+                      <button
+                        className="btn-secondary"
+                        onClick={handleForceReauth}
+                      >
+                        Force Re-auth
+                      </button>
+                    )}
                   </div>
                 </div>
               </>

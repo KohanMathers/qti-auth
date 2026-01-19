@@ -675,6 +675,42 @@ const authMiddleware = async (c, next) => {
     }
 
     const session = sessions[0];
+
+    // Check if user is banned or locked
+    const { results: userStatus } = await db.prepare(
+      'SELECT is_banned, is_locked, lock_expires_at FROM users WHERE id = ?'
+    ).bind(payload.user_id).all();
+
+    if (userStatus.length > 0) {
+      const currentTime = now();
+      const userRecord = userStatus[0];
+
+      if (userRecord.is_banned) {
+        return c.json({
+          error: 'Your account has been banned',
+          code: 'ACCOUNT_BANNED',
+          requires_reauth: false,
+        }, 403);
+      }
+
+      if (userRecord.is_locked) {
+        // Check if lock has expired
+        if (userRecord.lock_expires_at && userRecord.lock_expires_at <= currentTime) {
+          // Lock expired, clear it
+          await db.prepare(
+            'UPDATE users SET is_locked = 0, lock_reason = NULL, locked_at = NULL, locked_by = NULL, lock_expires_at = NULL WHERE id = ?'
+          ).bind(payload.user_id).run();
+        } else {
+          return c.json({
+            error: 'Your account has been temporarily locked',
+            code: 'ACCOUNT_LOCKED',
+            requires_reauth: false,
+            lock_expires_at: userRecord.lock_expires_at,
+          }, 403);
+        }
+      }
+    }
+
     const currentFingerprint = collectFingerprint(c);
 
     // Validate fingerprint
@@ -1044,6 +1080,36 @@ app.get('/auth/oauth/callback', async (c) => {
   let user = results[0];
 
   if (user) {
+    // Check if user is banned or locked
+    if (user.is_banned) {
+      const accept = c.req.header('accept') || '';
+      const frontendUrl = c.env.FRONTEND_URL || 'https://account.quietterminal.co.uk';
+      if (accept.includes('text/html')) {
+        return c.redirect(`${frontendUrl}/login?error=account_banned`);
+      }
+      return c.json({ error: 'Your account has been banned' }, 403);
+    }
+
+    if (user.is_locked) {
+      const currentTime = now();
+      if (user.lock_expires_at && user.lock_expires_at <= currentTime) {
+        // Lock expired, clear it
+        await db.prepare(
+          'UPDATE users SET is_locked = 0, lock_reason = NULL, locked_at = NULL, locked_by = NULL, lock_expires_at = NULL WHERE id = ?'
+        ).bind(user.id).run();
+      } else {
+        const accept = c.req.header('accept') || '';
+        const frontendUrl = c.env.FRONTEND_URL || 'https://account.quietterminal.co.uk';
+        if (accept.includes('text/html')) {
+          return c.redirect(`${frontendUrl}/login?error=account_locked`);
+        }
+        return c.json({
+          error: 'Your account has been temporarily locked',
+          lock_expires_at: user.lock_expires_at,
+        }, 403);
+      }
+    }
+
     // Existing user - update last login
     await db.prepare(
       'UPDATE users SET updated_at = ? WHERE id = ?'
@@ -1408,6 +1474,26 @@ app.post('/auth/email/verify', async (c) => {
 
   if (users.length > 0) {
     user = users[0];
+
+    // Check if user is banned or locked
+    if (user.is_banned) {
+      return c.json({ error: 'Your account has been banned' }, 403);
+    }
+
+    if (user.is_locked) {
+      const currentTime = now();
+      if (user.lock_expires_at && user.lock_expires_at <= currentTime) {
+        // Lock expired, clear it
+        await db.prepare(
+          'UPDATE users SET is_locked = 0, lock_reason = NULL, locked_at = NULL, locked_by = NULL, lock_expires_at = NULL WHERE id = ?'
+        ).bind(user.id).run();
+      } else {
+        return c.json({
+          error: 'Your account has been temporarily locked',
+          lock_expires_at: user.lock_expires_at,
+        }, 403);
+      }
+    }
   } else {
     // Create new user
     const userId = generateId();
