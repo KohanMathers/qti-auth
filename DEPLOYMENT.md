@@ -121,6 +121,8 @@ npm run build
 wrangler pages deploy dist --project-name=qti-auth-frontend
 ```
 
+**Note: You MUST use `--project-name=qti-auth-frontend` or Cloudflare refuses to deploy the project** (the root `wrangler.toml` is configured for Workers and conflicts with Pages deployment).
+
 ---
 
 ## Step 5: Custom Domains

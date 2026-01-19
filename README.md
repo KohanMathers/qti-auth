@@ -63,6 +63,7 @@ cd frontend
 npm install
 npm run build
 wrangler pages deploy dist --project-name=qti-auth-frontend
+# Note: You MUST use --project-name=qti-auth-frontend or Cloudflare refuses to deploy the project
 ```
 
 ## Project Structure
