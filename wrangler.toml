@@ -45,3 +45,20 @@ crons = ["0 3 * * *"]
 [observability.logs]
 enabled = true
 invocation_logs = true
+
+[env.staging]
+name = "qti-auth-staging"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "qti_auth_staging"
+database_id = "f6c3bfa5-8c24-460a-9480-870d23c1cd96"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+FRONTEND_URL = "https://account-staging.quietterminal.co.uk"
+API_URL = "https://auth-staging.quietterminal.co.uk"
+
+[[env.staging.routes]]
+pattern = "auth-staging.quietterminal.co.uk/*"
+zone_name = "quietterminal.co.uk"

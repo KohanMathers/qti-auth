@@ -32,7 +32,7 @@ function Verify({ setUser }) {
             localStorage.setItem('qti_token', token);
 
             // Fetch full user profile from /me endpoint
-            fetch('https://auth.quietterminal.co.uk/me', {
+            fetch(`${import.meta.env.VITE_API_URL}/me`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -68,7 +68,7 @@ function Verify({ setUser }) {
             setTimeout(() => navigate('/dashboard'), 1000);
         } else {
             // Verify magic link token with backend
-            fetch('https://auth.quietterminal.co.uk/auth/email/verify', {
+            fetch(`${import.meta.env.VITE_API_URL}/auth/email/verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token })
@@ -79,7 +79,7 @@ function Verify({ setUser }) {
                         localStorage.setItem('qti_token', data.token);
 
                         // Fetch full user profile from /me endpoint
-                        fetch('https://auth.quietterminal.co.uk/me', {
+                        fetch(`${import.meta.env.VITE_API_URL}/me`, {
                             method: 'GET',
                             headers: {
                                 'Authorization': `Bearer ${data.token}`

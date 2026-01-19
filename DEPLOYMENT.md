@@ -281,13 +281,13 @@ SELECT * FROM recent_mod_actions LIMIT 100;
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| "Database not found" | Run migrations: `wrangler d1 execute qti_auth --file=./schema.sql` |
-| OAuth redirect fails | Check redirect URIs in OAuth provider settings |
-| Magic link not arriving | Check email service API key and sending domain |
-| "Unauthorized" errors | Verify JWT_SECRET is set correctly |
-| Worker not deploying | Run `wrangler whoami` to verify authentication |
+| Issue                   | Solution                                                           |
+| ----------------------- | ------------------------------------------------------------------ |
+| "Database not found"    | Run migrations: `wrangler d1 execute qti_auth --file=./schema.sql` |
+| OAuth redirect fails    | Check redirect URIs in OAuth provider settings                     |
+| Magic link not arriving | Check email service API key and sending domain                     |
+| "Unauthorized" errors   | Verify JWT_SECRET is set correctly                                 |
+| Worker not deploying    | Run `wrangler whoami` to verify authentication                     |
 
 ---
 

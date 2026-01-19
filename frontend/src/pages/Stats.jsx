@@ -27,7 +27,7 @@ function Stats({ user }) {
   const fetchGames = async () => {
     const token = localStorage.getItem('qti_token');
     try {
-      const res = await fetch('https://auth.quietterminal.co.uk/games', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/games`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -43,7 +43,7 @@ function Stats({ user }) {
     const token = localStorage.getItem('qti_token');
     setLoading(true);
     try {
-      const res = await fetch(`https://auth.quietterminal.co.uk/games/${slug}/stats`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/games/${slug}/stats`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
