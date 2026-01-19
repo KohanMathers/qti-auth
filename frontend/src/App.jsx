@@ -5,6 +5,8 @@ import Signup from './pages/Signup';
 import ClaimUsername from './pages/ClaimUsername';
 import Dashboard from './pages/Dashboard';
 import ModQueue from './pages/ModQueue';
+import UserManagement from './pages/UserManagement';
+import AuditLog from './pages/AuditLog';
 import Stats from './pages/Stats';
 import JagSMP from './pages/JagSMP';
 import Privacy from './pages/Privacy';
@@ -84,6 +86,26 @@ function App() {
           element={
             user && user.role === 'admin' ? (
               <ModQueue user={user} />
+            ) : (
+              <Navigate to="/dashboard" />
+            )
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            user && user.role === 'admin' ? (
+              <UserManagement user={user} />
+            ) : (
+              <Navigate to="/dashboard" />
+            )
+          }
+        />
+        <Route
+          path="/admin/audit-logs"
+          element={
+            user && user.role === 'admin' ? (
+              <AuditLog user={user} />
             ) : (
               <Navigate to="/dashboard" />
             )

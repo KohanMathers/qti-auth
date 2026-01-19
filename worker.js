@@ -3059,6 +3059,548 @@ function generateLinkCode() {
 }
 
 // ============================================================================
+// ADMIN USER MANAGEMENT ROUTES
+// ============================================================================
+
+// Get all users with filtering and pagination
+app.get('/admin/users', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const { search, status, role, page = '1', limit = '50' } = c.req.query();
+
+  const pageNum = Math.max(1, parseInt(page));
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+  const offset = (pageNum - 1) * limitNum;
+
+  let whereConditions = [];
+  let params = [];
+
+  if (search) {
+    whereConditions.push('(username_original LIKE ? OR email LIKE ? OR id = ?)');
+    params.push(`%${search}%`, `%${search}%`, search);
+  }
+
+  if (status === 'banned') {
+    whereConditions.push('is_banned = 1');
+  } else if (status === 'locked') {
+    whereConditions.push('is_locked = 1');
+  } else if (status === 'active') {
+    whereConditions.push('is_banned = 0 AND (is_locked = 0 OR is_locked IS NULL)');
+  }
+
+  if (role === 'admin') {
+    whereConditions.push("role = 'admin'");
+  } else if (role === 'user') {
+    whereConditions.push("role = 'user'");
+  }
+
+  const whereClause = whereConditions.length > 0
+    ? 'WHERE ' + whereConditions.join(' AND ')
+    : '';
+
+  // Get total count
+  const countQuery = `SELECT COUNT(*) as count FROM users ${whereClause}`;
+  const { results: countResults } = await db.prepare(countQuery).bind(...params).all();
+  const total = countResults[0].count;
+
+  // Get users
+  const usersQuery = `
+    SELECT id, username_original, email, role, is_child, is_banned, ban_reason, banned_at,
+           is_locked, lock_reason, locked_at, lock_expires_at, created_at, updated_at
+    FROM users
+    ${whereClause}
+    ORDER BY created_at DESC
+    LIMIT ? OFFSET ?
+  `;
+
+  const { results: users } = await db.prepare(usersQuery).bind(...params, limitNum, offset).all();
+
+  return c.json({
+    users,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      total_pages: Math.ceil(total / limitNum)
+    }
+  });
+});
+
+// Get single user details
+app.get('/admin/users/:userId', authMiddleware, adminMiddleware, async (c) => {
+  const userId = c.req.param('userId');
+  const db = c.env.DB;
+
+  // Get user
+  const { results: users } = await db.prepare(`
+    SELECT * FROM users WHERE id = ?
+  `).bind(userId).all();
+
+  if (users.length === 0) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+
+  const user = users[0];
+
+  // Get moderation history
+  const { results: modActions } = await db.prepare(`
+    SELECT ma.*, u.username_original as moderator_username
+    FROM moderation_actions ma
+    LEFT JOIN users u ON ma.moderator_id = u.id
+    WHERE ma.user_id = ?
+    ORDER BY ma.created_at DESC
+    LIMIT 20
+  `).bind(userId).all();
+
+  // Get active sessions count
+  const { results: sessionCount } = await db.prepare(`
+    SELECT COUNT(*) as count FROM user_sessions
+    WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+  `).bind(userId, now()).all();
+
+  // Get reports against this user
+  const { results: reports } = await db.prepare(`
+    SELECT id, report_type, status, priority, created_at
+    FROM user_reports
+    WHERE reported_user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 10
+  `).bind(userId).all();
+
+  // Get reports made by this user
+  const { results: reportsMade } = await db.prepare(`
+    SELECT COUNT(*) as count FROM user_reports WHERE reporter_user_id = ?
+  `).bind(userId).all();
+
+  return c.json({
+    user,
+    moderation_history: modActions,
+    active_sessions: sessionCount[0].count,
+    reports_against: reports,
+    reports_made: reportsMade[0].count
+  });
+});
+
+// Ban a user
+app.post('/admin/users/:userId/ban', authMiddleware, adminMiddleware, async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('userId');
+  const { reason, internal_notes } = await c.req.json();
+  const db = c.env.DB;
+  const ip = getClientIP(c);
+
+  if (!reason) {
+    return c.json({ error: 'Reason is required' }, 400);
+  }
+
+  // Check user exists and isn't already banned
+  const { results: users } = await db.prepare('SELECT id, is_banned FROM users WHERE id = ?').bind(userId).all();
+  if (users.length === 0) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+  if (users[0].is_banned) {
+    return c.json({ error: 'User is already banned' }, 400);
+  }
+
+  // Ban the user
+  await db.prepare(`
+    UPDATE users
+    SET is_banned = 1, ban_reason = ?, banned_at = ?, banned_by = ?
+    WHERE id = ?
+  `).bind(reason, now(), admin.user_id, userId).run();
+
+  // Create moderation action
+  const actionId = generateId();
+  await db.prepare(`
+    INSERT INTO moderation_actions (id, user_id, moderator_id, action_type, reason, internal_notes, created_at)
+    VALUES (?, ?, ?, 'ban', ?, ?, ?)
+  `).bind(actionId, userId, admin.user_id, reason, internal_notes || null, now()).run();
+
+  // Revoke all sessions
+  await db.prepare(`
+    UPDATE user_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL
+  `).bind(now(), userId).run();
+
+  // Log admin action
+  await db.prepare(`
+    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
+    VALUES (?, ?, 'ban_user', ?, 'user', ?, ?, ?)
+  `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason, internal_notes }), ip, now()).run();
+
+  // Update daily stats
+  await db.prepare(`
+    INSERT INTO daily_stats (date, accounts_banned, updated_at)
+    VALUES (date('now'), 1, ?)
+    ON CONFLICT(date) DO UPDATE SET accounts_banned = accounts_banned + 1, updated_at = excluded.updated_at
+  `).bind(now()).run();
+
+  return c.json({ message: 'User banned successfully', action_id: actionId });
+});
+
+// Unban a user
+app.post('/admin/users/:userId/unban', authMiddleware, adminMiddleware, async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('userId');
+  const { reason } = await c.req.json();
+  const db = c.env.DB;
+  const ip = getClientIP(c);
+
+  // Check user exists and is banned
+  const { results: users } = await db.prepare('SELECT id, is_banned FROM users WHERE id = ?').bind(userId).all();
+  if (users.length === 0) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+  if (!users[0].is_banned) {
+    return c.json({ error: 'User is not banned' }, 400);
+  }
+
+  // Unban the user
+  await db.prepare(`
+    UPDATE users SET is_banned = 0, ban_reason = NULL, banned_at = NULL, banned_by = NULL WHERE id = ?
+  `).bind(userId).run();
+
+  // Create moderation action
+  const actionId = generateId();
+  await db.prepare(`
+    INSERT INTO moderation_actions (id, user_id, moderator_id, action_type, reason, created_at)
+    VALUES (?, ?, ?, 'unban', ?, ?)
+  `).bind(actionId, userId, admin.user_id, reason || 'Unbanned by admin', now()).run();
+
+  // Log admin action
+  await db.prepare(`
+    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
+    VALUES (?, ?, 'unban_user', ?, 'user', ?, ?, ?)
+  `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason }), ip, now()).run();
+
+  return c.json({ message: 'User unbanned successfully', action_id: actionId });
+});
+
+// Lock a user account (temporary restriction)
+app.post('/admin/users/:userId/lock', authMiddleware, adminMiddleware, async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('userId');
+  const { reason, duration, internal_notes } = await c.req.json();
+  const db = c.env.DB;
+  const ip = getClientIP(c);
+
+  if (!reason) {
+    return c.json({ error: 'Reason is required' }, 400);
+  }
+
+  // Check user exists
+  const { results: users } = await db.prepare('SELECT id, is_banned, is_locked FROM users WHERE id = ?').bind(userId).all();
+  if (users.length === 0) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+  if (users[0].is_banned) {
+    return c.json({ error: 'User is banned, cannot lock a banned account' }, 400);
+  }
+  if (users[0].is_locked) {
+    return c.json({ error: 'User is already locked' }, 400);
+  }
+
+  // Calculate expiry (duration in seconds, null for indefinite)
+  const expiresAt = duration ? now() + duration : null;
+
+  // Lock the user
+  await db.prepare(`
+    UPDATE users
+    SET is_locked = 1, lock_reason = ?, locked_at = ?, locked_by = ?, lock_expires_at = ?
+    WHERE id = ?
+  `).bind(reason, now(), admin.user_id, expiresAt, userId).run();
+
+  // Create moderation action
+  const actionId = generateId();
+  await db.prepare(`
+    INSERT INTO moderation_actions (id, user_id, moderator_id, action_type, duration, reason, internal_notes, created_at, expires_at)
+    VALUES (?, ?, ?, 'lock', ?, ?, ?, ?, ?)
+  `).bind(actionId, userId, admin.user_id, duration || null, reason, internal_notes || null, now(), expiresAt).run();
+
+  // Revoke all sessions
+  await db.prepare(`
+    UPDATE user_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL
+  `).bind(now(), userId).run();
+
+  // Log admin action
+  await db.prepare(`
+    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
+    VALUES (?, ?, 'lock_user', ?, 'user', ?, ?, ?)
+  `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason, duration, internal_notes }), ip, now()).run();
+
+  return c.json({ message: 'User locked successfully', action_id: actionId, expires_at: expiresAt });
+});
+
+// Unlock a user account
+app.post('/admin/users/:userId/unlock', authMiddleware, adminMiddleware, async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('userId');
+  const { reason } = await c.req.json();
+  const db = c.env.DB;
+  const ip = getClientIP(c);
+
+  // Check user exists and is locked
+  const { results: users } = await db.prepare('SELECT id, is_locked FROM users WHERE id = ?').bind(userId).all();
+  if (users.length === 0) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+  if (!users[0].is_locked) {
+    return c.json({ error: 'User is not locked' }, 400);
+  }
+
+  // Unlock the user
+  await db.prepare(`
+    UPDATE users SET is_locked = 0, lock_reason = NULL, locked_at = NULL, locked_by = NULL, lock_expires_at = NULL WHERE id = ?
+  `).bind(userId).run();
+
+  // Create moderation action
+  const actionId = generateId();
+  await db.prepare(`
+    INSERT INTO moderation_actions (id, user_id, moderator_id, action_type, reason, created_at)
+    VALUES (?, ?, ?, 'unlock', ?, ?)
+  `).bind(actionId, userId, admin.user_id, reason || 'Unlocked by admin', now()).run();
+
+  // Log admin action
+  await db.prepare(`
+    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
+    VALUES (?, ?, 'unlock_user', ?, 'user', ?, ?, ?)
+  `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason }), ip, now()).run();
+
+  return c.json({ message: 'User unlocked successfully', action_id: actionId });
+});
+
+// Force password/session reset (forces user to re-authenticate)
+app.post('/admin/users/:userId/force-reauth', authMiddleware, adminMiddleware, async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('userId');
+  const { reason } = await c.req.json();
+  const db = c.env.DB;
+  const ip = getClientIP(c);
+
+  // Check user exists
+  const { results: users } = await db.prepare('SELECT id FROM users WHERE id = ?').bind(userId).all();
+  if (users.length === 0) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+
+  // Revoke all sessions
+  const result = await db.prepare(`
+    UPDATE user_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL
+  `).bind(now(), userId).run();
+
+  // Log admin action
+  await db.prepare(`
+    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
+    VALUES (?, ?, 'force_reauth', ?, 'user', ?, ?, ?)
+  `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason, sessions_revoked: result.meta?.changes || 0 }), ip, now()).run();
+
+  return c.json({ message: 'User sessions revoked, re-authentication required', sessions_revoked: result.meta?.changes || 0 });
+});
+
+// Change user role
+app.post('/admin/users/:userId/role', authMiddleware, adminMiddleware, async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('userId');
+  const { role, reason } = await c.req.json();
+  const db = c.env.DB;
+  const ip = getClientIP(c);
+
+  if (!role || !['user', 'admin'].includes(role)) {
+    return c.json({ error: 'Invalid role' }, 400);
+  }
+
+  // Prevent self-demotion
+  if (userId === admin.user_id && role !== 'admin') {
+    return c.json({ error: 'Cannot change your own role' }, 400);
+  }
+
+  // Check user exists
+  const { results: users } = await db.prepare('SELECT id, role FROM users WHERE id = ?').bind(userId).all();
+  if (users.length === 0) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+
+  const oldRole = users[0].role;
+  if (oldRole === role) {
+    return c.json({ error: `User already has role: ${role}` }, 400);
+  }
+
+  // Update role
+  await db.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?').bind(role, now(), userId).run();
+
+  // Log admin action
+  await db.prepare(`
+    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
+    VALUES (?, ?, 'change_role', ?, 'user', ?, ?, ?)
+  `).bind(generateId(), admin.user_id, userId, JSON.stringify({ old_role: oldRole, new_role: role, reason }), ip, now()).run();
+
+  return c.json({ message: `User role changed to ${role}`, old_role: oldRole, new_role: role });
+});
+
+// ============================================================================
+// ADMIN AUDIT LOG ROUTES
+// ============================================================================
+
+// Get audit logs with filtering
+app.get('/admin/audit-logs', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const { admin_id, action, target_type, start_date, end_date, page = '1', limit = '50' } = c.req.query();
+
+  const pageNum = Math.max(1, parseInt(page));
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+  const offset = (pageNum - 1) * limitNum;
+
+  let whereConditions = [];
+  let params = [];
+
+  if (admin_id) {
+    whereConditions.push('al.admin_id = ?');
+    params.push(admin_id);
+  }
+
+  if (action) {
+    whereConditions.push('al.action = ?');
+    params.push(action);
+  }
+
+  if (target_type) {
+    whereConditions.push('al.target_type = ?');
+    params.push(target_type);
+  }
+
+  if (start_date) {
+    whereConditions.push('al.created_at >= ?');
+    params.push(Math.floor(new Date(start_date).getTime() / 1000));
+  }
+
+  if (end_date) {
+    whereConditions.push('al.created_at <= ?');
+    params.push(Math.floor(new Date(end_date).getTime() / 1000));
+  }
+
+  const whereClause = whereConditions.length > 0
+    ? 'WHERE ' + whereConditions.join(' AND ')
+    : '';
+
+  // Get total count
+  const countQuery = `SELECT COUNT(*) as count FROM admin_logs al ${whereClause}`;
+  const { results: countResults } = await db.prepare(countQuery).bind(...params).all();
+  const total = countResults[0].count;
+
+  // Get logs with admin username
+  const logsQuery = `
+    SELECT al.*, u.username_original as admin_username, tu.username_original as target_username
+    FROM admin_logs al
+    LEFT JOIN users u ON al.admin_id = u.id
+    LEFT JOIN users tu ON al.target_id = tu.id AND al.target_type = 'user'
+    ${whereClause}
+    ORDER BY al.created_at DESC
+    LIMIT ? OFFSET ?
+  `;
+
+  const { results: logs } = await db.prepare(logsQuery).bind(...params, limitNum, offset).all();
+
+  // Parse JSON details
+  const logsWithParsedDetails = logs.map(log => ({
+    ...log,
+    details: log.details ? JSON.parse(log.details) : null
+  }));
+
+  return c.json({
+    logs: logsWithParsedDetails,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      total_pages: Math.ceil(total / limitNum)
+    }
+  });
+});
+
+// Get list of unique actions for filtering
+app.get('/admin/audit-logs/actions', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+
+  const { results } = await db.prepare('SELECT DISTINCT action FROM admin_logs ORDER BY action').all();
+
+  return c.json({ actions: results.map(r => r.action) });
+});
+
+// Get list of admins for filtering
+app.get('/admin/audit-logs/admins', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+
+  const { results } = await db.prepare(`
+    SELECT DISTINCT u.id, u.username_original
+    FROM admin_logs al
+    JOIN users u ON al.admin_id = u.id
+    ORDER BY u.username_original
+  `).all();
+
+  return c.json({ admins: results });
+});
+
+// Get moderation actions history (separate from admin logs)
+app.get('/admin/moderation-history', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const { user_id, moderator_id, action_type, page = '1', limit = '50' } = c.req.query();
+
+  const pageNum = Math.max(1, parseInt(page));
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+  const offset = (pageNum - 1) * limitNum;
+
+  let whereConditions = [];
+  let params = [];
+
+  if (user_id) {
+    whereConditions.push('ma.user_id = ?');
+    params.push(user_id);
+  }
+
+  if (moderator_id) {
+    whereConditions.push('ma.moderator_id = ?');
+    params.push(moderator_id);
+  }
+
+  if (action_type) {
+    whereConditions.push('ma.action_type = ?');
+    params.push(action_type);
+  }
+
+  const whereClause = whereConditions.length > 0
+    ? 'WHERE ' + whereConditions.join(' AND ')
+    : '';
+
+  // Get total count
+  const countQuery = `SELECT COUNT(*) as count FROM moderation_actions ma ${whereClause}`;
+  const { results: countResults } = await db.prepare(countQuery).bind(...params).all();
+  const total = countResults[0].count;
+
+  // Get actions
+  const actionsQuery = `
+    SELECT ma.*,
+           u.username_original as target_username,
+           m.username_original as moderator_username
+    FROM moderation_actions ma
+    LEFT JOIN users u ON ma.user_id = u.id
+    LEFT JOIN users m ON ma.moderator_id = m.id
+    ${whereClause}
+    ORDER BY ma.created_at DESC
+    LIMIT ? OFFSET ?
+  `;
+
+  const { results: actions } = await db.prepare(actionsQuery).bind(...params, limitNum, offset).all();
+
+  return c.json({
+    actions,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      total_pages: Math.ceil(total / limitNum)
+    }
+  });
+});
+
+// ============================================================================
 // HEALTH CHECK
 // ============================================================================
 

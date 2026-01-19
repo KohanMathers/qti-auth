@@ -91,12 +91,23 @@ function Dashboard({ user, setUser }) {
             JagSMP
           </button>
           {user.role === 'admin' && (
-            <button
-              className={activeTab === 'moderation' ? 'active' : ''}
-              onClick={() => navigate('/mod/queue')}
-            >
-              Moderation Queue
-            </button>
+            <>
+              <button
+                onClick={() => navigate('/mod/queue')}
+              >
+                Mod Queue
+              </button>
+              <button
+                onClick={() => navigate('/admin/users')}
+              >
+                User Management
+              </button>
+              <button
+                onClick={() => navigate('/admin/audit-logs')}
+              >
+                Audit Logs
+              </button>
+            </>
           )}
         </nav>
 
