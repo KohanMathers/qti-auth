@@ -175,6 +175,241 @@ async function hashToken(token) {
     .join('');
 }
 
+// ============================================================================
+// SESSION SECURITY - FINGERPRINTING & VALIDATION
+// ============================================================================
+
+// Extract /24 subnet from IP address (e.g., "192.168.1.100" -> "192.168.1")
+function getIPSubnet(ip) {
+  if (!ip || ip === 'unknown') return 'unknown';
+  // Handle IPv4
+  const parts = ip.split('.');
+  if (parts.length === 4) {
+    return parts.slice(0, 3).join('.');
+  }
+  // Handle IPv6 - use first 48 bits (3 groups)
+  const ipv6Parts = ip.split(':');
+  if (ipv6Parts.length >= 3) {
+    return ipv6Parts.slice(0, 3).join(':');
+  }
+  return ip;
+}
+
+// Collect all available fingerprint data from request
+function collectFingerprint(c) {
+  const fingerprint = {
+    ip: getClientIP(c),
+    ipSubnet: getIPSubnet(getClientIP(c)),
+    ipCountry: c.req.header('cf-ipcountry') || null, // Cloudflare provides this
+    userAgent: c.req.header('user-agent') || null,
+    tlsFingerprint: c.req.header('cf-ja3') || c.req.header('cf-ja4') || null, // Cloudflare JA3/JA4
+    language: c.req.header('accept-language') || null,
+    // These come from client-side fingerprinting (passed in request body/headers)
+    timezone: c.req.header('x-client-timezone') || null,
+    screenResolution: c.req.header('x-client-screen') || null,
+    browserFingerprint: c.req.header('x-browser-fingerprint') || null,
+  };
+  return fingerprint;
+}
+
+// Parse fingerprint data from JSON body (for login requests)
+function parseClientFingerprint(body) {
+  return {
+    timezone: body?.fingerprint?.timezone || null,
+    screenResolution: body?.fingerprint?.screen || null,
+    browserFingerprint: body?.fingerprint?.hash || null,
+  };
+}
+
+// Detect device type from User-Agent
+function detectDeviceType(userAgent) {
+  if (!userAgent) return 'unknown';
+  const ua = userAgent.toLowerCase();
+  if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
+    return 'mobile';
+  }
+  if (ua.includes('tablet') || ua.includes('ipad')) {
+    return 'tablet';
+  }
+  return 'desktop';
+}
+
+// Validate session against current request fingerprint
+// Returns: { valid: boolean, trustLevel: string, reason: string, matchDetails: object }
+function validateSessionFingerprint(session, currentFingerprint) {
+  const matchDetails = {
+    ipMatch: false,
+    ipSubnetMatch: false,
+    userAgentMatch: false,
+    browserFingerprintMatch: false,
+    tlsFingerprintMatch: false,
+    timezoneMatch: false,
+    screenMatch: false,
+    countryMatch: false,
+  };
+
+  // Check IP (strict match)
+  matchDetails.ipMatch = session.ip_address === currentFingerprint.ip;
+
+  // Check IP subnet (/24 - loose match)
+  matchDetails.ipSubnetMatch = session.ip_subnet === currentFingerprint.ipSubnet;
+
+  // Check User-Agent
+  if (session.user_agent && currentFingerprint.userAgent) {
+    matchDetails.userAgentMatch = session.user_agent === currentFingerprint.userAgent;
+  }
+
+  // Check browser fingerprint (canvas, WebGL, fonts hash)
+  if (session.browser_fingerprint && currentFingerprint.browserFingerprint) {
+    matchDetails.browserFingerprintMatch = session.browser_fingerprint === currentFingerprint.browserFingerprint;
+  }
+
+  // Check TLS fingerprint (JA3/JA4)
+  if (session.tls_fingerprint && currentFingerprint.tlsFingerprint) {
+    matchDetails.tlsFingerprintMatch = session.tls_fingerprint === currentFingerprint.tlsFingerprint;
+  }
+
+  // Check timezone
+  if (session.timezone && currentFingerprint.timezone) {
+    matchDetails.timezoneMatch = session.timezone === currentFingerprint.timezone;
+  }
+
+  // Check screen resolution
+  if (session.screen_resolution && currentFingerprint.screenResolution) {
+    matchDetails.screenMatch = session.screen_resolution === currentFingerprint.screenResolution;
+  }
+
+  // Check country
+  if (session.ip_country && currentFingerprint.ipCountry) {
+    matchDetails.countryMatch = session.ip_country === currentFingerprint.ipCountry;
+  }
+
+  // === VALIDATION LOGIC ===
+
+  // PERFECT MATCH: IP matches exactly
+  if (matchDetails.ipMatch) {
+    return {
+      valid: true,
+      trustLevel: 'full',
+      reason: 'ip_match',
+      matchDetails,
+    };
+  }
+
+  // SUSPICIOUS: Different country entirely
+  if (session.ip_country && currentFingerprint.ipCountry &&
+      session.ip_country !== currentFingerprint.ipCountry) {
+    return {
+      valid: false,
+      trustLevel: 'suspicious',
+      reason: 'country_mismatch',
+      matchDetails,
+    };
+  }
+
+  // LOOSE MATCH: Same /24 subnet + 2 or more fingerprint matches
+  if (matchDetails.ipSubnetMatch) {
+    const fingerprintMatches = [
+      matchDetails.userAgentMatch,
+      matchDetails.browserFingerprintMatch,
+      matchDetails.tlsFingerprintMatch,
+      matchDetails.timezoneMatch,
+      matchDetails.screenMatch,
+    ].filter(Boolean).length;
+
+    if (fingerprintMatches >= 2) {
+      return {
+        valid: true,
+        trustLevel: 'partial',
+        reason: 'subnet_with_fingerprints',
+        matchDetails,
+      };
+    }
+  }
+
+  // NO MATCH: Different IP, insufficient fingerprint matches
+  const totalMatches = [
+    matchDetails.userAgentMatch,
+    matchDetails.browserFingerprintMatch,
+    matchDetails.tlsFingerprintMatch,
+    matchDetails.timezoneMatch,
+    matchDetails.screenMatch,
+  ].filter(Boolean).length;
+
+  // If we have 3+ fingerprint matches even without IP, allow but flag
+  if (totalMatches >= 3) {
+    return {
+      valid: true,
+      trustLevel: 'partial',
+      reason: 'fingerprints_only',
+      matchDetails,
+    };
+  }
+
+  return {
+    valid: false,
+    trustLevel: 'blocked',
+    reason: 'no_match',
+    matchDetails,
+  };
+}
+
+// Log security event
+async function logSecurityEvent(db, eventType, sessionId, userId, ip, country, details) {
+  try {
+    await db.prepare(`
+      INSERT INTO session_security_events (id, session_id, user_id, event_type, ip_address, ip_country, details, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(generateId(), sessionId, userId, eventType, ip, country, JSON.stringify(details), now()).run();
+  } catch (e) {
+    console.error('Failed to log security event:', e);
+  }
+}
+
+// Send security alert email (for suspicious activity)
+async function sendSecurityAlert(c, user, eventType, details) {
+  if (!c.env.EMAIL_SERVICE_API_KEY || !user.email) return;
+
+  try {
+    await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': c.env.EMAIL_SERVICE_API_KEY,
+      },
+      body: JSON.stringify({
+        sender: { name: 'QTI Security', email: 'security@account.quietterminal.co.uk' },
+        to: [{ email: user.email }],
+        subject: 'Security Alert: Suspicious login attempt on your QTI account',
+        htmlContent: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"></head>
+          <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <h1 style="color: #dc2626;">⚠️ Security Alert</h1>
+            <p>We detected a suspicious login attempt on your QTI account.</p>
+            <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 16px; border-radius: 8px; margin: 20px 0;">
+              <p><strong>Event:</strong> ${eventType}</p>
+              <p><strong>IP Address:</strong> ${details.ip || 'Unknown'}</p>
+              <p><strong>Location:</strong> ${details.country || 'Unknown'}</p>
+              <p><strong>Time:</strong> ${new Date().toISOString()}</p>
+            </div>
+            <p><strong>If this was you:</strong> You may need to sign in again.</p>
+            <p><strong>If this wasn't you:</strong> Your session has been blocked. Consider reviewing your account security.</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
+              &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
+            </p>
+          </body>
+          </html>
+        `,
+      }),
+    });
+  } catch (e) {
+    console.error('Failed to send security alert:', e);
+  }
+}
+
 async function checkProfanity(text, db) {
   const lowerText = text.toLowerCase();
 
@@ -226,13 +461,72 @@ async function createSession(user) {
   return await sign(payload, CONFIG.JWT_SECRET);
 }
 
+// Create session with fingerprint tracking (enhanced security)
+async function createSecureSession(c, user, authMethod) {
+  const db = c.env.DB;
+  const fingerprint = collectFingerprint(c);
+
+  // Create JWT token
+  const token = await createSession(user);
+  const tokenHash = await hashToken(token);
+
+  // Create session record
+  const sessionId = generateId();
+  const userAgentHash = fingerprint.userAgent ? await hashToken(fingerprint.userAgent) : null;
+
+  try {
+    await db.prepare(`
+      INSERT INTO user_sessions (
+        id, user_id, token_hash,
+        ip_address, ip_subnet, ip_country,
+        user_agent, user_agent_hash, browser_fingerprint, tls_fingerprint,
+        timezone, screen_resolution, language,
+        auth_method, device_type, trust_level,
+        created_at, last_active_at, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      sessionId,
+      user.id,
+      tokenHash,
+      fingerprint.ip,
+      fingerprint.ipSubnet,
+      fingerprint.ipCountry,
+      fingerprint.userAgent,
+      userAgentHash,
+      fingerprint.browserFingerprint,
+      fingerprint.tlsFingerprint,
+      fingerprint.timezone,
+      fingerprint.screenResolution,
+      fingerprint.language,
+      authMethod,
+      detectDeviceType(fingerprint.userAgent),
+      'full',
+      now(),
+      now(),
+      now() + CONFIG.SESSION_DURATION
+    ).run();
+
+    // Log new session event
+    await logSecurityEvent(db, 'new_session', sessionId, user.id, fingerprint.ip, fingerprint.ipCountry, {
+      authMethod,
+      userAgent: fingerprint.userAgent,
+      deviceType: detectDeviceType(fingerprint.userAgent),
+    });
+  } catch (e) {
+    console.error('Failed to create session record:', e);
+    // Continue even if session tracking fails - token is still valid
+  }
+
+  return { token, sessionId };
+}
+
 // ============================================================================
 // MIDDLEWARE
 // ============================================================================
 
 app.use('/*', cors());
 
-// Auth middleware
+// Auth middleware with session fingerprint validation
 const authMiddleware = async (c, next) => {
   try {
     // Accept token from Authorization header or cookie named `qti_token`
@@ -247,7 +541,103 @@ const authMiddleware = async (c, next) => {
     }
 
     const payload = await verify(token, CONFIG.JWT_SECRET);
+    const db = c.env.DB;
+
+    // Look up session by token hash
+    const tokenHash = await hashToken(token);
+    const { results: sessions } = await db.prepare(
+      'SELECT * FROM user_sessions WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?'
+    ).bind(tokenHash, now()).all();
+
+    // If no session found, this is a legacy token or session was revoked
+    if (sessions.length === 0) {
+      // For backwards compatibility during migration, allow tokens without session records
+      // but flag them for re-auth on next opportunity
+      c.set('user', payload);
+      c.set('session_trust', 'legacy');
+      await next();
+      return;
+    }
+
+    const session = sessions[0];
+    const currentFingerprint = collectFingerprint(c);
+
+    // Validate fingerprint
+    const validation = validateSessionFingerprint(session, currentFingerprint);
+
+    if (!validation.valid) {
+      // Get user info for alert
+      const { results: users } = await db.prepare(
+        'SELECT email FROM users WHERE id = ?'
+      ).bind(payload.user_id).all();
+      const user = users[0] || {};
+
+      if (validation.trustLevel === 'suspicious') {
+        // Different country - send email alert and block
+        await logSecurityEvent(db, 'country_change', session.id, payload.user_id,
+          currentFingerprint.ip, currentFingerprint.ipCountry, {
+            originalCountry: session.ip_country,
+            newCountry: currentFingerprint.ipCountry,
+            validation: validation.matchDetails,
+          });
+
+        // Send security alert email
+        await sendSecurityAlert(c, user, 'Suspicious login from different country', {
+          ip: currentFingerprint.ip,
+          country: currentFingerprint.ipCountry,
+          originalCountry: session.ip_country,
+        });
+
+        // Revoke the session
+        await db.prepare(
+          'UPDATE user_sessions SET revoked_at = ?, trust_level = ?, flag_reason = ? WHERE id = ?'
+        ).bind(now(), 'blocked', 'country_mismatch', session.id).run();
+
+        return c.json({
+          error: 'Session blocked due to suspicious activity',
+          code: 'SESSION_BLOCKED_COUNTRY',
+          requires_reauth: true,
+        }, 401);
+      }
+
+      // No match at all - force re-auth
+      await logSecurityEvent(db, 'fingerprint_mismatch', session.id, payload.user_id,
+        currentFingerprint.ip, currentFingerprint.ipCountry, {
+          validation: validation.matchDetails,
+          reason: validation.reason,
+        });
+
+      return c.json({
+        error: 'Session validation failed. Please sign in again.',
+        code: 'SESSION_FINGERPRINT_MISMATCH',
+        requires_reauth: true,
+      }, 401);
+    }
+
+    // Valid session - update last_active_at
+    await db.prepare(
+      'UPDATE user_sessions SET last_active_at = ? WHERE id = ?'
+    ).bind(now(), session.id).run();
+
+    // If partial match, flag the session but allow
+    if (validation.trustLevel === 'partial') {
+      if (session.trust_level !== 'partial') {
+        await db.prepare(
+          'UPDATE user_sessions SET trust_level = ?, flagged_at = ?, flag_reason = ? WHERE id = ?'
+        ).bind('partial', now(), validation.reason, session.id).run();
+
+        await logSecurityEvent(db, 'ip_change', session.id, payload.user_id,
+          currentFingerprint.ip, currentFingerprint.ipCountry, {
+            originalIP: session.ip_address,
+            newIP: currentFingerprint.ip,
+            validation: validation.matchDetails,
+          });
+      }
+    }
+
     c.set('user', payload);
+    c.set('session', session);
+    c.set('session_trust', validation.trustLevel);
     await next();
   } catch (err) {
     return c.json({ error: 'Invalid token' }, 401);
@@ -612,8 +1002,8 @@ app.get('/auth/oauth/callback', async (c) => {
 
   // Check if username claimed
   if (!user.username_original) {
-    // Create a session so browser can be authenticated while choosing a username
-    const sessionToken = await createSession(user);
+    // Create a secure session so browser can be authenticated while choosing a username
+    const { token: sessionToken } = await createSecureSession(c, user, `oauth_${provider}`);
     try {
       const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
       const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=Lax; Max-Age=${CONFIG.SESSION_DURATION}`;
@@ -637,7 +1027,7 @@ app.get('/auth/oauth/callback', async (c) => {
     });
   }
 
-  const token = await createSession(user);
+  const { token } = await createSecureSession(c, user, `oauth_${provider}`);
   // Set session cookie
   try {
     const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
@@ -933,8 +1323,8 @@ app.post('/auth/email/verify', async (c) => {
 
   // Check if username claimed
   if (!user.username_original) {
-    // Create a session token so the user can continue to claim a username
-    const sessionToken = await createSession(user);
+    // Create a secure session token so the user can continue to claim a username
+    const { token: sessionToken } = await createSecureSession(c, user, 'email');
 
     // Set an HttpOnly secure cookie for the session. Use COOKIE_DOMAIN env if present, otherwise default to .quietterminal.co.uk
     try {
@@ -953,7 +1343,7 @@ app.post('/auth/email/verify', async (c) => {
     });
   }
 
-  const sessionToken = await createSession(user);
+  const { token: sessionToken } = await createSecureSession(c, user, 'email');
 
   // Set cookie for authenticated session
   try {
@@ -1033,8 +1423,8 @@ app.post('/auth/age/verify', async (c) => {
 
   const user = { id: userId, email: temp.email, role: 'user', is_child: age < 18, username_original: null };
 
-  // Create session token and set cookie
-  const sessionToken = await createSession(user);
+  // Create secure session token and set cookie
+  const { token: sessionToken } = await createSecureSession(c, user, `oauth_${temp.provider}`);
   try {
     const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
     const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=Lax; Max-Age=${CONFIG.SESSION_DURATION}`;
@@ -1210,8 +1600,21 @@ app.get('/me', authMiddleware, async (c) => {
 });
 
 app.post('/logout', authMiddleware, async (c) => {
-  // With JWT, logout is client-side (delete token)
-  // Could implement token blacklist in D1/KV if needed
+  const db = c.env.DB;
+  const session = c.get('session');
+
+  // Revoke the session in database
+  if (session?.id) {
+    try {
+      await db.prepare(
+        'UPDATE user_sessions SET revoked_at = ? WHERE id = ?'
+      ).bind(now(), session.id).run();
+    } catch (e) {
+      console.error('Failed to revoke session:', e);
+    }
+  }
+
+  // Clear cookie
   try {
     const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
     const cookie = `qti_token=deleted; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
@@ -1528,6 +1931,107 @@ app.get('/admin/stats', authMiddleware, adminMiddleware, async (c) => {
     pending_reports: pendingReports[0].count,
     recent_stats: recentStats,
   });
+});
+
+// ============================================================================
+// SESSION MANAGEMENT ROUTES
+// ============================================================================
+
+// Get user's active sessions
+app.get('/sessions', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const currentSession = c.get('session');
+
+  const { results: sessions } = await db.prepare(`
+    SELECT id, ip_address, ip_country, user_agent, device_type, auth_method,
+           trust_level, created_at, last_active_at, expires_at
+    FROM user_sessions
+    WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+    ORDER BY last_active_at DESC
+  `).bind(user.user_id, now()).all();
+
+  // Mark current session
+  const sessionsWithCurrent = sessions.map(s => ({
+    ...s,
+    is_current: currentSession?.id === s.id,
+  }));
+
+  return c.json({ sessions: sessionsWithCurrent });
+});
+
+// Revoke a specific session
+app.post('/sessions/:sessionId/revoke', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const sessionId = c.req.param('sessionId');
+  const db = c.env.DB;
+
+  // Verify session belongs to user
+  const { results: sessions } = await db.prepare(
+    'SELECT id FROM user_sessions WHERE id = ? AND user_id = ?'
+  ).bind(sessionId, user.user_id).all();
+
+  if (sessions.length === 0) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+
+  await db.prepare(
+    'UPDATE user_sessions SET revoked_at = ? WHERE id = ?'
+  ).bind(now(), sessionId).run();
+
+  return c.json({ message: 'Session revoked' });
+});
+
+// Revoke all sessions except current
+app.post('/sessions/revoke-all', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const currentSession = c.get('session');
+
+  // Revoke all sessions except current
+  await db.prepare(`
+    UPDATE user_sessions
+    SET revoked_at = ?
+    WHERE user_id = ? AND revoked_at IS NULL AND id != ?
+  `).bind(now(), user.user_id, currentSession?.id || '').run();
+
+  return c.json({ message: 'All other sessions revoked' });
+});
+
+// Admin: View security events for a user
+app.get('/admin/users/:userId/security-events', authMiddleware, adminMiddleware, async (c) => {
+  const userId = c.req.param('userId');
+  const db = c.env.DB;
+
+  const { results: events } = await db.prepare(`
+    SELECT * FROM session_security_events
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 100
+  `).bind(userId).all();
+
+  return c.json({ events });
+});
+
+// Admin: Revoke all sessions for a user (force logout)
+app.post('/admin/users/:userId/revoke-sessions', authMiddleware, adminMiddleware, async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('userId');
+  const db = c.env.DB;
+
+  await db.prepare(`
+    UPDATE user_sessions
+    SET revoked_at = ?
+    WHERE user_id = ? AND revoked_at IS NULL
+  `).bind(now(), userId).run();
+
+  // Log admin action
+  await db.prepare(`
+    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(generateId(), admin.user_id, 'revoke_all_sessions', userId, 'user', '{}', now()).run();
+
+  return c.json({ message: 'All user sessions revoked' });
 });
 
 // ============================================================================

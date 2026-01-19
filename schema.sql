@@ -78,6 +78,76 @@ CREATE TABLE IF NOT EXISTS username_cooldowns (
 );
 
 -- ============================================================================
+-- SESSION MANAGEMENT (Enhanced Security)
+-- ============================================================================
+
+-- Active user sessions with fingerprint tracking
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id TEXT PRIMARY KEY,                     -- Session UUID
+  user_id TEXT NOT NULL,                   -- User this session belongs to
+
+  -- Token info
+  token_hash TEXT NOT NULL,                -- SHA-256 hash of JWT for revocation
+
+  -- IP/Network tracking
+  ip_address TEXT NOT NULL,                -- Client IP at session creation
+  ip_subnet TEXT NOT NULL,                 -- /24 subnet for loose matching (e.g., "192.168.1")
+  ip_country TEXT,                         -- Country code from IP geolocation
+
+  -- Browser fingerprinting
+  user_agent TEXT,                         -- Full User-Agent string
+  user_agent_hash TEXT,                    -- Hash of User-Agent for quick comparison
+  browser_fingerprint TEXT,                -- Hash of canvas/WebGL/fonts fingerprint
+  tls_fingerprint TEXT,                    -- JA3/JA4 TLS fingerprint (from Cloudflare)
+  timezone TEXT,                           -- Client timezone (e.g., "Europe/London")
+  screen_resolution TEXT,                  -- Screen resolution (e.g., "1920x1080")
+  language TEXT,                           -- Accept-Language header
+
+  -- Session metadata
+  auth_method TEXT NOT NULL,               -- "email", "oauth_google", "oauth_github", "oauth_discord"
+  device_type TEXT,                        -- "desktop", "mobile", "tablet"
+
+  -- Security flags
+  trust_level TEXT DEFAULT 'full',         -- "full", "partial", "suspicious", "blocked"
+  flagged_at INTEGER,                      -- When session was flagged
+  flag_reason TEXT,                        -- Why it was flagged
+
+  -- Timestamps
+  created_at INTEGER NOT NULL,
+  last_active_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  revoked_at INTEGER,                      -- Set when session is invalidated
+
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_ip ON user_sessions(ip_address);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_trust ON user_sessions(trust_level);
+
+-- Session security events (audit trail)
+CREATE TABLE IF NOT EXISTS session_security_events (
+  id TEXT PRIMARY KEY,
+  session_id TEXT,                         -- May be null if session creation failed
+  user_id TEXT,
+  event_type TEXT NOT NULL,                -- "new_session", "fingerprint_mismatch", "ip_change", "country_change", "forced_reauth", "blocked"
+  ip_address TEXT,
+  ip_country TEXT,
+  details TEXT,                            -- JSON with event details
+  created_at INTEGER NOT NULL,
+
+  FOREIGN KEY (session_id) REFERENCES user_sessions(id) ON DELETE SET NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_events_user ON session_security_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_session_events_session ON session_security_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_session_events_type ON session_security_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_session_events_created ON session_security_events(created_at);
+
+-- ============================================================================
 -- EMAIL AUTHENTICATION
 -- ============================================================================
 
@@ -95,6 +165,44 @@ CREATE TABLE IF NOT EXISTS email_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_email_tokens_hash ON email_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_email_tokens_expires ON email_tokens(expires_at);
+
+-- ============================================================================
+-- OAUTH TEMPORARY DATA
+-- ============================================================================
+
+-- OAuth state parameter tracking (CSRF protection)
+CREATE TABLE IF NOT EXISTS oauth_states (
+  state TEXT PRIMARY KEY,                  -- Random state UUID
+  provider TEXT NOT NULL,                  -- "google", "github", "discord"
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at);
+
+-- Temporary OAuth data (when age verification is needed)
+CREATE TABLE IF NOT EXISTS oauth_temp (
+  id TEXT PRIMARY KEY,                     -- Temp token UUID
+  provider TEXT NOT NULL,                  -- OAuth provider
+  oauth_id TEXT NOT NULL,                  -- Provider's user ID
+  email TEXT,                              -- User's email from provider
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_temp_created ON oauth_temp(created_at);
+
+-- ============================================================================
+-- RATE LIMITING
+-- ============================================================================
+
+-- Email/IP rate limit tracking
+CREATE TABLE IF NOT EXISTS mail_rate_limits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL,                       -- Rate limit key (e.g., "email_auth:email@example.com")
+  timestamp INTEGER NOT NULL               -- When the request occurred
+);
+
+CREATE INDEX IF NOT EXISTS idx_mail_rate_limits_key ON mail_rate_limits(key);
+CREATE INDEX IF NOT EXISTS idx_mail_rate_limits_timestamp ON mail_rate_limits(timestamp);
 
 -- ============================================================================
 -- UK ONLINE SAFETY ACT COMPLIANCE TABLES
