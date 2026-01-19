@@ -17,7 +17,17 @@ function App() {
   const [user, setUser] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
 
+  const authCheckAttempted = React.useRef(false);
+
   React.useEffect(() => {
+    if (authCheckAttempted.current) return;
+    authCheckAttempted.current = true;
+
+    if (window.location.pathname === '/verify') {
+      setLoading(false);
+      return;
+    }
+
     // Check if user is logged in
     const token = localStorage.getItem('qti_token');
     if (token) {

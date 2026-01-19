@@ -39,4 +39,9 @@ zone_name = "quietterminal.co.uk"
 command = "npm install"
 
 [triggers]
-crons = ["0 *3 * * *"]
+crons = ["0 3 * * *"]
+
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true

@@ -14,6 +14,12 @@ function Verify({ setUser }) {
     useEffect(() => {
         const token = query.get('token');
 
+        const verifyKey = `verify_attempted_${token}`;
+        if (sessionStorage.getItem(verifyKey)) {
+            return;
+        }
+        sessionStorage.setItem(verifyKey, 'true');
+
         if (!token) {
             setStatus('error');
             setMessage('No token provided');

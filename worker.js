@@ -333,7 +333,7 @@ function validateSessionFingerprint(session, currentFingerprint) {
 
   // SUSPICIOUS: Different country entirely
   if (session.ip_country && currentFingerprint.ipCountry &&
-      session.ip_country !== currentFingerprint.ipCountry) {
+    session.ip_country !== currentFingerprint.ipCountry) {
     return {
       valid: false,
       trustLevel: 'suspicious',
@@ -377,6 +377,21 @@ function validateSessionFingerprint(session, currentFingerprint) {
       valid: true,
       trustLevel: 'partial',
       reason: 'fingerprints_only',
+      matchDetails,
+    };
+  }
+
+  // FALLBACK: If user-agent matches and client-side fingerprint data wasn't sent
+  // (timezone, screen, browserFingerprint are all null), allow with reduced trust.
+  // This handles the case where the frontend isn't sending fingerprint headers yet.
+  const clientFingerprintMissing = !currentFingerprint.timezone &&
+    !currentFingerprint.screenResolution &&
+    !currentFingerprint.browserFingerprint;
+  if (matchDetails.userAgentMatch && clientFingerprintMissing) {
+    return {
+      valid: true,
+      trustLevel: 'partial',
+      reason: 'user_agent_only_no_client_fingerprint',
       matchDetails,
     };
   }
@@ -628,7 +643,7 @@ const authMiddleware = async (c, next) => {
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    const payload = await verify(token, CONFIG.JWT_SECRET);
+    const payload = await verify(token, CONFIG.JWT_SECRET, "HS256");
     const db = c.env.DB;
     const currentTime = now();
 
@@ -683,10 +698,10 @@ const authMiddleware = async (c, next) => {
         if (updateResult.meta?.changes > 0) {
           await logSecurityEvent(db, 'country_change', session.id, payload.user_id,
             currentFingerprint.ip, currentFingerprint.ipCountry, {
-              originalCountry: session.ip_country,
-              newCountry: currentFingerprint.ipCountry,
-              validation: validation.matchDetails,
-            });
+            originalCountry: session.ip_country,
+            newCountry: currentFingerprint.ipCountry,
+            validation: validation.matchDetails,
+          });
 
           // Send security alert email
           await sendSecurityAlert(c, user, 'Suspicious login from different country', {
@@ -706,9 +721,9 @@ const authMiddleware = async (c, next) => {
       // No match at all - force re-auth
       await logSecurityEvent(db, 'fingerprint_mismatch', session.id, payload.user_id,
         currentFingerprint.ip, currentFingerprint.ipCountry, {
-          validation: validation.matchDetails,
-          reason: validation.reason,
-        });
+        validation: validation.matchDetails,
+        reason: validation.reason,
+      });
 
       return c.json({
         error: 'Session validation failed. Please sign in again.',
@@ -725,10 +740,10 @@ const authMiddleware = async (c, next) => {
 
       await logSecurityEvent(db, 'ip_change', session.id, payload.user_id,
         currentFingerprint.ip, currentFingerprint.ipCountry, {
-          originalIP: session.ip_address,
-          newIP: currentFingerprint.ip,
-          validation: validation.matchDetails,
-        });
+        originalIP: session.ip_address,
+        newIP: currentFingerprint.ip,
+        validation: validation.matchDetails,
+      });
     } else {
       // Just update last_active_at
       await db.prepare(
@@ -740,8 +755,10 @@ const authMiddleware = async (c, next) => {
     c.set('session', session);
     c.set('session_trust', validation.trustLevel);
     await next();
-  } catch (err) {
-    return c.json({ error: 'Invalid token' }, 401);
+  } catch (e) {
+    console.log("authMiddleware caught:", String(e));
+    console.log("authMiddleware stack:", e?.stack);
+    return c.json({ error: "Auth middleware error", detail: String(e) }, 500);
   }
 };
 
