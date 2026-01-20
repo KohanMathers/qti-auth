@@ -165,6 +165,14 @@ function normalizeUsername(username) {
   return username.toLowerCase();
 }
 
+function slugify(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function calculateAge(dateOfBirth) {
   const dob = new Date(dateOfBirth);
   const today = new Date();
@@ -789,7 +797,15 @@ async function createSecureSession(c, user, authMethod) {
 // MIDDLEWARE
 // ============================================================================
 
-app.use('/*', cors());
+app.use('/*', cors({
+  origin: [
+    'https://account.quietterminal.co.uk',
+    'https://account-staging.quietterminal.co.uk',
+    'https://support.quietterminal.co.uk',
+    'https://support-staging.quietterminal.co.uk',
+  ],
+  credentials: true,
+}));
 
 // Auth middleware with session fingerprint validation
 const authMiddleware = async (c, next) => {
@@ -846,13 +862,23 @@ const authMiddleware = async (c, next) => {
     if (userStatus.length > 0) {
       const currentTime = now();
       const userRecord = userStatus[0];
+      const requestPath = new URL(c.req.url).pathname;
+      const allowRestrictedSupport = requestPath === '/support/tickets' && c.req.method === 'POST';
 
       if (userRecord.is_banned) {
-        return c.json({
-          error: 'Your account has been banned',
-          code: 'ACCOUNT_BANNED',
-          requires_reauth: false,
-        }, 403);
+        if (!allowRestrictedSupport) {
+          return c.json({
+            error: 'Your account has been banned',
+            code: 'ACCOUNT_BANNED',
+            requires_reauth: false,
+          }, 403);
+        }
+
+        c.set('restricted_account', {
+          is_banned: true,
+          is_locked: false,
+          lock_expires_at: null,
+        });
       }
 
       if (userRecord.is_locked) {
@@ -863,12 +889,20 @@ const authMiddleware = async (c, next) => {
             'UPDATE users SET is_locked = 0, lock_reason = NULL, locked_at = NULL, locked_by = NULL, lock_expires_at = NULL WHERE id = ?'
           ).bind(payload.user_id).run();
         } else {
-          return c.json({
-            error: 'Your account has been temporarily locked',
-            code: 'ACCOUNT_LOCKED',
-            requires_reauth: false,
+          if (!allowRestrictedSupport) {
+            return c.json({
+              error: 'Your account has been temporarily locked',
+              code: 'ACCOUNT_LOCKED',
+              requires_reauth: false,
+              lock_expires_at: userRecord.lock_expires_at,
+            }, 403);
+          }
+
+          c.set('restricted_account', {
+            is_banned: false,
+            is_locked: true,
             lock_expires_at: userRecord.lock_expires_at,
-          }, 403);
+          });
         }
       }
     }
@@ -964,6 +998,14 @@ const authMiddleware = async (c, next) => {
 const adminMiddleware = async (c, next) => {
   const user = c.get('user');
   if (user.role !== 'admin') {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+  await next();
+};
+
+const staffMiddleware = async (c, next) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'support') {
     return c.json({ error: 'Forbidden' }, 403);
   }
   await next();
@@ -1352,7 +1394,7 @@ app.get('/auth/oauth/callback', async (c) => {
     const { token: sessionToken } = await createSecureSession(c, user, `oauth_${provider}`);
     try {
       const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
-      const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=Lax; Max-Age=${CONFIG.SESSION_DURATION}`;
+      const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=None; Max-Age=${CONFIG.SESSION_DURATION}`;
       c.header('Set-Cookie', cookie);
     } catch (e) {
       console.error('Failed to set cookie on OAuth callback (needs_username):', e);
@@ -1377,7 +1419,7 @@ app.get('/auth/oauth/callback', async (c) => {
   // Set session cookie
   try {
     const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
-    const cookie = `qti_token=${token}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=Lax; Max-Age=${CONFIG.SESSION_DURATION}`;
+    const cookie = `qti_token=${token}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=None; Max-Age=${CONFIG.SESSION_DURATION}`;
     c.header('Set-Cookie', cookie);
   } catch (e) {
     console.error('Failed to set cookie on OAuth callback:', e);
@@ -1695,7 +1737,7 @@ app.post('/auth/email/verify', async (c) => {
     // Set an HttpOnly secure cookie for the session. Use COOKIE_DOMAIN env if present, otherwise default to .quietterminal.co.uk
     try {
       const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
-      const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=Lax; Max-Age=${CONFIG.SESSION_DURATION}`;
+      const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=None; Max-Age=${CONFIG.SESSION_DURATION}`;
       c.header('Set-Cookie', cookie);
     } catch (e) {
       // If headers can't be set for some reason, continue — token will still be returned in body
@@ -1714,7 +1756,7 @@ app.post('/auth/email/verify', async (c) => {
   // Set cookie for authenticated session
   try {
     const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
-    const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=Lax; Max-Age=${CONFIG.SESSION_DURATION}`;
+    const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=None; Max-Age=${CONFIG.SESSION_DURATION}`;
     c.header('Set-Cookie', cookie);
   } catch (e) {
     console.error('Failed to set cookie:', e);
@@ -1793,7 +1835,7 @@ app.post('/auth/age/verify', async (c) => {
   const { token: sessionToken } = await createSecureSession(c, user, `oauth_${temp.provider}`);
   try {
     const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
-    const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=Lax; Max-Age=${CONFIG.SESSION_DURATION}`;
+    const cookie = `qti_token=${sessionToken}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=None; Max-Age=${CONFIG.SESSION_DURATION}`;
     c.header('Set-Cookie', cookie);
   } catch (e) {
     console.error('Failed to set cookie on age verify:', e);
@@ -1983,7 +2025,7 @@ app.post('/logout', authMiddleware, async (c) => {
   // Clear cookie
   try {
     const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
-    const cookie = `qti_token=deleted; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+    const cookie = `qti_token=deleted; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=None; Max-Age=0`;
     c.header('Set-Cookie', cookie);
   } catch (e) {
     console.error('Failed to clear cookie on logout:', e);
@@ -2469,6 +2511,804 @@ app.post('/admin/cleanup', authMiddleware, adminMiddleware, async (c) => {
     deleted: results,
     timestamp: currentTime,
   });
+});
+
+// ============================================================================
+// SUPPORT & KNOWLEDGE BASE ROUTES
+// ============================================================================
+
+app.get('/kb/articles', async (c) => {
+  const db = c.env.DB;
+  const { search, category, page = '1', limit = '20' } = c.req.query();
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const offset = (pageNum - 1) * limitNum;
+  const where = ['is_published = 1'];
+  const params = [];
+
+  if (search) {
+    where.push('(title LIKE ? OR content LIKE ?)');
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  if (category) {
+    where.push('category = ?');
+    params.push(category);
+  }
+
+  const { results: articles } = await db.prepare(`
+    SELECT id, slug, title, category, tags, author_id, is_published, view_count,
+           helpful_yes, helpful_no, created_at, updated_at, published_at
+    FROM kb_articles
+    WHERE ${where.join(' AND ')}
+    ORDER BY published_at DESC, created_at DESC
+    LIMIT ? OFFSET ?
+  `).bind(...params, limitNum, offset).all();
+
+  return c.json({ articles, page: pageNum, limit: limitNum });
+});
+
+app.get('/kb/articles/:slug', async (c) => {
+  const db = c.env.DB;
+  const slug = c.req.param('slug');
+
+  const { results: articles } = await db.prepare(`
+    SELECT id, slug, title, content, category, tags, author_id, is_published, view_count,
+           helpful_yes, helpful_no, created_at, updated_at, published_at
+    FROM kb_articles
+    WHERE slug = ? AND is_published = 1
+  `).bind(slug).all();
+
+  if (articles.length === 0) {
+    return c.json({ error: 'Article not found' }, 404);
+  }
+
+  const article = articles[0];
+  await db.prepare('UPDATE kb_articles SET view_count = view_count + 1 WHERE id = ?')
+    .bind(article.id).run();
+
+  return c.json({ article: { ...article, view_count: article.view_count + 1 } });
+});
+
+app.post('/kb/articles/:id/feedback', async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const body = await c.req.json();
+  let helpful = body?.helpful;
+
+  if (typeof helpful !== 'boolean') {
+    if (body?.value === 'yes') helpful = true;
+    if (body?.value === 'no') helpful = false;
+  }
+
+  if (typeof helpful !== 'boolean') {
+    return c.json({ error: 'Invalid feedback payload' }, 400);
+  }
+
+  const field = helpful ? 'helpful_yes' : 'helpful_no';
+  await db.prepare(`UPDATE kb_articles SET ${field} = ${field} + 1 WHERE id = ?`)
+    .bind(id).run();
+
+  return c.json({ message: 'Feedback recorded' });
+});
+
+app.get('/kb/categories', async (c) => {
+  const db = c.env.DB;
+  const { results: categories } = await db.prepare(`
+    SELECT id, slug, name, description, icon, display_order
+    FROM kb_categories
+    WHERE is_active = 1
+    ORDER BY display_order ASC, name ASC
+  `).all();
+
+  return c.json({ categories });
+});
+
+app.get('/kb/admin/articles', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const { search, category, published, page = '1', limit = '50' } = c.req.query();
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+  const offset = (pageNum - 1) * limitNum;
+  const where = ['1 = 1'];
+  const params = [];
+
+  if (search) {
+    where.push('(title LIKE ? OR content LIKE ? OR slug LIKE ?)');
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+  }
+
+  if (category) {
+    where.push('category = ?');
+    params.push(category);
+  }
+
+  if (published === 'true' || published === '1') {
+    where.push('is_published = 1');
+  } else if (published === 'false' || published === '0') {
+    where.push('is_published = 0');
+  }
+
+  const { results: articles } = await db.prepare(`
+    SELECT id, slug, title, content, category, tags, author_id, is_published, view_count,
+           helpful_yes, helpful_no, created_at, updated_at, published_at
+    FROM kb_articles
+    WHERE ${where.join(' AND ')}
+    ORDER BY updated_at DESC
+    LIMIT ? OFFSET ?
+  `).bind(...params, limitNum, offset).all();
+
+  return c.json({ articles, page: pageNum, limit: limitNum });
+});
+
+app.get('/kb/admin/articles/:id', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+
+  const { results: articles } = await db.prepare(`
+    SELECT id, slug, title, content, category, tags, author_id, is_published, view_count,
+           helpful_yes, helpful_no, created_at, updated_at, published_at
+    FROM kb_articles
+    WHERE id = ?
+  `).bind(id).all();
+
+  if (articles.length === 0) {
+    return c.json({ error: 'Article not found' }, 404);
+  }
+
+  return c.json({ article: articles[0] });
+});
+
+app.post('/kb/articles', authMiddleware, adminMiddleware, async (c) => {
+  const admin = c.get('user');
+  const db = c.env.DB;
+  const body = await c.req.json();
+  const title = body?.title?.trim();
+  const content = body?.content?.trim();
+  const category = body?.category?.trim();
+  let slug = body?.slug?.trim();
+  const tags = Array.isArray(body?.tags) ? JSON.stringify(body.tags) : (body?.tags ? JSON.stringify(body.tags) : null);
+  const isPublished = Boolean(body?.is_published);
+
+  if (!title || !content || !category) {
+    return c.json({ error: 'Missing required fields' }, 400);
+  }
+
+  if (!slug) {
+    slug = slugify(title);
+  }
+
+  const { results: existing } = await db.prepare(
+    'SELECT id FROM kb_articles WHERE slug = ?'
+  ).bind(slug).all();
+
+  if (existing.length > 0) {
+    return c.json({ error: 'Slug already in use' }, 409);
+  }
+
+  const articleId = generateId();
+  const timestamp = now();
+  const publishedAt = isPublished ? timestamp : null;
+
+  await db.prepare(`
+    INSERT INTO kb_articles (
+      id, slug, title, content, category, tags, author_id,
+      is_published, view_count, helpful_yes, helpful_no,
+      created_at, updated_at, published_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?)
+  `).bind(
+    articleId,
+    slug,
+    title,
+    content,
+    category,
+    tags,
+    admin.user_id,
+    isPublished ? 1 : 0,
+    timestamp,
+    timestamp,
+    publishedAt
+  ).run();
+
+  return c.json({ id: articleId, slug });
+});
+
+app.put('/kb/articles/:id', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const body = await c.req.json();
+
+  const { results: existingRows } = await db.prepare(
+    'SELECT id, slug, is_published, published_at FROM kb_articles WHERE id = ?'
+  ).bind(id).all();
+
+  if (existingRows.length === 0) {
+    return c.json({ error: 'Article not found' }, 404);
+  }
+
+  const existing = existingRows[0];
+  const updates = [];
+  const params = [];
+  const nowTs = now();
+
+  if (body?.title) {
+    updates.push('title = ?');
+    params.push(body.title.trim());
+  }
+
+  if (body?.content) {
+    updates.push('content = ?');
+    params.push(body.content.trim());
+  }
+
+  if (body?.category) {
+    updates.push('category = ?');
+    params.push(body.category.trim());
+  }
+
+  if (body?.slug) {
+    const newSlug = body.slug.trim();
+    if (newSlug !== existing.slug) {
+      const { results: slugRows } = await db.prepare(
+        'SELECT id FROM kb_articles WHERE slug = ? AND id != ?'
+      ).bind(newSlug, id).all();
+      if (slugRows.length > 0) {
+        return c.json({ error: 'Slug already in use' }, 409);
+      }
+      updates.push('slug = ?');
+      params.push(newSlug);
+    }
+  }
+
+  if (body?.tags !== undefined) {
+    const tagValue = Array.isArray(body.tags) ? JSON.stringify(body.tags) : (body.tags ? JSON.stringify(body.tags) : null);
+    updates.push('tags = ?');
+    params.push(tagValue);
+  }
+
+  if (body?.is_published !== undefined) {
+    const nextPublished = Boolean(body.is_published);
+    updates.push('is_published = ?');
+    params.push(nextPublished ? 1 : 0);
+
+    if (nextPublished && !existing.is_published) {
+      updates.push('published_at = ?');
+      params.push(nowTs);
+    } else if (!nextPublished) {
+      updates.push('published_at = NULL');
+    }
+  }
+
+  updates.push('updated_at = ?');
+  params.push(nowTs);
+
+  if (updates.length === 0) {
+    return c.json({ message: 'No changes' });
+  }
+
+  await db.prepare(`UPDATE kb_articles SET ${updates.join(', ')} WHERE id = ?`)
+    .bind(...params, id).run();
+
+  return c.json({ message: 'Article updated' });
+});
+
+app.delete('/kb/articles/:id', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+
+  await db.prepare('DELETE FROM kb_articles WHERE id = ?').bind(id).run();
+  return c.json({ message: 'Article deleted' });
+});
+
+app.post('/support/tickets', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const body = await c.req.json();
+  const subject = body?.subject?.trim();
+  const message = body?.message?.trim();
+  let category = body?.category?.trim();
+  const priority = body?.priority?.trim() || 'normal';
+  const restriction = c.get('restricted_account');
+  const allowedPriorities = ['low', 'normal', 'high', 'urgent'];
+
+  if (!subject || !message) {
+    return c.json({ error: 'Missing subject or message' }, 400);
+  }
+
+  if (!allowedPriorities.includes(priority)) {
+    return c.json({ error: 'Invalid priority' }, 400);
+  }
+
+  if (restriction?.is_banned || restriction?.is_locked) {
+    const { results: userRows } = await db.prepare(
+      'SELECT is_banned, is_locked, banned_at, locked_at FROM users WHERE id = ?'
+    ).bind(user.user_id).all();
+
+    const userStatus = userRows[0] || {};
+    if (userStatus.is_banned) {
+      category = 'ban_appeal';
+      const cutoff = userStatus.banned_at || 0;
+      const { results: existingAppeals } = await db.prepare(`
+        SELECT id FROM support_tickets
+        WHERE user_id = ? AND category = ? AND created_at >= ?
+        LIMIT 1
+      `).bind(user.user_id, category, cutoff).all();
+
+      if (existingAppeals.length > 0) {
+        return c.json({ error: 'Appeal already submitted for this ban' }, 409);
+      }
+    } else if (userStatus.is_locked) {
+      category = 'lock_appeal';
+      const cutoff = userStatus.locked_at || 0;
+      const { results: existingAppeals } = await db.prepare(`
+        SELECT id FROM support_tickets
+        WHERE user_id = ? AND category = ? AND created_at >= ?
+        LIMIT 1
+      `).bind(user.user_id, category, cutoff).all();
+
+      if (existingAppeals.length > 0) {
+        return c.json({ error: 'Appeal already submitted for this lock' }, 409);
+      }
+    }
+  }
+
+  if (!category) {
+    return c.json({ error: 'Missing category' }, 400);
+  }
+
+  const { results: seqRows } = await db.prepare(
+    'UPDATE ticket_sequence SET next_number = next_number + 1 WHERE id = 1 RETURNING next_number - 1 as ticket_number'
+  ).all();
+
+  let ticketNumber = seqRows[0]?.ticket_number;
+  if (!ticketNumber) {
+    await db.prepare(
+      'INSERT OR IGNORE INTO ticket_sequence (id, next_number) VALUES (1, 1)'
+    ).run();
+
+    const { results: seqRowsRetry } = await db.prepare(
+      'UPDATE ticket_sequence SET next_number = next_number + 1 WHERE id = 1 RETURNING next_number - 1 as ticket_number'
+    ).all();
+    ticketNumber = seqRowsRetry[0]?.ticket_number;
+  }
+  if (!ticketNumber) {
+    return c.json({ error: 'Failed to allocate ticket number' }, 500);
+  }
+
+  const ticketId = generateId();
+  const messageId = generateId();
+  const timestamp = now();
+
+  await db.prepare(`
+    INSERT INTO support_tickets (
+      id, ticket_number, user_id, subject, category, priority, status,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    ticketId,
+    ticketNumber,
+    user.user_id,
+    subject,
+    category,
+    priority,
+    'open',
+    timestamp,
+    timestamp
+  ).run();
+
+  await db.prepare(`
+    INSERT INTO ticket_messages (
+      id, ticket_id, author_id, content, is_staff_reply, is_internal_note, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    messageId,
+    ticketId,
+    user.user_id,
+    message,
+    0,
+    0,
+    timestamp
+  ).run();
+
+  return c.json({
+    id: ticketId,
+    ticket_number: ticketNumber,
+    status: 'open',
+  });
+});
+
+app.get('/support/tickets', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const { status, search, page = '1', limit = '20' } = c.req.query();
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const offset = (pageNum - 1) * limitNum;
+  const where = ['user_id = ?'];
+  const params = [user.user_id];
+
+  if (status) {
+    where.push('status = ?');
+    params.push(status);
+  }
+
+  if (search) {
+    where.push('(subject LIKE ? OR CAST(ticket_number AS TEXT) LIKE ?)');
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  const { results: tickets } = await db.prepare(`
+    SELECT id, ticket_number, subject, category, priority, status, assigned_to,
+           created_at, updated_at, resolved_at, closed_at, satisfaction_rating
+    FROM support_tickets
+    WHERE ${where.join(' AND ')}
+    ORDER BY updated_at DESC
+    LIMIT ? OFFSET ?
+  `).bind(...params, limitNum, offset).all();
+
+  return c.json({ tickets, page: pageNum, limit: limitNum });
+});
+
+app.get('/support/tickets/:id', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const id = c.req.param('id');
+
+  const { results: tickets } = await db.prepare(
+    'SELECT * FROM support_tickets WHERE id = ? AND user_id = ?'
+  ).bind(id, user.user_id).all();
+
+  if (tickets.length === 0) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
+
+  const { results: messages } = await db.prepare(`
+    SELECT id, ticket_id, author_id, content, is_staff_reply, is_internal_note, created_at, edited_at
+    FROM ticket_messages
+    WHERE ticket_id = ? AND is_internal_note = 0
+    ORDER BY created_at ASC
+  `).bind(id).all();
+
+  return c.json({ ticket: tickets[0], messages });
+});
+
+app.post('/support/tickets/:id/reply', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const { message } = await c.req.json();
+
+  if (!message?.trim()) {
+    return c.json({ error: 'Message is required' }, 400);
+  }
+
+  const { results: tickets } = await db.prepare(
+    'SELECT id, status FROM support_tickets WHERE id = ? AND user_id = ?'
+  ).bind(id, user.user_id).all();
+
+  if (tickets.length === 0) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
+
+  if (tickets[0].status === 'closed') {
+    return c.json({ error: 'Ticket is closed' }, 400);
+  }
+
+  const timestamp = now();
+  await db.prepare(`
+    INSERT INTO ticket_messages (
+      id, ticket_id, author_id, content, is_staff_reply, is_internal_note, created_at
+    ) VALUES (?, ?, ?, ?, 0, 0, ?)
+  `).bind(generateId(), id, user.user_id, message.trim(), timestamp).run();
+
+  await db.prepare(
+    'UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?'
+  ).bind('awaiting_reply', timestamp, id).run();
+
+  return c.json({ message: 'Reply added' });
+});
+
+app.post('/support/tickets/:id/close', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const timestamp = now();
+
+  const { results: tickets } = await db.prepare(
+    'SELECT id, status FROM support_tickets WHERE id = ? AND user_id = ?'
+  ).bind(id, user.user_id).all();
+
+  if (tickets.length === 0) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
+
+  if (tickets[0].status === 'closed') {
+    return c.json({ message: 'Ticket already closed' });
+  }
+
+  await db.prepare(`
+    UPDATE support_tickets
+    SET status = 'closed', closed_at = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(timestamp, timestamp, id).run();
+
+  return c.json({ message: 'Ticket closed' });
+});
+
+app.post('/support/tickets/:id/reopen', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const timestamp = now();
+
+  const { results: tickets } = await db.prepare(
+    'SELECT id, status FROM support_tickets WHERE id = ? AND user_id = ?'
+  ).bind(id, user.user_id).all();
+
+  if (tickets.length === 0) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
+
+  if (tickets[0].status !== 'closed') {
+    return c.json({ error: 'Ticket is not closed' }, 400);
+  }
+
+  await db.prepare(`
+    UPDATE support_tickets
+    SET status = 'open', closed_at = NULL, resolved_at = NULL, updated_at = ?
+    WHERE id = ?
+  `).bind(timestamp, id).run();
+
+  return c.json({ message: 'Ticket reopened' });
+});
+
+app.post('/support/tickets/:id/rate', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const { rating } = await c.req.json();
+  const ratingValue = parseInt(rating, 10);
+
+  if (!ratingValue || ratingValue < 1 || ratingValue > 5) {
+    return c.json({ error: 'Rating must be between 1 and 5' }, 400);
+  }
+
+  const { results: tickets } = await db.prepare(
+    'SELECT id, status FROM support_tickets WHERE id = ? AND user_id = ?'
+  ).bind(id, user.user_id).all();
+
+  if (tickets.length === 0) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
+
+  if (!['resolved', 'closed'].includes(tickets[0].status)) {
+    return c.json({ error: 'Ticket is not resolved' }, 400);
+  }
+
+  await db.prepare(
+    'UPDATE support_tickets SET satisfaction_rating = ?, updated_at = ? WHERE id = ?'
+  ).bind(ratingValue, now(), id).run();
+
+  return c.json({ message: 'Rating saved' });
+});
+
+app.get('/support/admin/tickets', authMiddleware, staffMiddleware, async (c) => {
+  const db = c.env.DB;
+  const { status, priority, category, assigned_to, search, page = '1', limit = '50' } = c.req.query();
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+  const offset = (pageNum - 1) * limitNum;
+  const where = ['1 = 1'];
+  const params = [];
+
+  if (status) {
+    where.push('t.status = ?');
+    params.push(status);
+  }
+
+  if (priority) {
+    where.push('t.priority = ?');
+    params.push(priority);
+  }
+
+  if (category) {
+    where.push('t.category = ?');
+    params.push(category);
+  }
+
+  if (assigned_to) {
+    where.push('t.assigned_to = ?');
+    params.push(assigned_to);
+  }
+
+  if (search) {
+    where.push('(t.subject LIKE ? OR CAST(t.ticket_number AS TEXT) LIKE ? OR u.username_original LIKE ? OR u.email LIKE ?)');
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+  }
+
+  const { results: tickets } = await db.prepare(`
+    SELECT t.*, u.username_original as user_username, u.email as user_email
+    FROM support_tickets t
+    LEFT JOIN users u ON t.user_id = u.id
+    WHERE ${where.join(' AND ')}
+    ORDER BY t.updated_at DESC
+    LIMIT ? OFFSET ?
+  `).bind(...params, limitNum, offset).all();
+
+  return c.json({ tickets, page: pageNum, limit: limitNum });
+});
+
+app.get('/support/admin/tickets/:id', authMiddleware, staffMiddleware, async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+
+  const { results: tickets } = await db.prepare(`
+    SELECT t.*, u.username_original as user_username, u.email as user_email
+    FROM support_tickets t
+    LEFT JOIN users u ON t.user_id = u.id
+    WHERE t.id = ?
+  `).bind(id).all();
+
+  if (tickets.length === 0) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
+
+  const { results: messages } = await db.prepare(`
+    SELECT id, ticket_id, author_id, content, is_staff_reply, is_internal_note, created_at, edited_at
+    FROM ticket_messages
+    WHERE ticket_id = ?
+    ORDER BY created_at ASC
+  `).bind(id).all();
+
+  return c.json({ ticket: tickets[0], messages });
+});
+
+app.post('/support/admin/tickets/:id/reply', authMiddleware, staffMiddleware, async (c) => {
+  const staff = c.get('user');
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const { message } = await c.req.json();
+
+  if (!message?.trim()) {
+    return c.json({ error: 'Message is required' }, 400);
+  }
+
+  const { results: tickets } = await db.prepare(
+    'SELECT id FROM support_tickets WHERE id = ?'
+  ).bind(id).all();
+
+  if (tickets.length === 0) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
+
+  const timestamp = now();
+  await db.prepare(`
+    INSERT INTO ticket_messages (
+      id, ticket_id, author_id, content, is_staff_reply, is_internal_note, created_at
+    ) VALUES (?, ?, ?, ?, 1, 0, ?)
+  `).bind(generateId(), id, staff.user_id, message.trim(), timestamp).run();
+
+  await db.prepare(
+    'UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?'
+  ).bind('in_progress', timestamp, id).run();
+
+  return c.json({ message: 'Reply added' });
+});
+
+app.post('/support/admin/tickets/:id/note', authMiddleware, staffMiddleware, async (c) => {
+  const staff = c.get('user');
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const { message } = await c.req.json();
+
+  if (!message?.trim()) {
+    return c.json({ error: 'Note is required' }, 400);
+  }
+
+  const { results: tickets } = await db.prepare(
+    'SELECT id FROM support_tickets WHERE id = ?'
+  ).bind(id).all();
+
+  if (tickets.length === 0) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
+
+  await db.prepare(`
+    INSERT INTO ticket_messages (
+      id, ticket_id, author_id, content, is_staff_reply, is_internal_note, created_at
+    ) VALUES (?, ?, ?, ?, 1, 1, ?)
+  `).bind(generateId(), id, staff.user_id, message.trim(), now()).run();
+
+  return c.json({ message: 'Note added' });
+});
+
+app.put('/support/admin/tickets/:id/assign', authMiddleware, staffMiddleware, async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const { assigned_to } = await c.req.json();
+  const timestamp = now();
+
+  if (assigned_to) {
+    const { results: users } = await db.prepare(
+      'SELECT id FROM users WHERE id = ?'
+    ).bind(assigned_to).all();
+    if (users.length === 0) {
+      return c.json({ error: 'Assigned user not found' }, 404);
+    }
+  }
+
+  await db.prepare(
+    'UPDATE support_tickets SET assigned_to = ?, updated_at = ? WHERE id = ?'
+  ).bind(assigned_to || null, timestamp, id).run();
+
+  return c.json({ message: 'Assignment updated' });
+});
+
+app.put('/support/admin/tickets/:id/status', authMiddleware, staffMiddleware, async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const { status } = await c.req.json();
+  const allowedStatuses = ['open', 'awaiting_reply', 'in_progress', 'resolved', 'closed'];
+
+  if (!allowedStatuses.includes(status)) {
+    return c.json({ error: 'Invalid status' }, 400);
+  }
+
+  const timestamp = now();
+  const updates = ['status = ?', 'updated_at = ?'];
+  const params = [status, timestamp];
+
+  if (status === 'resolved') {
+    updates.push('resolved_at = ?');
+    params.push(timestamp);
+    updates.push('closed_at = NULL');
+  } else if (status === 'closed') {
+    updates.push('closed_at = ?');
+    params.push(timestamp);
+    updates.push('resolved_at = NULL');
+  } else {
+    updates.push('resolved_at = NULL', 'closed_at = NULL');
+  }
+
+  params.push(id);
+  await db.prepare(`UPDATE support_tickets SET ${updates.join(', ')} WHERE id = ?`)
+    .bind(...params).run();
+
+  return c.json({ message: 'Status updated' });
+});
+
+app.put('/support/admin/tickets/:id/priority', authMiddleware, staffMiddleware, async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const { priority } = await c.req.json();
+  const allowedPriorities = ['low', 'normal', 'high', 'urgent'];
+
+  if (!allowedPriorities.includes(priority)) {
+    return c.json({ error: 'Invalid priority' }, 400);
+  }
+
+  await db.prepare(
+    'UPDATE support_tickets SET priority = ?, updated_at = ? WHERE id = ?'
+  ).bind(priority, now(), id).run();
+
+  return c.json({ message: 'Priority updated' });
+});
+
+app.get('/support/admin/stats', authMiddleware, staffMiddleware, async (c) => {
+  const db = c.env.DB;
+  const { results: statsRows } = await db.prepare(`
+    SELECT
+      SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open,
+      SUM(CASE WHEN status = 'awaiting_reply' THEN 1 ELSE 0 END) as awaiting_reply,
+      SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+      SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved,
+      SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed,
+      SUM(CASE WHEN priority = 'urgent' THEN 1 ELSE 0 END) as urgent,
+      SUM(CASE WHEN assigned_to IS NULL THEN 1 ELSE 0 END) as unassigned
+    FROM support_tickets
+  `).all();
+
+  return c.json({ stats: statsRows[0] || {} });
 });
 
 // Scheduled cleanup handler for Cloudflare Cron Triggers

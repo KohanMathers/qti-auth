@@ -29,6 +29,7 @@ database_id = "fee04853-d8d0-4d7f-9adc-d2f74e18c850"
 ENVIRONMENT = "production"
 FRONTEND_URL = "https://account.quietterminal.co.uk"
 API_URL = "https://auth.quietterminal.co.uk"
+COOKIE_DOMAIN = ".quietterminal.co.uk"
 
 # Rate limiting (optional - use Cloudflare Rate Limiting rules instead)
 # [[unsafe.bindings]]
@@ -63,6 +64,7 @@ database_id = "f6c3bfa5-8c24-460a-9480-870d23c1cd96"
 ENVIRONMENT = "staging"
 FRONTEND_URL = "https://account-staging.quietterminal.co.uk"
 API_URL = "https://auth-staging.quietterminal.co.uk"
+COOKIE_DOMAIN = ".quietterminal.co.uk"
 
 [[env.staging.routes]]
 pattern = "auth-staging.quietterminal.co.uk/*"

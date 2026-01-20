@@ -50,6 +50,14 @@ wrangler d1 execute qti_auth --file=./schema.sql
 wrangler d1 execute qti_auth --local --file=./schema.sql
 ```
 
+### Support System Tables
+
+If you are adding the support system to an existing database, apply the support migration:
+
+```bash
+wrangler d1 execute qti_auth --file=./migrations/0008_support.sql
+```
+
 ---
 
 ## Step 2: Worker Configuration
@@ -125,6 +133,29 @@ wrangler pages deploy dist --project-name=qti-auth-frontend
 
 ---
 
+## Support Frontend Setup
+
+```bash
+cd support-frontend
+npm install
+```
+
+Create `support-frontend/.env.local`:
+
+```env
+VITE_API_URL=https://auth.yourdomain.com
+VITE_ACCOUNT_URL=https://account.yourdomain.com/login
+```
+
+This support frontend relies on the shared `qti_token` cookie set for `.yourdomain.com`, so ensure `COOKIE_DOMAIN` in `wrangler.toml` is set to the parent domain:
+
+```toml
+[vars]
+COOKIE_DOMAIN = ".yourdomain.com"
+```
+
+---
+
 ## Step 5: Custom Domains
 
 ### Worker Custom Domain
@@ -138,6 +169,12 @@ wrangler pages deploy dist --project-name=qti-auth-frontend
 1. Go to Pages → qti-auth-frontend
 2. Click "Custom domains" → "Set up a custom domain"
 3. Enter: `account.yourdomain.com`
+
+---
+
+## Support Domain
+
+Point your support frontend to `support.yourdomain.com` (or `support.quietterminal.co.uk` for production) and ensure it can reach the worker at `auth.yourdomain.com`.
 
 ---
 
