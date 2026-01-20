@@ -401,6 +401,17 @@ button:disabled {
   border-color: #fbbf24;
 }
 
+[data-theme="dark"] .info-box.warning {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.4);
+  color: var(--text);
+}
+
+[data-theme="dark"] .info-box.warning p,
+[data-theme="dark"] .info-box.warning h3 {
+  color: var(--text);
+}
+
 /* Username Rules */
 .username-rules {
   margin-top: 0.75rem;
@@ -447,10 +458,48 @@ button:disabled {
 }
 
 .badge {
+  display: inline-block;
   padding: 0.25rem 0.75rem;
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
+  text-transform: capitalize;
+}
+
+.badge.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge.info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge.muted {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+[data-theme="dark"] .badge.success {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+}
+
+[data-theme="dark"] .badge.warning {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fcd34d;
+}
+
+[data-theme="dark"] .badge.info {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
 }
 
 .child-badge {
@@ -461,6 +510,16 @@ button:disabled {
 .admin-badge {
   background: #dbeafe;
   color: #1e40af;
+}
+
+[data-theme="dark"] .child-badge {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fcd34d;
+}
+
+[data-theme="dark"] .admin-badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
 }
 
 .dashboard-content {
@@ -604,6 +663,175 @@ button:disabled {
 .report-date {
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+/* OAuth Client Cards */
+.clients-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.client-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.client-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.client-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.client-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.client-description {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.client-details {
+  margin: 1rem 0;
+}
+
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row .label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.detail-row code {
+  font-size: 0.85rem;
+  background: var(--bg);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.uri-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.client-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+/* Developer Portal */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
+.dashboard-main.full-width {
+  width: 100%;
+}
+
+.create-form-container {
+  max-width: 600px;
+}
+
+.create-form-container h2 {
+  margin-bottom: 1.5rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.client-secret-box .secret-display {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.client-secret-box .secret-display .form-group {
+  margin-bottom: 1rem;
+}
+
+.client-secret-box .secret-display .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.client-secret-box .secret-display label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.client-secret-box .secret-display code {
+  display: block;
+  font-size: 0.9rem;
+  word-break: break-all;
+  color: var(--text);
+}
+
+/* OAuth Admin */
+.uri-list-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.uri-list-admin code {
+  display: block;
+  background: var(--bg-secondary);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.scopes-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 /* Moderation Queue */

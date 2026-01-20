@@ -19,6 +19,11 @@ database_id = "fee04853-d8d0-4d7f-9adc-d2f74e18c850"
 # wrangler secret put DISCORD_CLIENT_ID
 # wrangler secret put DISCORD_CLIENT_SECRET
 # wrangler secret put EMAIL_SERVICE_API_KEY
+#
+# OAuth Provider (Sign in with QTI) - RS256 key pair for signing ID tokens
+# Generate with: openssl genrsa -out private.pem 2048 && openssl rsa -in private.pem -pubout -out public.pem
+# wrangler secret put OAUTH_PROVIDER_PRIVATE_KEY < private.pem
+# wrangler secret put OAUTH_PROVIDER_PUBLIC_KEY < public.pem
 
 [vars]
 ENVIRONMENT = "production"

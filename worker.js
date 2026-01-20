@@ -35,6 +35,18 @@ const CONFIG = {
   LEGACY_TOKEN_DEADLINE: 1737331200, // 2025-01-20 00:00:00 UTC - after this, legacy tokens are rejected
   SECURITY_EVENT_RATE_LIMIT: 10, // Max security events per user per hour
   SECURITY_ALERT_RATE_LIMIT: 3, // Max security alert emails per user per hour
+
+  // OAuth 2.1 / OpenID Connect Provider settings
+  OAUTH_PROVIDER: {
+    AUTH_CODE_EXPIRY: 10 * 60,           // 10 minutes
+    ACCESS_TOKEN_EXPIRY: 60 * 60,        // 1 hour
+    REFRESH_TOKEN_EXPIRY: 30 * 24 * 60 * 60, // 30 days
+    ID_TOKEN_EXPIRY: 60 * 60,            // 1 hour
+    SUPPORTED_SCOPES: ['openid', 'profile', 'email'],
+    SUPPORTED_RESPONSE_TYPES: ['code'],
+    SUPPORTED_GRANT_TYPES: ['authorization_code', 'refresh_token'],
+    SUPPORTED_CODE_CHALLENGE_METHODS: ['S256'],
+  },
 };
 
 const REPORT_TYPES = {
@@ -183,6 +195,156 @@ async function hashToken(token) {
   return Array.from(new Uint8Array(hash))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+// ============================================================================
+// OAUTH 2.1 / OPENID CONNECT PROVIDER UTILITIES
+// ============================================================================
+
+// Base64URL encode (no padding, URL-safe)
+function base64UrlEncode(data) {
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(data)));
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function base64UrlEncodeString(str) {
+  const encoder = new TextEncoder();
+  return base64UrlEncode(encoder.encode(str));
+}
+
+function base64UrlDecode(str) {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = '='.repeat((4 - base64.length % 4) % 4);
+  const decoded = atob(base64 + padding);
+  return new Uint8Array([...decoded].map(c => c.charCodeAt(0)));
+}
+
+// Import RSA private key from PEM format for signing
+async function importPrivateKey(pemKey) {
+  const pemContents = pemKey
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s/g, '');
+  const binaryKey = base64UrlDecode(pemContents.replace(/\+/g, '-').replace(/\//g, '_'));
+
+  return await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+}
+
+// Import RSA public key from PEM format for verification
+async function importPublicKey(pemKey) {
+  const pemContents = pemKey
+    .replace(/-----BEGIN PUBLIC KEY-----/, '')
+    .replace(/-----END PUBLIC KEY-----/, '')
+    .replace(/\s/g, '');
+  const binaryKey = base64UrlDecode(pemContents.replace(/\+/g, '-').replace(/\//g, '_'));
+
+  return await crypto.subtle.importKey(
+    'spki',
+    binaryKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    true,
+    ['verify']
+  );
+}
+
+// Sign JWT with RS256
+async function signJwtRS256(payload, privateKeyPem) {
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const headerB64 = base64UrlEncodeString(JSON.stringify(header));
+  const payloadB64 = base64UrlEncodeString(JSON.stringify(payload));
+  const message = `${headerB64}.${payloadB64}`;
+
+  const privateKey = await importPrivateKey(privateKeyPem);
+  const encoder = new TextEncoder();
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    privateKey,
+    encoder.encode(message)
+  );
+
+  return `${message}.${base64UrlEncode(signature)}`;
+}
+
+// Generate at_hash (access token hash for ID token)
+async function generateAtHash(accessToken) {
+  const encoder = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(accessToken));
+  // Take left-most half of hash and base64url encode
+  const halfHash = new Uint8Array(hash).slice(0, 16);
+  return base64UrlEncode(halfHash);
+}
+
+// Verify PKCE code_verifier against code_challenge (S256 only per OAuth 2.1)
+async function verifyPKCE(codeVerifier, codeChallenge) {
+  const encoder = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
+  const computedChallenge = base64UrlEncode(hash);
+  return computedChallenge === codeChallenge;
+}
+
+// Generate secure random token
+function generateSecureToken(length = 32) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+// Get issuer URL based on environment
+function getIssuer(c) {
+  return c.env.API_URL || 'https://auth.quietterminal.co.uk';
+}
+
+// Build user claims based on requested scopes
+function buildUserClaims(user, scopes) {
+  const claims = {};
+
+  // openid scope - always include sub
+  if (scopes.includes('openid')) {
+    claims.sub = user.id;
+  }
+
+  // profile scope
+  if (scopes.includes('profile')) {
+    claims.name = user.username_original;
+    claims.preferred_username = user.username_original;
+    claims.updated_at = user.updated_at;
+    // picture could be added if we have avatar support
+  }
+
+  // email scope
+  if (scopes.includes('email')) {
+    claims.email = user.email;
+    claims.email_verified = true; // All our emails are verified via magic link or OAuth
+  }
+
+  return claims;
+}
+
+// Validate redirect URI against registered URIs (exact match per OAuth 2.1)
+function validateRedirectUri(redirectUri, registeredUris) {
+  try {
+    const uris = JSON.parse(registeredUris);
+    return uris.includes(redirectUri);
+  } catch {
+    return false;
+  }
+}
+
+// Validate requested scopes against client's allowed scopes
+function validateScopes(requestedScopes, allowedScopes) {
+  try {
+    const allowed = JSON.parse(allowedScopes);
+    const requested = requestedScopes.split(' ').filter(s => s);
+    return requested.every(scope => allowed.includes(scope));
+  } catch {
+    return false;
+  }
 }
 
 // ============================================================================
@@ -3644,6 +3806,1256 @@ app.get('/admin/moderation-history', authMiddleware, adminMiddleware, async (c) 
       total_pages: Math.ceil(total / limitNum)
     }
   });
+});
+
+// ============================================================================
+// OAUTH 2.1 / OPENID CONNECT PROVIDER ENDPOINTS
+// ============================================================================
+
+// OpenID Connect Discovery Document
+app.get('/.well-known/openid-configuration', (c) => {
+  const issuer = getIssuer(c);
+
+  return c.json({
+    issuer,
+    authorization_endpoint: `${issuer}/oauth/authorize`,
+    token_endpoint: `${issuer}/oauth/token`,
+    userinfo_endpoint: `${issuer}/oauth/userinfo`,
+    revocation_endpoint: `${issuer}/oauth/revoke`,
+    introspection_endpoint: `${issuer}/oauth/introspect`,
+    jwks_uri: `${issuer}/.well-known/jwks.json`,
+    registration_endpoint: `${issuer}/oauth/clients`,
+    scopes_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_SCOPES,
+    response_types_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_RESPONSE_TYPES,
+    response_modes_supported: ['query'],
+    grant_types_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_GRANT_TYPES,
+    subject_types_supported: ['public'],
+    id_token_signing_alg_values_supported: ['RS256'],
+    token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+    code_challenge_methods_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_CODE_CHALLENGE_METHODS,
+    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'name', 'preferred_username', 'email', 'email_verified', 'updated_at'],
+    service_documentation: 'https://quietterminal.co.uk/docs/oauth',
+  });
+});
+
+// JWKS endpoint - returns public key for ID token verification
+app.get('/.well-known/jwks.json', async (c) => {
+  const publicKeyPem = c.env.OAUTH_PROVIDER_PUBLIC_KEY;
+
+  if (!publicKeyPem) {
+    return c.json({ keys: [] });
+  }
+
+  try {
+    // Import the public key to get its components
+    const publicKey = await importPublicKey(publicKeyPem);
+    const jwk = await crypto.subtle.exportKey('jwk', publicKey);
+
+    return c.json({
+      keys: [{
+        kty: jwk.kty,
+        use: 'sig',
+        alg: 'RS256',
+        kid: 'qti-auth-1', // Key ID - increment when rotating keys
+        n: jwk.n,
+        e: jwk.e,
+      }]
+    });
+  } catch (e) {
+    console.error('JWKS error:', e);
+    return c.json({ keys: [] });
+  }
+});
+
+// ============================================================================
+// OAUTH CLIENT MANAGEMENT (Developer Portal)
+// ============================================================================
+
+// Register new OAuth client (any authenticated user)
+app.post('/oauth/clients', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+
+  // Children cannot create OAuth clients
+  if (user.is_child) {
+    return c.json({ error: 'Child accounts cannot create OAuth applications' }, 403);
+  }
+
+  const { name, description, homepage_url, privacy_policy_url, redirect_uris, client_type = 'confidential' } = await c.req.json();
+
+  // Validation
+  if (!name || name.length < 3 || name.length > 100) {
+    return c.json({ error: 'Name must be between 3 and 100 characters' }, 400);
+  }
+
+  if (!redirect_uris || !Array.isArray(redirect_uris) || redirect_uris.length === 0) {
+    return c.json({ error: 'At least one redirect URI is required' }, 400);
+  }
+
+  // Validate redirect URIs
+  for (const uri of redirect_uris) {
+    try {
+      const url = new URL(uri);
+      // OAuth 2.1 requires HTTPS except for localhost
+      if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+        return c.json({ error: `Redirect URI must use HTTPS: ${uri}` }, 400);
+      }
+    } catch {
+      return c.json({ error: `Invalid redirect URI: ${uri}` }, 400);
+    }
+  }
+
+  if (client_type !== 'confidential' && client_type !== 'public') {
+    return c.json({ error: 'Client type must be "confidential" or "public"' }, 400);
+  }
+
+  const clientId = generateId();
+  const clientSecret = generateSecureToken(32);
+  const clientSecretHash = await hashToken(clientSecret);
+  const currentTime = now();
+
+  await db.prepare(`
+    INSERT INTO oauth_clients (id, client_secret_hash, name, description, homepage_url, privacy_policy_url, redirect_uris, client_type, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    clientId,
+    clientSecretHash,
+    name,
+    description || null,
+    homepage_url || null,
+    privacy_policy_url || null,
+    JSON.stringify(redirect_uris),
+    client_type,
+    user.user_id,
+    currentTime,
+    currentTime
+  ).run();
+
+  return c.json({
+    client_id: clientId,
+    client_secret: clientSecret, // Only shown once!
+    name,
+    redirect_uris,
+    client_type,
+    is_approved: false,
+    message: 'Save your client secret securely - it will not be shown again. Your app can only be used by you until an admin approves it.',
+  }, 201);
+});
+
+// List my OAuth clients
+app.get('/oauth/clients', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+
+  const { results } = await db.prepare(`
+    SELECT id, name, description, homepage_url, logo_url, redirect_uris, client_type, is_active, is_approved, approval_requested, approval_requested_at, created_at, updated_at
+    FROM oauth_clients
+    WHERE created_by = ?
+    ORDER BY created_at DESC
+  `).bind(user.user_id).all();
+
+  return c.json({
+    clients: results.map(client => ({
+      ...client,
+      redirect_uris: JSON.parse(client.redirect_uris),
+    }))
+  });
+});
+
+// Get specific OAuth client (owner only)
+app.get('/oauth/clients/:id', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const clientId = c.req.param('id');
+
+  const { results } = await db.prepare(`
+    SELECT id, name, description, homepage_url, privacy_policy_url, logo_url, redirect_uris, allowed_scopes, client_type, is_active, is_approved, approval_requested, approval_requested_at, created_at, updated_at
+    FROM oauth_clients
+    WHERE id = ? AND created_by = ?
+  `).bind(clientId, user.user_id).all();
+
+  if (results.length === 0) {
+    return c.json({ error: 'Client not found' }, 404);
+  }
+
+  const client = results[0];
+  return c.json({
+    ...client,
+    redirect_uris: JSON.parse(client.redirect_uris),
+    allowed_scopes: JSON.parse(client.allowed_scopes),
+  });
+});
+
+// Update OAuth client (owner only)
+app.put('/oauth/clients/:id', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const clientId = c.req.param('id');
+
+  // Check ownership
+  const { results: existing } = await db.prepare(
+    'SELECT id FROM oauth_clients WHERE id = ? AND created_by = ?'
+  ).bind(clientId, user.user_id).all();
+
+  if (existing.length === 0) {
+    return c.json({ error: 'Client not found' }, 404);
+  }
+
+  const { name, description, homepage_url, privacy_policy_url, redirect_uris } = await c.req.json();
+
+  const updates = [];
+  const params = [];
+
+  if (name !== undefined) {
+    if (name.length < 3 || name.length > 100) {
+      return c.json({ error: 'Name must be between 3 and 100 characters' }, 400);
+    }
+    updates.push('name = ?');
+    params.push(name);
+  }
+
+  if (description !== undefined) {
+    updates.push('description = ?');
+    params.push(description);
+  }
+
+  if (homepage_url !== undefined) {
+    updates.push('homepage_url = ?');
+    params.push(homepage_url);
+  }
+
+  if (privacy_policy_url !== undefined) {
+    updates.push('privacy_policy_url = ?');
+    params.push(privacy_policy_url);
+  }
+
+  if (redirect_uris !== undefined) {
+    if (!Array.isArray(redirect_uris) || redirect_uris.length === 0) {
+      return c.json({ error: 'At least one redirect URI is required' }, 400);
+    }
+    for (const uri of redirect_uris) {
+      try {
+        const url = new URL(uri);
+        if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+          return c.json({ error: `Redirect URI must use HTTPS: ${uri}` }, 400);
+        }
+      } catch {
+        return c.json({ error: `Invalid redirect URI: ${uri}` }, 400);
+      }
+    }
+    updates.push('redirect_uris = ?');
+    params.push(JSON.stringify(redirect_uris));
+  }
+
+  if (updates.length === 0) {
+    return c.json({ error: 'No valid fields to update' }, 400);
+  }
+
+  updates.push('updated_at = ?');
+  params.push(now());
+  params.push(clientId);
+
+  await db.prepare(`UPDATE oauth_clients SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run();
+
+  return c.json({ success: true });
+});
+
+// Delete OAuth client (owner only)
+app.delete('/oauth/clients/:id', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const clientId = c.req.param('id');
+
+  const result = await db.prepare(
+    'DELETE FROM oauth_clients WHERE id = ? AND created_by = ?'
+  ).bind(clientId, user.user_id).run();
+
+  if (result.meta?.changes === 0) {
+    return c.json({ error: 'Client not found' }, 404);
+  }
+
+  return c.json({ success: true });
+});
+
+// Regenerate client secret (owner only)
+app.post('/oauth/clients/:id/regenerate-secret', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const clientId = c.req.param('id');
+
+  // Check ownership
+  const { results: existing } = await db.prepare(
+    'SELECT id FROM oauth_clients WHERE id = ? AND created_by = ?'
+  ).bind(clientId, user.user_id).all();
+
+  if (existing.length === 0) {
+    return c.json({ error: 'Client not found' }, 404);
+  }
+
+  const newSecret = generateSecureToken(32);
+  const newSecretHash = await hashToken(newSecret);
+
+  await db.prepare(
+    'UPDATE oauth_clients SET client_secret_hash = ?, updated_at = ? WHERE id = ?'
+  ).bind(newSecretHash, now(), clientId).run();
+
+  // Revoke all existing tokens for this client
+  await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE client_id = ?').bind(clientId).run();
+  await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE client_id = ?').bind(clientId).run();
+
+  return c.json({
+    client_secret: newSecret,
+    message: 'Save your new client secret securely - it will not be shown again. All existing tokens have been revoked.',
+  });
+});
+
+// Request approval for OAuth client (owner only)
+app.post('/oauth/clients/:id/request-approval', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const clientId = c.req.param('id');
+
+  // Check ownership and current status
+  const { results: existing } = await db.prepare(
+    'SELECT id, is_approved, approval_requested FROM oauth_clients WHERE id = ? AND created_by = ?'
+  ).bind(clientId, user.user_id).all();
+
+  if (existing.length === 0) {
+    return c.json({ error: 'Client not found' }, 404);
+  }
+
+  const client = existing[0];
+
+  if (client.is_approved) {
+    return c.json({ error: 'Client is already approved' }, 400);
+  }
+
+  if (client.approval_requested) {
+    return c.json({ error: 'Approval has already been requested' }, 400);
+  }
+
+  await db.prepare(
+    'UPDATE oauth_clients SET approval_requested = 1, approval_requested_at = ?, updated_at = ? WHERE id = ?'
+  ).bind(now(), now(), clientId).run();
+
+  return c.json({
+    success: true,
+    message: 'Approval requested. An admin will review your application.',
+  });
+});
+
+// ============================================================================
+// OAUTH AUTHORIZATION ENDPOINT
+// ============================================================================
+
+// Authorization endpoint (GET for user redirect, shows consent screen)
+app.get('/oauth/authorize', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+
+  // Children cannot authorize third-party apps
+  if (user.is_child) {
+    const errorUrl = new URL(c.env.FRONTEND_URL + '/oauth-error');
+    errorUrl.searchParams.set('error', 'access_denied');
+    errorUrl.searchParams.set('error_description', 'Child accounts cannot authorize third-party applications');
+    return c.redirect(errorUrl.toString());
+  }
+
+  const {
+    client_id,
+    redirect_uri,
+    response_type,
+    scope = 'openid',
+    state,
+    code_challenge,
+    code_challenge_method,
+    nonce,
+  } = c.req.query();
+
+  // Validate required parameters
+  if (!client_id) {
+    return c.json({ error: 'invalid_request', error_description: 'client_id is required' }, 400);
+  }
+
+  if (!redirect_uri) {
+    return c.json({ error: 'invalid_request', error_description: 'redirect_uri is required' }, 400);
+  }
+
+  if (response_type !== 'code') {
+    return c.json({ error: 'unsupported_response_type', error_description: 'Only response_type=code is supported (OAuth 2.1)' }, 400);
+  }
+
+  // PKCE is mandatory in OAuth 2.1
+  if (!code_challenge) {
+    return c.json({ error: 'invalid_request', error_description: 'code_challenge is required (PKCE mandatory in OAuth 2.1)' }, 400);
+  }
+
+  if (code_challenge_method !== 'S256') {
+    return c.json({ error: 'invalid_request', error_description: 'code_challenge_method must be S256 (plain not allowed in OAuth 2.1)' }, 400);
+  }
+
+  // Validate client exists and is active
+  const { results: clients } = await db.prepare(`
+    SELECT id, name, description, logo_url, redirect_uris, allowed_scopes, is_active, is_approved, created_by
+    FROM oauth_clients WHERE id = ?
+  `).bind(client_id).all();
+
+  if (clients.length === 0) {
+    return c.json({ error: 'invalid_client', error_description: 'Client not found' }, 400);
+  }
+
+  const client = clients[0];
+
+  if (!client.is_active) {
+    return c.json({ error: 'invalid_client', error_description: 'Client is not active' }, 400);
+  }
+
+  // Non-approved clients can only be used by their owner
+  if (!client.is_approved && client.created_by !== user.user_id) {
+    return c.json({ error: 'invalid_client', error_description: 'Client is not approved for public use' }, 400);
+  }
+
+  // Validate redirect_uri (exact match per OAuth 2.1)
+  if (!validateRedirectUri(redirect_uri, client.redirect_uris)) {
+    return c.json({ error: 'invalid_request', error_description: 'redirect_uri does not match any registered URIs' }, 400);
+  }
+
+  // Validate scopes
+  if (!validateScopes(scope, client.allowed_scopes)) {
+    const errorUrl = new URL(redirect_uri);
+    errorUrl.searchParams.set('error', 'invalid_scope');
+    errorUrl.searchParams.set('error_description', 'Requested scope is not allowed for this client');
+    if (state) errorUrl.searchParams.set('state', state);
+    return c.redirect(errorUrl.toString());
+  }
+
+  // openid scope is required for OIDC
+  const scopes = scope.split(' ').filter(s => s);
+  if (!scopes.includes('openid')) {
+    const errorUrl = new URL(redirect_uri);
+    errorUrl.searchParams.set('error', 'invalid_scope');
+    errorUrl.searchParams.set('error_description', 'openid scope is required');
+    if (state) errorUrl.searchParams.set('state', state);
+    return c.redirect(errorUrl.toString());
+  }
+
+  // Check if user has already consented to this client with these scopes
+  const { results: existingConsents } = await db.prepare(`
+    SELECT scope FROM oauth_consents WHERE user_id = ? AND client_id = ?
+  `).bind(user.user_id, client_id).all();
+
+  const needsConsent = existingConsents.length === 0 ||
+    !scopes.every(s => JSON.parse(existingConsents[0].scope).includes(s));
+
+  if (!needsConsent) {
+    // User already consented - issue authorization code directly
+    const code = generateSecureToken(32);
+    const codeHash = await hashToken(code);
+    const currentTime = now();
+
+    await db.prepare(`
+      INSERT INTO oauth_authorization_codes (code_hash, client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, nonce, auth_time, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      codeHash,
+      client_id,
+      user.user_id,
+      redirect_uri,
+      scope,
+      code_challenge,
+      code_challenge_method,
+      nonce || null,
+      currentTime,
+      currentTime,
+      currentTime + CONFIG.OAUTH_PROVIDER.AUTH_CODE_EXPIRY
+    ).run();
+
+    const callbackUrl = new URL(redirect_uri);
+    callbackUrl.searchParams.set('code', code);
+    if (state) callbackUrl.searchParams.set('state', state);
+    return c.redirect(callbackUrl.toString());
+  }
+
+  // Redirect to frontend consent screen
+  const consentUrl = new URL(c.env.FRONTEND_URL + '/oauth/authorize');
+  consentUrl.searchParams.set('client_id', client_id);
+  consentUrl.searchParams.set('redirect_uri', redirect_uri);
+  consentUrl.searchParams.set('scope', scope);
+  consentUrl.searchParams.set('state', state || '');
+  consentUrl.searchParams.set('code_challenge', code_challenge);
+  consentUrl.searchParams.set('code_challenge_method', code_challenge_method);
+  if (nonce) consentUrl.searchParams.set('nonce', nonce);
+
+  return c.redirect(consentUrl.toString());
+});
+
+// Get client info for consent screen (authenticated)
+app.get('/oauth/authorize/client-info', authMiddleware, async (c) => {
+  const db = c.env.DB;
+  const { client_id, scope } = c.req.query();
+
+  if (!client_id) {
+    return c.json({ error: 'client_id is required' }, 400);
+  }
+
+  const { results } = await db.prepare(`
+    SELECT id, name, description, logo_url, homepage_url, privacy_policy_url
+    FROM oauth_clients WHERE id = ? AND is_active = 1
+  `).bind(client_id).all();
+
+  if (results.length === 0) {
+    return c.json({ error: 'Client not found' }, 404);
+  }
+
+  const client = results[0];
+  const scopes = (scope || 'openid').split(' ').filter(s => s);
+
+  // Build scope descriptions
+  const scopeDescriptions = {
+    openid: 'Verify your identity',
+    profile: 'Access your username and profile information',
+    email: 'Access your email address',
+  };
+
+  return c.json({
+    client,
+    scopes: scopes.map(s => ({ name: s, description: scopeDescriptions[s] || s })),
+  });
+});
+
+// Submit consent decision (POST from consent screen)
+app.post('/oauth/authorize', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+
+  if (user.is_child) {
+    return c.json({ error: 'access_denied', error_description: 'Child accounts cannot authorize third-party applications' }, 403);
+  }
+
+  const {
+    client_id,
+    redirect_uri,
+    scope,
+    state,
+    code_challenge,
+    code_challenge_method,
+    nonce,
+    consent, // 'allow' or 'deny'
+  } = await c.req.json();
+
+  // If user denied, redirect with error
+  if (consent !== 'allow') {
+    const errorUrl = new URL(redirect_uri);
+    errorUrl.searchParams.set('error', 'access_denied');
+    errorUrl.searchParams.set('error_description', 'User denied the authorization request');
+    if (state) errorUrl.searchParams.set('state', state);
+    return c.json({ redirect: errorUrl.toString() });
+  }
+
+  // Validate client again
+  const { results: clients } = await db.prepare(`
+    SELECT id, redirect_uris, allowed_scopes, is_active, is_approved, created_by
+    FROM oauth_clients WHERE id = ?
+  `).bind(client_id).all();
+
+  if (clients.length === 0 || !clients[0].is_active) {
+    return c.json({ error: 'invalid_client' }, 400);
+  }
+
+  const client = clients[0];
+
+  if (!client.is_approved && client.created_by !== user.user_id) {
+    return c.json({ error: 'invalid_client', error_description: 'Client is not approved' }, 400);
+  }
+
+  if (!validateRedirectUri(redirect_uri, client.redirect_uris)) {
+    return c.json({ error: 'invalid_request', error_description: 'Invalid redirect_uri' }, 400);
+  }
+
+  if (!validateScopes(scope, client.allowed_scopes)) {
+    return c.json({ error: 'invalid_scope' }, 400);
+  }
+
+  // Save consent
+  const consentId = generateId();
+  const currentTime = now();
+  const scopes = scope.split(' ').filter(s => s);
+
+  await db.prepare(`
+    INSERT INTO oauth_consents (id, user_id, client_id, scope, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, client_id) DO UPDATE SET scope = ?, updated_at = ?
+  `).bind(
+    consentId,
+    user.user_id,
+    client_id,
+    JSON.stringify(scopes),
+    currentTime,
+    currentTime,
+    JSON.stringify(scopes),
+    currentTime
+  ).run();
+
+  // Generate authorization code
+  const code = generateSecureToken(32);
+  const codeHash = await hashToken(code);
+
+  await db.prepare(`
+    INSERT INTO oauth_authorization_codes (code_hash, client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, nonce, auth_time, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    codeHash,
+    client_id,
+    user.user_id,
+    redirect_uri,
+    scope,
+    code_challenge,
+    code_challenge_method,
+    nonce || null,
+    currentTime,
+    currentTime,
+    currentTime + CONFIG.OAUTH_PROVIDER.AUTH_CODE_EXPIRY
+  ).run();
+
+  const callbackUrl = new URL(redirect_uri);
+  callbackUrl.searchParams.set('code', code);
+  if (state) callbackUrl.searchParams.set('state', state);
+
+  return c.json({ redirect: callbackUrl.toString() });
+});
+
+// ============================================================================
+// OAUTH TOKEN ENDPOINT
+// ============================================================================
+
+app.post('/oauth/token', async (c) => {
+  const db = c.env.DB;
+  const contentType = c.req.header('content-type') || '';
+
+  let params;
+  if (contentType.includes('application/json')) {
+    params = await c.req.json();
+  } else {
+    params = Object.fromEntries(new URLSearchParams(await c.req.text()));
+  }
+
+  const { grant_type, code, redirect_uri, client_id, client_secret, code_verifier, refresh_token } = params;
+
+  // Get client credentials from Basic auth or body
+  let authClientId = client_id;
+  let authClientSecret = client_secret;
+
+  const authHeader = c.req.header('authorization');
+  if (authHeader?.startsWith('Basic ')) {
+    const decoded = atob(authHeader.slice(6));
+    const [id, secret] = decoded.split(':');
+    authClientId = authClientId || decodeURIComponent(id);
+    authClientSecret = authClientSecret || decodeURIComponent(secret);
+  }
+
+  if (!authClientId) {
+    return c.json({ error: 'invalid_client', error_description: 'client_id is required' }, 401);
+  }
+
+  // Validate client
+  const { results: clients } = await db.prepare(`
+    SELECT id, client_secret_hash, client_type, is_active
+    FROM oauth_clients WHERE id = ?
+  `).bind(authClientId).all();
+
+  if (clients.length === 0) {
+    return c.json({ error: 'invalid_client' }, 401);
+  }
+
+  const client = clients[0];
+
+  if (!client.is_active) {
+    return c.json({ error: 'invalid_client', error_description: 'Client is not active' }, 401);
+  }
+
+  // Confidential clients must authenticate
+  if (client.client_type === 'confidential') {
+    if (!authClientSecret) {
+      return c.json({ error: 'invalid_client', error_description: 'Client authentication required' }, 401);
+    }
+    const secretHash = await hashToken(authClientSecret);
+    if (secretHash !== client.client_secret_hash) {
+      return c.json({ error: 'invalid_client', error_description: 'Invalid client credentials' }, 401);
+    }
+  }
+
+  if (grant_type === 'authorization_code') {
+    return handleAuthorizationCodeGrant(c, db, client, code, redirect_uri, code_verifier);
+  } else if (grant_type === 'refresh_token') {
+    return handleRefreshTokenGrant(c, db, client, refresh_token);
+  } else {
+    return c.json({ error: 'unsupported_grant_type', error_description: 'Only authorization_code and refresh_token grants are supported' }, 400);
+  }
+});
+
+async function handleAuthorizationCodeGrant(c, db, client, code, redirectUri, codeVerifier) {
+  if (!code) {
+    return c.json({ error: 'invalid_request', error_description: 'code is required' }, 400);
+  }
+
+  if (!codeVerifier) {
+    return c.json({ error: 'invalid_request', error_description: 'code_verifier is required (PKCE mandatory)' }, 400);
+  }
+
+  const codeHash = await hashToken(code);
+  const currentTime = now();
+
+  // Look up authorization code
+  const { results: codes } = await db.prepare(`
+    SELECT * FROM oauth_authorization_codes
+    WHERE code_hash = ? AND client_id = ? AND used = 0 AND expires_at > ?
+  `).bind(codeHash, client.id, currentTime).all();
+
+  if (codes.length === 0) {
+    return c.json({ error: 'invalid_grant', error_description: 'Invalid or expired authorization code' }, 400);
+  }
+
+  const authCode = codes[0];
+
+  // Verify redirect_uri matches
+  if (redirectUri && redirectUri !== authCode.redirect_uri) {
+    return c.json({ error: 'invalid_grant', error_description: 'redirect_uri does not match' }, 400);
+  }
+
+  // Verify PKCE
+  const pkceValid = await verifyPKCE(codeVerifier, authCode.code_challenge);
+  if (!pkceValid) {
+    return c.json({ error: 'invalid_grant', error_description: 'Invalid code_verifier' }, 400);
+  }
+
+  // Mark code as used (single-use)
+  await db.prepare('UPDATE oauth_authorization_codes SET used = 1 WHERE code_hash = ?').bind(codeHash).run();
+
+  // Get user info
+  const { results: users } = await db.prepare(`
+    SELECT id, username_original, email, updated_at
+    FROM users WHERE id = ?
+  `).bind(authCode.user_id).all();
+
+  if (users.length === 0) {
+    return c.json({ error: 'invalid_grant', error_description: 'User not found' }, 400);
+  }
+
+  const user = users[0];
+  const scopes = authCode.scope.split(' ').filter(s => s);
+
+  // Generate tokens
+  const accessToken = generateSecureToken(32);
+  const refreshToken = generateSecureToken(32);
+  const accessTokenHash = await hashToken(accessToken);
+  const refreshTokenHash = await hashToken(refreshToken);
+
+  const accessTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY;
+  const refreshTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.REFRESH_TOKEN_EXPIRY;
+
+  // Store tokens
+  await db.prepare(`
+    INSERT INTO oauth_access_tokens (token_hash, client_id, user_id, scope, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(accessTokenHash, client.id, user.id, authCode.scope, currentTime, accessTokenExpiry).run();
+
+  await db.prepare(`
+    INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, scope, access_token_hash, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(refreshTokenHash, client.id, user.id, authCode.scope, accessTokenHash, currentTime, refreshTokenExpiry).run();
+
+  // Build ID token
+  const idTokenPayload = {
+    iss: getIssuer(c),
+    sub: user.id,
+    aud: client.id,
+    exp: currentTime + CONFIG.OAUTH_PROVIDER.ID_TOKEN_EXPIRY,
+    iat: currentTime,
+    auth_time: authCode.auth_time,
+  };
+
+  if (authCode.nonce) {
+    idTokenPayload.nonce = authCode.nonce;
+  }
+
+  // Add at_hash
+  idTokenPayload.at_hash = await generateAtHash(accessToken);
+
+  // Add claims based on scopes
+  const userClaims = buildUserClaims(user, scopes);
+  Object.assign(idTokenPayload, userClaims);
+
+  // Sign ID token with RS256
+  const privateKey = c.env.OAUTH_PROVIDER_PRIVATE_KEY;
+  if (!privateKey) {
+    return c.json({ error: 'server_error', error_description: 'Server signing key not configured' }, 500);
+  }
+
+  const idToken = await signJwtRS256(idTokenPayload, privateKey);
+
+  return c.json({
+    access_token: accessToken,
+    token_type: 'Bearer',
+    expires_in: CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY,
+    refresh_token: refreshToken,
+    id_token: idToken,
+    scope: authCode.scope,
+  });
+}
+
+async function handleRefreshTokenGrant(c, db, client, refreshToken) {
+  if (!refreshToken) {
+    return c.json({ error: 'invalid_request', error_description: 'refresh_token is required' }, 400);
+  }
+
+  const tokenHash = await hashToken(refreshToken);
+  const currentTime = now();
+
+  // Look up refresh token
+  const { results: tokens } = await db.prepare(`
+    SELECT * FROM oauth_refresh_tokens
+    WHERE token_hash = ? AND client_id = ? AND revoked = 0 AND expires_at > ?
+  `).bind(tokenHash, client.id, currentTime).all();
+
+  if (tokens.length === 0) {
+    return c.json({ error: 'invalid_grant', error_description: 'Invalid or expired refresh token' }, 400);
+  }
+
+  const oldRefreshToken = tokens[0];
+
+  // Get user info
+  const { results: users } = await db.prepare(`
+    SELECT id, username_original, email, updated_at, is_banned
+    FROM users WHERE id = ?
+  `).bind(oldRefreshToken.user_id).all();
+
+  if (users.length === 0 || users[0].is_banned) {
+    return c.json({ error: 'invalid_grant', error_description: 'User not found or banned' }, 400);
+  }
+
+  const user = users[0];
+
+  // Rotate tokens (OAuth 2.1 requirement)
+  // Revoke old refresh token and its associated access token
+  await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE token_hash = ?').bind(tokenHash).run();
+  if (oldRefreshToken.access_token_hash) {
+    await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE token_hash = ?').bind(oldRefreshToken.access_token_hash).run();
+  }
+
+  // Generate new tokens
+  const newAccessToken = generateSecureToken(32);
+  const newRefreshToken = generateSecureToken(32);
+  const newAccessTokenHash = await hashToken(newAccessToken);
+  const newRefreshTokenHash = await hashToken(newRefreshToken);
+
+  const accessTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY;
+  const refreshTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.REFRESH_TOKEN_EXPIRY;
+
+  // Store new tokens
+  await db.prepare(`
+    INSERT INTO oauth_access_tokens (token_hash, client_id, user_id, scope, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(newAccessTokenHash, client.id, user.id, oldRefreshToken.scope, currentTime, accessTokenExpiry).run();
+
+  await db.prepare(`
+    INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, scope, access_token_hash, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(newRefreshTokenHash, client.id, user.id, oldRefreshToken.scope, newAccessTokenHash, currentTime, refreshTokenExpiry).run();
+
+  return c.json({
+    access_token: newAccessToken,
+    token_type: 'Bearer',
+    expires_in: CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY,
+    refresh_token: newRefreshToken,
+    scope: oldRefreshToken.scope,
+  });
+}
+
+// ============================================================================
+// OAUTH USERINFO ENDPOINT
+// ============================================================================
+
+app.get('/oauth/userinfo', async (c) => {
+  const db = c.env.DB;
+
+  // Get access token from Authorization header
+  const authHeader = c.req.header('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return c.json({ error: 'invalid_token', error_description: 'Bearer token required' }, 401);
+  }
+
+  const accessToken = authHeader.slice(7);
+  const tokenHash = await hashToken(accessToken);
+  const currentTime = now();
+
+  // Validate access token
+  const { results: tokens } = await db.prepare(`
+    SELECT user_id, scope FROM oauth_access_tokens
+    WHERE token_hash = ? AND revoked = 0 AND expires_at > ?
+  `).bind(tokenHash, currentTime).all();
+
+  if (tokens.length === 0) {
+    return c.json({ error: 'invalid_token', error_description: 'Invalid or expired access token' }, 401);
+  }
+
+  const token = tokens[0];
+
+  // Get user info
+  const { results: users } = await db.prepare(`
+    SELECT id, username_original, email, updated_at
+    FROM users WHERE id = ?
+  `).bind(token.user_id).all();
+
+  if (users.length === 0) {
+    return c.json({ error: 'invalid_token', error_description: 'User not found' }, 401);
+  }
+
+  const user = users[0];
+  const scopes = token.scope.split(' ').filter(s => s);
+
+  // Build response based on scopes
+  const response = buildUserClaims(user, scopes);
+
+  return c.json(response);
+});
+
+// POST also supported for userinfo
+app.post('/oauth/userinfo', async (c) => {
+  // Delegate to GET handler - same logic
+  return app.fetch(new Request(c.req.url, { method: 'GET', headers: c.req.raw.headers }), c.env, c.executionCtx);
+});
+
+// ============================================================================
+// OAUTH TOKEN REVOCATION & INTROSPECTION
+// ============================================================================
+
+// Token revocation (RFC 7009)
+app.post('/oauth/revoke', async (c) => {
+  const db = c.env.DB;
+  const contentType = c.req.header('content-type') || '';
+
+  let params;
+  if (contentType.includes('application/json')) {
+    params = await c.req.json();
+  } else {
+    params = Object.fromEntries(new URLSearchParams(await c.req.text()));
+  }
+
+  const { token, token_type_hint, client_id, client_secret } = params;
+
+  if (!token) {
+    return c.json({ error: 'invalid_request', error_description: 'token is required' }, 400);
+  }
+
+  // Get client credentials
+  let authClientId = client_id;
+  let authClientSecret = client_secret;
+
+  const authHeader = c.req.header('authorization');
+  if (authHeader?.startsWith('Basic ')) {
+    const decoded = atob(authHeader.slice(6));
+    const [id, secret] = decoded.split(':');
+    authClientId = authClientId || decodeURIComponent(id);
+    authClientSecret = authClientSecret || decodeURIComponent(secret);
+  }
+
+  // Validate client if provided
+  if (authClientId) {
+    const { results: clients } = await db.prepare(`
+      SELECT id, client_secret_hash, client_type FROM oauth_clients WHERE id = ?
+    `).bind(authClientId).all();
+
+    if (clients.length > 0 && clients[0].client_type === 'confidential') {
+      const secretHash = await hashToken(authClientSecret || '');
+      if (secretHash !== clients[0].client_secret_hash) {
+        return c.json({ error: 'invalid_client' }, 401);
+      }
+    }
+  }
+
+  const tokenHash = await hashToken(token);
+
+  // Try to revoke as access token first, then refresh token
+  if (token_type_hint !== 'refresh_token') {
+    await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE token_hash = ?').bind(tokenHash).run();
+  }
+
+  if (token_type_hint !== 'access_token') {
+    await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE token_hash = ?').bind(tokenHash).run();
+  }
+
+  // Always return 200 OK per RFC 7009
+  return c.json({});
+});
+
+// Token introspection (RFC 7662)
+app.post('/oauth/introspect', async (c) => {
+  const db = c.env.DB;
+  const contentType = c.req.header('content-type') || '';
+
+  let params;
+  if (contentType.includes('application/json')) {
+    params = await c.req.json();
+  } else {
+    params = Object.fromEntries(new URLSearchParams(await c.req.text()));
+  }
+
+  const { token, token_type_hint, client_id, client_secret } = params;
+
+  if (!token) {
+    return c.json({ error: 'invalid_request', error_description: 'token is required' }, 400);
+  }
+
+  // Get client credentials
+  let authClientId = client_id;
+  let authClientSecret = client_secret;
+
+  const authHeader = c.req.header('authorization');
+  if (authHeader?.startsWith('Basic ')) {
+    const decoded = atob(authHeader.slice(6));
+    const [id, secret] = decoded.split(':');
+    authClientId = authClientId || decodeURIComponent(id);
+    authClientSecret = authClientSecret || decodeURIComponent(secret);
+  }
+
+  // Client authentication required for introspection
+  if (!authClientId) {
+    return c.json({ error: 'invalid_client', error_description: 'Client authentication required' }, 401);
+  }
+
+  const { results: clients } = await db.prepare(`
+    SELECT id, client_secret_hash, client_type FROM oauth_clients WHERE id = ?
+  `).bind(authClientId).all();
+
+  if (clients.length === 0) {
+    return c.json({ error: 'invalid_client' }, 401);
+  }
+
+  if (clients[0].client_type === 'confidential') {
+    const secretHash = await hashToken(authClientSecret || '');
+    if (secretHash !== clients[0].client_secret_hash) {
+      return c.json({ error: 'invalid_client' }, 401);
+    }
+  }
+
+  const tokenHash = await hashToken(token);
+  const currentTime = now();
+
+  // Try access token first
+  if (token_type_hint !== 'refresh_token') {
+    const { results: accessTokens } = await db.prepare(`
+      SELECT at.*, u.username_original, u.email
+      FROM oauth_access_tokens at
+      JOIN users u ON at.user_id = u.id
+      WHERE at.token_hash = ?
+    `).bind(tokenHash).all();
+
+    if (accessTokens.length > 0) {
+      const t = accessTokens[0];
+      const active = t.revoked === 0 && t.expires_at > currentTime;
+
+      return c.json({
+        active,
+        scope: t.scope,
+        client_id: t.client_id,
+        username: t.username_original,
+        token_type: 'Bearer',
+        exp: t.expires_at,
+        iat: t.created_at,
+        sub: t.user_id,
+        aud: t.client_id,
+        iss: getIssuer(c),
+      });
+    }
+  }
+
+  // Try refresh token
+  if (token_type_hint !== 'access_token') {
+    const { results: refreshTokens } = await db.prepare(`
+      SELECT rt.*, u.username_original
+      FROM oauth_refresh_tokens rt
+      JOIN users u ON rt.user_id = u.id
+      WHERE rt.token_hash = ?
+    `).bind(tokenHash).all();
+
+    if (refreshTokens.length > 0) {
+      const t = refreshTokens[0];
+      const active = t.revoked === 0 && t.expires_at > currentTime;
+
+      return c.json({
+        active,
+        scope: t.scope,
+        client_id: t.client_id,
+        username: t.username_original,
+        token_type: 'refresh_token',
+        exp: t.expires_at,
+        iat: t.created_at,
+        sub: t.user_id,
+      });
+    }
+  }
+
+  // Token not found - return inactive
+  return c.json({ active: false });
+});
+
+// ============================================================================
+// USER AUTHORIZED APPS MANAGEMENT
+// ============================================================================
+
+// List apps the user has authorized
+app.get('/oauth/authorized-apps', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+
+  const { results } = await db.prepare(`
+    SELECT oc.id, oc.client_id, oc.scope, oc.created_at, oc.updated_at,
+           c.name, c.description, c.logo_url, c.homepage_url
+    FROM oauth_consents oc
+    JOIN oauth_clients c ON oc.client_id = c.id
+    WHERE oc.user_id = ?
+    ORDER BY oc.updated_at DESC
+  `).bind(user.user_id).all();
+
+  return c.json({
+    apps: results.map(app => ({
+      ...app,
+      scope: JSON.parse(app.scope),
+    }))
+  });
+});
+
+// Revoke authorization for an app
+app.delete('/oauth/authorized-apps/:client_id', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const clientId = c.req.param('client_id');
+
+  // Delete consent
+  await db.prepare('DELETE FROM oauth_consents WHERE user_id = ? AND client_id = ?')
+    .bind(user.user_id, clientId).run();
+
+  // Revoke all tokens for this user+client
+  await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE user_id = ? AND client_id = ?')
+    .bind(user.user_id, clientId).run();
+  await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE user_id = ? AND client_id = ?')
+    .bind(user.user_id, clientId).run();
+
+  return c.json({ success: true });
+});
+
+// ============================================================================
+// ADMIN OAUTH CLIENT MANAGEMENT
+// ============================================================================
+
+// List all OAuth clients (admin)
+app.get('/admin/oauth/clients', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const { is_approved, page = '1', limit = '50' } = c.req.query();
+
+  const pageNum = Math.max(1, parseInt(page));
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+  const offset = (pageNum - 1) * limitNum;
+
+  let whereClause = '';
+  const params = [];
+
+  if (is_approved !== undefined) {
+    whereClause = 'WHERE is_approved = ?';
+    params.push(is_approved === 'true' ? 1 : 0);
+  }
+
+  const { results: countResults } = await db.prepare(
+    `SELECT COUNT(*) as count FROM oauth_clients ${whereClause}`
+  ).bind(...params).all();
+  const total = countResults[0].count;
+
+  const { results } = await db.prepare(`
+    SELECT oc.*, u.username_original as created_by_username
+    FROM oauth_clients oc
+    JOIN users u ON oc.created_by = u.id
+    ${whereClause}
+    ORDER BY oc.created_at DESC
+    LIMIT ? OFFSET ?
+  `).bind(...params, limitNum, offset).all();
+
+  return c.json({
+    clients: results.map(client => ({
+      ...client,
+      redirect_uris: JSON.parse(client.redirect_uris),
+      allowed_scopes: JSON.parse(client.allowed_scopes),
+    })),
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      total_pages: Math.ceil(total / limitNum),
+    }
+  });
+});
+
+// Approve OAuth client (admin)
+app.post('/admin/oauth/clients/:id/approve', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const clientId = c.req.param('id');
+  const admin = c.get('user');
+
+  const result = await db.prepare(
+    'UPDATE oauth_clients SET is_approved = 1, approval_requested = 0, updated_at = ? WHERE id = ?'
+  ).bind(now(), clientId).run();
+
+  if (result.meta?.changes === 0) {
+    return c.json({ error: 'Client not found' }, 404);
+  }
+
+  // Log admin action
+  await db.prepare(`
+    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    generateId(),
+    admin.user_id,
+    'oauth_client_approved',
+    clientId,
+    'oauth_client',
+    JSON.stringify({ action: 'approved' }),
+    getClientIP(c),
+    now()
+  ).run();
+
+  return c.json({ success: true });
+});
+
+// Revoke OAuth client approval (admin)
+app.post('/admin/oauth/clients/:id/revoke', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const clientId = c.req.param('id');
+  const admin = c.get('user');
+
+  const result = await db.prepare(
+    'UPDATE oauth_clients SET is_approved = 0, updated_at = ? WHERE id = ?'
+  ).bind(now(), clientId).run();
+
+  if (result.meta?.changes === 0) {
+    return c.json({ error: 'Client not found' }, 404);
+  }
+
+  // Log admin action
+  await db.prepare(`
+    INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    generateId(),
+    admin.user_id,
+    'oauth_client_revoked',
+    clientId,
+    'oauth_client',
+    JSON.stringify({ action: 'revoked' }),
+    getClientIP(c),
+    now()
+  ).run();
+
+  return c.json({ success: true });
 });
 
 // ============================================================================

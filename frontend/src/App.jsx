@@ -13,6 +13,10 @@ import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import Verify from './pages/Verify';
 import AgeVerify from './pages/AgeVerify';
+import OAuthAuthorize from './pages/OAuthAuthorize';
+import DeveloperPortal from './pages/DeveloperPortal';
+import MyAuthorizedApps from './pages/MyAuthorizedApps';
+import OAuthAdmin from './pages/OAuthAdmin';
 import './App.css';
 
 function App() {
@@ -112,6 +116,16 @@ function App() {
           }
         />
         <Route
+          path="/admin/oauth"
+          element={
+            user && user.role === 'admin' ? (
+              <OAuthAdmin user={user} />
+            ) : (
+              <Navigate to="/dashboard" />
+            )
+          }
+        />
+        <Route
           path="/stats"
           element={user ? <Stats user={user} /> : <Navigate to="/login" />}
         />
@@ -122,6 +136,18 @@ function App() {
         <Route
           path="/jagsmp"
           element={user ? <JagSMP user={user} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/oauth/authorize"
+          element={user ? <OAuthAuthorize user={user} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/developer"
+          element={user ? <DeveloperPortal user={user} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/authorized-apps"
+          element={user ? <MyAuthorizedApps user={user} /> : <Navigate to="/login" />}
         />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />

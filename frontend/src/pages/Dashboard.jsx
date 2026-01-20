@@ -90,6 +90,16 @@ function Dashboard({ user, setUser }) {
           >
             JagSMP
           </button>
+          <button
+            onClick={() => navigate('/authorized-apps')}
+          >
+            Authorized Apps
+          </button>
+          <button
+            onClick={() => navigate('/developer')}
+          >
+            Developer Portal
+          </button>
           {user.role === 'admin' && (
             <>
               <button
@@ -101,6 +111,11 @@ function Dashboard({ user, setUser }) {
                 onClick={() => navigate('/admin/users')}
               >
                 User Management
+              </button>
+              <button
+                onClick={() => navigate('/admin/oauth')}
+              >
+                OAuth Apps
               </button>
               <button
                 onClick={() => navigate('/admin/audit-logs')}
