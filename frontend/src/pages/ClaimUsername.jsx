@@ -64,7 +64,22 @@ function ClaimUsername({ user, setUser }) {
       if (res.ok) {
         // Update user state with username
         setUser({ ...user, username_original: data.username });
-        navigate('/dashboard');
+        const redirectTarget = localStorage.getItem('post_login_redirect') || sessionStorage.getItem('post_login_redirect');
+        if (redirectTarget) {
+          localStorage.removeItem('post_login_redirect');
+          sessionStorage.removeItem('post_login_redirect');
+          const authToken = localStorage.getItem('qti_token');
+          fetch(`${import.meta.env.VITE_API_URL}/auth/session`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            credentials: 'include',
+          })
+            .finally(() => {
+              window.location.href = redirectTarget;
+            });
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         setError(data.error);
       }

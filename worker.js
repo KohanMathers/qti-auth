@@ -296,14 +296,12 @@ async function verifyPKCE(codeVerifier, codeChallenge) {
   return computedChallenge === codeChallenge;
 }
 
-// Generate secure random token
 function generateSecureToken(length = 32) {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return base64UrlEncode(bytes);
 }
 
-// Get issuer URL based on environment
 function getIssuer(c) {
   return c.env.API_URL || 'https://auth.quietterminal.co.uk';
 }
@@ -312,23 +310,19 @@ function getIssuer(c) {
 function buildUserClaims(user, scopes) {
   const claims = {};
 
-  // openid scope - always include sub
   if (scopes.includes('openid')) {
     claims.sub = user.id;
   }
 
-  // profile scope
   if (scopes.includes('profile')) {
     claims.name = user.username_original;
     claims.preferred_username = user.username_original;
     claims.updated_at = user.updated_at;
-    // picture could be added if we have avatar support
   }
 
-  // email scope
   if (scopes.includes('email')) {
     claims.email = user.email;
-    claims.email_verified = true; // All our emails are verified via magic link or OAuth
+    claims.email_verified = true;
   }
 
   return claims;
@@ -417,16 +411,6 @@ function collectFingerprint(c) {
   return fingerprint;
 }
 
-// Parse fingerprint data from JSON body (for login requests)
-function parseClientFingerprint(body) {
-  return {
-    timezone: body?.fingerprint?.timezone || null,
-    screenResolution: body?.fingerprint?.screen || null,
-    browserFingerprint: body?.fingerprint?.hash || null,
-  };
-}
-
-// Detect device type from User-Agent
 function detectDeviceType(userAgent) {
   if (!userAgent) return 'unknown';
   const ua = userAgent.toLowerCase();
@@ -551,9 +535,9 @@ function validateSessionFingerprint(session, currentFingerprint) {
     };
   }
 
-  // FALLBACK: If user-agent matches and client-side fingerprint data wasn't sent
-  // (timezone, screen, browserFingerprint are all null), allow with reduced trust.
-  // This handles the case where the frontend isn't sending fingerprint headers yet.
+  // If user-agent matches and client-side fingerprint data wasn't sent (timezone, 
+  // screen, browserFingerprint are all null), allow with reduced trust.This handles 
+  // the case where the frontend isn't sending fingerprint headers yet.
   const clientFingerprintMissing = !currentFingerprint.timezone &&
     !currentFingerprint.screenResolution &&
     !currentFingerprint.browserFingerprint;
@@ -616,7 +600,7 @@ async function sendSecurityAlert(c, user, eventType, details) {
 
     if (!rateCheck.allowed) {
       console.warn(`Security alert rate limit exceeded for ${user.email}`);
-      return; // Skip sending to prevent email flooding
+      return;
     }
   } catch (e) {
     console.error('Failed to check security alert rate limit:', e);
@@ -714,7 +698,6 @@ async function createSession(user) {
   return await sign(payload, CONFIG.JWT_SECRET);
 }
 
-// Create session with fingerprint tracking (enhanced security)
 async function createSecureSession(c, user, authMethod) {
   const db = c.env.DB;
   const fingerprint = collectFingerprint(c);
@@ -725,7 +708,6 @@ async function createSecureSession(c, user, authMethod) {
 
   // Create session record
   const sessionId = generateId();
-  // Fix: Check fingerprint.userAgent is truthy before hashing
   const userAgentHash = fingerprint.userAgent
     ? await hashToken(fingerprint.userAgent)
     : null;
@@ -810,6 +792,29 @@ app.use('/*', cors({
 // Auth middleware with session fingerprint validation
 const authMiddleware = async (c, next) => {
   try {
+    const requestPath = new URL(c.req.url).pathname;
+    const acceptHeader = c.req.header('accept') || '';
+    const wantsHtml = acceptHeader.includes('text/html');
+    const shouldRedirectToLogin = requestPath === '/oauth/authorize' && wantsHtml;
+
+    const maybeRedirectToLogin = () => {
+      if (!shouldRedirectToLogin) return null;
+      const frontendUrl = c.env.FRONTEND_URL || 'https://account.quietterminal.co.uk';
+      const loginUrl = new URL(`${frontendUrl}/login`);
+      loginUrl.searchParams.set('redirect', c.req.url);
+      return c.redirect(loginUrl.toString());
+    };
+
+    const clearAuthCookie = () => {
+      try {
+        const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
+        const cookie = `qti_token=deleted; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=None; Max-Age=0`;
+        c.header('Set-Cookie', cookie);
+      } catch (e) {
+        console.error('Failed to clear cookie in auth middleware:', e);
+      }
+    };
+
     // Accept token from Authorization header or cookie named `qti_token`
     let token = c.req.header('Authorization')?.replace('Bearer ', '');
     if (!token) {
@@ -818,41 +823,86 @@ const authMiddleware = async (c, next) => {
       if (match) token = match[1];
     }
     if (!token) {
+      const redirect = maybeRedirectToLogin();
+      if (redirect) return redirect;
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    const payload = await verify(token, CONFIG.JWT_SECRET, "HS256");
     const db = c.env.DB;
     const currentTime = now();
+    let payload;
+    let authType = 'jwt';
 
-    // Look up session by token hash
-    const tokenHash = await hashToken(token);
-    const { results: sessions } = await db.prepare(
-      'SELECT * FROM user_sessions WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?'
-    ).bind(tokenHash, currentTime).all();
-
-    // If no session found, this is a legacy token or session was revoked
-    if (sessions.length === 0) {
-      // Check if legacy token deadline has passed
-      if (currentTime > CONFIG.LEGACY_TOKEN_DEADLINE) {
-        return c.json({
-          error: 'Session expired. Please sign in again.',
-          code: 'LEGACY_TOKEN_EXPIRED',
-          requires_reauth: true,
-        }, 401);
-      }
-
-      // For backwards compatibility during migration, allow tokens without session records
-      // but indicate re-auth is needed soon
-      c.set('user', payload);
-      c.set('session', null);
-      c.set('session_trust', 'legacy');
-      c.set('legacy_reauth_recommended', true);
-      await next();
-      return;
+    try {
+      payload = await verify(token, CONFIG.JWT_SECRET, "HS256");
+    } catch (e) {
+      authType = 'oauth';
     }
 
-    const session = sessions[0];
+    if (authType === 'oauth') {
+      const tokenHash = await hashToken(token);
+      const { results: accessTokens } = await db.prepare(
+        'SELECT user_id, scope FROM oauth_access_tokens WHERE token_hash = ? AND revoked = 0 AND expires_at > ?'
+      ).bind(tokenHash, currentTime).all();
+
+      if (accessTokens.length === 0) {
+        const redirect = maybeRedirectToLogin();
+        if (redirect) return redirect;
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+
+      const { results: users } = await db.prepare(
+        'SELECT id, username_original, email, role, is_child FROM users WHERE id = ?'
+      ).bind(accessTokens[0].user_id).all();
+
+      if (users.length === 0) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+
+      const user = users[0];
+      payload = {
+        user_id: user.id,
+        username: user.username_original,
+        role: user.role,
+        is_child: Boolean(user.is_child),
+        oauth_scopes: accessTokens[0].scope,
+      };
+    }
+
+    let session = null;
+    if (authType === 'jwt') {
+      // Look up session by token hash
+      const tokenHash = await hashToken(token);
+      const { results: sessions } = await db.prepare(
+        'SELECT * FROM user_sessions WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?'
+      ).bind(tokenHash, currentTime).all();
+
+      // If no session found, this is a legacy token or session was revoked
+      if (sessions.length === 0) {
+        // Check if legacy token deadline has passed
+        if (currentTime > CONFIG.LEGACY_TOKEN_DEADLINE) {
+          clearAuthCookie();
+          const redirect = maybeRedirectToLogin();
+          if (redirect) return redirect;
+          return c.json({
+            error: 'Session expired. Please sign in again.',
+            code: 'LEGACY_TOKEN_EXPIRED',
+            requires_reauth: true,
+          }, 401);
+        }
+
+        // For backwards compatibility during migration, allow tokens without session records
+        // but indicate re-auth is needed soon
+        c.set('user', payload);
+        c.set('session', null);
+        c.set('session_trust', 'legacy');
+        c.set('legacy_reauth_recommended', true);
+        await next();
+        return;
+      }
+
+      session = sessions[0];
+    }
 
     // Check if user is banned or locked
     const { results: userStatus } = await db.prepare(
@@ -907,85 +957,90 @@ const authMiddleware = async (c, next) => {
       }
     }
 
-    const currentFingerprint = collectFingerprint(c);
+    let sessionTrust = 'oauth';
+    if (authType === 'jwt') {
+      const currentFingerprint = collectFingerprint(c);
 
-    // Validate fingerprint
-    const validation = validateSessionFingerprint(session, currentFingerprint);
+      // Validate fingerprint
+      const validation = validateSessionFingerprint(session, currentFingerprint);
 
-    if (!validation.valid) {
-      // Get user info for alert
-      const { results: users } = await db.prepare(
-        'SELECT email FROM users WHERE id = ?'
-      ).bind(payload.user_id).all();
-      const user = users[0] || {};
+      if (!validation.valid) {
+        // Get user info for alert
+        const { results: users } = await db.prepare(
+          'SELECT email FROM users WHERE id = ?'
+        ).bind(payload.user_id).all();
+        const user = users[0] || {};
 
-      if (validation.trustLevel === 'suspicious') {
-        // Different country - send email alert and block
-        // Use a single atomic update to prevent race conditions
-        const updateResult = await db.prepare(
-          'UPDATE user_sessions SET revoked_at = ?, trust_level = ?, flag_reason = ? WHERE id = ? AND revoked_at IS NULL'
-        ).bind(currentTime, 'blocked', 'country_mismatch', session.id).run();
+        if (validation.trustLevel === 'suspicious') {
+          // Different country - send email alert and block
+          // Use a single atomic update to prevent race conditions
+          const updateResult = await db.prepare(
+            'UPDATE user_sessions SET revoked_at = ?, trust_level = ?, flag_reason = ? WHERE id = ? AND revoked_at IS NULL'
+          ).bind(currentTime, 'blocked', 'country_mismatch', session.id).run();
 
-        // Only log and send alert if we actually revoked the session (race condition guard)
-        if (updateResult.meta?.changes > 0) {
-          await logSecurityEvent(db, 'country_change', session.id, payload.user_id,
-            currentFingerprint.ip, currentFingerprint.ipCountry, {
-            originalCountry: session.ip_country,
-            newCountry: currentFingerprint.ipCountry,
-            validation: validation.matchDetails,
-          });
+          // Only log and send alert if we actually revoked the session (race condition guard)
+          if (updateResult.meta?.changes > 0) {
+            await logSecurityEvent(db, 'country_change', session.id, payload.user_id,
+              currentFingerprint.ip, currentFingerprint.ipCountry, {
+              originalCountry: session.ip_country,
+              newCountry: currentFingerprint.ipCountry,
+              validation: validation.matchDetails,
+            });
 
-          // Send security alert email
-          await sendSecurityAlert(c, user, 'Suspicious login from different country', {
-            ip: currentFingerprint.ip,
-            country: currentFingerprint.ipCountry,
-            originalCountry: session.ip_country,
-          });
+            // Send security alert email
+            await sendSecurityAlert(c, user, 'Suspicious login from different country', {
+              ip: currentFingerprint.ip,
+              country: currentFingerprint.ipCountry,
+              originalCountry: session.ip_country,
+            });
+          }
+
+          return c.json({
+            error: 'Session blocked due to suspicious activity',
+            code: 'SESSION_BLOCKED_COUNTRY',
+            requires_reauth: true,
+          }, 401);
         }
 
+        // No match at all - force re-auth
+        await logSecurityEvent(db, 'fingerprint_mismatch', session.id, payload.user_id,
+          currentFingerprint.ip, currentFingerprint.ipCountry, {
+          validation: validation.matchDetails,
+          reason: validation.reason,
+        });
+
         return c.json({
-          error: 'Session blocked due to suspicious activity',
-          code: 'SESSION_BLOCKED_COUNTRY',
+          error: 'Session validation failed. Please sign in again.',
+          code: 'SESSION_FINGERPRINT_MISMATCH',
           requires_reauth: true,
         }, 401);
       }
 
-      // No match at all - force re-auth
-      await logSecurityEvent(db, 'fingerprint_mismatch', session.id, payload.user_id,
-        currentFingerprint.ip, currentFingerprint.ipCountry, {
-        validation: validation.matchDetails,
-        reason: validation.reason,
-      });
+      // Valid session - update last_active_at and handle partial trust in one query to reduce race conditions
+      if (validation.trustLevel === 'partial' && session.trust_level !== 'partial') {
+        await db.prepare(
+          'UPDATE user_sessions SET last_active_at = ?, trust_level = ?, flagged_at = ?, flag_reason = ? WHERE id = ?'
+        ).bind(currentTime, 'partial', currentTime, validation.reason, session.id).run();
 
-      return c.json({
-        error: 'Session validation failed. Please sign in again.',
-        code: 'SESSION_FINGERPRINT_MISMATCH',
-        requires_reauth: true,
-      }, 401);
-    }
+        await logSecurityEvent(db, 'ip_change', session.id, payload.user_id,
+          currentFingerprint.ip, currentFingerprint.ipCountry, {
+          originalIP: session.ip_address,
+          newIP: currentFingerprint.ip,
+          validation: validation.matchDetails,
+        });
+      } else {
+        // Just update last_active_at
+        await db.prepare(
+          'UPDATE user_sessions SET last_active_at = ? WHERE id = ?'
+        ).bind(currentTime, session.id).run();
+      }
 
-    // Valid session - update last_active_at and handle partial trust in one query to reduce race conditions
-    if (validation.trustLevel === 'partial' && session.trust_level !== 'partial') {
-      await db.prepare(
-        'UPDATE user_sessions SET last_active_at = ?, trust_level = ?, flagged_at = ?, flag_reason = ? WHERE id = ?'
-      ).bind(currentTime, 'partial', currentTime, validation.reason, session.id).run();
-
-      await logSecurityEvent(db, 'ip_change', session.id, payload.user_id,
-        currentFingerprint.ip, currentFingerprint.ipCountry, {
-        originalIP: session.ip_address,
-        newIP: currentFingerprint.ip,
-        validation: validation.matchDetails,
-      });
-    } else {
-      // Just update last_active_at
-      await db.prepare(
-        'UPDATE user_sessions SET last_active_at = ? WHERE id = ?'
-      ).bind(currentTime, session.id).run();
+      sessionTrust = validation.trustLevel;
     }
 
     c.set('user', payload);
     c.set('session', session);
-    c.set('session_trust', validation.trustLevel);
+    c.set('session_trust', sessionTrust);
     await next();
   } catch (e) {
     console.log("authMiddleware caught:", String(e));
@@ -1054,7 +1109,6 @@ app.post('/auth/oauth/start', async (c) => {
     return c.json({ error: 'Invalid provider' }, 400);
   }
 
-  // Note: we're not persisting `state` in D1/KV here; for production you should store it and validate on callback.
   return c.json({ redirect_url: url, state });
 });
 
@@ -1111,7 +1165,6 @@ app.get('/auth/oauth/callback', async (c) => {
 
       if (stateRows.length > 0) {
         oauthUser.provider = stateRows[0].provider;
-        // Optionally delete the row to avoid reuse
         await db.prepare('DELETE FROM oauth_states WHERE state = ?').bind(state).run();
       } else {
         return c.json({ error: 'Unknown OAuth state; provider not found' }, 400);
@@ -2005,6 +2058,53 @@ app.get('/me', authMiddleware, async (c) => {
   ).bind(user.user_id).all();
 
   return c.json({ user: results[0] });
+});
+
+// Establish a session cookie from a bearer token (for cross-site OAuth redirects)
+app.post('/auth/session', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '');
+  if (!token) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    await verify(token, CONFIG.JWT_SECRET, "HS256");
+  } catch (e) {
+    return c.json({ error: 'Invalid token' }, 401);
+  }
+
+  const db = c.env.DB;
+  const currentTime = now();
+  const tokenHash = await hashToken(token);
+  const { results: sessions } = await db.prepare(
+    'SELECT id FROM user_sessions WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?'
+  ).bind(tokenHash, currentTime).all();
+
+  if (sessions.length === 0) {
+    if (currentTime > CONFIG.LEGACY_TOKEN_DEADLINE) {
+      return c.json({
+        error: 'Session expired. Please sign in again.',
+        code: 'LEGACY_TOKEN_EXPIRED',
+        requires_reauth: true,
+      }, 401);
+    }
+
+    return c.json({
+      error: 'Session not found. Please sign in again.',
+      code: 'SESSION_NOT_FOUND',
+      requires_reauth: true,
+    }, 401);
+  }
+
+  try {
+    const domain = c.env.COOKIE_DOMAIN || '.quietterminal.co.uk';
+    const cookie = `qti_token=${token}; Path=/; Domain=${domain}; HttpOnly; Secure; SameSite=None; Max-Age=${CONFIG.SESSION_DURATION}`;
+    c.header('Set-Cookie', cookie);
+  } catch (e) {
+    console.error('Failed to set cookie via auth/session:', e);
+  }
+
+  return c.json({ success: true });
 });
 
 app.post('/logout', authMiddleware, async (c) => {
@@ -3127,9 +3227,14 @@ app.get('/support/admin/tickets', authMiddleware, staffMiddleware, async (c) => 
   }
 
   const { results: tickets } = await db.prepare(`
-    SELECT t.*, u.username_original as user_username, u.email as user_email
+    SELECT t.*,
+           u.username_original as user_username,
+           u.email as user_email,
+           a.username_original as assigned_username,
+           a.email as assigned_email
     FROM support_tickets t
     LEFT JOIN users u ON t.user_id = u.id
+    LEFT JOIN users a ON t.assigned_to = a.id
     WHERE ${where.join(' AND ')}
     ORDER BY t.updated_at DESC
     LIMIT ? OFFSET ?
@@ -3143,9 +3248,14 @@ app.get('/support/admin/tickets/:id', authMiddleware, staffMiddleware, async (c)
   const id = c.req.param('id');
 
   const { results: tickets } = await db.prepare(`
-    SELECT t.*, u.username_original as user_username, u.email as user_email
+    SELECT t.*,
+           u.username_original as user_username,
+           u.email as user_email,
+           a.username_original as assigned_username,
+           a.email as assigned_email
     FROM support_tickets t
     LEFT JOIN users u ON t.user_id = u.id
+    LEFT JOIN users a ON t.assigned_to = a.id
     WHERE t.id = ?
   `).bind(id).all();
 

@@ -1,9 +1,58 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import AuthForm from '../components/AuthForm';
 
 function Login() {
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get('redirect');
+
+  React.useEffect(() => {
+    if (redirect) {
+      localStorage.setItem('post_login_redirect', redirect);
+    }
+
+    const existingToken = localStorage.getItem('qti_token');
+    if (!existingToken) {
+      return;
+    }
+
+    fetch(`${import.meta.env.VITE_API_URL}/me`, {
+      headers: { 'Authorization': `Bearer ${existingToken}` },
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.user) {
+          const target = localStorage.getItem('post_login_redirect');
+          const redirectTarget = target || '/dashboard';
+
+          fetch(`${import.meta.env.VITE_API_URL}/auth/session`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${existingToken}` },
+            credentials: 'include',
+          })
+            .then(res => {
+              if (res.ok) {
+                if (target) {
+                  localStorage.removeItem('post_login_redirect');
+                }
+                window.location.href = redirectTarget;
+              } else {
+                localStorage.removeItem('qti_token');
+              }
+            })
+            .catch(() => {
+              localStorage.removeItem('qti_token');
+            });
+        } else {
+          localStorage.removeItem('qti_token');
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('qti_token');
+      });
+  }, [redirect]);
+
   return (
     <div className="auth-container">
       <ThemeToggle />

@@ -181,6 +181,14 @@ function App() {
           )}
         />
         <Route
+          path="/oauth/callback"
+          element={(
+            <PageShell user={user} onLogout={handleLogout}>
+              <OAuthCallback onLoginSuccess={handleLoginSuccess} />
+            </PageShell>
+          )}
+        />
+        <Route
           path="/admin"
           element={(
             <PageShell user={user} onLogout={handleLogout}>

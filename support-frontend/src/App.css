@@ -107,7 +107,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 .brand {
@@ -128,7 +128,10 @@ button {
 .header-nav {
   display: flex;
   gap: 1rem;
-  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
   font-size: 0.95rem;
 }
 
@@ -136,6 +139,7 @@ button {
   padding: 0.35rem 0.6rem;
   border-radius: 999px;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .header-nav a:hover {
@@ -147,6 +151,9 @@ button {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
 }
 
 .pill {
@@ -248,7 +255,7 @@ button.pill {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 2rem;
+  padding: 2.25rem;
   box-shadow: 0 12px 32px rgba(34, 32, 52, 0.08);
   animation: riseIn 0.5s ease both;
 }
@@ -305,7 +312,7 @@ button.pill {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 /* Hero */
@@ -646,12 +653,17 @@ button.pill {
   background: rgba(91, 177, 239, 0.12);
   color: var(--text);
   font-size: 0.85rem;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
 }
 
 /* Ticket forms */
 .ticket-form {
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
   margin-top: 1.5rem;
 }
 
@@ -697,8 +709,8 @@ button.pill {
 /* Ticket list */
 .ticket-filters {
   display: grid;
-  gap: 1rem;
-  margin: 1.5rem 0;
+  gap: 1.25rem;
+  margin: 1.75rem 0;
 }
 
 .ticket-stats {
@@ -901,8 +913,8 @@ button.pill {
 .queue-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem;
-  margin: 1.5rem 0;
+  gap: 1rem;
+  margin: 1.75rem 0;
 }
 
 .queue-filters input,

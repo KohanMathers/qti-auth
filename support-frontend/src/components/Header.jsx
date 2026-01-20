@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-
-const ACCOUNT_LOGIN_URL = import.meta.env.VITE_ACCOUNT_URL || 'https://account.quietterminal.co.uk/login';
+import { startLogin } from '../lib/auth';
 
 function Header({ user, onLogout }) {
   return (
@@ -25,7 +24,7 @@ function Header({ user, onLogout }) {
               <button type="button" className="pill" onClick={onLogout}>Sign out</button>
             </>
           ) : (
-            <a className="pill" href={ACCOUNT_LOGIN_URL}>Sign in</a>
+            <button type="button" className="pill" onClick={() => startLogin()}>Sign in with QTI</button>
           )}
           <Link className="pill primary" to="/tickets/new">Submit Ticket</Link>
         </div>

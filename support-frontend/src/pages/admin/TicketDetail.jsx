@@ -174,7 +174,7 @@ function TicketDetail({ user }) {
         </div>
         <div>
           <label>Assigned</label>
-          <span>{ticket.assigned_to || 'Unassigned'}</span>
+          <span>{ticket.assigned_username || ticket.assigned_email || ticket.assigned_to || 'Unassigned'}</span>
         </div>
         <div>
           <label>User</label>

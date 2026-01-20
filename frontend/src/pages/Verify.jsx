@@ -13,6 +13,27 @@ function Verify({ setUser }) {
 
     useEffect(() => {
         const token = query.get('token');
+        const consumeRedirect = () => {
+            const target = localStorage.getItem('post_login_redirect') || sessionStorage.getItem('post_login_redirect');
+            if (target) {
+                localStorage.removeItem('post_login_redirect');
+                sessionStorage.removeItem('post_login_redirect');
+                return target;
+            }
+            return null;
+        };
+        const ensureSessionCookie = async (authToken) => {
+            if (!authToken) return;
+            try {
+                await fetch(`${import.meta.env.VITE_API_URL}/auth/session`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                    credentials: 'include',
+                });
+            } catch (e) {
+                // Best-effort; redirect still happens.
+            }
+        };
 
         const verifyKey = `verify_attempted_${token}`;
         if (sessionStorage.getItem(verifyKey)) {
@@ -65,7 +86,16 @@ function Verify({ setUser }) {
 
             setStatus('success');
             setMessage('Signed in successfully! Redirecting...');
-            setTimeout(() => navigate('/dashboard'), 1000);
+            const redirectTarget = consumeRedirect();
+            setTimeout(() => {
+                if (redirectTarget) {
+                    ensureSessionCookie(token).finally(() => {
+                        window.location.href = redirectTarget;
+                    });
+                } else {
+                    navigate('/dashboard');
+                }
+            }, 1000);
         } else {
             // Verify magic link token with backend
             fetch(`${import.meta.env.VITE_API_URL}/auth/email/verify`, {
@@ -101,7 +131,14 @@ function Verify({ setUser }) {
                             if (data.needs_username) {
                                 navigate('/claim-username');
                             } else {
-                                navigate('/dashboard');
+                                const redirectTarget = consumeRedirect();
+                                if (redirectTarget) {
+                                    ensureSessionCookie(data.token).finally(() => {
+                                        window.location.href = redirectTarget;
+                                    });
+                                } else {
+                                    navigate('/dashboard');
+                                }
                             }
                         }, 1000);
                     } else {

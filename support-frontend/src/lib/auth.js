@@ -5,6 +5,7 @@ const AUTH_BASE = (import.meta.env.VITE_API_URL || 'https://auth.quietterminal.c
 // OAuth client credentials - these should be set up in the QTI auth system
 // The client_id is public, client_secret is only used server-side (we use PKCE instead)
 const CLIENT_ID = import.meta.env.VITE_OAUTH_CLIENT_ID || 'qti-support';
+const CLIENT_SECRET = import.meta.env.VITE_OAUTH_CLIENT_SECRET || '';
 const REDIRECT_URI = import.meta.env.VITE_OAUTH_REDIRECT_URI || `${window.location.origin}/oauth/callback`;
 const SCOPES = 'openid profile email';
 
@@ -70,18 +71,24 @@ export async function handleCallback(code, state) {
   }
 
   // Exchange code for tokens
+  const tokenParams = {
+    grant_type: 'authorization_code',
+    code: code,
+    redirect_uri: REDIRECT_URI,
+    client_id: CLIENT_ID,
+    code_verifier: codeVerifier,
+  };
+
+  if (CLIENT_SECRET) {
+    tokenParams.client_secret = CLIENT_SECRET;
+  }
+
   const response = await fetch(`${AUTH_BASE}/oauth/token`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: REDIRECT_URI,
-      client_id: CLIENT_ID,
-      code_verifier: codeVerifier,
-    }),
+    body: new URLSearchParams(tokenParams),
   });
 
   if (!response.ok) {
@@ -113,16 +120,22 @@ export async function refreshAccessToken() {
     throw new Error('No refresh token available');
   }
 
+  const refreshParams = {
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: CLIENT_ID,
+  };
+
+  if (CLIENT_SECRET) {
+    refreshParams.client_secret = CLIENT_SECRET;
+  }
+
   const response = await fetch(`${AUTH_BASE}/oauth/token`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: CLIENT_ID,
-    }),
+    body: new URLSearchParams(refreshParams),
   });
 
   if (!response.ok) {
