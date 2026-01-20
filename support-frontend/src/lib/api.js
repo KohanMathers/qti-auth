@@ -25,15 +25,13 @@ function getAuthHeaders() {
   return { 'Authorization': `Bearer ${token}` };
 }
 
-// Wrapper to handle token refresh on 401
 async function fetchWithRefresh(url, options, retried = false) {
+  // Retry once after refresh to keep callers simple.
   const response = await fetch(url, options);
 
   if (response.status === 401 && !retried) {
-    // Try to refresh the token
     try {
       await refreshAccessToken();
-      // Retry with new token
       const newOptions = {
         ...options,
         headers: {
@@ -43,7 +41,6 @@ async function fetchWithRefresh(url, options, retried = false) {
       };
       return fetch(url, newOptions);
     } catch (refreshError) {
-      // Refresh failed, user needs to log in again
       logout();
       throw new Error('Session expired. Please log in again.');
     }

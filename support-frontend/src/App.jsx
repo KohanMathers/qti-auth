@@ -33,6 +33,7 @@ function PageShell({ children, user, onLogout }) {
 }
 
 function RequireAuth({ user, loading, children }) {
+  // Shared guard so pages can stay dumb and optimistic.
   if (loading) {
     return (
       <section className="page-card">
@@ -55,6 +56,7 @@ function RequireAuth({ user, loading, children }) {
 }
 
 function RequireStaff({ user, loading, children }) {
+  // Staff gate is intentionally hard; no "maybe" paths.
   if (loading) {
     return (
       <section className="page-card">
@@ -79,7 +81,7 @@ function App() {
   const [authLoading, setAuthLoading] = React.useState(true);
 
   const checkAuth = React.useCallback(async () => {
-    // Only check if we have a token
+    // Skip the network if we already know the user is logged out.
     if (!isLoggedIn()) {
       setUser(null);
       setAuthLoading(false);
@@ -91,7 +93,6 @@ function App() {
       setUser(data.user || null);
     } catch (error) {
       setUser(null);
-      // If unauthorized, clear tokens
       if (error.status === 401) {
         authLogout();
       }
@@ -110,7 +111,6 @@ function App() {
   };
 
   const handleLoginSuccess = () => {
-    // Re-check auth after OAuth callback
     setAuthLoading(true);
     checkAuth();
   };

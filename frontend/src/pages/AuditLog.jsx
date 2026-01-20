@@ -38,7 +38,6 @@ function AuditLog({ user }) {
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, total: 0, total_pages: 0 });
 
-  // Filters
   const [admins, setAdmins] = useState([]);
   const [actions, setActions] = useState([]);
   const [selectedAdmin, setSelectedAdmin] = useState('');
@@ -46,10 +45,8 @@ function AuditLog({ user }) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  // Selected log detail
   const [selectedLog, setSelectedLog] = useState(null);
 
-  // Tab: audit-logs vs moderation-history
   const [activeTab, setActiveTab] = useState('audit-logs');
 
   useEffect(() => {
@@ -57,6 +54,7 @@ function AuditLog({ user }) {
   }, []);
 
   useEffect(() => {
+    // Same UI, different endpoints depending on the active tab.
     if (activeTab === 'audit-logs') {
       fetchAuditLogs();
     } else {

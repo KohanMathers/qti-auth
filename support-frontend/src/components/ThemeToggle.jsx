@@ -6,6 +6,7 @@ function ThemeToggle() {
   });
 
   useEffect(() => {
+    // Attribute powers the CSS theme swap without extra class juggling.
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('qti-theme', theme);
   }, [theme]);

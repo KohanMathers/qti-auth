@@ -65,7 +65,8 @@ function ModQueue({ user }) {
     };
 
     if (duration && (actionType === 'timeout' || actionType === 'suspend')) {
-      payload.duration = parseInt(duration) * 86400; // Convert days to seconds
+      // API expects seconds for moderation durations.
+      payload.duration = parseInt(duration) * 86400;
     }
 
     try {

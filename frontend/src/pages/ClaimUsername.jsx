@@ -10,11 +10,11 @@ function ClaimUsername({ user, setUser }) {
   const location = useLocation();
 
   useEffect(() => {
-    // If redirected from OAuth with a token in query, store it and try to fetch /me
     const params = new URLSearchParams(location.search);
     const tokenParam = params.get('token');
     const existing = localStorage.getItem('qti_token');
 
+    // OAuth redirect can deliver a short-lived token in the query string.
     if (!existing && tokenParam) {
       localStorage.setItem('qti_token', tokenParam);
       fetch(`${import.meta.env.VITE_API_URL}/me`, {
@@ -25,19 +25,13 @@ function ClaimUsername({ user, setUser }) {
           if (data.user) {
             setUser && setUser(data.user);
           } else {
-            // If /me didn't return a user, do NOT immediately bounce to login.
-            // Some environments may have timing/CORS/cookie propagation issues —
-            // allow the user to continue and submit a username using the token
-            // stored in localStorage.
             console.warn('Could not fetch /me after OAuth redirect; continuing to claim username.');
           }
         })
         .catch((err) => {
           console.warn('Error fetching /me after OAuth redirect:', err);
-          // Don't redirect to login; let the user proceed with the token.
         });
     } else if (!existing && !tokenParam) {
-      // No token and no user -> redirect to login
       navigate('/login');
     }
   }, []);
@@ -62,8 +56,8 @@ function ClaimUsername({ user, setUser }) {
       const data = await res.json();
 
       if (res.ok) {
-        // Update user state with username
         setUser({ ...user, username_original: data.username });
+        // Respect any pre-auth redirect, but re-establish a cookie session first.
         const redirectTarget = localStorage.getItem('post_login_redirect') || sessionStorage.getItem('post_login_redirect');
         if (redirectTarget) {
           localStorage.removeItem('post_login_redirect');

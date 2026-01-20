@@ -15,6 +15,7 @@ function Stats({ user }) {
   }, []);
 
   useEffect(() => {
+    // Deep link into a specific game's stats when a slug is present.
     if (gameSlug && games.length > 0) {
       const game = games.find(g => g.slug === gameSlug);
       if (game) {
@@ -131,7 +132,6 @@ function Stats({ user }) {
               </div>
             ) : gameStats ? (
               <div className="stats-content">
-                {/* Progress Overview */}
                 <div className="progress-card">
                   <h3>Achievement Progress</h3>
                   <div className="progress-stats">
@@ -156,7 +156,6 @@ function Stats({ user }) {
                   </div>
                 </div>
 
-                {/* Achievements */}
                 <div className="achievements-section">
                   <h3>Achievements</h3>
                   {gameStats.achievements.length === 0 ? (
@@ -194,7 +193,6 @@ function Stats({ user }) {
                   )}
                 </div>
 
-                {/* Custom Game Stats */}
                 {Object.keys(gameStats.stats).length > 0 && (
                   <div className="custom-stats-section">
                     <h3>Game Statistics</h3>

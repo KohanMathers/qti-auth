@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 function AuthForm({ isSignup = false }) {
   const [email, setEmail] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [step, setStep] = useState('email'); // 'email' or 'verify'
+  // Two-step flow: request link, then show the confirmation panel.
+  const [step, setStep] = useState('email');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -40,7 +41,7 @@ function AuthForm({ isSignup = false }) {
   };
 
   const handleOAuth = (provider) => {
-    // Redirect to OAuth provider
+    // Keep OAuth on the backend so we can validate state server-side.
     window.location.href = `${import.meta.env.VITE_API_URL}/auth/oauth/start?provider=${provider}`;
   };
 

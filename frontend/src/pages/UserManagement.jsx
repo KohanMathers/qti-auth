@@ -108,7 +108,8 @@ function UserManagement({ user }) {
     const payload = { reason: actionReason };
     if (actionNotes) payload.internal_notes = actionNotes;
     if (actionDuration && (action === 'lock')) {
-      payload.duration = parseInt(actionDuration) * 86400; // days to seconds
+      // Backend expects seconds, UI collects days.
+      payload.duration = parseInt(actionDuration) * 86400;
     }
 
     try {

@@ -43,9 +43,9 @@ function OAuthAdmin({ user }) {
       });
       const data = await res.json();
 
+      // Backend filtering gets us close; client-side tightens the pending view.
       let filteredClients = data.clients || [];
 
-      // Client-side filter for pending review (approval_requested but not approved)
       if (filter === 'pending') {
         filteredClients = filteredClients.filter(c => c.approval_requested && !c.is_approved);
       } else if (filter === 'not_approved') {

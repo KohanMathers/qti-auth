@@ -31,10 +31,10 @@ function Verify({ setUser }) {
                     credentials: 'include',
                 });
             } catch (e) {
-                // Best-effort; redirect still happens.
             }
         };
 
+        // Guard against duplicate verifies on re-renders or back/forward cache.
         const verifyKey = `verify_attempted_${token}`;
         if (sessionStorage.getItem(verifyKey)) {
             return;
@@ -48,11 +48,10 @@ function Verify({ setUser }) {
             return;
         }
 
-        // JWT from OAuth starts with 'eyJ', UUID from magic link doesn't
+        // JWT from OAuth vs UUID from magic link.
         if (token.startsWith('eyJ')) {
             localStorage.setItem('qti_token', token);
 
-            // Fetch full user profile from /me endpoint
             fetch(`${import.meta.env.VITE_API_URL}/me`, {
                 method: 'GET',
                 headers: {
@@ -67,7 +66,6 @@ function Verify({ setUser }) {
                 })
                 .catch(e => {
                     console.error('Failed to fetch user profile:', e);
-                    // Fallback to JWT decode if /me fails
                     try {
                         const payload = JSON.parse(atob(token.split('.')[1]));
                         if (setUser) {
@@ -97,7 +95,6 @@ function Verify({ setUser }) {
                 }
             }, 1000);
         } else {
-            // Verify magic link token with backend
             fetch(`${import.meta.env.VITE_API_URL}/auth/email/verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -108,7 +105,6 @@ function Verify({ setUser }) {
                     if (data.token) {
                         localStorage.setItem('qti_token', data.token);
 
-                        // Fetch full user profile from /me endpoint
                         fetch(`${import.meta.env.VITE_API_URL}/me`, {
                             method: 'GET',
                             headers: {

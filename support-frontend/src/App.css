@@ -1,7 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-/* QTI Support - Base Styling */
 
+
+/* Design tokens shared across the support UI. */
 :root {
   --midnight-express: #222034;
   --roman-red: #DD5F5F;
@@ -26,6 +27,7 @@
   --panel: rgba(255, 255, 255, 0.85);
 }
 
+/* Theme toggle flips variables instead of duplicating rules. */
 [data-theme="dark"] {
   --primary: #5BB1EF;
   --primary-hover: #3a9fdc;
@@ -48,6 +50,7 @@
   padding: 0;
 }
 
+/* Layered gradients keep the background lively without being loud. */
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
@@ -90,7 +93,7 @@ button {
   padding: 2.5rem 1.5rem 3rem;
 }
 
-/* Header */
+
 .support-header {
   position: sticky;
   top: 0;
@@ -187,7 +190,7 @@ button.pill {
   box-shadow: 0 6px 16px var(--shadow);
 }
 
-/* Footer */
+
 .support-footer {
   border-top: 1px solid var(--border);
   background: var(--panel);
@@ -215,7 +218,7 @@ button.pill {
   font-size: 0.9rem;
 }
 
-/* Theme toggle */
+
 .theme-toggle {
   position: fixed;
   top: 1.5rem;
@@ -250,7 +253,7 @@ button.pill {
   color: var(--text);
 }
 
-/* Page blocks */
+
 .page-card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -315,7 +318,7 @@ button.pill {
   margin-bottom: 2rem;
 }
 
-/* Hero */
+
 .hero-card {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
@@ -400,7 +403,7 @@ button.pill {
   font-size: 0.85rem;
 }
 
-/* Search */
+
 .search-bar {
   display: flex;
   gap: 0.5rem;
@@ -431,7 +434,7 @@ button.pill {
   transform: translateY(-1px);
 }
 
-/* KB */
+
 .kb-header {
   display: flex;
   gap: 2rem;
@@ -546,7 +549,7 @@ button.pill {
   color: var(--primary);
 }
 
-/* Article view */
+
 .article-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
@@ -639,7 +642,7 @@ button.pill {
   padding: 1rem;
 }
 
-/* Auth gate */
+
 .auth-gate {
   display: flex;
   flex-direction: column;
@@ -660,7 +663,7 @@ button.pill {
   flex-shrink: 1;
 }
 
-/* Ticket forms */
+
 .ticket-form {
   display: grid;
   gap: 1.25rem;
@@ -706,7 +709,7 @@ button.pill {
   margin-bottom: 1rem;
 }
 
-/* Ticket list */
+
 .ticket-filters {
   display: grid;
   gap: 1.25rem;
@@ -788,7 +791,7 @@ button.pill {
   color: #475569;
 }
 
-/* Ticket detail */
+
 .ticket-detail {
   display: grid;
   gap: 1.5rem;
@@ -878,7 +881,7 @@ button.pill {
   border-color: transparent;
 }
 
-/* Admin */
+
 .admin-dashboard .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

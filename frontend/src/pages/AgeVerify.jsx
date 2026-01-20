@@ -13,6 +13,7 @@ function AgeVerify({ setUser }) {
     const [message, setMessage] = useState('');
 
     useEffect(() => {
+        // The temp token is issued during OAuth flows for underage users.
         const token = query.get('temp_token');
         if (!token) {
             setStatus('error');
@@ -51,7 +52,6 @@ function AgeVerify({ setUser }) {
             }
 
             if (data.needs_username) {
-                // store token and redirect to claim username
                 if (data.token) localStorage.setItem('qti_token', data.token);
                 navigate('/claim-username');
                 return;

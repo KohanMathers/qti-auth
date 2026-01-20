@@ -1,7 +1,8 @@
-/* QTI Auth - Minimal, Clean Styling */
 
+
+/* Core tokens for the auth UI palette and spacing. */
 :root {
-  /* QTI Official Colors */
+  
   --midnight-express: #222034;
   --roman-red: #DD5F5F;
   --coral-orange: #FF954F;
@@ -10,7 +11,7 @@
   --medium-orchid: #BC6DE0;
   --cornflower-blue: #5BB1EF;
 
-  /* Light mode */
+  
   --primary: #5BB1EF;
   --primary-hover: #3a9fdc;
   --danger: #DD5F5F;
@@ -27,6 +28,7 @@
   --gradient-end: #BC6DE0;
 }
 
+/* Dark mode overrides ride on data-theme from the toggle. */
 [data-theme="dark"] {
   --primary: #5BB1EF;
   --primary-hover: #3a9fdc;
@@ -60,7 +62,8 @@ body {
   background: var(--bg-secondary);
 }
 
-/* Loading Screen */
+
+/* Fullscreen loader for auth/bootstrap flows. */
 .loading-screen {
   display: flex;
   flex-direction: column;
@@ -83,7 +86,7 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Auth Container */
+
 .auth-container {
   min-height: 100vh;
   display: flex;
@@ -102,7 +105,7 @@ body {
   background-image: url('https://cdn.quietterminal.co.uk/3,107835fec2');
 }
 
-/* Dark mode toggle */
+
 .theme-toggle {
   position: fixed;
   top: 1.5rem;
@@ -171,7 +174,7 @@ body {
   margin-bottom: 2rem;
 }
 
-/* OAuth Buttons */
+
 .oauth-buttons {
   display: flex;
   flex-direction: column;
@@ -208,7 +211,7 @@ body {
 .oauth-btn.github:hover { border-color: #333; }
 .oauth-btn.discord:hover { border-color: #5865F2; }
 
-/* Divider */
+
 .divider {
   display: flex;
   align-items: center;
@@ -229,7 +232,7 @@ body {
   padding: 0 1rem;
 }
 
-/* Forms */
+
 .form-group {
   margin-bottom: 1.25rem;
 }
@@ -266,7 +269,7 @@ body {
   margin-top: 0.5rem;
 }
 
-/* Buttons */
+
 .btn-primary,
 .btn-secondary,
 .btn-danger {
@@ -313,7 +316,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* Messages */
+
 .error-message {
   background: #fee2e2;
   color: #991b1b;
@@ -350,7 +353,7 @@ button:disabled {
   margin-bottom: 0.5rem;
 }
 
-/* Footer */
+
 .footer-text,
 .legal-text {
   text-align: center;
@@ -371,7 +374,7 @@ button:disabled {
   text-decoration: underline;
 }
 
-/* Info Box */
+
 .info-box {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -412,7 +415,7 @@ button:disabled {
   color: var(--text);
 }
 
-/* Username Rules */
+
 .username-rules {
   margin-top: 0.75rem;
 }
@@ -423,7 +426,7 @@ button:disabled {
   margin-bottom: 0.25rem;
 }
 
-/* Dashboard */
+
 .dashboard-container {
   min-height: 100vh;
   background: var(--bg-secondary);
@@ -611,7 +614,7 @@ button:disabled {
   color: var(--text-muted);
 }
 
-/* Reports */
+
 .reports-list {
   display: flex;
   flex-direction: column;
@@ -665,7 +668,7 @@ button:disabled {
   color: var(--text-muted);
 }
 
-/* OAuth Client Cards */
+
 .clients-list {
   display: flex;
   flex-direction: column;
@@ -751,7 +754,7 @@ button:disabled {
   flex-wrap: wrap;
 }
 
-/* Developer Portal */
+
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -812,7 +815,7 @@ button:disabled {
   color: var(--text);
 }
 
-/* OAuth Admin */
+
 .uri-list-admin {
   display: flex;
   flex-direction: column;
@@ -834,7 +837,7 @@ button:disabled {
   gap: 0.5rem;
 }
 
-/* Moderation Queue */
+
 .mod-queue-container {
   min-height: 100vh;
   background: var(--bg-secondary);
@@ -1045,7 +1048,7 @@ button:disabled {
   color: var(--text-muted);
 }
 
-/* Stats Page */
+
 .stats-container {
   max-width: 1200px;
   margin: 2rem auto;
@@ -1314,7 +1317,7 @@ button:disabled {
   color: var(--primary);
 }
 
-/* JagSMP - Minecraft Account Linking */
+
 .page-container {
   min-height: 100vh;
   background: var(--bg-secondary);
@@ -1682,7 +1685,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* Responsive */
+
 @media (max-width: 768px) {
   .auth-box {
     padding: 2rem;
@@ -1746,7 +1749,7 @@ button:disabled {
   }
 }
 
-/* Admin Page Styles */
+
 .admin-page-container {
   min-height: 100vh;
   background: var(--bg-secondary);
@@ -1801,7 +1804,7 @@ button:disabled {
   height: calc(100vh - 85px);
 }
 
-/* Users Panel */
+
 .users-panel,
 .logs-panel {
   width: 450px;
@@ -1963,7 +1966,7 @@ button:disabled {
   color: var(--text-muted);
 }
 
-/* Status Badges */
+
 .status-badge.active {
   background: #d1fae5;
   color: #065f46;
@@ -1979,7 +1982,7 @@ button:disabled {
   color: #92400e;
 }
 
-/* Action Badges */
+
 .action-badge {
   padding: 0.2rem 0.6rem;
   border-radius: 4px;
@@ -2032,7 +2035,7 @@ button:disabled {
   color: #92400e;
 }
 
-/* Tabs */
+
 .tabs {
   display: flex;
   border-bottom: 1px solid var(--border);
@@ -2060,7 +2063,7 @@ button:disabled {
   border-bottom-color: var(--primary);
 }
 
-/* Detail Panel for Admin Pages */
+
 .admin-content .detail-panel {
   flex: 1;
   padding: 2rem;
@@ -2097,7 +2100,7 @@ button:disabled {
   word-break: break-all;
 }
 
-/* History List */
+
 .history-list {
   display: flex;
   flex-direction: column;
@@ -2136,7 +2139,7 @@ button:disabled {
   font-style: italic;
 }
 
-/* Action Section */
+
 .action-section {
   margin-top: 2rem;
   padding-top: 1.5rem;
@@ -2187,7 +2190,7 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-/* Modal */
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -2232,7 +2235,7 @@ button:disabled {
   flex: 1;
 }
 
-/* JSON Details */
+
 .details-json {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -2249,7 +2252,7 @@ button:disabled {
   word-break: break-word;
 }
 
-/* Reason & Notes Boxes */
+
 .reason-box,
 .notes-box {
   background: var(--bg-secondary);
@@ -2271,7 +2274,7 @@ button:disabled {
   border-color: rgba(251, 191, 36, 0.3);
 }
 
-/* Loading & Empty States */
+
 .loading-state,
 .empty-state,
 .error-state {
@@ -2287,7 +2290,7 @@ button:disabled {
   color: var(--danger);
 }
 
-/* Pagination */
+
 .pagination {
   display: flex;
   align-items: center;
@@ -2325,7 +2328,7 @@ button:disabled {
   color: var(--text-muted);
 }
 
-/* Admin Page Responsive */
+
 @media (max-width: 1024px) {
   .admin-content {
     flex-direction: column;

@@ -11,7 +11,6 @@ function DeveloperPortal({ user }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -21,7 +20,7 @@ function DeveloperPortal({ user }) {
     client_type: 'confidential',
   });
 
-  // New client secret (shown only once after creation)
+  // Only populated on create/regenerate to show the secret once.
   const [newClientSecret, setNewClientSecret] = useState(null);
 
   useEffect(() => {

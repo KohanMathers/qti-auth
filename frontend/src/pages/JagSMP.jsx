@@ -12,6 +12,7 @@ function JagSMP({ user }) {
   const [unlinking, setUnlinking] = useState(false);
 
   useEffect(() => {
+    // On first load, resolve link status to decide which view to show.
     fetchLinkStatus();
   }, []);
 
@@ -42,6 +43,7 @@ function JagSMP({ user }) {
 
     try {
       const token = localStorage.getItem('qti_token');
+      // Uppercase on the client to match plugin-issued codes.
       const response = await fetch(`${import.meta.env.VITE_API_URL}/jagsmp/link`, {
         method: 'POST',
         headers: {
@@ -186,7 +188,6 @@ function JagSMP({ user }) {
         </div>
       ) : (
         <div className="stats-section">
-          {/* Account Info Card */}
           <div className="info-card">
             <div className="card-header">
               <h2>Linked Account</h2>
@@ -208,9 +209,7 @@ function JagSMP({ user }) {
             </div>
           </div>
 
-          {/* Stats Cards Grid */}
           <div className="stats-grid">
-            {/* Playtime Card */}
             <div className="stat-card">
               <div className="stat-icon">⏱️</div>
               <h3>Playtime</h3>
@@ -224,7 +223,6 @@ function JagSMP({ user }) {
               </div>
             </div>
 
-            {/* PvP Stats Card */}
             <div className="stat-card">
               <div className="stat-icon">⚔️</div>
               <h3>Combat Stats</h3>
@@ -236,7 +234,6 @@ function JagSMP({ user }) {
               </div>
             </div>
 
-            {/* Achievements Card */}
             <div className="stat-card">
               <div className="stat-icon">🏆</div>
               <h3>Achievements</h3>
@@ -246,7 +243,6 @@ function JagSMP({ user }) {
               </div>
             </div>
 
-            {/* Damage Stats Card */}
             <div className="stat-card">
               <div className="stat-icon">💥</div>
               <h3>Damage</h3>
@@ -261,7 +257,6 @@ function JagSMP({ user }) {
             </div>
           </div>
 
-          {/* Current Session Info */}
           {linkData.stats.current_session && linkData.stats.current_session.login_timestamp > 0 && (
             <div className="info-card">
               <h2>Current Session</h2>
@@ -278,7 +273,6 @@ function JagSMP({ user }) {
             </div>
           )}
 
-          {/* Movement Stats */}
           {linkData.stats.movement && (
             <div className="info-card">
               <h2>Movement Stats (meters)</h2>
@@ -339,7 +333,6 @@ function JagSMP({ user }) {
             </div>
           )}
 
-          {/* Interaction Stats */}
           {linkData.stats.interactions && (
             <div className="info-card">
               <h2>Interaction Stats</h2>
@@ -388,7 +381,6 @@ function JagSMP({ user }) {
             </div>
           )}
 
-          {/* Building/Crafting Stats */}
           {linkData.stats.building && (
             <div className="info-card">
               <h2>Building & Crafting Stats</h2>
@@ -429,7 +421,6 @@ function JagSMP({ user }) {
             </div>
           )}
 
-          {/* Misc Stats */}
           {linkData.stats.misc && (
             <div className="info-card">
               <h2>Miscellaneous Stats</h2>
@@ -470,7 +461,6 @@ function JagSMP({ user }) {
             </div>
           )}
 
-          {/* Recent Achievements */}
           {linkData.achievements.recent && linkData.achievements.recent.length > 0 && (
             <div className="info-card">
               <h2>Recent Achievements</h2>
@@ -493,7 +483,6 @@ function JagSMP({ user }) {
             </div>
           )}
 
-          {/* Recent Activity */}
           {linkData.recent_activity && linkData.recent_activity.length > 0 && (
             <div className="info-card">
               <h2>Recent Activity</h2>

@@ -8,6 +8,7 @@ function Footer() {
         <p>Quiet Terminal Interactive Support</p>
         <div className="footer-links">
           <Link to="/kb">Knowledge Base</Link>
+          {/* External links open in new tabs to keep ticket context intact. */}
           <a href="https://account.quietterminal.co.uk" target="_blank" rel="noreferrer">Account</a>
           <a href="https://quietterminal.co.uk" target="_blank" rel="noreferrer">Main Site</a>
         </div>
