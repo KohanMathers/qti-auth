@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
+import { BRANDING } from '../config/branding';
 
 function Terms() {
   return (
@@ -12,12 +13,12 @@ function Terms() {
 
         <div style={{ textAlign: 'left', marginTop: '2rem', fontSize: '0.95rem' }}>
           <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-            Welcome to Quiet Terminal Interactive. These Terms of Service ("Terms") govern your use of our games, websites, and services (collectively, the "Services"). By creating an account or using our Services, you agree to these Terms.
+            Welcome to {BRANDING.companyName}. These Terms of Service ("Terms") govern your use of our games, websites, and services (collectively, the "Services"). By creating an account or using our Services, you agree to these Terms.
           </p>
 
           <section style={{ marginBottom: '2rem' }}>
             <h2 style={{ fontSize: '1.4rem', marginBottom: '1rem', color: 'var(--primary)' }}>1. Acceptance of Terms</h2>
-            <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>By accessing or using Quiet Terminal Interactive, you confirm that:</p>
+            <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>By accessing or using {BRANDING.companyName}, you confirm that:</p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
               <li>You have read and understood these Terms</li>
               <li>You agree to be bound by these Terms</li>
@@ -33,7 +34,7 @@ function Terms() {
             <h2 style={{ fontSize: '1.4rem', marginBottom: '1rem', color: 'var(--primary)' }}>2. Account Registration</h2>
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>2.1 Creating an Account</h3>
-            <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>To use Quiet Terminal Interactive, you must create an account by providing:</p>
+            <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>To use {BRANDING.companyName}, you must create an account by providing:</p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
               <li>A valid email address OR OAuth authentication (Google, GitHub, Discord)</li>
               <li>Your date of birth (required for age verification under UK law)</li>
@@ -108,7 +109,7 @@ function Terms() {
             <h2 style={{ fontSize: '1.4rem', marginBottom: '1rem', color: 'var(--primary)' }}>4. Acceptable Use</h2>
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>4.1 You Must Not</h3>
-            <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>When using Quiet Terminal Interactive, you must not:</p>
+            <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>When using {BRANDING.companyName}, you must not:</p>
 
             <p style={{ marginBottom: '0.5rem', marginTop: '1rem', lineHeight: '1.7' }}><strong>Content Violations:</strong></p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
@@ -173,7 +174,7 @@ function Terms() {
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>5.1 Your Content</h3>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              When you post content (messages, images, videos, etc.) on Quiet Terminal Interactive:
+              When you post content (messages, images, videos, etc.) on {BRANDING.companyName}:
             </p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
               <li>You retain ownership of your content</li>
@@ -246,7 +247,7 @@ function Terms() {
               If you believe a moderation action was made in error:
             </p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
-              <li>Contact us at moderation@quietterminal.co.uk</li>
+              <li>Contact us at {BRANDING.moderationEmail}</li>
               <li>Include your username and reason for appeal</li>
               <li>We will review within 7 days</li>
               <li>Our decision after review is final</li>
@@ -266,7 +267,7 @@ function Terms() {
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>7.1 Our Rights</h3>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              Quiet Terminal Interactive, including all content, features, code, designs, logos, and trademarks, are owned by QTI or our licensors. You may not:
+              {BRANDING.companyName}, including all content, features, code, designs, logos, and trademarks, are owned by QTI or our licensors. You may not:
             </p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
               <li>Copy, modify, or distribute our content</li>
@@ -277,7 +278,7 @@ function Terms() {
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>7.2 Fan Content</h3>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              You may create fan art, videos, or other content featuring Quiet Terminal Interactive, provided:
+              You may create fan art, videos, or other content featuring {BRANDING.companyName}, provided:
             </p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
               <li>It is non-commercial (unless we grant permission)</li>
@@ -323,7 +324,7 @@ function Terms() {
               <li>Object to processing</li>
             </ul>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              Contact us at <a href="mailto:kohan@quietterminal.co.uk" style={{ color: 'var(--primary)' }}>kohan@quietterminal.co.uk</a> to exercise these rights.
+              Contact us at <a href={`mailto:${BRANDING.legalEmail}`} style={{ color: 'var(--primary)' }}>{BRANDING.legalEmail}</a> to exercise these rights.
             </p>
           </section>
 
@@ -359,7 +360,7 @@ function Terms() {
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>10.1 Service "As Is"</h3>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              Quiet Terminal Interactive is provided "as is" and "as available" without warranties of any kind, including:
+              {BRANDING.companyName} is provided "as is" and "as available" without warranties of any kind, including:
             </p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
               <li>Availability, reliability, or error-free operation</li>
@@ -385,7 +386,7 @@ function Terms() {
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>10.4 Your Responsibility</h3>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              You use Quiet Terminal Interactive at your own risk. You are responsible for:
+              You use {BRANDING.companyName} at your own risk. You are responsible for:
             </p>
             <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem', lineHeight: '1.7' }}>
               <li>Your interactions with other users</li>
@@ -409,7 +410,7 @@ function Terms() {
 
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>11.3 Informal Resolution</h3>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              Before filing a claim, please contact us at <a href="mailto:kohan@quietterminal.co.uk" style={{ color: 'var(--primary)' }}>kohan@quietterminal.co.uk</a> to attempt informal resolution.
+              Before filing a claim, please contact us at <a href={`mailto:${BRANDING.legalEmail}`} style={{ color: 'var(--primary)' }}>{BRANDING.legalEmail}</a> to attempt informal resolution.
             </p>
           </section>
 
@@ -480,13 +481,13 @@ function Terms() {
               If you have questions about these Terms:
             </p>
             <p style={{ marginBottom: '0.5rem', lineHeight: '1.7' }}>
-              <strong>Email:</strong> <a href="mailto:kohan@quietterminal.co.uk" style={{ color: 'var(--primary)' }}>kohan@quietterminal.co.uk</a>
+              <strong>Email:</strong> <a href={`mailto:${BRANDING.legalEmail}`} style={{ color: 'var(--primary)' }}>{BRANDING.legalEmail}</a>
             </p>
             <p style={{ marginBottom: '0.5rem', lineHeight: '1.7' }}>
-              <strong>Moderation:</strong> <a href="mailto:moderation@quietterminal.co.uk" style={{ color: 'var(--primary)' }}>moderation@quietterminal.co.uk</a>
+              <strong>Moderation:</strong> <a href={`mailto:${BRANDING.moderationEmail}`} style={{ color: 'var(--primary)' }}>{BRANDING.moderationEmail}</a>
             </p>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              <strong>Telephone:</strong> 07841974811
+              <strong>Telephone:</strong> {BRANDING.contactPhone}
             </p>
           </section>
 
@@ -565,7 +566,7 @@ function Terms() {
 
           <div style={{ textAlign: 'center', padding: '2rem 0', borderTop: '1px solid var(--border)' }}>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7', fontWeight: '600' }}>
-              By using Quiet Terminal Interactive, you agree to these Terms of Service.
+              By using {BRANDING.companyName}, you agree to these Terms of Service.
             </p>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7', fontWeight: '600' }}>
               Effective Date: January 10, 2025
@@ -587,3 +588,4 @@ function Terms() {
 }
 
 export default Terms;
+

@@ -1,14 +1,14 @@
 {
   "name": "qti-auth-worker",
   "version": "1.0.0",
-  "description": "QTI Auth System - Serverless authentication for QTI Games",
-  "private": true,
+  "description": "QTI Auth - serverless authentication and account platform on Cloudflare Workers + D1",
+  "private": false,
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:create": "wrangler d1 create qti_auth",
-    "db:migrate": "wrangler d1 execute qti_auth --file=./schema.sql",
-    "db:migrate:local": "wrangler d1 execute qti_auth --local --file=./schema.sql",
+    "db:migrate": "wrangler d1 execute qti_auth --file=./setup.sql",
+    "db:migrate:local": "wrangler d1 execute qti_auth --local --file=./setup.sql",
     "tail": "wrangler tail"
   },
   "dependencies": {

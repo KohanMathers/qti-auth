@@ -1,178 +1,149 @@
-# QTI Auth System
+# QTI Auth
 
-Serverless authentication system for QTI Games built on Cloudflare Workers + D1.
+QTI Auth is a Cloudflare Workers + D1 account and authentication platform with:
+- Passwordless login (email magic links + OAuth social login)
+- Session and account security controls
+- Moderation/reporting workflows
+- OAuth 2.1 / OIDC provider endpoints ("Sign in with QTI")
+- Optional game stats and support ticket modules
 
-## Features
+## Open-Source Safe Baseline
 
-- Passwordless authentication (OAuth + email magic links)
-- Age verification and child account protections
-- User reporting and moderation queue
-- Session management with fingerprint tracking
-- Game statistics and achievements
-- Minecraft account linking (JagSMP)
+This repository is sanitized for open source:
+- No production D1 IDs in tracked config
+- No tracked local `.env` files
+- No tracked runtime/build artifacts
+- Canonical database bootstrap file: `setup.sql`
 
-## Architecture
+If you already run this in production, keep your real values only in:
+- Cloudflare secrets (`wrangler secret put ...`)
+- Untracked local env/config files
+- Your deployment platform settings
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Cloudflare Edge                       │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────┐    ┌──────────────┐    ┌───────────┐  │
-│  │   Frontend   │    │    Worker    │    │    D1     │  │
-│  │ (React/Vite) │───▶│    (Hono)    │───▶│  (SQLite) │  │
-│  │   on Pages   │    │     API      │    │           │  │
-│  └──────────────┘    └──────────────┘    └───────────┘  │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │        OAuth Providers (Google/GitHub/Discord)    │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-```
+## Requirements
+
+- Node.js 18+
+- npm
+- Cloudflare account + Wrangler CLI (`npm i -g wrangler`)
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js 18+
-- Cloudflare account
-- Wrangler CLI: `npm install -g wrangler`
-
-### Setup
+1. Install dependencies
 
 ```bash
-# Install dependencies
 npm install
+cd frontend && npm install && cd ..
+cd support-frontend && npm install && cd ..
+```
 
-# Create D1 database
+2. Configure Worker
+
+- Edit `wrangler.toml`:
+  - `database_id`
+  - routes/domains (defaults are current production values)
+  - environment URLs
+
+3. Create and initialize D1
+
+```bash
 wrangler d1 create qti_auth
-# Copy the database ID into wrangler.toml
-
-# Run migrations
-wrangler d1 execute qti_auth --file=./schema.sql
-
-# Set JWT secret
-wrangler secret put JWT_SECRET
-
-# Deploy worker
-wrangler deploy
-
-# Deploy frontend
-cd frontend
-npm install
-npm run build
-wrangler pages deploy dist --project-name=qti-auth-frontend
-# Note: You MUST use --project-name=qti-auth-frontend or Cloudflare refuses to deploy the project
+wrangler d1 execute qti_auth --file=./setup.sql
 ```
 
-## Project Structure
-
-```
-qti-auth/
-├── schema.sql              # D1 database schema
-├── worker.js               # Cloudflare Worker API
-├── wrangler.toml           # Worker configuration
-├── package.json            # Dependencies
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx         # React app with routing
-│   │   ├── pages/          # Page components
-│   │   └── components/     # Reusable components
-│   └── package.json
-└── migrations/             # Database migrations
-```
-
-## API Endpoints
-
-### Authentication
-
-```
-POST   /auth/oauth/start        Start OAuth flow
-GET    /auth/oauth/callback     OAuth callback
-POST   /auth/email/start        Send magic link
-POST   /auth/email/verify       Verify magic link
-POST   /auth/age/verify         Submit date of birth
-GET    /me                      Get current user
-POST   /logout                  End session
-```
-
-### Username Management
-
-```
-POST   /username/claim          Claim initial username
-POST   /username/change         Change username (with cooldown)
-```
-
-### Reporting & Moderation
-
-```
-POST   /report/user             Report a user
-POST   /report/content          Report content
-GET    /report/status/:id       Check report status
-GET    /moderation/queue        View pending reports (admin)
-POST   /moderation/action       Take action on report (admin)
-POST   /moderation/dismiss      Dismiss report (admin)
-```
-
-### Sessions
-
-```
-GET    /sessions                Get user's active sessions
-POST   /sessions/:id/revoke     Revoke a specific session
-POST   /sessions/revoke-all     Revoke all other sessions
-```
-
-### Admin
-
-```
-GET    /admin/stats             Dashboard statistics
-POST   /admin/cleanup           Database cleanup
-```
-
-### Game Stats
-
-```
-GET    /games                   List games
-GET    /games/:slug/stats       Get user stats for a game
-```
-
-### JagSMP (Minecraft)
-
-```
-POST   /jagsmp/generate-code    Generate link code (plugin)
-POST   /jagsmp/link             Link Minecraft account
-POST   /jagsmp/unlink           Unlink Minecraft account
-GET    /jagsmp/me               Get linked account and stats
-```
-
-## Configuration
-
-Environment variables (set via `wrangler secret put`):
-
-| Variable | Description |
-|----------|-------------|
-| `JWT_SECRET` | Secret for JWT signing |
-| `EMAIL_SERVICE_API_KEY` | Brevo API key for emails |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
-| `GITHUB_CLIENT_ID` | GitHub OAuth client ID |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret |
-| `DISCORD_CLIENT_ID` | Discord OAuth client ID |
-| `DISCORD_CLIENT_SECRET` | Discord OAuth client secret |
-| `MINECRAFT_PLUGIN_SECRET` | Secret for Minecraft plugin auth |
-
-## Development
+4. Set required secrets
 
 ```bash
-# Run worker locally
-wrangler dev
-
-# Run frontend locally
-cd frontend
-npm run dev
+wrangler secret put JWT_SECRET
+wrangler secret put EMAIL_SERVICE_API_KEY
 ```
+
+5. Set optional secrets (if using these features)
+
+```bash
+wrangler secret put GOOGLE_CLIENT_ID
+wrangler secret put GOOGLE_CLIENT_SECRET
+wrangler secret put GITHUB_CLIENT_ID
+wrangler secret put GITHUB_CLIENT_SECRET
+wrangler secret put DISCORD_CLIENT_ID
+wrangler secret put DISCORD_CLIENT_SECRET
+wrangler secret put MINECRAFT_PLUGIN_SECRET
+wrangler secret put OAUTH_PROVIDER_PRIVATE_KEY
+wrangler secret put OAUTH_PROVIDER_PUBLIC_KEY
+```
+
+6. Create local frontend env files
+
+```bash
+cp frontend/.env.example frontend/.env.local
+cp support-frontend/.env.example support-frontend/.env.local
+```
+
+7. Run locally
+
+```bash
+npm run dev
+# frontend in another terminal
+cd frontend && npm run dev
+# support frontend in another terminal
+cd support-frontend && npm run dev
+```
+
+## Branding Config
+
+Branding is centralized and overrideable via config/env while keeping current production values as defaults.
+
+- Worker branding/domain defaults: `worker.js` via `BRANDING_DEFAULTS`, override in `wrangler.toml` `[vars]`:
+  - `BRAND_NAME`
+  - `COMPANY_NAME`
+  - `API_URL`
+  - `FRONTEND_URL`
+  - `COOKIE_DOMAIN`
+  - `OAUTH_REDIRECT_URI`
+  - `CORS_ORIGINS`
+  - `SECURITY_SENDER_NAME`
+  - `SECURITY_SENDER_EMAIL`
+  - `AUTH_SENDER_NAME`
+  - `AUTH_SENDER_EMAIL`
+  - `SERVICE_DOCUMENTATION_URL`
+- Account frontend branding defaults: `frontend/src/config/branding.js`, override via `frontend/.env.local`.
+- Support frontend branding defaults: `support-frontend/src/config/branding.js`, override via `support-frontend/.env.local`.
+
+## Database
+
+- `setup.sql`: full schema for a fresh environment
+- `migrations/`: historical incremental migrations
+- `schema.sql`: legacy full-schema file retained for compatibility
+
+For new installs, use `setup.sql`.
+
+## Scripts
+
+From repository root:
+
+```bash
+npm run dev
+npm run deploy
+npm run db:create
+npm run db:migrate
+npm run db:migrate:local
+npm run tail
+```
+
+## Repo Layout
+
+- `worker.js` - Worker API
+- `setup.sql` - canonical DB setup
+- `migrations/` - migration history
+- `frontend/` - account frontend
+- `support-frontend/` - support portal frontend
+- `wrangler.toml` - Worker deployment config template
+
+## Security Notes
+
+- Never commit `.env.local`, `.env.staging`, or private keys.
+- Keep all credentials in Cloudflare secrets or external secret managers.
+- Rotate production secrets before first public release if this repo was previously private.
 
 ## License
 
-Copyright Quiet Terminal Interactive. All rights reserved.
+MIT. See `LICENSE`.

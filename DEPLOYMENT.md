@@ -44,10 +44,10 @@ database_id = "YOUR_DATABASE_ID_HERE"
 
 ```bash
 # For production
-wrangler d1 execute qti_auth --file=./schema.sql
+wrangler d1 execute qti_auth --file=./setup.sql
 
 # For local development
-wrangler d1 execute qti_auth --local --file=./schema.sql
+wrangler d1 execute qti_auth --local --file=./setup.sql
 ```
 
 ### Support System Tables
@@ -320,7 +320,7 @@ SELECT * FROM recent_mod_actions LIMIT 100;
 
 | Issue                   | Solution                                                           |
 | ----------------------- | ------------------------------------------------------------------ |
-| "Database not found"    | Run migrations: `wrangler d1 execute qti_auth --file=./schema.sql` |
+| "Database not found"    | Run migrations: `wrangler d1 execute qti_auth --file=./setup.sql` |
 | OAuth redirect fails    | Check redirect URIs in OAuth provider settings                     |
 | Magic link not arriving | Check email service API key and sending domain                     |
 | "Unauthorized" errors   | Verify JWT_SECRET is set correctly                                 |
@@ -333,3 +333,4 @@ SELECT * FROM recent_mod_actions LIMIT 100;
 - **Cloudflare Docs**: https://developers.cloudflare.com
 - **Hono Docs**: https://hono.dev
 - **Wrangler CLI**: https://developers.cloudflare.com/workers/wrangler
+

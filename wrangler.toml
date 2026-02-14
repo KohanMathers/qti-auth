@@ -1,42 +1,27 @@
-# Wrangler Configuration for QTI Auth System
 name = "qti-auth"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 
-# D1 Database binding
 [[d1_databases]]
 binding = "DB"
 database_name = "qti_auth"
-database_id = "fee04853-d8d0-4d7f-9adc-d2f74e18c850"
-
-# Environment variables (set via wrangler secrets)
-# Run these commands:
-# wrangler secret put JWT_SECRET
-# wrangler secret put GOOGLE_CLIENT_ID
-# wrangler secret put GOOGLE_CLIENT_SECRET
-# wrangler secret put GITHUB_CLIENT_ID
-# wrangler secret put GITHUB_CLIENT_SECRET
-# wrangler secret put DISCORD_CLIENT_ID
-# wrangler secret put DISCORD_CLIENT_SECRET
-# wrangler secret put EMAIL_SERVICE_API_KEY
-#
-# OAuth Provider (Sign in with QTI) - RS256 key pair for signing ID tokens
-# Generate with: openssl genrsa -out private.pem 2048 && openssl rsa -in private.pem -pubout -out public.pem
-# wrangler secret put OAUTH_PROVIDER_PRIVATE_KEY < private.pem
-# wrangler secret put OAUTH_PROVIDER_PUBLIC_KEY < public.pem
+database_id = "YOUR_D1_DATABASE_ID"
 
 [vars]
 ENVIRONMENT = "production"
 FRONTEND_URL = "https://account.quietterminal.co.uk"
 API_URL = "https://auth.quietterminal.co.uk"
 COOKIE_DOMAIN = ".quietterminal.co.uk"
+OAUTH_REDIRECT_URI = "https://auth.quietterminal.co.uk/auth/oauth/callback"
+BRAND_NAME = "QTI"
+COMPANY_NAME = "Quiet Terminal Interactive"
+SECURITY_SENDER_NAME = "QTI Security"
+SECURITY_SENDER_EMAIL = "security@account.quietterminal.co.uk"
+AUTH_SENDER_NAME = "QTI Auth"
+AUTH_SENDER_EMAIL = "auth@account.quietterminal.co.uk"
+SERVICE_DOCUMENTATION_URL = "https://quietterminal.co.uk/docs/oauth"
+CORS_ORIGINS = "https://account.quietterminal.co.uk,https://account-staging.quietterminal.co.uk,https://support.quietterminal.co.uk,https://support-staging.quietterminal.co.uk"
 
-# Rate limiting (optional - use Cloudflare Rate Limiting rules instead)
-# [[unsafe.bindings]]
-# name = "RATE_LIMITER"
-# type = "rate-limit"
-
-# Routes
 [[routes]]
 pattern = "auth.quietterminal.co.uk/*"
 zone_name = "quietterminal.co.uk"
@@ -58,13 +43,22 @@ name = "qti-auth-staging"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "qti_auth_staging"
-database_id = "f6c3bfa5-8c24-460a-9480-870d23c1cd96"
+database_id = "YOUR_STAGING_D1_DATABASE_ID"
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
 FRONTEND_URL = "https://account-staging.quietterminal.co.uk"
 API_URL = "https://auth-staging.quietterminal.co.uk"
 COOKIE_DOMAIN = ".quietterminal.co.uk"
+OAUTH_REDIRECT_URI = "https://auth-staging.quietterminal.co.uk/auth/oauth/callback"
+BRAND_NAME = "QTI"
+COMPANY_NAME = "Quiet Terminal Interactive"
+SECURITY_SENDER_NAME = "QTI Security"
+SECURITY_SENDER_EMAIL = "security@account.quietterminal.co.uk"
+AUTH_SENDER_NAME = "QTI Auth"
+AUTH_SENDER_EMAIL = "auth@account.quietterminal.co.uk"
+SERVICE_DOCUMENTATION_URL = "https://quietterminal.co.uk/docs/oauth"
+CORS_ORIGINS = "https://account.quietterminal.co.uk,https://account-staging.quietterminal.co.uk,https://support.quietterminal.co.uk,https://support-staging.quietterminal.co.uk"
 
 [[env.staging.routes]]
 pattern = "auth-staging.quietterminal.co.uk/*"

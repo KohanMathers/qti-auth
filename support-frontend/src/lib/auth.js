@@ -1,5 +1,7 @@
 
-const AUTH_BASE = (import.meta.env.VITE_API_URL || 'https://auth.quietterminal.co.uk').replace(/\/+$/, '');
+import { SUPPORT_BRANDING } from '../config/branding';
+
+const AUTH_BASE = SUPPORT_BRANDING.authBaseUrl.replace(/\/+$/, '');
 
 const CLIENT_ID = import.meta.env.VITE_OAUTH_CLIENT_ID || 'qti-support';
 const CLIENT_SECRET = import.meta.env.VITE_OAUTH_CLIENT_SECRET || '';

@@ -26,6 +26,8 @@
   --shadow: rgba(34, 32, 52, 0.1);
   --gradient-start: #5BB1EF;
   --gradient-end: #BC6DE0;
+  --auth-bg-light-url: url('https://cdn.quietterminal.co.uk/5,0e693e9611');
+  --auth-bg-dark-url: url('https://cdn.quietterminal.co.uk/3,107835fec2');
 }
 
 /* Dark mode overrides ride on data-theme from the toggle. */
@@ -93,7 +95,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background-image: url('https://cdn.quietterminal.co.uk/5,0e693e9611');
+  background-image: var(--auth-bg-light-url);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -102,7 +104,7 @@ body {
 }
 
 [data-theme="dark"] .auth-container {
-  background-image: url('https://cdn.quietterminal.co.uk/3,107835fec2');
+  background-image: var(--auth-bg-dark-url);
 }
 
 

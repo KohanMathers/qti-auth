@@ -1,5 +1,40 @@
+# Dependencies
 node_modules/
-.wrangler/
-dist/
-.env
+frontend/node_modules/
+support-frontend/node_modules/
 package-lock.json
+frontend/package-lock.json
+support-frontend/package-lock.json
+
+# Build output
+dist/
+frontend/dist/
+support-frontend/dist/
+
+# Cloudflare local state
+.wrangler/
+frontend/.wrangler/
+support-frontend/.wrangler/
+
+# Local environment files (keep examples tracked)
+.env
+.env.*
+!.env.example
+frontend/.env.local
+frontend/.env.staging
+support-frontend/.env.local
+support-frontend/.env.staging
+
+# Logs and OS/editor noise
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Runtime caches
+.cache/
+frontend/.vite/
+support-frontend/.vite/

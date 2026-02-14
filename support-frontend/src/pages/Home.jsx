@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { apiGet } from '../lib/api';
 import SearchBar from '../components/SearchBar';
 import ArticleCard from '../components/ArticleCard';
+import { SUPPORT_BRANDING } from '../config/branding';
 
 function Home() {
   const navigate = useNavigate();
@@ -44,7 +45,7 @@ function Home() {
     <div className="home-layout">
       <section className="hero-card">
         <div className="hero-content">
-          <span className="hero-kicker">QTI Support Desk</span>
+          <span className="hero-kicker">{SUPPORT_BRANDING.supportTitle} Desk</span>
           <h1>How can we help?</h1>
           <p>Search the knowledge base or submit a ticket to reach the support team.</p>
           <SearchBar
@@ -84,7 +85,7 @@ function Home() {
         <div className="section-header">
           <div>
             <h2>Featured articles</h2>
-            <p>Fresh answers from the QTI support team.</p>
+            <p>Fresh answers from the {SUPPORT_BRANDING.supportTitle} team.</p>
           </div>
           <Link className="pill" to="/kb">See all</Link>
         </div>

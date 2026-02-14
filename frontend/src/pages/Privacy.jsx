@@ -1,13 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
+import { BRANDING } from '../config/branding';
 
 function Privacy() {
   return (
     <div className="auth-container">
       <ThemeToggle />
       <div className="auth-box" style={{ maxWidth: '900px', maxHeight: '85vh', overflowY: 'auto' }}>
-        <h1>Quiet Terminal Interactive LTD customer privacy notice</h1>
+        <h1>{BRANDING.companyLegalName} customer privacy notice</h1>
         <p className="subtitle">This privacy notice tells you what to expect us to do with your personal information.</p>
 
         <div style={{ textAlign: 'left', marginTop: '2rem', fontSize: '0.95rem' }}>
@@ -24,10 +25,10 @@ function Privacy() {
           <section style={{ marginBottom: '2rem' }}>
             <h2 style={{ fontSize: '1.4rem', marginBottom: '1rem', color: 'var(--primary)' }}>Contact details</h2>
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>Telephone</h3>
-            <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>07841974811</p>
+            <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>{BRANDING.contactPhone}</p>
             <h3 style={{ fontSize: '1.2rem', marginTop: '1.5rem', marginBottom: '0.75rem', fontWeight: '600' }}>Email</h3>
             <p style={{ marginBottom: '1rem', lineHeight: '1.7' }}>
-              <a href="mailto:kohan@quietterminal.co.uk" style={{ color: 'var(--primary)' }}>kohan@quietterminal.co.uk</a>
+              <a href={`mailto:${BRANDING.legalEmail}`} style={{ color: 'var(--primary)' }}>{BRANDING.legalEmail}</a>
             </p>
           </section>
 

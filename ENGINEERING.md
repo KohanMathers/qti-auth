@@ -608,7 +608,7 @@ npm install
 cd frontend && npm install && cd ..
 
 # Create local D1
-wrangler d1 execute qti_auth --local --file=./schema.sql
+wrangler d1 execute qti_auth --local --file=./setup.sql
 
 # Run worker
 wrangler dev
@@ -652,7 +652,7 @@ wrangler pages deploy dist --project-name=qti-auth-frontend
 
 ```bash
 # Apply schema
-wrangler d1 execute qti_auth --file=./schema.sql
+wrangler d1 execute qti_auth --file=./setup.sql
 
 # Apply specific migration
 wrangler d1 execute qti_auth --file=./migrations/0004_jagsmp_minecraft_linking.sql
@@ -691,3 +691,4 @@ wrangler d1 execute qti_auth --command="SELECT COUNT(*) FROM user_reports WHERE 
 # Recent moderation actions
 wrangler d1 execute qti_auth --command="SELECT * FROM recent_mod_actions LIMIT 10"
 ```
+

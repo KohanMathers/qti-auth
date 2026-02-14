@@ -17,6 +17,7 @@ import OAuthAuthorize from './pages/OAuthAuthorize';
 import DeveloperPortal from './pages/DeveloperPortal';
 import MyAuthorizedApps from './pages/MyAuthorizedApps';
 import OAuthAdmin from './pages/OAuthAdmin';
+import { BRANDING } from './config/branding';
 import './App.css';
 
 function App() {
@@ -60,11 +61,16 @@ function App() {
     }
   }, []);
 
+  React.useEffect(() => {
+    document.documentElement.style.setProperty('--auth-bg-light-url', `url('${BRANDING.authBackgroundLightUrl}')`);
+    document.documentElement.style.setProperty('--auth-bg-dark-url', `url('${BRANDING.authBackgroundDarkUrl}')`);
+  }, []);
+
   if (loading) {
     return (
       <div className="loading-screen">
         <div className="spinner"></div>
-        <p>Loading QTI Auth...</p>
+        <p>Loading {BRANDING.productName}...</p>
       </div>
     );
   }
