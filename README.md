@@ -142,7 +142,6 @@ npm run tail
 
 - Never commit `.env.local`, `.env.staging`, or private keys.
 - Keep all credentials in Cloudflare secrets or external secret managers.
-- Rotate production secrets before first public release if this repo was previously private.
 
 ## License
 

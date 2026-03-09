@@ -2373,6 +2373,38 @@ export function registerRoutes(app) {
     return c.json({ achievement_id: achievementId, message: 'Achievement created' });
   });
 
+  // Return all active games owned by the authenticated user.
+  app.get('/games/owned', authMiddleware, async (c) => {
+    try {
+      const db = c.env.DB;
+      const user = c.get('user');
+      const { results } = await db.prepare(`
+        SELECT g.id, g.name, g.slug, g.description, g.icon_url, go.granted_at
+        FROM games_owned go
+        JOIN games g ON g.id = go.game_id
+        WHERE go.user_id = ? AND g.is_active = 1
+        ORDER BY g.name
+      `).bind(user.user_id).all();
+      return c.json({ games: results });
+    } catch (error) {
+      console.error('Error fetching owned games:', error);
+      return c.json({ error: 'Failed to retrieve owned games' }, 500);
+    }
+  });
+
+  // Check whether the authenticated user owns a specific game.
+  app.get('/games/:gameSlug/owned', authMiddleware, async (c) => {
+    const db = c.env.DB;
+    const user = c.get('user');
+    const gameSlug = c.req.param('gameSlug');
+    const row = await db.prepare(`
+      SELECT go.id FROM games_owned go
+      JOIN games g ON g.id = go.game_id
+      WHERE go.user_id = ? AND g.slug = ? AND g.is_active = 1
+    `).bind(user.user_id, gameSlug).first();
+    return c.json({ owned: !!row });
+  });
+
 
   app.post('/jagsmp/generate-code', async (c) => {
     const { plugin_secret, minecraft_uuid, minecraft_username } = await c.req.json();
@@ -4598,6 +4630,144 @@ app.post('/admin/oauth/clients/:id/revoke', authMiddleware, adminMiddleware, asy
   ).run();
 
   return c.json({ success: true });
+});
+
+
+// Issue a signed JWT lease for a game the authenticated user owns.
+app.post('/game/lease', authMiddleware, async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const { game_slug } = await c.req.json();
+
+  if (!game_slug) {
+    return c.json({ error: 'game_slug is required' }, 400);
+  }
+
+  const row = await db.prepare(`
+    SELECT g.id, g.slug FROM games_owned go
+    JOIN games g ON g.id = go.game_id
+    WHERE go.user_id = ? AND g.slug = ? AND g.is_active = 1
+  `).bind(user.user_id, game_slug).first();
+
+  if (!row) {
+    return c.json({ error: 'You do not own this game' }, 403);
+  }
+
+  const privateKey = c.env.OAUTH_PROVIDER_PRIVATE_KEY;
+  if (!privateKey) {
+    return c.json({ error: 'Lease signing is not configured' }, 500);
+  }
+
+  const issuedAt = now();
+  const expiresAt = issuedAt + CONFIG.GAME_LEASE_DURATION;
+
+  const lease = await signJwtRS256({
+    type: 'game_lease',
+    sub: user.user_id,
+    product_id: row.id,
+    product_slug: row.slug,
+    iss: getIssuer(c),
+    iat: issuedAt,
+    exp: expiresAt,
+  }, privateKey);
+
+  const leaseId = generateId();
+  await db.prepare(`
+    INSERT INTO game_leases (id, user_id, game_id, issued_at, expires_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).bind(leaseId, user.user_id, row.id, issuedAt, expiresAt).run();
+
+  return c.json({ lease, expires_at: expiresAt });
+});
+
+// Verify a game lease JWT (no auth required — called by game servers).
+app.post('/game/lease/verify', async (c) => {
+  const { lease } = await c.req.json();
+
+  if (!lease) {
+    return c.json({ valid: false, reason: 'lease is required' }, 400);
+  }
+
+  const publicKey = c.env.OAUTH_PROVIDER_PUBLIC_KEY;
+  if (!publicKey) {
+    return c.json({ valid: false, reason: 'Verification not configured' }, 500);
+  }
+
+  try {
+    const parts = lease.split('.');
+    if (parts.length !== 3) {
+      return c.json({ valid: false, reason: 'malformed' });
+    }
+
+    const headerPayload = `${parts[0]}.${parts[1]}`;
+    const signature = base64UrlDecode(parts[2]);
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[1])));
+
+    if (payload.type !== 'game_lease') {
+      return c.json({ valid: false, reason: 'not_a_lease' });
+    }
+
+    if (payload.exp && payload.exp < now()) {
+      return c.json({ valid: false, reason: 'expired' });
+    }
+
+    const key = await importPublicKey(publicKey);
+    const encoder = new TextEncoder();
+    const valid = await crypto.subtle.verify(
+      'RSASSA-PKCS1-v1_5',
+      key,
+      signature,
+      encoder.encode(headerPayload)
+    );
+
+    if (!valid) {
+      return c.json({ valid: false, reason: 'invalid_signature' });
+    }
+
+    const db = c.env.DB;
+    const revoked = await db.prepare(`
+      SELECT id FROM game_leases
+      WHERE user_id = ? AND game_id = ? AND revoked_at IS NOT NULL
+        AND issued_at = ? AND expires_at = ?
+    `).bind(payload.sub, payload.product_id, payload.iat, payload.exp).first();
+
+    if (revoked) {
+      return c.json({ valid: false, reason: 'revoked' });
+    }
+
+    return c.json({
+      valid: true,
+      user_id: payload.sub,
+      product_id: payload.product_id,
+      product_slug: payload.product_slug,
+      expires_at: payload.exp,
+    });
+  } catch (e) {
+    console.error('Lease verification failed:', e);
+    return c.json({ valid: false, reason: 'verification_error' });
+  }
+});
+
+// Admin: revoke all active leases for a user/game combination.
+app.post('/admin/game/lease/revoke', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.DB;
+  const { user_id, game_slug } = await c.req.json();
+
+  if (!user_id || !game_slug) {
+    return c.json({ error: 'user_id and game_slug are required' }, 400);
+  }
+
+  const game = await db.prepare('SELECT id FROM games WHERE slug = ?').bind(game_slug).first();
+  if (!game) {
+    return c.json({ error: 'Game not found' }, 404);
+  }
+
+  const result = await db.prepare(`
+    UPDATE game_leases SET revoked_at = ?
+    WHERE user_id = ? AND game_id = ? AND revoked_at IS NULL AND expires_at > ?
+  `).bind(now(), user_id, game.id, now()).run();
+
+  return c.json({ message: 'Leases revoked', count: result.meta.changes });
 });
 
 

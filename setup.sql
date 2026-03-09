@@ -1106,3 +1106,41 @@ CREATE TABLE IF NOT EXISTS ticket_sequence (
 );
 
 INSERT OR IGNORE INTO ticket_sequence (id, next_number) VALUES (1, 1);
+
+-- ============================================================
+-- Migration: 0009_game_ownership_and_leases.sql
+-- ============================================================
+-- Migration: Game Ownership and Lease System
+-- Tracks which users own which games, and issues/revokes short-lived
+-- signed JWT leases for game-server authentication.
+
+CREATE TABLE IF NOT EXISTS games_owned (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  game_id TEXT NOT NULL,
+  granted_at INTEGER NOT NULL,
+  granted_by TEXT,
+  UNIQUE (user_id, game_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+  FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_games_owned_user ON games_owned(user_id);
+CREATE INDEX IF NOT EXISTS idx_games_owned_game ON games_owned(game_id);
+
+CREATE TABLE IF NOT EXISTS game_leases (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  game_id TEXT NOT NULL,
+  issued_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  revoked_at INTEGER,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_leases_user ON game_leases(user_id);
+CREATE INDEX IF NOT EXISTS idx_game_leases_game ON game_leases(game_id);
+CREATE INDEX IF NOT EXISTS idx_game_leases_expires ON game_leases(expires_at);
+CREATE INDEX IF NOT EXISTS idx_game_leases_revoked ON game_leases(revoked_at);
