@@ -957,7 +957,7 @@ export function registerRoutes(app) {
     }
 
     try {
-      await verify(token, CONFIG.JWT_SECRET, "HS256");
+      await verify(token, c.env.JWT_SECRET || CONFIG.JWT_SECRET, "HS256");
     } catch (e) {
       return c.json({ error: 'Invalid token' }, 401);
     }

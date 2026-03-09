@@ -537,7 +537,7 @@ export function validateUsername(username) {
   return errors;
 }
 
-export async function createSession(user) {
+export async function createSession(user, jwtSecret) {
   const payload = {
     user_id: user.id,
     username: user.username_original,
@@ -547,14 +547,14 @@ export async function createSession(user) {
     exp: now() + CONFIG.SESSION_DURATION,
   };
 
-  return await sign(payload, CONFIG.JWT_SECRET);
+  return await sign(payload, jwtSecret || CONFIG.JWT_SECRET);
 }
 
 export async function createSecureSession(c, user, authMethod) {
   const db = c.env.DB;
   const fingerprint = collectFingerprint(c);
 
-  const token = await createSession(user);
+  const token = await createSession(user, c.env.JWT_SECRET);
   const tokenHash = await hashToken(token);
 
   const sessionId = generateId();

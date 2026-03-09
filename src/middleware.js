@@ -54,7 +54,7 @@ export const authMiddleware = async (c, next) => {
     let authType = 'jwt';
 
     try {
-      payload = await verify(token, CONFIG.JWT_SECRET, 'HS256');
+      payload = await verify(token, c.env.JWT_SECRET || CONFIG.JWT_SECRET, 'HS256');
     } catch (e) {
       authType = 'oauth';
     }
