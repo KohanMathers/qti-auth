@@ -4,7 +4,7 @@
 
 Production-ready authentication system for QTI Games built on Cloudflare's serverless infrastructure.
 
-## Architecture
+## Architecture 
 
 - **Backend**: Cloudflare Workers (Hono framework)
 - **Database**: Cloudflare D1 (distributed SQLite)
