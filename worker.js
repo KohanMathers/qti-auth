@@ -850,13 +850,30 @@ const authMiddleware = async (c, next) => {
     try {
         // Accept token from Authorization header or cookie named `qti_token`
         let token = c.req.header('Authorization')?.replace('Bearer ', '');
+        const cookieHeader = c.req.header('cookie') || '';
         if (!token) {
-            const cookieHeader = c.req.header('cookie') || '';
             const match = cookieHeader.match(/(?:^|; )qti_token=([^;]+)/);
             if (match) token = match[1];
         }
+        const requestPath = new URL(c.req.url).pathname;
+        console.log('[authMiddleware] path:', requestPath, 'hasToken:', !!token, 'cookieHeader:', cookieHeader.slice(0, 80));
         if (!token) {
-            const requestPath = new URL(c.req.url).pathname;
+            const wantsHtml = (c.req.header('accept') || '').includes('text/html');
+            if (requestPath === '/oauth/authorize' && wantsHtml) {
+                const frontendUrl = c.env.FRONTEND_URL || 'https://account.quietterminal.co.uk';
+                const loginUrl = new URL(`${frontendUrl}/login`);
+                loginUrl.searchParams.set('redirect', c.req.url);
+                console.log('[authMiddleware] no token, redirecting to login');
+                return c.redirect(loginUrl.toString());
+            }
+            return c.json({ error: 'Unauthorized' }, 401);
+        }
+
+        let payload;
+        try {
+            payload = await verify(token, CONFIG.JWT_SECRET, "HS256");
+        } catch (e) {
+            console.log('[authMiddleware] JWT verify failed:', String(e));
             const wantsHtml = (c.req.header('accept') || '').includes('text/html');
             if (requestPath === '/oauth/authorize' && wantsHtml) {
                 const frontendUrl = c.env.FRONTEND_URL || 'https://account.quietterminal.co.uk';
@@ -866,8 +883,6 @@ const authMiddleware = async (c, next) => {
             }
             return c.json({ error: 'Unauthorized' }, 401);
         }
-
-        const payload = await verify(token, CONFIG.JWT_SECRET, "HS256");
         const db = c.env.DB;
         const currentTime = now();
 
@@ -877,10 +892,13 @@ const authMiddleware = async (c, next) => {
             'SELECT * FROM user_sessions WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?'
         ).bind(tokenHash, currentTime).all();
 
+        console.log('[authMiddleware] user_id:', payload.user_id, 'sessions found:', sessions.length);
+
         // If no session found, this is a legacy token or session was revoked
         if (sessions.length === 0) {
             // Check if legacy token deadline has passed
             if (currentTime > CONFIG.LEGACY_TOKEN_DEADLINE) {
+                console.log('[authMiddleware] legacy token deadline passed');
                 return c.json({
                     error: 'Session expired. Please sign in again.',
                     code: 'LEGACY_TOKEN_EXPIRED',
@@ -954,9 +972,12 @@ const authMiddleware = async (c, next) => {
         }
 
         const currentFingerprint = collectFingerprint(c);
+        console.log('[authMiddleware] fingerprint:', JSON.stringify(currentFingerprint));
+        console.log('[authMiddleware] session stored:', JSON.stringify({ ip: session.ip_address, country: session.ip_country, ua: (session.user_agent_hash || '').slice(0, 8) }));
 
         // Validate fingerprint
         const validation = validateSessionFingerprint(session, currentFingerprint);
+        console.log('[authMiddleware] fingerprint validation:', JSON.stringify(validation));
 
         if (!validation.valid) {
             // Get user info for alert
