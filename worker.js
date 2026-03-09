@@ -856,6 +856,14 @@ const authMiddleware = async (c, next) => {
             if (match) token = match[1];
         }
         if (!token) {
+            const requestPath = new URL(c.req.url).pathname;
+            const wantsHtml = (c.req.header('accept') || '').includes('text/html');
+            if (requestPath === '/oauth/authorize' && wantsHtml) {
+                const frontendUrl = c.env.FRONTEND_URL || 'https://account.quietterminal.co.uk';
+                const loginUrl = new URL(`${frontendUrl}/login`);
+                loginUrl.searchParams.set('redirect', c.req.url);
+                return c.redirect(loginUrl.toString());
+            }
             return c.json({ error: 'Unauthorized' }, 401);
         }
 
