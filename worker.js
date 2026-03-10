@@ -39,6 +39,8 @@ const CONFIG = {
         SUPPORTED_GRANT_TYPES: ['authorization_code', 'refresh_token'],
         SUPPORTED_CODE_CHALLENGE_METHODS: ['S256'],
     },
+
+    GAME_LEASE_DURATION: 20 * 24 * 60 * 60, // 20 days in seconds
 };
 
 const BRANDING_DEFAULTS = {
