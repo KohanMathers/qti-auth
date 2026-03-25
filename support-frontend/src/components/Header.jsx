@@ -1,10 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-<<<<<<< HEAD
 import { SUPPORT_BRANDING } from '../config/branding';
-=======
-import { startLogin } from '../lib/auth';
->>>>>>> 46701a859a0fe4ec77a69c4b39c311dc198eeb33
 
 function Header({ user, onLogout }) {
   return (
@@ -28,11 +24,7 @@ function Header({ user, onLogout }) {
               <button type="button" className="pill" onClick={onLogout}>Sign out</button>
             </>
           ) : (
-<<<<<<< HEAD
             <a className="pill" href={SUPPORT_BRANDING.accountLoginUrl}>Sign in</a>
-=======
-            <button type="button" className="pill" onClick={() => startLogin()}>Sign in with QTI</button>
->>>>>>> 46701a859a0fe4ec77a69c4b39c311dc198eeb33
           )}
           <Link className="pill primary" to="/tickets/new">Submit Ticket</Link>
         </div>
