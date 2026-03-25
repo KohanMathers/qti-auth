@@ -1,5 +1,4 @@
 
-
 /* Core tokens for the auth UI palette and spacing. */
 :root {
   
@@ -26,8 +25,8 @@
   --shadow: rgba(34, 32, 52, 0.1);
   --gradient-start: #5BB1EF;
   --gradient-end: #BC6DE0;
-  --auth-bg-light-url: url('https://cdn.quietterminal.co.uk/5,0e693e9611');
-  --auth-bg-dark-url: url('https://cdn.quietterminal.co.uk/3,107835fec2');
+  --auth-bg-light-url: url('https://cdn.quietterminal.co.uk/misc/LightBackground.png');
+  --auth-bg-dark-url: url('https://cdn.quietterminal.co.uk/DarkBackground.png');
 }
 
 /* Dark mode overrides ride on data-theme from the toggle. */
