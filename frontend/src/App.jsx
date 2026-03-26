@@ -21,6 +21,11 @@ import Settings from './pages/Settings';
 import { BRANDING } from './config/branding';
 import './App.css';
 
+function SaveAndLoginRedirect({ to }) {
+  localStorage.setItem('post_login_redirect', to);
+  return <Navigate to="/login" />;
+}
+
 function App() {
   const [user, setUser] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -157,7 +162,11 @@ function App() {
         />
         <Route
           path="/oauth/authorize"
-          element={user ? <OAuthAuthorize user={user} /> : <Navigate to="/login" />}
+          element={
+            user
+              ? <OAuthAuthorize user={user} />
+              : <SaveAndLoginRedirect to={window.location.pathname + window.location.search} />
+          }
         />
         <Route
           path="/developer"
