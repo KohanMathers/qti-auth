@@ -1854,58 +1854,56 @@ export function registerRoutes(app) {
       timestamp
     ).run();
 
-    // Notify admins who have new-ticket notifications enabled (fire-and-forget)
-    (async () => {
-      try {
-        const { results: adminPrefs } = await db.prepare(`
-          SELECT u.email, u.username_original
-          FROM users u
-          LEFT JOIN admin_notification_preferences anp ON anp.user_id = u.id
-          WHERE u.role = 'admin'
-            AND u.email IS NOT NULL
-            AND (anp.notify_new_tickets IS NULL OR anp.notify_new_tickets = 1)
-        `).all();
+    // Notify admins who have new-ticket notifications enabled
+    try {
+      const { results: adminPrefs } = await db.prepare(`
+        SELECT u.email, u.username_original
+        FROM users u
+        LEFT JOIN admin_notification_preferences anp ON anp.user_id = u.id
+        WHERE u.role = 'admin'
+          AND u.email IS NOT NULL
+          AND (anp.notify_new_tickets IS NULL OR anp.notify_new_tickets = 1)
+      `).all();
 
-        for (const admin of adminPrefs) {
-          await fetch('https://api.brevo.com/v3/smtp/email', {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'api-key': c.env.EMAIL_SERVICE_API_KEY,
-            },
-            body: JSON.stringify({
-              sender: { name: 'QTI Support', email: 'auth@account.quietterminal.co.uk' },
-              to: [{ email: admin.email }],
-              subject: `New Support Ticket #${ticketNumber}: ${subject}`,
-              htmlContent: `
-                <!DOCTYPE html>
-                <html>
-                <head><meta charset="utf-8"></head>
-                <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                  <h2 style="color: #1d4ed8;">New Support Ticket</h2>
-                  <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                    <p><strong>Ticket #:</strong> ${ticketNumber}</p>
-                    <p><strong>Subject:</strong> ${subject}</p>
-                    <p><strong>Category:</strong> ${category}</p>
-                    <p><strong>Priority:</strong> ${priority}</p>
-                    <p><strong>Submitted:</strong> ${new Date().toUTCString()}</p>
-                  </div>
-                  <p>Log in to the admin panel to view and respond to this ticket.</p>
-                  <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
-                    You are receiving this because you are an admin with new-ticket notifications enabled.<br>
-                    &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
-                  </p>
-                </body>
-                </html>
-              `,
-            }),
-          });
-        }
-      } catch (e) {
-        console.error('Failed to send new-ticket admin notification:', e);
-      }
-    })();
+      await Promise.all(adminPrefs.map(admin =>
+        fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'api-key': c.env.EMAIL_SERVICE_API_KEY,
+          },
+          body: JSON.stringify({
+            sender: { name: 'QTI Support', email: 'auth@account.quietterminal.co.uk' },
+            to: [{ email: admin.email }],
+            subject: `New Support Ticket #${ticketNumber}: ${subject}`,
+            htmlContent: `
+              <!DOCTYPE html>
+              <html>
+              <head><meta charset="utf-8"></head>
+              <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <h2 style="color: #1d4ed8;">New Support Ticket</h2>
+                <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                  <p><strong>Ticket #:</strong> ${ticketNumber}</p>
+                  <p><strong>Subject:</strong> ${subject}</p>
+                  <p><strong>Category:</strong> ${category}</p>
+                  <p><strong>Priority:</strong> ${priority}</p>
+                  <p><strong>Submitted:</strong> ${new Date().toUTCString()}</p>
+                </div>
+                <p>Log in to the admin panel to view and respond to this ticket.</p>
+                <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
+                  You are receiving this because you are an admin with new-ticket notifications enabled.<br>
+                  &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
+                </p>
+              </body>
+              </html>
+            `,
+          }),
+        }).catch(e => console.error('Failed to send new-ticket notification to', admin.email, e))
+      ));
+    } catch (e) {
+      console.error('Failed to send new-ticket admin notifications:', e);
+    }
 
     return c.json({
       id: ticketId,
@@ -2200,57 +2198,55 @@ export function registerRoutes(app) {
       'UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?'
     ).bind('in_progress', timestamp, id).run();
 
-    // Notify ticket owner if they have email and notifications enabled (fire-and-forget)
-    (async () => {
-      try {
-        const { results: owners } = await db.prepare(`
-          SELECT u.email, u.username_original
-          FROM users u
-          LEFT JOIN user_notification_preferences unp ON unp.user_id = u.id
-          WHERE u.id = ?
-            AND u.email IS NOT NULL
-            AND u.oauth_provider IS NULL
-            AND (unp.notify_ticket_updates IS NULL OR unp.notify_ticket_updates = 1)
-        `).bind(ticket.user_id).all();
+    // Notify ticket owner if they have email and notifications enabled
+    try {
+      const { results: owners } = await db.prepare(`
+        SELECT u.email, u.username_original
+        FROM users u
+        LEFT JOIN user_notification_preferences unp ON unp.user_id = u.id
+        WHERE u.id = ?
+          AND u.email IS NOT NULL
+          AND u.oauth_provider IS NULL
+          AND (unp.notify_ticket_updates IS NULL OR unp.notify_ticket_updates = 1)
+      `).bind(ticket.user_id).all();
 
-        if (owners.length > 0) {
-          const owner = owners[0];
-          await fetch('https://api.brevo.com/v3/smtp/email', {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'api-key': c.env.EMAIL_SERVICE_API_KEY,
-            },
-            body: JSON.stringify({
-              sender: { name: 'QTI Support', email: 'auth@account.quietterminal.co.uk' },
-              to: [{ email: owner.email }],
-              subject: `Re: Support Ticket #${ticket.ticket_number} — ${ticket.subject}`,
-              htmlContent: `
-                <!DOCTYPE html>
-                <html>
-                <head><meta charset="utf-8"></head>
-                <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                  <h2 style="color: #1d4ed8;">A staff member has replied to your ticket</h2>
-                  <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                    <p><strong>Ticket #${ticket.ticket_number}:</strong> ${ticket.subject}</p>
-                  </div>
-                  <p>Log in to your account to view the full reply and respond.</p>
-                  <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
-                    You are receiving this because you have ticket update notifications enabled.<br>
-                    You can manage this preference in your account settings.<br>
-                    &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
-                  </p>
-                </body>
-                </html>
-              `,
-            }),
-          });
-        }
-      } catch (e) {
-        console.error('Failed to send ticket reply notification:', e);
+      if (owners.length > 0) {
+        const owner = owners[0];
+        await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'api-key': c.env.EMAIL_SERVICE_API_KEY,
+          },
+          body: JSON.stringify({
+            sender: { name: 'QTI Support', email: 'auth@account.quietterminal.co.uk' },
+            to: [{ email: owner.email }],
+            subject: `Re: Support Ticket #${ticket.ticket_number} — ${ticket.subject}`,
+            htmlContent: `
+              <!DOCTYPE html>
+              <html>
+              <head><meta charset="utf-8"></head>
+              <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <h2 style="color: #1d4ed8;">A staff member has replied to your ticket</h2>
+                <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                  <p><strong>Ticket #${ticket.ticket_number}:</strong> ${ticket.subject}</p>
+                </div>
+                <p>Log in to your account to view the full reply and respond.</p>
+                <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
+                  You are receiving this because you have ticket update notifications enabled.<br>
+                  You can manage this preference in your account settings.<br>
+                  &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
+                </p>
+              </body>
+              </html>
+            `,
+          }),
+        });
       }
-    })();
+    } catch (e) {
+      console.error('Failed to send ticket reply notification:', e);
+    }
 
     return c.json({ message: 'Reply added' });
   });
@@ -2351,58 +2347,56 @@ export function registerRoutes(app) {
       closed: 'Closed',
     };
 
-    // Notify ticket owner of status change (fire-and-forget)
-    (async () => {
-      try {
-        const { results: owners } = await db.prepare(`
-          SELECT u.email, u.username_original
-          FROM users u
-          LEFT JOIN user_notification_preferences unp ON unp.user_id = u.id
-          WHERE u.id = ?
-            AND u.email IS NOT NULL
-            AND u.oauth_provider IS NULL
-            AND (unp.notify_ticket_updates IS NULL OR unp.notify_ticket_updates = 1)
-        `).bind(ticket.user_id).all();
+    // Notify ticket owner of status change
+    try {
+      const { results: owners } = await db.prepare(`
+        SELECT u.email, u.username_original
+        FROM users u
+        LEFT JOIN user_notification_preferences unp ON unp.user_id = u.id
+        WHERE u.id = ?
+          AND u.email IS NOT NULL
+          AND u.oauth_provider IS NULL
+          AND (unp.notify_ticket_updates IS NULL OR unp.notify_ticket_updates = 1)
+      `).bind(ticket.user_id).all();
 
-        if (owners.length > 0) {
-          const owner = owners[0];
-          await fetch('https://api.brevo.com/v3/smtp/email', {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'api-key': c.env.EMAIL_SERVICE_API_KEY,
-            },
-            body: JSON.stringify({
-              sender: { name: 'QTI Support', email: 'auth@account.quietterminal.co.uk' },
-              to: [{ email: owner.email }],
-              subject: `Ticket #${ticket.ticket_number} status updated — ${ticket.subject}`,
-              htmlContent: `
-                <!DOCTYPE html>
-                <html>
-                <head><meta charset="utf-8"></head>
-                <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                  <h2 style="color: #1d4ed8;">Your support ticket status has been updated</h2>
-                  <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                    <p><strong>Ticket #${ticket.ticket_number}:</strong> ${ticket.subject}</p>
-                    <p><strong>New status:</strong> ${STATUS_LABELS[status] || status}</p>
-                  </div>
-                  <p>Log in to your account to view your ticket.</p>
-                  <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
-                    You are receiving this because you have ticket update notifications enabled.<br>
-                    You can manage this preference in your account settings.<br>
-                    &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
-                  </p>
-                </body>
-                </html>
-              `,
-            }),
-          });
-        }
-      } catch (e) {
-        console.error('Failed to send ticket status notification:', e);
+      if (owners.length > 0) {
+        const owner = owners[0];
+        await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'api-key': c.env.EMAIL_SERVICE_API_KEY,
+          },
+          body: JSON.stringify({
+            sender: { name: 'QTI Support', email: 'auth@account.quietterminal.co.uk' },
+            to: [{ email: owner.email }],
+            subject: `Ticket #${ticket.ticket_number} status updated — ${ticket.subject}`,
+            htmlContent: `
+              <!DOCTYPE html>
+              <html>
+              <head><meta charset="utf-8"></head>
+              <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <h2 style="color: #1d4ed8;">Your support ticket status has been updated</h2>
+                <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                  <p><strong>Ticket #${ticket.ticket_number}:</strong> ${ticket.subject}</p>
+                  <p><strong>New status:</strong> ${STATUS_LABELS[status] || status}</p>
+                </div>
+                <p>Log in to your account to view your ticket.</p>
+                <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
+                  You are receiving this because you have ticket update notifications enabled.<br>
+                  You can manage this preference in your account settings.<br>
+                  &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
+                </p>
+              </body>
+              </html>
+            `,
+          }),
+        });
       }
-    })();
+    } catch (e) {
+      console.error('Failed to send ticket status notification:', e);
+    }
 
     return c.json({ message: 'Status updated' });
   });
