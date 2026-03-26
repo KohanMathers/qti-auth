@@ -1144,3 +1144,17 @@ CREATE INDEX IF NOT EXISTS idx_game_leases_user ON game_leases(user_id);
 CREATE INDEX IF NOT EXISTS idx_game_leases_game ON game_leases(game_id);
 CREATE INDEX IF NOT EXISTS idx_game_leases_expires ON game_leases(expires_at);
 CREATE INDEX IF NOT EXISTS idx_game_leases_revoked ON game_leases(revoked_at);
+
+CREATE TABLE IF NOT EXISTS admin_notification_preferences (
+  user_id TEXT PRIMARY KEY,
+  notify_new_tickets INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_notification_preferences (
+  user_id TEXT PRIMARY KEY,
+  notify_ticket_updates INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

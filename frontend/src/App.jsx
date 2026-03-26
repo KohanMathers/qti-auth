@@ -17,6 +17,7 @@ import OAuthAuthorize from './pages/OAuthAuthorize';
 import DeveloperPortal from './pages/DeveloperPortal';
 import MyAuthorizedApps from './pages/MyAuthorizedApps';
 import OAuthAdmin from './pages/OAuthAdmin';
+import Settings from './pages/Settings';
 import { BRANDING } from './config/branding';
 import './App.css';
 
@@ -129,6 +130,16 @@ function App() {
               <OAuthAdmin user={user} />
             ) : (
               <Navigate to="/dashboard" />
+            )
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            user ? (
+              <Settings user={user} />
+            ) : (
+              <Navigate to="/login" />
             )
           }
         />

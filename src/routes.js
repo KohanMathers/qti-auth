@@ -1854,6 +1854,59 @@ export function registerRoutes(app) {
       timestamp
     ).run();
 
+    // Notify admins who have new-ticket notifications enabled (fire-and-forget)
+    (async () => {
+      try {
+        const { results: adminPrefs } = await db.prepare(`
+          SELECT u.email, u.username_original
+          FROM users u
+          LEFT JOIN admin_notification_preferences anp ON anp.user_id = u.id
+          WHERE u.role = 'admin'
+            AND u.email IS NOT NULL
+            AND (anp.notify_new_tickets IS NULL OR anp.notify_new_tickets = 1)
+        `).all();
+
+        for (const admin of adminPrefs) {
+          await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'api-key': c.env.EMAIL_SERVICE_API_KEY,
+            },
+            body: JSON.stringify({
+              sender: { name: 'QTI Support', email: 'auth@account.quietterminal.co.uk' },
+              to: [{ email: admin.email }],
+              subject: `New Support Ticket #${ticketNumber}: ${subject}`,
+              htmlContent: `
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="utf-8"></head>
+                <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                  <h2 style="color: #1d4ed8;">New Support Ticket</h2>
+                  <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Ticket #:</strong> ${ticketNumber}</p>
+                    <p><strong>Subject:</strong> ${subject}</p>
+                    <p><strong>Category:</strong> ${category}</p>
+                    <p><strong>Priority:</strong> ${priority}</p>
+                    <p><strong>Submitted:</strong> ${new Date().toUTCString()}</p>
+                  </div>
+                  <p>Log in to the admin panel to view and respond to this ticket.</p>
+                  <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
+                    You are receiving this because you are an admin with new-ticket notifications enabled.<br>
+                    &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
+                  </p>
+                </body>
+                </html>
+              `,
+            }),
+          });
+        }
+      } catch (e) {
+        console.error('Failed to send new-ticket admin notification:', e);
+      }
+    })();
+
     return c.json({
       id: ticketId,
       ticket_number: ticketNumber,
@@ -2128,13 +2181,14 @@ export function registerRoutes(app) {
     }
 
     const { results: tickets } = await db.prepare(
-      'SELECT id FROM support_tickets WHERE id = ?'
+      'SELECT id, ticket_number, subject, user_id FROM support_tickets WHERE id = ?'
     ).bind(id).all();
 
     if (tickets.length === 0) {
       return c.json({ error: 'Ticket not found' }, 404);
     }
 
+    const ticket = tickets[0];
     const timestamp = now();
     await db.prepare(`
       INSERT INTO ticket_messages (
@@ -2145,6 +2199,58 @@ export function registerRoutes(app) {
     await db.prepare(
       'UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?'
     ).bind('in_progress', timestamp, id).run();
+
+    // Notify ticket owner if they have email and notifications enabled (fire-and-forget)
+    (async () => {
+      try {
+        const { results: owners } = await db.prepare(`
+          SELECT u.email, u.username_original
+          FROM users u
+          LEFT JOIN user_notification_preferences unp ON unp.user_id = u.id
+          WHERE u.id = ?
+            AND u.email IS NOT NULL
+            AND u.oauth_provider IS NULL
+            AND (unp.notify_ticket_updates IS NULL OR unp.notify_ticket_updates = 1)
+        `).bind(ticket.user_id).all();
+
+        if (owners.length > 0) {
+          const owner = owners[0];
+          await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'api-key': c.env.EMAIL_SERVICE_API_KEY,
+            },
+            body: JSON.stringify({
+              sender: { name: 'QTI Support', email: 'auth@account.quietterminal.co.uk' },
+              to: [{ email: owner.email }],
+              subject: `Re: Support Ticket #${ticket.ticket_number} — ${ticket.subject}`,
+              htmlContent: `
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="utf-8"></head>
+                <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                  <h2 style="color: #1d4ed8;">A staff member has replied to your ticket</h2>
+                  <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Ticket #${ticket.ticket_number}:</strong> ${ticket.subject}</p>
+                  </div>
+                  <p>Log in to your account to view the full reply and respond.</p>
+                  <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
+                    You are receiving this because you have ticket update notifications enabled.<br>
+                    You can manage this preference in your account settings.<br>
+                    &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
+                  </p>
+                </body>
+                </html>
+              `,
+            }),
+          });
+        }
+      } catch (e) {
+        console.error('Failed to send ticket reply notification:', e);
+      }
+    })();
 
     return c.json({ message: 'Reply added' });
   });
@@ -2208,6 +2314,15 @@ export function registerRoutes(app) {
       return c.json({ error: 'Invalid status' }, 400);
     }
 
+    const { results: tickets } = await db.prepare(
+      'SELECT ticket_number, subject, user_id FROM support_tickets WHERE id = ?'
+    ).bind(id).all();
+
+    if (tickets.length === 0) {
+      return c.json({ error: 'Ticket not found' }, 404);
+    }
+
+    const ticket = tickets[0];
     const timestamp = now();
     const updates = ['status = ?', 'updated_at = ?'];
     const params = [status, timestamp];
@@ -2227,6 +2342,67 @@ export function registerRoutes(app) {
     params.push(id);
     await db.prepare(`UPDATE support_tickets SET ${updates.join(', ')} WHERE id = ?`)
       .bind(...params).run();
+
+    const STATUS_LABELS = {
+      open: 'Open',
+      awaiting_reply: 'Awaiting Your Reply',
+      in_progress: 'In Progress',
+      resolved: 'Resolved',
+      closed: 'Closed',
+    };
+
+    // Notify ticket owner of status change (fire-and-forget)
+    (async () => {
+      try {
+        const { results: owners } = await db.prepare(`
+          SELECT u.email, u.username_original
+          FROM users u
+          LEFT JOIN user_notification_preferences unp ON unp.user_id = u.id
+          WHERE u.id = ?
+            AND u.email IS NOT NULL
+            AND u.oauth_provider IS NULL
+            AND (unp.notify_ticket_updates IS NULL OR unp.notify_ticket_updates = 1)
+        `).bind(ticket.user_id).all();
+
+        if (owners.length > 0) {
+          const owner = owners[0];
+          await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'api-key': c.env.EMAIL_SERVICE_API_KEY,
+            },
+            body: JSON.stringify({
+              sender: { name: 'QTI Support', email: 'auth@account.quietterminal.co.uk' },
+              to: [{ email: owner.email }],
+              subject: `Ticket #${ticket.ticket_number} status updated — ${ticket.subject}`,
+              htmlContent: `
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="utf-8"></head>
+                <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                  <h2 style="color: #1d4ed8;">Your support ticket status has been updated</h2>
+                  <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Ticket #${ticket.ticket_number}:</strong> ${ticket.subject}</p>
+                    <p><strong>New status:</strong> ${STATUS_LABELS[status] || status}</p>
+                  </div>
+                  <p>Log in to your account to view your ticket.</p>
+                  <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">
+                    You are receiving this because you have ticket update notifications enabled.<br>
+                    You can manage this preference in your account settings.<br>
+                    &copy; ${new Date().getFullYear()} Quiet Terminal Interactive
+                  </p>
+                </body>
+                </html>
+              `,
+            }),
+          });
+        }
+      } catch (e) {
+        console.error('Failed to send ticket status notification:', e);
+      }
+    })();
 
     return c.json({ message: 'Status updated' });
   });
@@ -3421,6 +3597,60 @@ app.get('/admin/audit-logs/admins', authMiddleware, adminMiddleware, async (c) =
     `).all();
 
   return c.json({ admins: results });
+});
+
+app.get('/settings/notifications', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+
+  const { results: userPrefs } = await db.prepare(
+    'SELECT notify_ticket_updates FROM user_notification_preferences WHERE user_id = ?'
+  ).bind(user.user_id).all();
+
+  const response = {
+    notify_ticket_updates: userPrefs[0] ? Boolean(userPrefs[0].notify_ticket_updates) : true,
+  };
+
+  if (user.role === 'admin') {
+    const { results: adminPrefs } = await db.prepare(
+      'SELECT notify_new_tickets FROM admin_notification_preferences WHERE user_id = ?'
+    ).bind(user.user_id).all();
+    response.notify_new_tickets = adminPrefs[0] ? Boolean(adminPrefs[0].notify_new_tickets) : true;
+  }
+
+  return c.json(response);
+});
+
+app.put('/settings/notifications', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const db = c.env.DB;
+  const body = await c.req.json();
+  const timestamp = now();
+  const response = {};
+
+  if (typeof body?.notify_ticket_updates === 'boolean') {
+    await db.prepare(`
+      INSERT INTO user_notification_preferences (user_id, notify_ticket_updates, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET notify_ticket_updates = excluded.notify_ticket_updates, updated_at = excluded.updated_at
+    `).bind(user.user_id, body.notify_ticket_updates ? 1 : 0, timestamp).run();
+    response.notify_ticket_updates = body.notify_ticket_updates;
+  }
+
+  if (user.role === 'admin' && typeof body?.notify_new_tickets === 'boolean') {
+    await db.prepare(`
+      INSERT INTO admin_notification_preferences (user_id, notify_new_tickets, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET notify_new_tickets = excluded.notify_new_tickets, updated_at = excluded.updated_at
+    `).bind(user.user_id, body.notify_new_tickets ? 1 : 0, timestamp).run();
+    response.notify_new_tickets = body.notify_new_tickets;
+  }
+
+  if (Object.keys(response).length === 0) {
+    return c.json({ error: 'No valid fields provided' }, 400);
+  }
+
+  return c.json(response);
 });
 
 app.get('/admin/moderation-history', authMiddleware, adminMiddleware, async (c) => {

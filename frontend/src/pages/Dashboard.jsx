@@ -100,6 +100,11 @@ function Dashboard({ user, setUser }) {
           >
             Developer Portal
           </button>
+          <button
+            onClick={() => navigate('/settings')}
+          >
+            Settings
+          </button>
           {user.role === 'admin' && (
             <>
               <button
