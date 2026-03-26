@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { SUPPORT_BRANDING } from '../config/branding';
+import { startLogin } from '../lib/auth';
 
 function Header({ user, onLogout }) {
   return (
@@ -24,7 +25,7 @@ function Header({ user, onLogout }) {
               <button type="button" className="pill" onClick={onLogout}>Sign out</button>
             </>
           ) : (
-            <a className="pill" href={SUPPORT_BRANDING.accountLoginUrl}>Sign in</a>
+            <button type="button" className="pill" onClick={() => startLogin()}>Sign in</button>
           )}
           <Link className="pill primary" to="/tickets/new">Submit Ticket</Link>
         </div>
