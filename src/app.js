@@ -6,7 +6,14 @@ import { registerRoutes } from './routes.js';
 export function createApp() {
   const app = new Hono();
 
-  // Explicit allowlist keeps CORS tight across prod/staging surfaces.
+  // Public OAuth endpoints must be reachable by any client (server-side, native apps, etc.)
+  app.use('/oauth/token', cors({ origin: '*' }));
+  app.use('/oauth/userinfo', cors({ origin: '*' }));
+  app.use('/oauth/revoke', cors({ origin: '*' }));
+  app.use('/oauth/introspect', cors({ origin: '*' }));
+  app.use('/.well-known/*', cors({ origin: '*' }));
+
+  // All other routes: explicit allowlist keeps CORS tight across prod/staging surfaces.
   app.use('/*', cors({
     origin: [
       'https://account.quietterminal.co.uk',
