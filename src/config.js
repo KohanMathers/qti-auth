@@ -24,7 +24,7 @@ export const CONFIG = {
     ACCESS_TOKEN_EXPIRY: 60 * 60,
     REFRESH_TOKEN_EXPIRY: 30 * 24 * 60 * 60,
     ID_TOKEN_EXPIRY: 60 * 60,
-    SUPPORTED_SCOPES: ['openid', 'profile', 'email'],
+    SUPPORTED_SCOPES: ['openid', 'profile', 'email', 'games', 'achievements', 'game_stats'],
     SUPPORTED_RESPONSE_TYPES: ['code'],
     SUPPORTED_GRANT_TYPES: ['authorization_code', 'refresh_token'],
     SUPPORTED_CODE_CHALLENGE_METHODS: ['S256'],

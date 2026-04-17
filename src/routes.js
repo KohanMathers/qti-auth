@@ -4177,6 +4177,9 @@ app.get('/oauth/authorize/client-info', authMiddleware, async (c) => {
     openid: 'Verify your identity',
     profile: 'Access your username and profile information',
     email: 'Access your email address',
+    games: 'Access the list of games you own',
+    achievements: 'Access your unlocked achievements across all games',
+    game_stats: 'Access your in-game stats for each game',
   };
 
   return c.json({
@@ -4544,6 +4547,46 @@ app.get('/oauth/userinfo', async (c) => {
   const scopes = token.scope.split(' ').filter(s => s);
 
   const response = buildUserClaims(user, scopes);
+
+  if (scopes.includes('games')) {
+    const { results: ownedGames } = await db.prepare(`
+      SELECT g.id, g.name, g.slug, g.description, g.icon_url, go.granted_at
+      FROM games_owned go
+      JOIN games g ON g.id = go.game_id
+      WHERE go.user_id = ? AND g.is_active = 1 AND g.admin_only = 0
+      ORDER BY go.granted_at ASC
+    `).bind(token.user_id).all();
+    response.games = ownedGames;
+  }
+
+  if (scopes.includes('game_stats')) {
+    const { results: gameStats } = await db.prepare(`
+      SELECT g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
+             ugs.stats_data, ugs.last_played
+      FROM user_game_stats ugs
+      JOIN games g ON g.id = ugs.game_id
+      WHERE ugs.user_id = ? AND g.is_active = 1 AND g.admin_only = 0
+      ORDER BY ugs.last_played DESC
+    `).bind(token.user_id).all();
+    response.game_stats = gameStats.map(r => ({
+      ...r,
+      stats_data: r.stats_data ? JSON.parse(r.stats_data) : {},
+    }));
+  }
+
+  if (scopes.includes('achievements')) {
+    const { results: achievements } = await db.prepare(`
+      SELECT ga.id, ga.name, ga.description, ga.icon_url, ga.points,
+             g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
+             ua.unlocked_at
+      FROM user_achievements ua
+      JOIN game_achievements ga ON ga.id = ua.achievement_id
+      JOIN games g ON g.id = ga.game_id
+      WHERE ua.user_id = ? AND g.is_active = 1 AND g.admin_only = 0
+      ORDER BY ua.unlocked_at ASC
+    `).bind(token.user_id).all();
+    response.achievements = achievements;
+  }
 
   return c.json(response);
 });
