@@ -779,6 +779,48 @@ button:disabled {
   margin-bottom: 1.5rem;
 }
 
+.scope-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.scope-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  font-weight: normal;
+  margin-bottom: 0;
+}
+
+.scope-item input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  border: none;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.scope-item.scope-required {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.scope-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  min-width: 90px;
+}
+
+.scope-description {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 .form-actions {
   display: flex;
   gap: 1rem;

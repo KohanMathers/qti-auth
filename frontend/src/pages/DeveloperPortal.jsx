@@ -18,7 +18,17 @@ function DeveloperPortal({ user }) {
     privacy_policy_url: '',
     redirect_uris: '',
     client_type: 'confidential',
+    allowed_scopes: ['openid', 'profile', 'email'],
   });
+
+  const AVAILABLE_SCOPES = [
+    { id: 'openid', label: 'OpenID', description: 'Required for OIDC authentication', required: true },
+    { id: 'profile', label: 'Profile', description: 'Username and account information' },
+    { id: 'email', label: 'Email', description: 'Email address' },
+    { id: 'games', label: 'Games', description: 'Access to owned games' },
+    { id: 'achievements', label: 'Achievements', description: 'Game achievements' },
+    { id: 'game_stats', label: 'Game Stats', description: 'Game statistics and scores' },
+  ];
 
   // Only populated on create/regenerate to show the secret once.
   const [newClientSecret, setNewClientSecret] = useState(null);
@@ -85,6 +95,7 @@ function DeveloperPortal({ user }) {
           privacy_policy_url: formData.privacy_policy_url || undefined,
           redirect_uris: redirectUris,
           client_type: formData.client_type,
+          allowed_scopes: formData.allowed_scopes,
         }),
       });
 
@@ -200,6 +211,7 @@ function DeveloperPortal({ user }) {
       privacy_policy_url: client.privacy_policy_url || '',
       redirect_uris: client.redirect_uris.join('\n'),
       client_type: client.client_type,
+      allowed_scopes: client.allowed_scopes ?? ['openid', 'profile', 'email'],
     });
     setEditingClient(client);
     setShowCreateForm(true);
@@ -213,6 +225,7 @@ function DeveloperPortal({ user }) {
       privacy_policy_url: '',
       redirect_uris: '',
       client_type: 'confidential',
+      allowed_scopes: ['openid', 'profile', 'email'],
     });
   };
 
@@ -437,6 +450,30 @@ function DeveloperPortal({ user }) {
                   <p className="help-text">
                     Must use HTTPS except for localhost. Exact URI matching is enforced.
                   </p>
+                </div>
+
+                <div className="form-group">
+                  <label>Allowed Scopes</label>
+                  <div className="scope-list">
+                    {AVAILABLE_SCOPES.map(scope => (
+                      <label key={scope.id} className={`scope-item ${scope.required ? 'scope-required' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={formData.allowed_scopes.includes(scope.id)}
+                          disabled={scope.required}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...formData.allowed_scopes, scope.id]
+                              : formData.allowed_scopes.filter(s => s !== scope.id);
+                            setFormData({ ...formData, allowed_scopes: next });
+                          }}
+                        />
+                        <span className="scope-label">{scope.label}</span>
+                        <span className="scope-description">{scope.description}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="help-text">Select which scopes this application may request from users.</p>
                 </div>
 
                 <div className="form-group">

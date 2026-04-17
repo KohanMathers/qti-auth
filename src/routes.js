@@ -3771,7 +3771,7 @@ app.post('/oauth/clients', authMiddleware, async (c) => {
     return c.json({ error: 'Child accounts cannot create OAuth applications' }, 403);
   }
 
-  const { name, description, homepage_url, privacy_policy_url, redirect_uris, client_type = 'confidential' } = await c.req.json();
+  const { name, description, homepage_url, privacy_policy_url, redirect_uris, client_type = 'confidential', allowed_scopes } = await c.req.json();
 
   if (!name || name.length < 3 || name.length > 100) {
     return c.json({ error: 'Name must be between 3 and 100 characters' }, 400);
@@ -3796,14 +3796,23 @@ app.post('/oauth/clients', authMiddleware, async (c) => {
     return c.json({ error: 'Client type must be "confidential" or "public"' }, 400);
   }
 
+  const resolvedScopes = allowed_scopes ?? ['openid', 'profile', 'email'];
+  if (!Array.isArray(resolvedScopes) || resolvedScopes.length === 0) {
+    return c.json({ error: 'allowed_scopes must be a non-empty array' }, 400);
+  }
+  const invalidScopes = resolvedScopes.filter(s => !CONFIG.OAUTH_PROVIDER.SUPPORTED_SCOPES.includes(s));
+  if (invalidScopes.length > 0) {
+    return c.json({ error: `Unsupported scopes: ${invalidScopes.join(', ')}` }, 400);
+  }
+
   const clientId = generateId();
   const clientSecret = generateSecureToken(32);
   const clientSecretHash = await hashToken(clientSecret);
   const currentTime = now();
 
   await db.prepare(`
-      INSERT INTO oauth_clients (id, client_secret_hash, name, description, homepage_url, privacy_policy_url, redirect_uris, client_type, created_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO oauth_clients (id, client_secret_hash, name, description, homepage_url, privacy_policy_url, redirect_uris, allowed_scopes, client_type, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
     clientId,
     clientSecretHash,
@@ -3812,6 +3821,7 @@ app.post('/oauth/clients', authMiddleware, async (c) => {
     homepage_url || null,
     privacy_policy_url || null,
     JSON.stringify(redirect_uris),
+    JSON.stringify(resolvedScopes),
     client_type,
     user.user_id,
     currentTime,
@@ -3885,10 +3895,22 @@ app.put('/oauth/clients/:id', authMiddleware, async (c) => {
     return c.json({ error: 'Client not found' }, 404);
   }
 
-  const { name, description, homepage_url, privacy_policy_url, redirect_uris } = await c.req.json();
+  const { name, description, homepage_url, privacy_policy_url, redirect_uris, allowed_scopes } = await c.req.json();
 
   const updates = [];
   const params = [];
+
+  if (allowed_scopes !== undefined) {
+    if (!Array.isArray(allowed_scopes) || allowed_scopes.length === 0) {
+      return c.json({ error: 'allowed_scopes must be a non-empty array' }, 400);
+    }
+    const invalidScopes = allowed_scopes.filter(s => !CONFIG.OAUTH_PROVIDER.SUPPORTED_SCOPES.includes(s));
+    if (invalidScopes.length > 0) {
+      return c.json({ error: `Unsupported scopes: ${invalidScopes.join(', ')}` }, 400);
+    }
+    updates.push('allowed_scopes = ?');
+    params.push(JSON.stringify(allowed_scopes));
+  }
 
   if (name !== undefined) {
     if (name.length < 3 || name.length > 100) {
