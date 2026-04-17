@@ -207,6 +207,7 @@ export function buildUserClaims(user, scopes) {
     claims.name = user.username_original;
     claims.preferred_username = user.username_original;
     claims.updated_at = user.updated_at;
+    claims.role = user.role;
   }
 
   if (scopes.includes('email')) {

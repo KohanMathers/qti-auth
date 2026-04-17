@@ -4384,7 +4384,7 @@ async function handleAuthorizationCodeGrant(c, db, client, code, redirectUri, co
   await db.prepare('UPDATE oauth_authorization_codes SET used = 1 WHERE code_hash = ?').bind(codeHash).run();
 
   const { results: users } = await db.prepare(`
-      SELECT id, username_original, email, updated_at
+      SELECT id, username_original, email, updated_at, role
       FROM users WHERE id = ?
     `).bind(authCode.user_id).all();
 
@@ -4535,7 +4535,7 @@ app.get('/oauth/userinfo', async (c) => {
   const token = tokens[0];
 
   const { results: users } = await db.prepare(`
-      SELECT id, username_original, email, updated_at
+      SELECT id, username_original, email, updated_at, role
       FROM users WHERE id = ?
     `).bind(token.user_id).all();
 
