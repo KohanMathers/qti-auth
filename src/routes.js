@@ -5083,7 +5083,9 @@ export function registerRoutes(app) {
       ticket,
       identity: 'qti-auth-server',
     });
-    const valveUrl = `https://partner.steam-api.com/ISteamUserAuth/AuthenticateUserTicket/v1/?${params}`;
+    // TODO: Switch back to partner.steam-api.com with a publisher key for production
+    const steamApiHost = c.env.STEAM_API_KEY ? 'partner.steam-api.com' : 'api.steampowered.com';
+    const valveUrl = `https://${steamApiHost}/ISteamUserAuth/AuthenticateUserTicket/v1/?${params}`;
 
     let data;
     try {
