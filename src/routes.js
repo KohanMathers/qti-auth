@@ -5077,18 +5077,20 @@ export function registerRoutes(app) {
     // TODO: Replace test key 64DABCC7574DBDFD0693E2A5DD451CC5 with real STEAM_API_KEY secret
     const STEAM_API_KEY = c.env.STEAM_API_KEY || '64DABCC7574DBDFD0693E2A5DD451CC5';
 
-    const valveUrl =
-      `https://partner.steam-api.com/ISteamUserAuth/AuthenticateUserTicket/v1/` +
-      `?key=${STEAM_API_KEY}` +
-      `&appid=${appId}` +
-      `&ticket=${ticket}` +
-      `&identity=qti-auth-server`;
+    const params = new URLSearchParams({
+      key: STEAM_API_KEY,
+      appid: String(appId),
+      ticket,
+      identity: 'qti-auth-server',
+    });
+    const valveUrl = `https://partner.steam-api.com/ISteamUserAuth/AuthenticateUserTicket/v1/?${params}`;
 
     let data;
     try {
       const valveResp = await fetch(valveUrl);
       data = await valveResp.json();
-    } catch {
+    } catch (err) {
+      console.error('[steam/verify] Valve fetch failed:', err?.message ?? err);
       return c.json({ valid: false }, 502);
     }
 
