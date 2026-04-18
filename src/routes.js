@@ -5104,6 +5104,7 @@ export function registerRoutes(app) {
     const result = data?.response?.params;
 
     if (!result || result.result !== 'OK') {
+      console.error('[steam/verify] Valve rejected ticket:', JSON.stringify(data?.response));
       return c.json({ valid: false }, 401);
     }
 
