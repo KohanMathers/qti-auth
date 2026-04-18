@@ -5088,7 +5088,12 @@ export function registerRoutes(app) {
     let data;
     try {
       const valveResp = await fetch(valveUrl);
-      data = await valveResp.json();
+      const text = await valveResp.text();
+      if (!valveResp.ok || !text.trimStart().startsWith('{')) {
+        console.error('[steam/verify] Valve returned non-JSON:', valveResp.status, text.slice(0, 200));
+        return c.json({ valid: false }, 502);
+      }
+      data = JSON.parse(text);
     } catch (err) {
       console.error('[steam/verify] Valve fetch failed:', err?.message ?? err);
       return c.json({ valid: false }, 502);
