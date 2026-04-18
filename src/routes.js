@@ -5060,6 +5060,48 @@ app.post('/admin/game/lease/revoke', authMiddleware, adminMiddleware, async (c) 
 });
 
 
+// TODO: Replace ALLOWED_APP_IDS (remove 480 test entry) and set STEAM_API_KEY secret once you have real credentials
+const ALLOWED_APP_IDS = [480, 123456];
+
+app.post('/steam/verify', async (c) => {
+  const { ticket, appId } = await c.req.json();
+
+  if (!ticket || appId === undefined) {
+    return c.json({ valid: false }, 400);
+  }
+
+  if (!ALLOWED_APP_IDS.includes(appId)) {
+    return c.json({ valid: false }, 400);
+  }
+
+  // TODO: Replace test key 64DABCC7574DBDFD0693E2A5DD451CC5 with real STEAM_API_KEY secret
+  const STEAM_API_KEY = c.env.STEAM_API_KEY || '64DABCC7574DBDFD0693E2A5DD451CC5';
+
+  const valveUrl =
+    `https://partner.steam-api.com/ISteamUserAuth/AuthenticateUserTicket/v1/` +
+    `?key=${STEAM_API_KEY}` +
+    `&appid=${appId}` +
+    `&ticket=${ticket}` +
+    `&identity=rogue-reunion-server`;
+
+  let data;
+  try {
+    const valveResp = await fetch(valveUrl);
+    data = await valveResp.json();
+  } catch {
+    return c.json({ valid: false }, 502);
+  }
+
+  const result = data?.response?.params;
+
+  if (!result || result.result !== 'OK') {
+    return c.json({ valid: false }, 401);
+  }
+
+  return c.json({ valid: true, admin: false });
+});
+
+
 app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: now() });
 });
