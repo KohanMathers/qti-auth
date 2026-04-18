@@ -3204,44 +3204,44 @@ export function registerRoutes(app) {
   });
 
   app.get('/admin/users', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.DB;
-  const { search, status, role, page = '1', limit = '50' } = c.req.query();
+    const db = c.env.DB;
+    const { search, status, role, page = '1', limit = '50' } = c.req.query();
 
-  const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-  const offset = (pageNum - 1) * limitNum;
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+    const offset = (pageNum - 1) * limitNum;
 
-  let whereConditions = [];
-  let params = [];
+    let whereConditions = [];
+    let params = [];
 
-  if (search) {
-    whereConditions.push('(username_original LIKE ? OR email LIKE ? OR id = ?)');
-    params.push(`%${search}%`, `%${search}%`, search);
-  }
+    if (search) {
+      whereConditions.push('(username_original LIKE ? OR email LIKE ? OR id = ?)');
+      params.push(`%${search}%`, `%${search}%`, search);
+    }
 
-  if (status === 'banned') {
-    whereConditions.push('is_banned = 1');
-  } else if (status === 'locked') {
-    whereConditions.push('is_locked = 1');
-  } else if (status === 'active') {
-    whereConditions.push('is_banned = 0 AND (is_locked = 0 OR is_locked IS NULL)');
-  }
+    if (status === 'banned') {
+      whereConditions.push('is_banned = 1');
+    } else if (status === 'locked') {
+      whereConditions.push('is_locked = 1');
+    } else if (status === 'active') {
+      whereConditions.push('is_banned = 0 AND (is_locked = 0 OR is_locked IS NULL)');
+    }
 
-  if (role === 'admin') {
-    whereConditions.push("role = 'admin'");
-  } else if (role === 'user') {
-    whereConditions.push("role = 'user'");
-  }
+    if (role === 'admin') {
+      whereConditions.push("role = 'admin'");
+    } else if (role === 'user') {
+      whereConditions.push("role = 'user'");
+    }
 
-  const whereClause = whereConditions.length > 0
-    ? 'WHERE ' + whereConditions.join(' AND ')
-    : '';
+    const whereClause = whereConditions.length > 0
+      ? 'WHERE ' + whereConditions.join(' AND ')
+      : '';
 
-  const countQuery = `SELECT COUNT(*) as count FROM users ${whereClause}`;
-  const { results: countResults } = await db.prepare(countQuery).bind(...params).all();
-  const total = countResults[0].count;
+    const countQuery = `SELECT COUNT(*) as count FROM users ${whereClause}`;
+    const { results: countResults } = await db.prepare(countQuery).bind(...params).all();
+    const total = countResults[0].count;
 
-  const usersQuery = `
+    const usersQuery = `
       SELECT id, username_original, email, role, is_child, is_banned, ban_reason, banned_at,
              is_locked, lock_reason, locked_at, lock_expires_at, created_at, updated_at
       FROM users
@@ -3250,34 +3250,34 @@ export function registerRoutes(app) {
       LIMIT ? OFFSET ?
     `;
 
-  const { results: users } = await db.prepare(usersQuery).bind(...params, limitNum, offset).all();
+    const { results: users } = await db.prepare(usersQuery).bind(...params, limitNum, offset).all();
 
-  return c.json({
-    users,
-    pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      total_pages: Math.ceil(total / limitNum)
-    }
+    return c.json({
+      users,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        total_pages: Math.ceil(total / limitNum)
+      }
+    });
   });
-});
 
-app.get('/admin/users/:userId', authMiddleware, adminMiddleware, async (c) => {
-  const userId = c.req.param('userId');
-  const db = c.env.DB;
+  app.get('/admin/users/:userId', authMiddleware, adminMiddleware, async (c) => {
+    const userId = c.req.param('userId');
+    const db = c.env.DB;
 
-  const { results: users } = await db.prepare(`
+    const { results: users } = await db.prepare(`
       SELECT * FROM users WHERE id = ?
     `).bind(userId).all();
 
-  if (users.length === 0) {
-    return c.json({ error: 'User not found' }, 404);
-  }
+    if (users.length === 0) {
+      return c.json({ error: 'User not found' }, 404);
+    }
 
-  const user = users[0];
+    const user = users[0];
 
-  const { results: modActions } = await db.prepare(`
+    const { results: modActions } = await db.prepare(`
       SELECT ma.*, u.username_original as moderator_username
       FROM moderation_actions ma
       LEFT JOIN users u ON ma.moderator_id = u.id
@@ -3286,12 +3286,12 @@ app.get('/admin/users/:userId', authMiddleware, adminMiddleware, async (c) => {
       LIMIT 20
     `).bind(userId).all();
 
-  const { results: sessionCount } = await db.prepare(`
+    const { results: sessionCount } = await db.prepare(`
       SELECT COUNT(*) as count FROM user_sessions
       WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
     `).bind(userId, now()).all();
 
-  const { results: reports } = await db.prepare(`
+    const { results: reports } = await db.prepare(`
       SELECT id, report_type, status, priority, created_at
       FROM user_reports
       WHERE reported_user_id = ?
@@ -3299,252 +3299,252 @@ app.get('/admin/users/:userId', authMiddleware, adminMiddleware, async (c) => {
       LIMIT 10
     `).bind(userId).all();
 
-  const { results: reportsMade } = await db.prepare(`
+    const { results: reportsMade } = await db.prepare(`
       SELECT COUNT(*) as count FROM user_reports WHERE reporter_user_id = ?
     `).bind(userId).all();
 
-  return c.json({
-    user,
-    moderation_history: modActions,
-    active_sessions: sessionCount[0].count,
-    reports_against: reports,
-    reports_made: reportsMade[0].count
+    return c.json({
+      user,
+      moderation_history: modActions,
+      active_sessions: sessionCount[0].count,
+      reports_against: reports,
+      reports_made: reportsMade[0].count
+    });
   });
-});
 
-app.post('/admin/users/:userId/ban', authMiddleware, adminMiddleware, async (c) => {
-  const admin = c.get('user');
-  const userId = c.req.param('userId');
-  const { reason, internal_notes } = await c.req.json();
-  const db = c.env.DB;
-  const ip = getClientIP(c);
+  app.post('/admin/users/:userId/ban', authMiddleware, adminMiddleware, async (c) => {
+    const admin = c.get('user');
+    const userId = c.req.param('userId');
+    const { reason, internal_notes } = await c.req.json();
+    const db = c.env.DB;
+    const ip = getClientIP(c);
 
-  if (!reason) {
-    return c.json({ error: 'Reason is required' }, 400);
-  }
+    if (!reason) {
+      return c.json({ error: 'Reason is required' }, 400);
+    }
 
-  const { results: users } = await db.prepare('SELECT id, is_banned FROM users WHERE id = ?').bind(userId).all();
-  if (users.length === 0) {
-    return c.json({ error: 'User not found' }, 404);
-  }
-  if (users[0].is_banned) {
-    return c.json({ error: 'User is already banned' }, 400);
-  }
+    const { results: users } = await db.prepare('SELECT id, is_banned FROM users WHERE id = ?').bind(userId).all();
+    if (users.length === 0) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+    if (users[0].is_banned) {
+      return c.json({ error: 'User is already banned' }, 400);
+    }
 
-  await db.prepare(`
+    await db.prepare(`
       UPDATE users
       SET is_banned = 1, ban_reason = ?, banned_at = ?, banned_by = ?
       WHERE id = ?
     `).bind(reason, now(), admin.user_id, userId).run();
 
-  const actionId = generateId();
-  await db.prepare(`
+    const actionId = generateId();
+    await db.prepare(`
       INSERT INTO moderation_actions (id, user_id, moderator_id, action_type, reason, internal_notes, created_at)
       VALUES (?, ?, ?, 'ban', ?, ?, ?)
     `).bind(actionId, userId, admin.user_id, reason, internal_notes || null, now()).run();
 
-  await db.prepare(`
+    await db.prepare(`
       UPDATE user_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL
     `).bind(now(), userId).run();
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
       VALUES (?, ?, 'ban_user', ?, 'user', ?, ?, ?)
     `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason, internal_notes }), ip, now()).run();
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO daily_stats (date, accounts_banned, updated_at)
       VALUES (date('now'), 1, ?)
       ON CONFLICT(date) DO UPDATE SET accounts_banned = accounts_banned + 1, updated_at = excluded.updated_at
     `).bind(now()).run();
 
-  return c.json({ message: 'User banned successfully', action_id: actionId });
-});
+    return c.json({ message: 'User banned successfully', action_id: actionId });
+  });
 
-app.post('/admin/users/:userId/unban', authMiddleware, adminMiddleware, async (c) => {
-  const admin = c.get('user');
-  const userId = c.req.param('userId');
-  const { reason } = await c.req.json();
-  const db = c.env.DB;
-  const ip = getClientIP(c);
+  app.post('/admin/users/:userId/unban', authMiddleware, adminMiddleware, async (c) => {
+    const admin = c.get('user');
+    const userId = c.req.param('userId');
+    const { reason } = await c.req.json();
+    const db = c.env.DB;
+    const ip = getClientIP(c);
 
-  const { results: users } = await db.prepare('SELECT id, is_banned FROM users WHERE id = ?').bind(userId).all();
-  if (users.length === 0) {
-    return c.json({ error: 'User not found' }, 404);
-  }
-  if (!users[0].is_banned) {
-    return c.json({ error: 'User is not banned' }, 400);
-  }
+    const { results: users } = await db.prepare('SELECT id, is_banned FROM users WHERE id = ?').bind(userId).all();
+    if (users.length === 0) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+    if (!users[0].is_banned) {
+      return c.json({ error: 'User is not banned' }, 400);
+    }
 
-  await db.prepare(`
+    await db.prepare(`
       UPDATE users SET is_banned = 0, ban_reason = NULL, banned_at = NULL, banned_by = NULL WHERE id = ?
     `).bind(userId).run();
 
-  const actionId = generateId();
-  await db.prepare(`
+    const actionId = generateId();
+    await db.prepare(`
       INSERT INTO moderation_actions (id, user_id, moderator_id, action_type, reason, created_at)
       VALUES (?, ?, ?, 'unban', ?, ?)
     `).bind(actionId, userId, admin.user_id, reason || 'Unbanned by admin', now()).run();
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
       VALUES (?, ?, 'unban_user', ?, 'user', ?, ?, ?)
     `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason }), ip, now()).run();
 
-  return c.json({ message: 'User unbanned successfully', action_id: actionId });
-});
+    return c.json({ message: 'User unbanned successfully', action_id: actionId });
+  });
 
-app.post('/admin/users/:userId/lock', authMiddleware, adminMiddleware, async (c) => {
-  const admin = c.get('user');
-  const userId = c.req.param('userId');
-  const { reason, duration, internal_notes } = await c.req.json();
-  const db = c.env.DB;
-  const ip = getClientIP(c);
+  app.post('/admin/users/:userId/lock', authMiddleware, adminMiddleware, async (c) => {
+    const admin = c.get('user');
+    const userId = c.req.param('userId');
+    const { reason, duration, internal_notes } = await c.req.json();
+    const db = c.env.DB;
+    const ip = getClientIP(c);
 
-  if (!reason) {
-    return c.json({ error: 'Reason is required' }, 400);
-  }
+    if (!reason) {
+      return c.json({ error: 'Reason is required' }, 400);
+    }
 
-  const { results: users } = await db.prepare('SELECT id, is_banned, is_locked FROM users WHERE id = ?').bind(userId).all();
-  if (users.length === 0) {
-    return c.json({ error: 'User not found' }, 404);
-  }
-  if (users[0].is_banned) {
-    return c.json({ error: 'User is banned, cannot lock a banned account' }, 400);
-  }
-  if (users[0].is_locked) {
-    return c.json({ error: 'User is already locked' }, 400);
-  }
+    const { results: users } = await db.prepare('SELECT id, is_banned, is_locked FROM users WHERE id = ?').bind(userId).all();
+    if (users.length === 0) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+    if (users[0].is_banned) {
+      return c.json({ error: 'User is banned, cannot lock a banned account' }, 400);
+    }
+    if (users[0].is_locked) {
+      return c.json({ error: 'User is already locked' }, 400);
+    }
 
-  const expiresAt = duration ? now() + duration : null;
+    const expiresAt = duration ? now() + duration : null;
 
-  await db.prepare(`
+    await db.prepare(`
       UPDATE users
       SET is_locked = 1, lock_reason = ?, locked_at = ?, locked_by = ?, lock_expires_at = ?
       WHERE id = ?
     `).bind(reason, now(), admin.user_id, expiresAt, userId).run();
 
-  const actionId = generateId();
-  await db.prepare(`
+    const actionId = generateId();
+    await db.prepare(`
       INSERT INTO moderation_actions (id, user_id, moderator_id, action_type, duration, reason, internal_notes, created_at, expires_at)
       VALUES (?, ?, ?, 'lock', ?, ?, ?, ?, ?)
     `).bind(actionId, userId, admin.user_id, duration || null, reason, internal_notes || null, now(), expiresAt).run();
 
-  await db.prepare(`
+    await db.prepare(`
       UPDATE user_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL
     `).bind(now(), userId).run();
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
       VALUES (?, ?, 'lock_user', ?, 'user', ?, ?, ?)
     `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason, duration, internal_notes }), ip, now()).run();
 
-  return c.json({ message: 'User locked successfully', action_id: actionId, expires_at: expiresAt });
-});
+    return c.json({ message: 'User locked successfully', action_id: actionId, expires_at: expiresAt });
+  });
 
-app.post('/admin/users/:userId/unlock', authMiddleware, adminMiddleware, async (c) => {
-  const admin = c.get('user');
-  const userId = c.req.param('userId');
-  const { reason } = await c.req.json();
-  const db = c.env.DB;
-  const ip = getClientIP(c);
+  app.post('/admin/users/:userId/unlock', authMiddleware, adminMiddleware, async (c) => {
+    const admin = c.get('user');
+    const userId = c.req.param('userId');
+    const { reason } = await c.req.json();
+    const db = c.env.DB;
+    const ip = getClientIP(c);
 
-  const { results: users } = await db.prepare('SELECT id, is_locked FROM users WHERE id = ?').bind(userId).all();
-  if (users.length === 0) {
-    return c.json({ error: 'User not found' }, 404);
-  }
-  if (!users[0].is_locked) {
-    return c.json({ error: 'User is not locked' }, 400);
-  }
+    const { results: users } = await db.prepare('SELECT id, is_locked FROM users WHERE id = ?').bind(userId).all();
+    if (users.length === 0) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+    if (!users[0].is_locked) {
+      return c.json({ error: 'User is not locked' }, 400);
+    }
 
-  await db.prepare(`
+    await db.prepare(`
       UPDATE users SET is_locked = 0, lock_reason = NULL, locked_at = NULL, locked_by = NULL, lock_expires_at = NULL WHERE id = ?
     `).bind(userId).run();
 
-  const actionId = generateId();
-  await db.prepare(`
+    const actionId = generateId();
+    await db.prepare(`
       INSERT INTO moderation_actions (id, user_id, moderator_id, action_type, reason, created_at)
       VALUES (?, ?, ?, 'unlock', ?, ?)
     `).bind(actionId, userId, admin.user_id, reason || 'Unlocked by admin', now()).run();
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
       VALUES (?, ?, 'unlock_user', ?, 'user', ?, ?, ?)
     `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason }), ip, now()).run();
 
-  return c.json({ message: 'User unlocked successfully', action_id: actionId });
-});
+    return c.json({ message: 'User unlocked successfully', action_id: actionId });
+  });
 
-app.post('/admin/users/:userId/force-reauth', authMiddleware, adminMiddleware, async (c) => {
-  const admin = c.get('user');
-  const userId = c.req.param('userId');
-  const { reason } = await c.req.json();
-  const db = c.env.DB;
-  const ip = getClientIP(c);
+  app.post('/admin/users/:userId/force-reauth', authMiddleware, adminMiddleware, async (c) => {
+    const admin = c.get('user');
+    const userId = c.req.param('userId');
+    const { reason } = await c.req.json();
+    const db = c.env.DB;
+    const ip = getClientIP(c);
 
-  const { results: users } = await db.prepare('SELECT id FROM users WHERE id = ?').bind(userId).all();
-  if (users.length === 0) {
-    return c.json({ error: 'User not found' }, 404);
-  }
+    const { results: users } = await db.prepare('SELECT id FROM users WHERE id = ?').bind(userId).all();
+    if (users.length === 0) {
+      return c.json({ error: 'User not found' }, 404);
+    }
 
-  const result = await db.prepare(`
+    const result = await db.prepare(`
       UPDATE user_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL
     `).bind(now(), userId).run();
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
       VALUES (?, ?, 'force_reauth', ?, 'user', ?, ?, ?)
     `).bind(generateId(), admin.user_id, userId, JSON.stringify({ reason, sessions_revoked: result.meta?.changes || 0 }), ip, now()).run();
 
-  return c.json({ message: 'User sessions revoked, re-authentication required', sessions_revoked: result.meta?.changes || 0 });
-});
+    return c.json({ message: 'User sessions revoked, re-authentication required', sessions_revoked: result.meta?.changes || 0 });
+  });
 
 
-app.get('/admin/audit-logs', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.DB;
-  const { admin_id, action, target_type, start_date, end_date, page = '1', limit = '50' } = c.req.query();
+  app.get('/admin/audit-logs', authMiddleware, adminMiddleware, async (c) => {
+    const db = c.env.DB;
+    const { admin_id, action, target_type, start_date, end_date, page = '1', limit = '50' } = c.req.query();
 
-  const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-  const offset = (pageNum - 1) * limitNum;
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+    const offset = (pageNum - 1) * limitNum;
 
-  let whereConditions = [];
-  let params = [];
+    let whereConditions = [];
+    let params = [];
 
-  if (admin_id) {
-    whereConditions.push('al.admin_id = ?');
-    params.push(admin_id);
-  }
+    if (admin_id) {
+      whereConditions.push('al.admin_id = ?');
+      params.push(admin_id);
+    }
 
-  if (action) {
-    whereConditions.push('al.action = ?');
-    params.push(action);
-  }
+    if (action) {
+      whereConditions.push('al.action = ?');
+      params.push(action);
+    }
 
-  if (target_type) {
-    whereConditions.push('al.target_type = ?');
-    params.push(target_type);
-  }
+    if (target_type) {
+      whereConditions.push('al.target_type = ?');
+      params.push(target_type);
+    }
 
-  if (start_date) {
-    whereConditions.push('al.created_at >= ?');
-    params.push(Math.floor(new Date(start_date).getTime() / 1000));
-  }
+    if (start_date) {
+      whereConditions.push('al.created_at >= ?');
+      params.push(Math.floor(new Date(start_date).getTime() / 1000));
+    }
 
-  if (end_date) {
-    whereConditions.push('al.created_at <= ?');
-    params.push(Math.floor(new Date(end_date).getTime() / 1000));
-  }
+    if (end_date) {
+      whereConditions.push('al.created_at <= ?');
+      params.push(Math.floor(new Date(end_date).getTime() / 1000));
+    }
 
-  const whereClause = whereConditions.length > 0
-    ? 'WHERE ' + whereConditions.join(' AND ')
-    : '';
+    const whereClause = whereConditions.length > 0
+      ? 'WHERE ' + whereConditions.join(' AND ')
+      : '';
 
-  const countQuery = `SELECT COUNT(*) as count FROM admin_logs al ${whereClause}`;
-  const { results: countResults } = await db.prepare(countQuery).bind(...params).all();
-  const total = countResults[0].count;
+    const countQuery = `SELECT COUNT(*) as count FROM admin_logs al ${whereClause}`;
+    const { results: countResults } = await db.prepare(countQuery).bind(...params).all();
+    const total = countResults[0].count;
 
-  const logsQuery = `
+    const logsQuery = `
       SELECT al.*, u.username_original as admin_username, tu.username_original as target_username
       FROM admin_logs al
       LEFT JOIN users u ON al.admin_id = u.id
@@ -3554,134 +3554,134 @@ app.get('/admin/audit-logs', authMiddleware, adminMiddleware, async (c) => {
       LIMIT ? OFFSET ?
     `;
 
-  const { results: logs } = await db.prepare(logsQuery).bind(...params, limitNum, offset).all();
+    const { results: logs } = await db.prepare(logsQuery).bind(...params, limitNum, offset).all();
 
-  const logsWithParsedDetails = logs.map(log => ({
-    ...log,
-    details: log.details ? JSON.parse(log.details) : null
-  }));
+    const logsWithParsedDetails = logs.map(log => ({
+      ...log,
+      details: log.details ? JSON.parse(log.details) : null
+    }));
 
-  return c.json({
-    logs: logsWithParsedDetails,
-    pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      total_pages: Math.ceil(total / limitNum)
-    }
+    return c.json({
+      logs: logsWithParsedDetails,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        total_pages: Math.ceil(total / limitNum)
+      }
+    });
   });
-});
 
-app.get('/admin/audit-logs/actions', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.DB;
+  app.get('/admin/audit-logs/actions', authMiddleware, adminMiddleware, async (c) => {
+    const db = c.env.DB;
 
-  const { results } = await db.prepare('SELECT DISTINCT action FROM admin_logs ORDER BY action').all();
+    const { results } = await db.prepare('SELECT DISTINCT action FROM admin_logs ORDER BY action').all();
 
-  return c.json({ actions: results.map(r => r.action) });
-});
+    return c.json({ actions: results.map(r => r.action) });
+  });
 
-app.get('/admin/audit-logs/admins', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.DB;
+  app.get('/admin/audit-logs/admins', authMiddleware, adminMiddleware, async (c) => {
+    const db = c.env.DB;
 
-  const { results } = await db.prepare(`
+    const { results } = await db.prepare(`
       SELECT DISTINCT u.id, u.username_original
       FROM admin_logs al
       JOIN users u ON al.admin_id = u.id
       ORDER BY u.username_original
     `).all();
 
-  return c.json({ admins: results });
-});
+    return c.json({ admins: results });
+  });
 
-app.get('/settings/notifications', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
+  app.get('/settings/notifications', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
 
-  const { results: userPrefs } = await db.prepare(
-    'SELECT notify_ticket_updates FROM user_notification_preferences WHERE user_id = ?'
-  ).bind(user.user_id).all();
-
-  const response = {
-    notify_ticket_updates: userPrefs[0] ? Boolean(userPrefs[0].notify_ticket_updates) : true,
-  };
-
-  if (user.role === 'admin') {
-    const { results: adminPrefs } = await db.prepare(
-      'SELECT notify_new_tickets FROM admin_notification_preferences WHERE user_id = ?'
+    const { results: userPrefs } = await db.prepare(
+      'SELECT notify_ticket_updates FROM user_notification_preferences WHERE user_id = ?'
     ).bind(user.user_id).all();
-    response.notify_new_tickets = adminPrefs[0] ? Boolean(adminPrefs[0].notify_new_tickets) : true;
-  }
 
-  return c.json(response);
-});
+    const response = {
+      notify_ticket_updates: userPrefs[0] ? Boolean(userPrefs[0].notify_ticket_updates) : true,
+    };
 
-app.put('/settings/notifications', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-  const body = await c.req.json();
-  const timestamp = now();
-  const response = {};
+    if (user.role === 'admin') {
+      const { results: adminPrefs } = await db.prepare(
+        'SELECT notify_new_tickets FROM admin_notification_preferences WHERE user_id = ?'
+      ).bind(user.user_id).all();
+      response.notify_new_tickets = adminPrefs[0] ? Boolean(adminPrefs[0].notify_new_tickets) : true;
+    }
 
-  if (typeof body?.notify_ticket_updates === 'boolean') {
-    await db.prepare(`
+    return c.json(response);
+  });
+
+  app.put('/settings/notifications', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
+    const body = await c.req.json();
+    const timestamp = now();
+    const response = {};
+
+    if (typeof body?.notify_ticket_updates === 'boolean') {
+      await db.prepare(`
       INSERT INTO user_notification_preferences (user_id, notify_ticket_updates, updated_at)
       VALUES (?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET notify_ticket_updates = excluded.notify_ticket_updates, updated_at = excluded.updated_at
     `).bind(user.user_id, body.notify_ticket_updates ? 1 : 0, timestamp).run();
-    response.notify_ticket_updates = body.notify_ticket_updates;
-  }
+      response.notify_ticket_updates = body.notify_ticket_updates;
+    }
 
-  if (user.role === 'admin' && typeof body?.notify_new_tickets === 'boolean') {
-    await db.prepare(`
+    if (user.role === 'admin' && typeof body?.notify_new_tickets === 'boolean') {
+      await db.prepare(`
       INSERT INTO admin_notification_preferences (user_id, notify_new_tickets, updated_at)
       VALUES (?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET notify_new_tickets = excluded.notify_new_tickets, updated_at = excluded.updated_at
     `).bind(user.user_id, body.notify_new_tickets ? 1 : 0, timestamp).run();
-    response.notify_new_tickets = body.notify_new_tickets;
-  }
+      response.notify_new_tickets = body.notify_new_tickets;
+    }
 
-  if (Object.keys(response).length === 0) {
-    return c.json({ error: 'No valid fields provided' }, 400);
-  }
+    if (Object.keys(response).length === 0) {
+      return c.json({ error: 'No valid fields provided' }, 400);
+    }
 
-  return c.json(response);
-});
+    return c.json(response);
+  });
 
-app.get('/admin/moderation-history', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.DB;
-  const { user_id, moderator_id, action_type, page = '1', limit = '50' } = c.req.query();
+  app.get('/admin/moderation-history', authMiddleware, adminMiddleware, async (c) => {
+    const db = c.env.DB;
+    const { user_id, moderator_id, action_type, page = '1', limit = '50' } = c.req.query();
 
-  const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-  const offset = (pageNum - 1) * limitNum;
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+    const offset = (pageNum - 1) * limitNum;
 
-  let whereConditions = [];
-  let params = [];
+    let whereConditions = [];
+    let params = [];
 
-  if (user_id) {
-    whereConditions.push('ma.user_id = ?');
-    params.push(user_id);
-  }
+    if (user_id) {
+      whereConditions.push('ma.user_id = ?');
+      params.push(user_id);
+    }
 
-  if (moderator_id) {
-    whereConditions.push('ma.moderator_id = ?');
-    params.push(moderator_id);
-  }
+    if (moderator_id) {
+      whereConditions.push('ma.moderator_id = ?');
+      params.push(moderator_id);
+    }
 
-  if (action_type) {
-    whereConditions.push('ma.action_type = ?');
-    params.push(action_type);
-  }
+    if (action_type) {
+      whereConditions.push('ma.action_type = ?');
+      params.push(action_type);
+    }
 
-  const whereClause = whereConditions.length > 0
-    ? 'WHERE ' + whereConditions.join(' AND ')
-    : '';
+    const whereClause = whereConditions.length > 0
+      ? 'WHERE ' + whereConditions.join(' AND ')
+      : '';
 
-  const countQuery = `SELECT COUNT(*) as count FROM moderation_actions ma ${whereClause}`;
-  const { results: countResults } = await db.prepare(countQuery).bind(...params).all();
-  const total = countResults[0].count;
+    const countQuery = `SELECT COUNT(*) as count FROM moderation_actions ma ${whereClause}`;
+    const { results: countResults } = await db.prepare(countQuery).bind(...params).all();
+    const total = countResults[0].count;
 
-  const actionsQuery = `
+    const actionsQuery = `
       SELECT ma.*,
              u.username_original as target_username,
              m.username_original as moderator_username
@@ -3693,252 +3693,94 @@ app.get('/admin/moderation-history', authMiddleware, adminMiddleware, async (c) 
       LIMIT ? OFFSET ?
     `;
 
-  const { results: actions } = await db.prepare(actionsQuery).bind(...params, limitNum, offset).all();
-
-  return c.json({
-    actions,
-    pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      total_pages: Math.ceil(total / limitNum)
-    }
-  });
-});
-
-
-// OIDC discovery for clients.
-app.get('/.well-known/openid-configuration', (c) => {
-  const issuer = getIssuer(c);
-
-  return c.json({
-    issuer,
-    authorization_endpoint: `${issuer}/oauth/authorize`,
-    token_endpoint: `${issuer}/oauth/token`,
-    userinfo_endpoint: `${issuer}/oauth/userinfo`,
-    revocation_endpoint: `${issuer}/oauth/revoke`,
-    introspection_endpoint: `${issuer}/oauth/introspect`,
-    jwks_uri: `${issuer}/.well-known/jwks.json`,
-    registration_endpoint: `${issuer}/oauth/clients`,
-    scopes_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_SCOPES,
-    response_types_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_RESPONSE_TYPES,
-    response_modes_supported: ['query'],
-    grant_types_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_GRANT_TYPES,
-    subject_types_supported: ['public'],
-    id_token_signing_alg_values_supported: ['RS256'],
-    token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
-    code_challenge_methods_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_CODE_CHALLENGE_METHODS,
-    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'name', 'preferred_username', 'email', 'email_verified', 'updated_at'],
-    service_documentation: 'https://quietterminal.co.uk/docs/oauth',
-  });
-});
-
-// JWKS for token verification by third-party clients.
-app.get('/.well-known/jwks.json', async (c) => {
-  const publicKeyPem = c.env.OAUTH_PROVIDER_PUBLIC_KEY;
-
-  if (!publicKeyPem) {
-    return c.json({ keys: [] });
-  }
-
-  try {
-    const publicKey = await importPublicKey(publicKeyPem);
-    const jwk = await crypto.subtle.exportKey('jwk', publicKey);
+    const { results: actions } = await db.prepare(actionsQuery).bind(...params, limitNum, offset).all();
 
     return c.json({
-      keys: [{
-        kty: jwk.kty,
-        use: 'sig',
-        alg: 'RS256',
-        // Bump this on key rotation to help clients refresh.
-        kid: 'qti-auth-1',
-        n: jwk.n,
-        e: jwk.e,
-      }]
-    });
-  } catch (e) {
-    console.error('JWKS error:', e);
-    return c.json({ keys: [] });
-  }
-});
-
-
-app.post('/oauth/clients', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-
-  if (user.is_child) {
-    return c.json({ error: 'Child accounts cannot create OAuth applications' }, 403);
-  }
-
-  const { name, description, homepage_url, privacy_policy_url, redirect_uris, client_type = 'confidential', allowed_scopes } = await c.req.json();
-
-  if (!name || name.length < 3 || name.length > 100) {
-    return c.json({ error: 'Name must be between 3 and 100 characters' }, 400);
-  }
-
-  if (!redirect_uris || !Array.isArray(redirect_uris) || redirect_uris.length === 0) {
-    return c.json({ error: 'At least one redirect URI is required' }, 400);
-  }
-
-  for (const uri of redirect_uris) {
-    try {
-      const url = new URL(uri);
-      if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
-        return c.json({ error: `Redirect URI must use HTTPS: ${uri}` }, 400);
+      actions,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        total_pages: Math.ceil(total / limitNum)
       }
-    } catch {
-      return c.json({ error: `Invalid redirect URI: ${uri}` }, 400);
-    }
-  }
-
-  if (client_type !== 'confidential' && client_type !== 'public') {
-    return c.json({ error: 'Client type must be "confidential" or "public"' }, 400);
-  }
-
-  const resolvedScopes = allowed_scopes ?? ['openid', 'profile', 'email'];
-  if (!Array.isArray(resolvedScopes) || resolvedScopes.length === 0) {
-    return c.json({ error: 'allowed_scopes must be a non-empty array' }, 400);
-  }
-  const invalidScopes = resolvedScopes.filter(s => !CONFIG.OAUTH_PROVIDER.SUPPORTED_SCOPES.includes(s));
-  if (invalidScopes.length > 0) {
-    return c.json({ error: `Unsupported scopes: ${invalidScopes.join(', ')}` }, 400);
-  }
-
-  const clientId = generateId();
-  const clientSecret = generateSecureToken(32);
-  const clientSecretHash = await hashToken(clientSecret);
-  const currentTime = now();
-
-  await db.prepare(`
-      INSERT INTO oauth_clients (id, client_secret_hash, name, description, homepage_url, privacy_policy_url, redirect_uris, allowed_scopes, client_type, created_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-    clientId,
-    clientSecretHash,
-    name,
-    description || null,
-    homepage_url || null,
-    privacy_policy_url || null,
-    JSON.stringify(redirect_uris),
-    JSON.stringify(resolvedScopes),
-    client_type,
-    user.user_id,
-    currentTime,
-    currentTime
-  ).run();
-
-  return c.json({
-    client_id: clientId,
-    // Only show the raw secret once; store the hash server-side.
-    client_secret: clientSecret,
-    name,
-    redirect_uris,
-    client_type,
-    is_approved: false,
-    message: 'Save your client secret securely - it will not be shown again. Your app can only be used by you until an admin approves it.',
-  }, 201);
-});
-
-app.get('/oauth/clients', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-
-  const { results } = await db.prepare(`
-      SELECT id, name, description, homepage_url, logo_url, redirect_uris, client_type, is_active, is_approved, approval_requested, approval_requested_at, created_at, updated_at
-      FROM oauth_clients
-      WHERE created_by = ?
-      ORDER BY created_at DESC
-    `).bind(user.user_id).all();
-
-  return c.json({
-    clients: results.map(client => ({
-      ...client,
-      redirect_uris: JSON.parse(client.redirect_uris),
-    }))
+    });
   });
-});
 
-app.get('/oauth/clients/:id', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-  const clientId = c.req.param('id');
 
-  const { results } = await db.prepare(`
-      SELECT id, name, description, homepage_url, privacy_policy_url, logo_url, redirect_uris, allowed_scopes, client_type, is_active, is_approved, approval_requested, approval_requested_at, created_at, updated_at
-      FROM oauth_clients
-      WHERE id = ? AND created_by = ?
-    `).bind(clientId, user.user_id).all();
+  // OIDC discovery for clients.
+  app.get('/.well-known/openid-configuration', (c) => {
+    const issuer = getIssuer(c);
 
-  if (results.length === 0) {
-    return c.json({ error: 'Client not found' }, 404);
-  }
-
-  const client = results[0];
-  return c.json({
-    ...client,
-    redirect_uris: JSON.parse(client.redirect_uris),
-    allowed_scopes: JSON.parse(client.allowed_scopes),
+    return c.json({
+      issuer,
+      authorization_endpoint: `${issuer}/oauth/authorize`,
+      token_endpoint: `${issuer}/oauth/token`,
+      userinfo_endpoint: `${issuer}/oauth/userinfo`,
+      revocation_endpoint: `${issuer}/oauth/revoke`,
+      introspection_endpoint: `${issuer}/oauth/introspect`,
+      jwks_uri: `${issuer}/.well-known/jwks.json`,
+      registration_endpoint: `${issuer}/oauth/clients`,
+      scopes_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_SCOPES,
+      response_types_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_RESPONSE_TYPES,
+      response_modes_supported: ['query'],
+      grant_types_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_GRANT_TYPES,
+      subject_types_supported: ['public'],
+      id_token_signing_alg_values_supported: ['RS256'],
+      token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+      code_challenge_methods_supported: CONFIG.OAUTH_PROVIDER.SUPPORTED_CODE_CHALLENGE_METHODS,
+      claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'name', 'preferred_username', 'email', 'email_verified', 'updated_at'],
+      service_documentation: 'https://quietterminal.co.uk/docs/oauth',
+    });
   });
-});
 
-app.put('/oauth/clients/:id', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-  const clientId = c.req.param('id');
+  // JWKS for token verification by third-party clients.
+  app.get('/.well-known/jwks.json', async (c) => {
+    const publicKeyPem = c.env.OAUTH_PROVIDER_PUBLIC_KEY;
 
-  const { results: existing } = await db.prepare(
-    'SELECT id FROM oauth_clients WHERE id = ? AND created_by = ?'
-  ).bind(clientId, user.user_id).all();
-
-  if (existing.length === 0) {
-    return c.json({ error: 'Client not found' }, 404);
-  }
-
-  const { name, description, homepage_url, privacy_policy_url, redirect_uris, allowed_scopes } = await c.req.json();
-
-  const updates = [];
-  const params = [];
-
-  if (allowed_scopes !== undefined) {
-    if (!Array.isArray(allowed_scopes) || allowed_scopes.length === 0) {
-      return c.json({ error: 'allowed_scopes must be a non-empty array' }, 400);
+    if (!publicKeyPem) {
+      return c.json({ keys: [] });
     }
-    const invalidScopes = allowed_scopes.filter(s => !CONFIG.OAUTH_PROVIDER.SUPPORTED_SCOPES.includes(s));
-    if (invalidScopes.length > 0) {
-      return c.json({ error: `Unsupported scopes: ${invalidScopes.join(', ')}` }, 400);
-    }
-    updates.push('allowed_scopes = ?');
-    params.push(JSON.stringify(allowed_scopes));
-  }
 
-  if (name !== undefined) {
-    if (name.length < 3 || name.length > 100) {
+    try {
+      const publicKey = await importPublicKey(publicKeyPem);
+      const jwk = await crypto.subtle.exportKey('jwk', publicKey);
+
+      return c.json({
+        keys: [{
+          kty: jwk.kty,
+          use: 'sig',
+          alg: 'RS256',
+          // Bump this on key rotation to help clients refresh.
+          kid: 'qti-auth-1',
+          n: jwk.n,
+          e: jwk.e,
+        }]
+      });
+    } catch (e) {
+      console.error('JWKS error:', e);
+      return c.json({ keys: [] });
+    }
+  });
+
+
+  app.post('/oauth/clients', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
+
+    if (user.is_child) {
+      return c.json({ error: 'Child accounts cannot create OAuth applications' }, 403);
+    }
+
+    const { name, description, homepage_url, privacy_policy_url, redirect_uris, client_type = 'confidential', allowed_scopes } = await c.req.json();
+
+    if (!name || name.length < 3 || name.length > 100) {
       return c.json({ error: 'Name must be between 3 and 100 characters' }, 400);
     }
-    updates.push('name = ?');
-    params.push(name);
-  }
 
-  if (description !== undefined) {
-    updates.push('description = ?');
-    params.push(description);
-  }
-
-  if (homepage_url !== undefined) {
-    updates.push('homepage_url = ?');
-    params.push(homepage_url);
-  }
-
-  if (privacy_policy_url !== undefined) {
-    updates.push('privacy_policy_url = ?');
-    params.push(privacy_policy_url);
-  }
-
-  if (redirect_uris !== undefined) {
-    if (!Array.isArray(redirect_uris) || redirect_uris.length === 0) {
+    if (!redirect_uris || !Array.isArray(redirect_uris) || redirect_uris.length === 0) {
       return c.json({ error: 'At least one redirect URI is required' }, 400);
     }
+
     for (const uri of redirect_uris) {
       try {
         const url = new URL(uri);
@@ -3949,201 +3791,502 @@ app.put('/oauth/clients/:id', authMiddleware, async (c) => {
         return c.json({ error: `Invalid redirect URI: ${uri}` }, 400);
       }
     }
-    updates.push('redirect_uris = ?');
-    params.push(JSON.stringify(redirect_uris));
-  }
 
-  if (updates.length === 0) {
-    return c.json({ error: 'No valid fields to update' }, 400);
-  }
+    if (client_type !== 'confidential' && client_type !== 'public') {
+      return c.json({ error: 'Client type must be "confidential" or "public"' }, 400);
+    }
 
-  updates.push('updated_at = ?');
-  params.push(now());
-  params.push(clientId);
+    const resolvedScopes = allowed_scopes ?? ['openid', 'profile', 'email'];
+    if (!Array.isArray(resolvedScopes) || resolvedScopes.length === 0) {
+      return c.json({ error: 'allowed_scopes must be a non-empty array' }, 400);
+    }
+    const invalidScopes = resolvedScopes.filter(s => !CONFIG.OAUTH_PROVIDER.SUPPORTED_SCOPES.includes(s));
+    if (invalidScopes.length > 0) {
+      return c.json({ error: `Unsupported scopes: ${invalidScopes.join(', ')}` }, 400);
+    }
 
-  await db.prepare(`UPDATE oauth_clients SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run();
+    const clientId = generateId();
+    const clientSecret = generateSecureToken(32);
+    const clientSecretHash = await hashToken(clientSecret);
+    const currentTime = now();
 
-  return c.json({ success: true });
-});
+    await db.prepare(`
+      INSERT INTO oauth_clients (id, client_secret_hash, name, description, homepage_url, privacy_policy_url, redirect_uris, allowed_scopes, client_type, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      clientId,
+      clientSecretHash,
+      name,
+      description || null,
+      homepage_url || null,
+      privacy_policy_url || null,
+      JSON.stringify(redirect_uris),
+      JSON.stringify(resolvedScopes),
+      client_type,
+      user.user_id,
+      currentTime,
+      currentTime
+    ).run();
 
-app.delete('/oauth/clients/:id', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-  const clientId = c.req.param('id');
-
-  const result = await db.prepare(
-    'DELETE FROM oauth_clients WHERE id = ? AND created_by = ?'
-  ).bind(clientId, user.user_id).run();
-
-  if (result.meta?.changes === 0) {
-    return c.json({ error: 'Client not found' }, 404);
-  }
-
-  return c.json({ success: true });
-});
-
-app.post('/oauth/clients/:id/regenerate-secret', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-  const clientId = c.req.param('id');
-
-  const { results: existing } = await db.prepare(
-    'SELECT id FROM oauth_clients WHERE id = ? AND created_by = ?'
-  ).bind(clientId, user.user_id).all();
-
-  if (existing.length === 0) {
-    return c.json({ error: 'Client not found' }, 404);
-  }
-
-  const newSecret = generateSecureToken(32);
-  const newSecretHash = await hashToken(newSecret);
-
-  await db.prepare(
-    'UPDATE oauth_clients SET client_secret_hash = ?, updated_at = ? WHERE id = ?'
-  ).bind(newSecretHash, now(), clientId).run();
-
-  await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE client_id = ?').bind(clientId).run();
-  await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE client_id = ?').bind(clientId).run();
-
-  return c.json({
-    client_secret: newSecret,
-    message: 'Save your new client secret securely - it will not be shown again. All existing tokens have been revoked.',
+    return c.json({
+      client_id: clientId,
+      // Only show the raw secret once; store the hash server-side.
+      client_secret: clientSecret,
+      name,
+      redirect_uris,
+      client_type,
+      is_approved: false,
+      message: 'Save your client secret securely - it will not be shown again. Your app can only be used by you until an admin approves it.',
+    }, 201);
   });
-});
 
-app.post('/oauth/clients/:id/request-approval', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-  const clientId = c.req.param('id');
+  app.get('/oauth/clients', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
 
-  const { results: existing } = await db.prepare(
-    'SELECT id, is_approved, approval_requested FROM oauth_clients WHERE id = ? AND created_by = ?'
-  ).bind(clientId, user.user_id).all();
+    const { results } = await db.prepare(`
+      SELECT id, name, description, homepage_url, logo_url, redirect_uris, client_type, is_active, is_approved, approval_requested, approval_requested_at, created_at, updated_at
+      FROM oauth_clients
+      WHERE created_by = ?
+      ORDER BY created_at DESC
+    `).bind(user.user_id).all();
 
-  if (existing.length === 0) {
-    return c.json({ error: 'Client not found' }, 404);
-  }
-
-  const client = existing[0];
-
-  if (client.is_approved) {
-    return c.json({ error: 'Client is already approved' }, 400);
-  }
-
-  if (client.approval_requested) {
-    return c.json({ error: 'Approval has already been requested' }, 400);
-  }
-
-  await db.prepare(
-    'UPDATE oauth_clients SET approval_requested = 1, approval_requested_at = ?, updated_at = ? WHERE id = ?'
-  ).bind(now(), now(), clientId).run();
-
-  return c.json({
-    success: true,
-    message: 'Approval requested. An admin will review your application.',
+    return c.json({
+      clients: results.map(client => ({
+        ...client,
+        redirect_uris: JSON.parse(client.redirect_uris),
+      }))
+    });
   });
-});
+
+  app.get('/oauth/clients/:id', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
+    const clientId = c.req.param('id');
+
+    const { results } = await db.prepare(`
+      SELECT id, name, description, homepage_url, privacy_policy_url, logo_url, redirect_uris, allowed_scopes, client_type, is_active, is_approved, approval_requested, approval_requested_at, created_at, updated_at
+      FROM oauth_clients
+      WHERE id = ? AND created_by = ?
+    `).bind(clientId, user.user_id).all();
+
+    if (results.length === 0) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    const client = results[0];
+    return c.json({
+      ...client,
+      redirect_uris: JSON.parse(client.redirect_uris),
+      allowed_scopes: JSON.parse(client.allowed_scopes),
+    });
+  });
+
+  app.put('/oauth/clients/:id', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
+    const clientId = c.req.param('id');
+
+    const { results: existing } = await db.prepare(
+      'SELECT id FROM oauth_clients WHERE id = ? AND created_by = ?'
+    ).bind(clientId, user.user_id).all();
+
+    if (existing.length === 0) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    const { name, description, homepage_url, privacy_policy_url, redirect_uris, allowed_scopes } = await c.req.json();
+
+    const updates = [];
+    const params = [];
+
+    if (allowed_scopes !== undefined) {
+      if (!Array.isArray(allowed_scopes) || allowed_scopes.length === 0) {
+        return c.json({ error: 'allowed_scopes must be a non-empty array' }, 400);
+      }
+      const invalidScopes = allowed_scopes.filter(s => !CONFIG.OAUTH_PROVIDER.SUPPORTED_SCOPES.includes(s));
+      if (invalidScopes.length > 0) {
+        return c.json({ error: `Unsupported scopes: ${invalidScopes.join(', ')}` }, 400);
+      }
+      updates.push('allowed_scopes = ?');
+      params.push(JSON.stringify(allowed_scopes));
+    }
+
+    if (name !== undefined) {
+      if (name.length < 3 || name.length > 100) {
+        return c.json({ error: 'Name must be between 3 and 100 characters' }, 400);
+      }
+      updates.push('name = ?');
+      params.push(name);
+    }
+
+    if (description !== undefined) {
+      updates.push('description = ?');
+      params.push(description);
+    }
+
+    if (homepage_url !== undefined) {
+      updates.push('homepage_url = ?');
+      params.push(homepage_url);
+    }
+
+    if (privacy_policy_url !== undefined) {
+      updates.push('privacy_policy_url = ?');
+      params.push(privacy_policy_url);
+    }
+
+    if (redirect_uris !== undefined) {
+      if (!Array.isArray(redirect_uris) || redirect_uris.length === 0) {
+        return c.json({ error: 'At least one redirect URI is required' }, 400);
+      }
+      for (const uri of redirect_uris) {
+        try {
+          const url = new URL(uri);
+          if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+            return c.json({ error: `Redirect URI must use HTTPS: ${uri}` }, 400);
+          }
+        } catch {
+          return c.json({ error: `Invalid redirect URI: ${uri}` }, 400);
+        }
+      }
+      updates.push('redirect_uris = ?');
+      params.push(JSON.stringify(redirect_uris));
+    }
+
+    if (updates.length === 0) {
+      return c.json({ error: 'No valid fields to update' }, 400);
+    }
+
+    updates.push('updated_at = ?');
+    params.push(now());
+    params.push(clientId);
+
+    await db.prepare(`UPDATE oauth_clients SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run();
+
+    return c.json({ success: true });
+  });
+
+  app.delete('/oauth/clients/:id', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
+    const clientId = c.req.param('id');
+
+    const result = await db.prepare(
+      'DELETE FROM oauth_clients WHERE id = ? AND created_by = ?'
+    ).bind(clientId, user.user_id).run();
+
+    if (result.meta?.changes === 0) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    return c.json({ success: true });
+  });
+
+  app.post('/oauth/clients/:id/regenerate-secret', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
+    const clientId = c.req.param('id');
+
+    const { results: existing } = await db.prepare(
+      'SELECT id FROM oauth_clients WHERE id = ? AND created_by = ?'
+    ).bind(clientId, user.user_id).all();
+
+    if (existing.length === 0) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    const newSecret = generateSecureToken(32);
+    const newSecretHash = await hashToken(newSecret);
+
+    await db.prepare(
+      'UPDATE oauth_clients SET client_secret_hash = ?, updated_at = ? WHERE id = ?'
+    ).bind(newSecretHash, now(), clientId).run();
+
+    await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE client_id = ?').bind(clientId).run();
+    await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE client_id = ?').bind(clientId).run();
+
+    return c.json({
+      client_secret: newSecret,
+      message: 'Save your new client secret securely - it will not be shown again. All existing tokens have been revoked.',
+    });
+  });
+
+  app.post('/oauth/clients/:id/request-approval', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
+    const clientId = c.req.param('id');
+
+    const { results: existing } = await db.prepare(
+      'SELECT id, is_approved, approval_requested FROM oauth_clients WHERE id = ? AND created_by = ?'
+    ).bind(clientId, user.user_id).all();
+
+    if (existing.length === 0) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    const client = existing[0];
+
+    if (client.is_approved) {
+      return c.json({ error: 'Client is already approved' }, 400);
+    }
+
+    if (client.approval_requested) {
+      return c.json({ error: 'Approval has already been requested' }, 400);
+    }
+
+    await db.prepare(
+      'UPDATE oauth_clients SET approval_requested = 1, approval_requested_at = ?, updated_at = ? WHERE id = ?'
+    ).bind(now(), now(), clientId).run();
+
+    return c.json({
+      success: true,
+      message: 'Approval requested. An admin will review your application.',
+    });
+  });
 
 
-// Authorization endpoint used by third-party apps.
-app.get('/oauth/authorize', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
+  // Authorization endpoint used by third-party apps.
+  app.get('/oauth/authorize', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
 
-  if (user.is_child) {
-    const errorUrl = new URL(c.env.FRONTEND_URL + '/oauth-error');
-    errorUrl.searchParams.set('error', 'access_denied');
-    errorUrl.searchParams.set('error_description', 'Child accounts cannot authorize third-party applications');
-    return c.redirect(errorUrl.toString());
-  }
+    if (user.is_child) {
+      const errorUrl = new URL(c.env.FRONTEND_URL + '/oauth-error');
+      errorUrl.searchParams.set('error', 'access_denied');
+      errorUrl.searchParams.set('error_description', 'Child accounts cannot authorize third-party applications');
+      return c.redirect(errorUrl.toString());
+    }
 
-  const {
-    client_id,
-    redirect_uri,
-    response_type,
-    scope = 'openid',
-    state,
-    code_challenge,
-    code_challenge_method,
-    nonce,
-  } = c.req.query();
+    const {
+      client_id,
+      redirect_uri,
+      response_type,
+      scope = 'openid',
+      state,
+      code_challenge,
+      code_challenge_method,
+      nonce,
+    } = c.req.query();
 
-  if (!client_id) {
-    return c.json({ error: 'invalid_request', error_description: 'client_id is required' }, 400);
-  }
+    if (!client_id) {
+      return c.json({ error: 'invalid_request', error_description: 'client_id is required' }, 400);
+    }
 
-  if (!redirect_uri) {
-    return c.json({ error: 'invalid_request', error_description: 'redirect_uri is required' }, 400);
-  }
+    if (!redirect_uri) {
+      return c.json({ error: 'invalid_request', error_description: 'redirect_uri is required' }, 400);
+    }
 
-  if (response_type !== 'code') {
-    return c.json({ error: 'unsupported_response_type', error_description: 'Only response_type=code is supported (OAuth 2.1)' }, 400);
-  }
+    if (response_type !== 'code') {
+      return c.json({ error: 'unsupported_response_type', error_description: 'Only response_type=code is supported (OAuth 2.1)' }, 400);
+    }
 
-  if (!code_challenge) {
-    return c.json({ error: 'invalid_request', error_description: 'code_challenge is required (PKCE mandatory in OAuth 2.1)' }, 400);
-  }
+    if (!code_challenge) {
+      return c.json({ error: 'invalid_request', error_description: 'code_challenge is required (PKCE mandatory in OAuth 2.1)' }, 400);
+    }
 
-  if (code_challenge_method !== 'S256') {
-    return c.json({ error: 'invalid_request', error_description: 'code_challenge_method must be S256 (plain not allowed in OAuth 2.1)' }, 400);
-  }
+    if (code_challenge_method !== 'S256') {
+      return c.json({ error: 'invalid_request', error_description: 'code_challenge_method must be S256 (plain not allowed in OAuth 2.1)' }, 400);
+    }
 
-  const { results: clients } = await db.prepare(`
+    const { results: clients } = await db.prepare(`
       SELECT id, name, description, logo_url, redirect_uris, allowed_scopes, is_active, is_approved, created_by
       FROM oauth_clients WHERE id = ?
     `).bind(client_id).all();
 
-  if (clients.length === 0) {
-    return c.json({ error: 'invalid_client', error_description: 'Client not found' }, 400);
-  }
+    if (clients.length === 0) {
+      return c.json({ error: 'invalid_client', error_description: 'Client not found' }, 400);
+    }
 
-  const client = clients[0];
+    const client = clients[0];
 
-  if (!client.is_active) {
-    return c.json({ error: 'invalid_client', error_description: 'Client is not active' }, 400);
-  }
+    if (!client.is_active) {
+      return c.json({ error: 'invalid_client', error_description: 'Client is not active' }, 400);
+    }
 
-  if (!client.is_approved && client.created_by !== user.user_id) {
-    return c.json({ error: 'invalid_client', error_description: 'Client is not approved for public use' }, 400);
-  }
+    if (!client.is_approved && client.created_by !== user.user_id) {
+      return c.json({ error: 'invalid_client', error_description: 'Client is not approved for public use' }, 400);
+    }
 
-  if (!validateRedirectUri(redirect_uri, client.redirect_uris)) {
-    return c.json({ error: 'invalid_request', error_description: 'redirect_uri does not match any registered URIs' }, 400);
-  }
+    if (!validateRedirectUri(redirect_uri, client.redirect_uris)) {
+      return c.json({ error: 'invalid_request', error_description: 'redirect_uri does not match any registered URIs' }, 400);
+    }
 
-  if (!validateScopes(scope, client.allowed_scopes)) {
-    const errorUrl = new URL(redirect_uri);
-    errorUrl.searchParams.set('error', 'invalid_scope');
-    errorUrl.searchParams.set('error_description', 'Requested scope is not allowed for this client');
-    if (state) errorUrl.searchParams.set('state', state);
-    return c.redirect(errorUrl.toString());
-  }
+    if (!validateScopes(scope, client.allowed_scopes)) {
+      const errorUrl = new URL(redirect_uri);
+      errorUrl.searchParams.set('error', 'invalid_scope');
+      errorUrl.searchParams.set('error_description', 'Requested scope is not allowed for this client');
+      if (state) errorUrl.searchParams.set('state', state);
+      return c.redirect(errorUrl.toString());
+    }
 
-  const scopes = scope.split(' ').filter(s => s);
-  if (!scopes.includes('openid')) {
-    const errorUrl = new URL(redirect_uri);
-    errorUrl.searchParams.set('error', 'invalid_scope');
-    errorUrl.searchParams.set('error_description', 'openid scope is required');
-    if (state) errorUrl.searchParams.set('state', state);
-    return c.redirect(errorUrl.toString());
-  }
+    const scopes = scope.split(' ').filter(s => s);
+    if (!scopes.includes('openid')) {
+      const errorUrl = new URL(redirect_uri);
+      errorUrl.searchParams.set('error', 'invalid_scope');
+      errorUrl.searchParams.set('error_description', 'openid scope is required');
+      if (state) errorUrl.searchParams.set('state', state);
+      return c.redirect(errorUrl.toString());
+    }
 
-  const { results: existingConsents } = await db.prepare(`
+    const { results: existingConsents } = await db.prepare(`
       SELECT scope FROM oauth_consents WHERE user_id = ? AND client_id = ?
     `).bind(user.user_id, client_id).all();
 
-  const needsConsent = existingConsents.length === 0 ||
-    !scopes.every(s => JSON.parse(existingConsents[0].scope).includes(s));
+    const needsConsent = existingConsents.length === 0 ||
+      !scopes.every(s => JSON.parse(existingConsents[0].scope).includes(s));
 
-  if (!needsConsent) {
-    const code = generateSecureToken(32);
-    const codeHash = await hashToken(code);
-    const currentTime = now();
+    if (!needsConsent) {
+      const code = generateSecureToken(32);
+      const codeHash = await hashToken(code);
+      const currentTime = now();
 
-    await db.prepare(`
+      await db.prepare(`
         INSERT INTO oauth_authorization_codes (code_hash, client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, nonce, auth_time, created_at, expires_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
+        codeHash,
+        client_id,
+        user.user_id,
+        redirect_uri,
+        scope,
+        code_challenge,
+        code_challenge_method,
+        nonce || null,
+        currentTime,
+        currentTime,
+        currentTime + CONFIG.OAUTH_PROVIDER.AUTH_CODE_EXPIRY
+      ).run();
+
+      const callbackUrl = new URL(redirect_uri);
+      callbackUrl.searchParams.set('code', code);
+      if (state) callbackUrl.searchParams.set('state', state);
+      return c.redirect(callbackUrl.toString());
+    }
+
+    const consentUrl = new URL(c.env.FRONTEND_URL + '/oauth/authorize');
+    consentUrl.searchParams.set('client_id', client_id);
+    consentUrl.searchParams.set('redirect_uri', redirect_uri);
+    consentUrl.searchParams.set('scope', scope);
+    consentUrl.searchParams.set('state', state || '');
+    consentUrl.searchParams.set('code_challenge', code_challenge);
+    consentUrl.searchParams.set('code_challenge_method', code_challenge_method);
+    if (nonce) consentUrl.searchParams.set('nonce', nonce);
+
+    return c.redirect(consentUrl.toString());
+  });
+
+  app.get('/oauth/authorize/client-info', authMiddleware, async (c) => {
+    const db = c.env.DB;
+    const { client_id, scope } = c.req.query();
+
+    if (!client_id) {
+      return c.json({ error: 'client_id is required' }, 400);
+    }
+
+    const { results } = await db.prepare(`
+      SELECT id, name, description, logo_url, homepage_url, privacy_policy_url
+      FROM oauth_clients WHERE id = ? AND is_active = 1
+    `).bind(client_id).all();
+
+    if (results.length === 0) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    const client = results[0];
+    const scopes = (scope || 'openid').split(' ').filter(s => s);
+
+    const scopeDescriptions = {
+      openid: 'Verify your identity',
+      profile: 'Access your username and profile information',
+      email: 'Access your email address',
+      games: 'Access the list of games you own',
+      achievements: 'Access your unlocked achievements across all games',
+      game_stats: 'Access your in-game stats for each game',
+    };
+
+    return c.json({
+      client,
+      scopes: scopes.map(s => ({ name: s, description: scopeDescriptions[s] || s })),
+    });
+  });
+
+  app.post('/oauth/authorize', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
+
+    if (user.is_child) {
+      return c.json({ error: 'access_denied', error_description: 'Child accounts cannot authorize third-party applications' }, 403);
+    }
+
+    const {
+      client_id,
+      redirect_uri,
+      scope,
+      state,
+      code_challenge,
+      code_challenge_method,
+      nonce,
+      // Consent is an explicit allow/deny string from the UI.
+      consent,
+    } = await c.req.json();
+
+    if (consent !== 'allow') {
+      const errorUrl = new URL(redirect_uri);
+      errorUrl.searchParams.set('error', 'access_denied');
+      errorUrl.searchParams.set('error_description', 'User denied the authorization request');
+      if (state) errorUrl.searchParams.set('state', state);
+      return c.json({ redirect: errorUrl.toString() });
+    }
+
+    const { results: clients } = await db.prepare(`
+      SELECT id, redirect_uris, allowed_scopes, is_active, is_approved, created_by
+      FROM oauth_clients WHERE id = ?
+    `).bind(client_id).all();
+
+    if (clients.length === 0 || !clients[0].is_active) {
+      return c.json({ error: 'invalid_client' }, 400);
+    }
+
+    const client = clients[0];
+
+    if (!client.is_approved && client.created_by !== user.user_id) {
+      return c.json({ error: 'invalid_client', error_description: 'Client is not approved' }, 400);
+    }
+
+    if (!validateRedirectUri(redirect_uri, client.redirect_uris)) {
+      return c.json({ error: 'invalid_request', error_description: 'Invalid redirect_uri' }, 400);
+    }
+
+    if (!validateScopes(scope, client.allowed_scopes)) {
+      return c.json({ error: 'invalid_scope' }, 400);
+    }
+
+    const consentId = generateId();
+    const currentTime = now();
+    const scopes = scope.split(' ').filter(s => s);
+
+    await db.prepare(`
+      INSERT INTO oauth_consents (id, user_id, client_id, scope, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, client_id) DO UPDATE SET scope = ?, updated_at = ?
+    `).bind(
+      consentId,
+      user.user_id,
+      client_id,
+      JSON.stringify(scopes),
+      currentTime,
+      currentTime,
+      JSON.stringify(scopes),
+      currentTime
+    ).run();
+
+    const code = generateSecureToken(32);
+    const codeHash = await hashToken(code);
+
+    await db.prepare(`
+      INSERT INTO oauth_authorization_codes (code_hash, client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, nonce, auth_time, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
       codeHash,
       client_id,
       user.user_id,
@@ -4160,429 +4303,286 @@ app.get('/oauth/authorize', authMiddleware, async (c) => {
     const callbackUrl = new URL(redirect_uri);
     callbackUrl.searchParams.set('code', code);
     if (state) callbackUrl.searchParams.set('state', state);
-    return c.redirect(callbackUrl.toString());
-  }
 
-  const consentUrl = new URL(c.env.FRONTEND_URL + '/oauth/authorize');
-  consentUrl.searchParams.set('client_id', client_id);
-  consentUrl.searchParams.set('redirect_uri', redirect_uri);
-  consentUrl.searchParams.set('scope', scope);
-  consentUrl.searchParams.set('state', state || '');
-  consentUrl.searchParams.set('code_challenge', code_challenge);
-  consentUrl.searchParams.set('code_challenge_method', code_challenge_method);
-  if (nonce) consentUrl.searchParams.set('nonce', nonce);
-
-  return c.redirect(consentUrl.toString());
-});
-
-app.get('/oauth/authorize/client-info', authMiddleware, async (c) => {
-  const db = c.env.DB;
-  const { client_id, scope } = c.req.query();
-
-  if (!client_id) {
-    return c.json({ error: 'client_id is required' }, 400);
-  }
-
-  const { results } = await db.prepare(`
-      SELECT id, name, description, logo_url, homepage_url, privacy_policy_url
-      FROM oauth_clients WHERE id = ? AND is_active = 1
-    `).bind(client_id).all();
-
-  if (results.length === 0) {
-    return c.json({ error: 'Client not found' }, 404);
-  }
-
-  const client = results[0];
-  const scopes = (scope || 'openid').split(' ').filter(s => s);
-
-  const scopeDescriptions = {
-    openid: 'Verify your identity',
-    profile: 'Access your username and profile information',
-    email: 'Access your email address',
-    games: 'Access the list of games you own',
-    achievements: 'Access your unlocked achievements across all games',
-    game_stats: 'Access your in-game stats for each game',
-  };
-
-  return c.json({
-    client,
-    scopes: scopes.map(s => ({ name: s, description: scopeDescriptions[s] || s })),
+    return c.json({ redirect: callbackUrl.toString() });
   });
-});
-
-app.post('/oauth/authorize', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-
-  if (user.is_child) {
-    return c.json({ error: 'access_denied', error_description: 'Child accounts cannot authorize third-party applications' }, 403);
-  }
-
-  const {
-    client_id,
-    redirect_uri,
-    scope,
-    state,
-    code_challenge,
-    code_challenge_method,
-    nonce,
-    // Consent is an explicit allow/deny string from the UI.
-    consent,
-  } = await c.req.json();
-
-  if (consent !== 'allow') {
-    const errorUrl = new URL(redirect_uri);
-    errorUrl.searchParams.set('error', 'access_denied');
-    errorUrl.searchParams.set('error_description', 'User denied the authorization request');
-    if (state) errorUrl.searchParams.set('state', state);
-    return c.json({ redirect: errorUrl.toString() });
-  }
-
-  const { results: clients } = await db.prepare(`
-      SELECT id, redirect_uris, allowed_scopes, is_active, is_approved, created_by
-      FROM oauth_clients WHERE id = ?
-    `).bind(client_id).all();
-
-  if (clients.length === 0 || !clients[0].is_active) {
-    return c.json({ error: 'invalid_client' }, 400);
-  }
-
-  const client = clients[0];
-
-  if (!client.is_approved && client.created_by !== user.user_id) {
-    return c.json({ error: 'invalid_client', error_description: 'Client is not approved' }, 400);
-  }
-
-  if (!validateRedirectUri(redirect_uri, client.redirect_uris)) {
-    return c.json({ error: 'invalid_request', error_description: 'Invalid redirect_uri' }, 400);
-  }
-
-  if (!validateScopes(scope, client.allowed_scopes)) {
-    return c.json({ error: 'invalid_scope' }, 400);
-  }
-
-  const consentId = generateId();
-  const currentTime = now();
-  const scopes = scope.split(' ').filter(s => s);
-
-  await db.prepare(`
-      INSERT INTO oauth_consents (id, user_id, client_id, scope, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, client_id) DO UPDATE SET scope = ?, updated_at = ?
-    `).bind(
-    consentId,
-    user.user_id,
-    client_id,
-    JSON.stringify(scopes),
-    currentTime,
-    currentTime,
-    JSON.stringify(scopes),
-    currentTime
-  ).run();
-
-  const code = generateSecureToken(32);
-  const codeHash = await hashToken(code);
-
-  await db.prepare(`
-      INSERT INTO oauth_authorization_codes (code_hash, client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, nonce, auth_time, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-    codeHash,
-    client_id,
-    user.user_id,
-    redirect_uri,
-    scope,
-    code_challenge,
-    code_challenge_method,
-    nonce || null,
-    currentTime,
-    currentTime,
-    currentTime + CONFIG.OAUTH_PROVIDER.AUTH_CODE_EXPIRY
-  ).run();
-
-  const callbackUrl = new URL(redirect_uri);
-  callbackUrl.searchParams.set('code', code);
-  if (state) callbackUrl.searchParams.set('state', state);
-
-  return c.json({ redirect: callbackUrl.toString() });
-});
 
 
-// Token exchange and refresh flows.
-app.post('/oauth/token', async (c) => {
-  const db = c.env.DB;
-  const contentType = c.req.header('content-type') || '';
+  // Token exchange and refresh flows.
+  app.post('/oauth/token', async (c) => {
+    const db = c.env.DB;
+    const contentType = c.req.header('content-type') || '';
 
-  let params;
-  if (contentType.includes('application/json')) {
-    params = await c.req.json();
-  } else {
-    params = Object.fromEntries(new URLSearchParams(await c.req.text()));
-  }
+    let params;
+    if (contentType.includes('application/json')) {
+      params = await c.req.json();
+    } else {
+      params = Object.fromEntries(new URLSearchParams(await c.req.text()));
+    }
 
-  const { grant_type, code, redirect_uri, client_id, client_secret, code_verifier, refresh_token } = params;
+    const { grant_type, code, redirect_uri, client_id, client_secret, code_verifier, refresh_token } = params;
 
-  let authClientId = client_id;
-  let authClientSecret = client_secret;
+    let authClientId = client_id;
+    let authClientSecret = client_secret;
 
-  const authHeader = c.req.header('authorization');
-  if (authHeader?.startsWith('Basic ')) {
-    const decoded = atob(authHeader.slice(6));
-    const [id, secret] = decoded.split(':');
-    authClientId = authClientId || decodeURIComponent(id);
-    authClientSecret = authClientSecret || decodeURIComponent(secret);
-  }
+    const authHeader = c.req.header('authorization');
+    if (authHeader?.startsWith('Basic ')) {
+      const decoded = atob(authHeader.slice(6));
+      const [id, secret] = decoded.split(':');
+      authClientId = authClientId || decodeURIComponent(id);
+      authClientSecret = authClientSecret || decodeURIComponent(secret);
+    }
 
-  if (!authClientId) {
-    return c.json({ error: 'invalid_client', error_description: 'client_id is required' }, 401);
-  }
+    if (!authClientId) {
+      return c.json({ error: 'invalid_client', error_description: 'client_id is required' }, 401);
+    }
 
-  const { results: clients } = await db.prepare(`
+    const { results: clients } = await db.prepare(`
       SELECT id, client_secret_hash, client_type, is_active
       FROM oauth_clients WHERE id = ?
     `).bind(authClientId).all();
 
-  if (clients.length === 0) {
-    return c.json({ error: 'invalid_client' }, 401);
-  }
-
-  const client = clients[0];
-
-  if (!client.is_active) {
-    return c.json({ error: 'invalid_client', error_description: 'Client is not active' }, 401);
-  }
-
-  if (client.client_type === 'confidential') {
-    if (!authClientSecret) {
-      return c.json({ error: 'invalid_client', error_description: 'Client authentication required' }, 401);
+    if (clients.length === 0) {
+      return c.json({ error: 'invalid_client' }, 401);
     }
-    const secretHash = await hashToken(authClientSecret);
-    if (secretHash !== client.client_secret_hash) {
-      return c.json({ error: 'invalid_client', error_description: 'Invalid client credentials' }, 401);
+
+    const client = clients[0];
+
+    if (!client.is_active) {
+      return c.json({ error: 'invalid_client', error_description: 'Client is not active' }, 401);
     }
-  }
 
-  if (grant_type === 'authorization_code') {
-    return handleAuthorizationCodeGrant(c, db, client, code, redirect_uri, code_verifier);
-  } else if (grant_type === 'refresh_token') {
-    return handleRefreshTokenGrant(c, db, client, refresh_token);
-  } else {
-    return c.json({ error: 'unsupported_grant_type', error_description: 'Only authorization_code and refresh_token grants are supported' }, 400);
-  }
-});
+    if (client.client_type === 'confidential') {
+      if (!authClientSecret) {
+        return c.json({ error: 'invalid_client', error_description: 'Client authentication required' }, 401);
+      }
+      const secretHash = await hashToken(authClientSecret);
+      if (secretHash !== client.client_secret_hash) {
+        return c.json({ error: 'invalid_client', error_description: 'Invalid client credentials' }, 401);
+      }
+    }
 
-async function handleAuthorizationCodeGrant(c, db, client, code, redirectUri, codeVerifier) {
-  if (!code) {
-    return c.json({ error: 'invalid_request', error_description: 'code is required' }, 400);
-  }
+    if (grant_type === 'authorization_code') {
+      return handleAuthorizationCodeGrant(c, db, client, code, redirect_uri, code_verifier);
+    } else if (grant_type === 'refresh_token') {
+      return handleRefreshTokenGrant(c, db, client, refresh_token);
+    } else {
+      return c.json({ error: 'unsupported_grant_type', error_description: 'Only authorization_code and refresh_token grants are supported' }, 400);
+    }
+  });
 
-  if (!codeVerifier) {
-    return c.json({ error: 'invalid_request', error_description: 'code_verifier is required (PKCE mandatory)' }, 400);
-  }
+  async function handleAuthorizationCodeGrant(c, db, client, code, redirectUri, codeVerifier) {
+    if (!code) {
+      return c.json({ error: 'invalid_request', error_description: 'code is required' }, 400);
+    }
 
-  const codeHash = await hashToken(code);
-  const currentTime = now();
+    if (!codeVerifier) {
+      return c.json({ error: 'invalid_request', error_description: 'code_verifier is required (PKCE mandatory)' }, 400);
+    }
 
-  const { results: codes } = await db.prepare(`
+    const codeHash = await hashToken(code);
+    const currentTime = now();
+
+    const { results: codes } = await db.prepare(`
       SELECT * FROM oauth_authorization_codes
       WHERE code_hash = ? AND client_id = ? AND used = 0 AND expires_at > ?
     `).bind(codeHash, client.id, currentTime).all();
 
-  if (codes.length === 0) {
-    return c.json({ error: 'invalid_grant', error_description: 'Invalid or expired authorization code' }, 400);
-  }
+    if (codes.length === 0) {
+      return c.json({ error: 'invalid_grant', error_description: 'Invalid or expired authorization code' }, 400);
+    }
 
-  const authCode = codes[0];
+    const authCode = codes[0];
 
-  if (redirectUri && redirectUri !== authCode.redirect_uri) {
-    return c.json({ error: 'invalid_grant', error_description: 'redirect_uri does not match' }, 400);
-  }
+    if (redirectUri && redirectUri !== authCode.redirect_uri) {
+      return c.json({ error: 'invalid_grant', error_description: 'redirect_uri does not match' }, 400);
+    }
 
-  const pkceValid = await verifyPKCE(codeVerifier, authCode.code_challenge);
-  if (!pkceValid) {
-    return c.json({ error: 'invalid_grant', error_description: 'Invalid code_verifier' }, 400);
-  }
+    const pkceValid = await verifyPKCE(codeVerifier, authCode.code_challenge);
+    if (!pkceValid) {
+      return c.json({ error: 'invalid_grant', error_description: 'Invalid code_verifier' }, 400);
+    }
 
-  await db.prepare('UPDATE oauth_authorization_codes SET used = 1 WHERE code_hash = ?').bind(codeHash).run();
+    await db.prepare('UPDATE oauth_authorization_codes SET used = 1 WHERE code_hash = ?').bind(codeHash).run();
 
-  const { results: users } = await db.prepare(`
+    const { results: users } = await db.prepare(`
       SELECT id, username_original, email, updated_at, role
       FROM users WHERE id = ?
     `).bind(authCode.user_id).all();
 
-  if (users.length === 0) {
-    return c.json({ error: 'invalid_grant', error_description: 'User not found' }, 400);
-  }
+    if (users.length === 0) {
+      return c.json({ error: 'invalid_grant', error_description: 'User not found' }, 400);
+    }
 
-  const user = users[0];
-  const scopes = authCode.scope.split(' ').filter(s => s);
+    const user = users[0];
+    const scopes = authCode.scope.split(' ').filter(s => s);
 
-  const accessToken = generateSecureToken(32);
-  const refreshToken = generateSecureToken(32);
-  const accessTokenHash = await hashToken(accessToken);
-  const refreshTokenHash = await hashToken(refreshToken);
+    const accessToken = generateSecureToken(32);
+    const refreshToken = generateSecureToken(32);
+    const accessTokenHash = await hashToken(accessToken);
+    const refreshTokenHash = await hashToken(refreshToken);
 
-  const accessTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY;
-  const refreshTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.REFRESH_TOKEN_EXPIRY;
+    const accessTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY;
+    const refreshTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.REFRESH_TOKEN_EXPIRY;
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO oauth_access_tokens (token_hash, client_id, user_id, scope, created_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).bind(accessTokenHash, client.id, user.id, authCode.scope, currentTime, accessTokenExpiry).run();
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, scope, access_token_hash, created_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).bind(refreshTokenHash, client.id, user.id, authCode.scope, accessTokenHash, currentTime, refreshTokenExpiry).run();
 
-  const idTokenPayload = {
-    iss: getIssuer(c),
-    sub: user.id,
-    aud: client.id,
-    exp: currentTime + CONFIG.OAUTH_PROVIDER.ID_TOKEN_EXPIRY,
-    iat: currentTime,
-    auth_time: authCode.auth_time,
-  };
+    const idTokenPayload = {
+      iss: getIssuer(c),
+      sub: user.id,
+      aud: client.id,
+      exp: currentTime + CONFIG.OAUTH_PROVIDER.ID_TOKEN_EXPIRY,
+      iat: currentTime,
+      auth_time: authCode.auth_time,
+    };
 
-  if (authCode.nonce) {
-    idTokenPayload.nonce = authCode.nonce;
+    if (authCode.nonce) {
+      idTokenPayload.nonce = authCode.nonce;
+    }
+
+    idTokenPayload.at_hash = await generateAtHash(accessToken);
+
+    const userClaims = buildUserClaims(user, scopes);
+    Object.assign(idTokenPayload, userClaims);
+
+    const privateKey = c.env.OAUTH_PROVIDER_PRIVATE_KEY;
+    if (!privateKey) {
+      return c.json({ error: 'server_error', error_description: 'Server signing key not configured' }, 500);
+    }
+
+    const idToken = await signJwtRS256(idTokenPayload, privateKey);
+
+    return c.json({
+      access_token: accessToken,
+      token_type: 'Bearer',
+      expires_in: CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY,
+      refresh_token: refreshToken,
+      id_token: idToken,
+      scope: authCode.scope,
+    });
   }
 
-  idTokenPayload.at_hash = await generateAtHash(accessToken);
+  async function handleRefreshTokenGrant(c, db, client, refreshToken) {
+    if (!refreshToken) {
+      return c.json({ error: 'invalid_request', error_description: 'refresh_token is required' }, 400);
+    }
 
-  const userClaims = buildUserClaims(user, scopes);
-  Object.assign(idTokenPayload, userClaims);
+    const tokenHash = await hashToken(refreshToken);
+    const currentTime = now();
 
-  const privateKey = c.env.OAUTH_PROVIDER_PRIVATE_KEY;
-  if (!privateKey) {
-    return c.json({ error: 'server_error', error_description: 'Server signing key not configured' }, 500);
-  }
-
-  const idToken = await signJwtRS256(idTokenPayload, privateKey);
-
-  return c.json({
-    access_token: accessToken,
-    token_type: 'Bearer',
-    expires_in: CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY,
-    refresh_token: refreshToken,
-    id_token: idToken,
-    scope: authCode.scope,
-  });
-}
-
-async function handleRefreshTokenGrant(c, db, client, refreshToken) {
-  if (!refreshToken) {
-    return c.json({ error: 'invalid_request', error_description: 'refresh_token is required' }, 400);
-  }
-
-  const tokenHash = await hashToken(refreshToken);
-  const currentTime = now();
-
-  const { results: tokens } = await db.prepare(`
+    const { results: tokens } = await db.prepare(`
       SELECT * FROM oauth_refresh_tokens
       WHERE token_hash = ? AND client_id = ? AND revoked = 0 AND expires_at > ?
     `).bind(tokenHash, client.id, currentTime).all();
 
-  if (tokens.length === 0) {
-    return c.json({ error: 'invalid_grant', error_description: 'Invalid or expired refresh token' }, 400);
-  }
+    if (tokens.length === 0) {
+      return c.json({ error: 'invalid_grant', error_description: 'Invalid or expired refresh token' }, 400);
+    }
 
-  const oldRefreshToken = tokens[0];
+    const oldRefreshToken = tokens[0];
 
-  const { results: users } = await db.prepare(`
+    const { results: users } = await db.prepare(`
       SELECT id, username_original, email, updated_at, is_banned
       FROM users WHERE id = ?
     `).bind(oldRefreshToken.user_id).all();
 
-  if (users.length === 0 || users[0].is_banned) {
-    return c.json({ error: 'invalid_grant', error_description: 'User not found or banned' }, 400);
-  }
+    if (users.length === 0 || users[0].is_banned) {
+      return c.json({ error: 'invalid_grant', error_description: 'User not found or banned' }, 400);
+    }
 
-  const user = users[0];
+    const user = users[0];
 
-  await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE token_hash = ?').bind(tokenHash).run();
-  if (oldRefreshToken.access_token_hash) {
-    await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE token_hash = ?').bind(oldRefreshToken.access_token_hash).run();
-  }
+    await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE token_hash = ?').bind(tokenHash).run();
+    if (oldRefreshToken.access_token_hash) {
+      await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE token_hash = ?').bind(oldRefreshToken.access_token_hash).run();
+    }
 
-  const newAccessToken = generateSecureToken(32);
-  const newRefreshToken = generateSecureToken(32);
-  const newAccessTokenHash = await hashToken(newAccessToken);
-  const newRefreshTokenHash = await hashToken(newRefreshToken);
+    const newAccessToken = generateSecureToken(32);
+    const newRefreshToken = generateSecureToken(32);
+    const newAccessTokenHash = await hashToken(newAccessToken);
+    const newRefreshTokenHash = await hashToken(newRefreshToken);
 
-  const accessTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY;
-  const refreshTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.REFRESH_TOKEN_EXPIRY;
+    const accessTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY;
+    const refreshTokenExpiry = currentTime + CONFIG.OAUTH_PROVIDER.REFRESH_TOKEN_EXPIRY;
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO oauth_access_tokens (token_hash, client_id, user_id, scope, created_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).bind(newAccessTokenHash, client.id, user.id, oldRefreshToken.scope, currentTime, accessTokenExpiry).run();
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, scope, access_token_hash, created_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).bind(newRefreshTokenHash, client.id, user.id, oldRefreshToken.scope, newAccessTokenHash, currentTime, refreshTokenExpiry).run();
 
-  return c.json({
-    access_token: newAccessToken,
-    token_type: 'Bearer',
-    expires_in: CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY,
-    refresh_token: newRefreshToken,
-    scope: oldRefreshToken.scope,
-  });
-}
-
-
-app.get('/oauth/userinfo', async (c) => {
-  const db = c.env.DB;
-
-  const authHeader = c.req.header('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({ error: 'invalid_token', error_description: 'Bearer token required' }, 401);
+    return c.json({
+      access_token: newAccessToken,
+      token_type: 'Bearer',
+      expires_in: CONFIG.OAUTH_PROVIDER.ACCESS_TOKEN_EXPIRY,
+      refresh_token: newRefreshToken,
+      scope: oldRefreshToken.scope,
+    });
   }
 
-  const accessToken = authHeader.slice(7);
-  const tokenHash = await hashToken(accessToken);
-  const currentTime = now();
 
-  const { results: tokens } = await db.prepare(`
+  app.get('/oauth/userinfo', async (c) => {
+    const db = c.env.DB;
+
+    const authHeader = c.req.header('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return c.json({ error: 'invalid_token', error_description: 'Bearer token required' }, 401);
+    }
+
+    const accessToken = authHeader.slice(7);
+    const tokenHash = await hashToken(accessToken);
+    const currentTime = now();
+
+    const { results: tokens } = await db.prepare(`
       SELECT user_id, scope FROM oauth_access_tokens
       WHERE token_hash = ? AND revoked = 0 AND expires_at > ?
     `).bind(tokenHash, currentTime).all();
 
-  if (tokens.length === 0) {
-    return c.json({ error: 'invalid_token', error_description: 'Invalid or expired access token' }, 401);
-  }
+    if (tokens.length === 0) {
+      return c.json({ error: 'invalid_token', error_description: 'Invalid or expired access token' }, 401);
+    }
 
-  const token = tokens[0];
+    const token = tokens[0];
 
-  const { results: users } = await db.prepare(`
+    const { results: users } = await db.prepare(`
       SELECT id, username_original, email, updated_at, role
       FROM users WHERE id = ?
     `).bind(token.user_id).all();
 
-  if (users.length === 0) {
-    return c.json({ error: 'invalid_token', error_description: 'User not found' }, 401);
-  }
+    if (users.length === 0) {
+      return c.json({ error: 'invalid_token', error_description: 'User not found' }, 401);
+    }
 
-  const user = users[0];
-  const scopes = token.scope.split(' ').filter(s => s);
+    const user = users[0];
+    const scopes = token.scope.split(' ').filter(s => s);
 
-  const response = buildUserClaims(user, scopes);
+    const response = buildUserClaims(user, scopes);
 
-  if (scopes.includes('games')) {
-    const { results: ownedGames } = await db.prepare(`
+    if (scopes.includes('games')) {
+      const { results: ownedGames } = await db.prepare(`
       SELECT g.id, g.name, g.slug, g.description, g.icon_url, go.granted_at
       FROM games_owned go
       JOIN games g ON g.id = go.game_id
       WHERE go.user_id = ? AND g.is_active = 1 AND g.admin_only = 0
       ORDER BY go.granted_at ASC
     `).bind(token.user_id).all();
-    response.games = ownedGames;
-  }
+      response.games = ownedGames;
+    }
 
-  if (scopes.includes('game_stats')) {
-    const { results: gameStats } = await db.prepare(`
+    if (scopes.includes('game_stats')) {
+      const { results: gameStats } = await db.prepare(`
       SELECT g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
              ugs.stats_data, ugs.last_played
       FROM user_game_stats ugs
@@ -4590,14 +4590,14 @@ app.get('/oauth/userinfo', async (c) => {
       WHERE ugs.user_id = ? AND g.is_active = 1 AND g.admin_only = 0
       ORDER BY ugs.last_played DESC
     `).bind(token.user_id).all();
-    response.game_stats = gameStats.map(r => ({
-      ...r,
-      stats_data: r.stats_data ? JSON.parse(r.stats_data) : {},
-    }));
-  }
+      response.game_stats = gameStats.map(r => ({
+        ...r,
+        stats_data: r.stats_data ? JSON.parse(r.stats_data) : {},
+      }));
+    }
 
-  if (scopes.includes('achievements')) {
-    const { results: achievements } = await db.prepare(`
+    if (scopes.includes('achievements')) {
+      const { results: achievements } = await db.prepare(`
       SELECT ga.id, ga.name, ga.description, ga.icon_url, ga.points,
              g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
              ua.unlocked_at
@@ -4607,182 +4607,182 @@ app.get('/oauth/userinfo', async (c) => {
       WHERE ua.user_id = ? AND g.is_active = 1 AND g.admin_only = 0
       ORDER BY ua.unlocked_at ASC
     `).bind(token.user_id).all();
-    response.achievements = achievements;
-  }
+      response.achievements = achievements;
+    }
 
-  return c.json(response);
-});
+    return c.json(response);
+  });
 
-app.post('/oauth/userinfo', async (c) => {
-  return app.fetch(new Request(c.req.url, { method: 'GET', headers: c.req.raw.headers }), c.env, c.executionCtx);
-});
+  app.post('/oauth/userinfo', async (c) => {
+    return app.fetch(new Request(c.req.url, { method: 'GET', headers: c.req.raw.headers }), c.env, c.executionCtx);
+  });
 
 
-app.post('/oauth/revoke', async (c) => {
-  const db = c.env.DB;
-  const contentType = c.req.header('content-type') || '';
+  app.post('/oauth/revoke', async (c) => {
+    const db = c.env.DB;
+    const contentType = c.req.header('content-type') || '';
 
-  let params;
-  if (contentType.includes('application/json')) {
-    params = await c.req.json();
-  } else {
-    params = Object.fromEntries(new URLSearchParams(await c.req.text()));
-  }
+    let params;
+    if (contentType.includes('application/json')) {
+      params = await c.req.json();
+    } else {
+      params = Object.fromEntries(new URLSearchParams(await c.req.text()));
+    }
 
-  const { token, token_type_hint, client_id, client_secret } = params;
+    const { token, token_type_hint, client_id, client_secret } = params;
 
-  if (!token) {
-    return c.json({ error: 'invalid_request', error_description: 'token is required' }, 400);
-  }
+    if (!token) {
+      return c.json({ error: 'invalid_request', error_description: 'token is required' }, 400);
+    }
 
-  let authClientId = client_id;
-  let authClientSecret = client_secret;
+    let authClientId = client_id;
+    let authClientSecret = client_secret;
 
-  const authHeader = c.req.header('authorization');
-  if (authHeader?.startsWith('Basic ')) {
-    const decoded = atob(authHeader.slice(6));
-    const [id, secret] = decoded.split(':');
-    authClientId = authClientId || decodeURIComponent(id);
-    authClientSecret = authClientSecret || decodeURIComponent(secret);
-  }
+    const authHeader = c.req.header('authorization');
+    if (authHeader?.startsWith('Basic ')) {
+      const decoded = atob(authHeader.slice(6));
+      const [id, secret] = decoded.split(':');
+      authClientId = authClientId || decodeURIComponent(id);
+      authClientSecret = authClientSecret || decodeURIComponent(secret);
+    }
 
-  if (authClientId) {
-    const { results: clients } = await db.prepare(`
+    if (authClientId) {
+      const { results: clients } = await db.prepare(`
         SELECT id, client_secret_hash, client_type FROM oauth_clients WHERE id = ?
       `).bind(authClientId).all();
 
-    if (clients.length > 0 && clients[0].client_type === 'confidential') {
+      if (clients.length > 0 && clients[0].client_type === 'confidential') {
+        const secretHash = await hashToken(authClientSecret || '');
+        if (secretHash !== clients[0].client_secret_hash) {
+          return c.json({ error: 'invalid_client' }, 401);
+        }
+      }
+    }
+
+    const tokenHash = await hashToken(token);
+
+    if (token_type_hint !== 'refresh_token') {
+      await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE token_hash = ?').bind(tokenHash).run();
+    }
+
+    if (token_type_hint !== 'access_token') {
+      await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE token_hash = ?').bind(tokenHash).run();
+    }
+
+    return c.json({});
+  });
+
+  app.post('/oauth/introspect', async (c) => {
+    const db = c.env.DB;
+    const contentType = c.req.header('content-type') || '';
+
+    let params;
+    if (contentType.includes('application/json')) {
+      params = await c.req.json();
+    } else {
+      params = Object.fromEntries(new URLSearchParams(await c.req.text()));
+    }
+
+    const { token, token_type_hint, client_id, client_secret } = params;
+
+    if (!token) {
+      return c.json({ error: 'invalid_request', error_description: 'token is required' }, 400);
+    }
+
+    let authClientId = client_id;
+    let authClientSecret = client_secret;
+
+    const authHeader = c.req.header('authorization');
+    if (authHeader?.startsWith('Basic ')) {
+      const decoded = atob(authHeader.slice(6));
+      const [id, secret] = decoded.split(':');
+      authClientId = authClientId || decodeURIComponent(id);
+      authClientSecret = authClientSecret || decodeURIComponent(secret);
+    }
+
+    if (!authClientId) {
+      return c.json({ error: 'invalid_client', error_description: 'Client authentication required' }, 401);
+    }
+
+    const { results: clients } = await db.prepare(`
+      SELECT id, client_secret_hash, client_type FROM oauth_clients WHERE id = ?
+    `).bind(authClientId).all();
+
+    if (clients.length === 0) {
+      return c.json({ error: 'invalid_client' }, 401);
+    }
+
+    if (clients[0].client_type === 'confidential') {
       const secretHash = await hashToken(authClientSecret || '');
       if (secretHash !== clients[0].client_secret_hash) {
         return c.json({ error: 'invalid_client' }, 401);
       }
     }
-  }
 
-  const tokenHash = await hashToken(token);
+    const tokenHash = await hashToken(token);
+    const currentTime = now();
 
-  if (token_type_hint !== 'refresh_token') {
-    await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE token_hash = ?').bind(tokenHash).run();
-  }
-
-  if (token_type_hint !== 'access_token') {
-    await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE token_hash = ?').bind(tokenHash).run();
-  }
-
-  return c.json({});
-});
-
-app.post('/oauth/introspect', async (c) => {
-  const db = c.env.DB;
-  const contentType = c.req.header('content-type') || '';
-
-  let params;
-  if (contentType.includes('application/json')) {
-    params = await c.req.json();
-  } else {
-    params = Object.fromEntries(new URLSearchParams(await c.req.text()));
-  }
-
-  const { token, token_type_hint, client_id, client_secret } = params;
-
-  if (!token) {
-    return c.json({ error: 'invalid_request', error_description: 'token is required' }, 400);
-  }
-
-  let authClientId = client_id;
-  let authClientSecret = client_secret;
-
-  const authHeader = c.req.header('authorization');
-  if (authHeader?.startsWith('Basic ')) {
-    const decoded = atob(authHeader.slice(6));
-    const [id, secret] = decoded.split(':');
-    authClientId = authClientId || decodeURIComponent(id);
-    authClientSecret = authClientSecret || decodeURIComponent(secret);
-  }
-
-  if (!authClientId) {
-    return c.json({ error: 'invalid_client', error_description: 'Client authentication required' }, 401);
-  }
-
-  const { results: clients } = await db.prepare(`
-      SELECT id, client_secret_hash, client_type FROM oauth_clients WHERE id = ?
-    `).bind(authClientId).all();
-
-  if (clients.length === 0) {
-    return c.json({ error: 'invalid_client' }, 401);
-  }
-
-  if (clients[0].client_type === 'confidential') {
-    const secretHash = await hashToken(authClientSecret || '');
-    if (secretHash !== clients[0].client_secret_hash) {
-      return c.json({ error: 'invalid_client' }, 401);
-    }
-  }
-
-  const tokenHash = await hashToken(token);
-  const currentTime = now();
-
-  if (token_type_hint !== 'refresh_token') {
-    const { results: accessTokens } = await db.prepare(`
+    if (token_type_hint !== 'refresh_token') {
+      const { results: accessTokens } = await db.prepare(`
         SELECT at.*, u.username_original, u.email
         FROM oauth_access_tokens at
         JOIN users u ON at.user_id = u.id
         WHERE at.token_hash = ?
       `).bind(tokenHash).all();
 
-    if (accessTokens.length > 0) {
-      const t = accessTokens[0];
-      const active = t.revoked === 0 && t.expires_at > currentTime;
+      if (accessTokens.length > 0) {
+        const t = accessTokens[0];
+        const active = t.revoked === 0 && t.expires_at > currentTime;
 
-      return c.json({
-        active,
-        scope: t.scope,
-        client_id: t.client_id,
-        username: t.username_original,
-        token_type: 'Bearer',
-        exp: t.expires_at,
-        iat: t.created_at,
-        sub: t.user_id,
-        aud: t.client_id,
-        iss: getIssuer(c),
-      });
+        return c.json({
+          active,
+          scope: t.scope,
+          client_id: t.client_id,
+          username: t.username_original,
+          token_type: 'Bearer',
+          exp: t.expires_at,
+          iat: t.created_at,
+          sub: t.user_id,
+          aud: t.client_id,
+          iss: getIssuer(c),
+        });
+      }
     }
-  }
 
-  if (token_type_hint !== 'access_token') {
-    const { results: refreshTokens } = await db.prepare(`
+    if (token_type_hint !== 'access_token') {
+      const { results: refreshTokens } = await db.prepare(`
         SELECT rt.*, u.username_original
         FROM oauth_refresh_tokens rt
         JOIN users u ON rt.user_id = u.id
         WHERE rt.token_hash = ?
       `).bind(tokenHash).all();
 
-    if (refreshTokens.length > 0) {
-      const t = refreshTokens[0];
-      const active = t.revoked === 0 && t.expires_at > currentTime;
+      if (refreshTokens.length > 0) {
+        const t = refreshTokens[0];
+        const active = t.revoked === 0 && t.expires_at > currentTime;
 
-      return c.json({
-        active,
-        scope: t.scope,
-        client_id: t.client_id,
-        username: t.username_original,
-        token_type: 'refresh_token',
-        exp: t.expires_at,
-        iat: t.created_at,
-        sub: t.user_id,
-      });
+        return c.json({
+          active,
+          scope: t.scope,
+          client_id: t.client_id,
+          username: t.username_original,
+          token_type: 'refresh_token',
+          exp: t.expires_at,
+          iat: t.created_at,
+          sub: t.user_id,
+        });
+      }
     }
-  }
 
-  return c.json({ active: false });
-});
+    return c.json({ active: false });
+  });
 
 
-app.get('/oauth/authorized-apps', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
+  app.get('/oauth/authorized-apps', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
 
-  const { results } = await db.prepare(`
+    const { results } = await db.prepare(`
       SELECT oc.id, oc.client_id, oc.scope, oc.created_at, oc.updated_at,
              c.name, c.description, c.logo_url, c.homepage_url
       FROM oauth_consents oc
@@ -4791,53 +4791,53 @@ app.get('/oauth/authorized-apps', authMiddleware, async (c) => {
       ORDER BY oc.updated_at DESC
     `).bind(user.user_id).all();
 
-  return c.json({
-    apps: results.map(app => ({
-      ...app,
-      scope: JSON.parse(app.scope),
-    }))
+    return c.json({
+      apps: results.map(app => ({
+        ...app,
+        scope: JSON.parse(app.scope),
+      }))
+    });
   });
-});
 
-app.delete('/oauth/authorized-apps/:client_id', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const db = c.env.DB;
-  const clientId = c.req.param('client_id');
+  app.delete('/oauth/authorized-apps/:client_id', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const db = c.env.DB;
+    const clientId = c.req.param('client_id');
 
-  await db.prepare('DELETE FROM oauth_consents WHERE user_id = ? AND client_id = ?')
-    .bind(user.user_id, clientId).run();
+    await db.prepare('DELETE FROM oauth_consents WHERE user_id = ? AND client_id = ?')
+      .bind(user.user_id, clientId).run();
 
-  await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE user_id = ? AND client_id = ?')
-    .bind(user.user_id, clientId).run();
-  await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE user_id = ? AND client_id = ?')
-    .bind(user.user_id, clientId).run();
+    await db.prepare('UPDATE oauth_access_tokens SET revoked = 1 WHERE user_id = ? AND client_id = ?')
+      .bind(user.user_id, clientId).run();
+    await db.prepare('UPDATE oauth_refresh_tokens SET revoked = 1 WHERE user_id = ? AND client_id = ?')
+      .bind(user.user_id, clientId).run();
 
-  return c.json({ success: true });
-});
+    return c.json({ success: true });
+  });
 
 
-app.get('/admin/oauth/clients', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.DB;
-  const { is_approved, page = '1', limit = '50' } = c.req.query();
+  app.get('/admin/oauth/clients', authMiddleware, adminMiddleware, async (c) => {
+    const db = c.env.DB;
+    const { is_approved, page = '1', limit = '50' } = c.req.query();
 
-  const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-  const offset = (pageNum - 1) * limitNum;
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+    const offset = (pageNum - 1) * limitNum;
 
-  let whereClause = '';
-  const params = [];
+    let whereClause = '';
+    const params = [];
 
-  if (is_approved !== undefined) {
-    whereClause = 'WHERE is_approved = ?';
-    params.push(is_approved === 'true' ? 1 : 0);
-  }
+    if (is_approved !== undefined) {
+      whereClause = 'WHERE is_approved = ?';
+      params.push(is_approved === 'true' ? 1 : 0);
+    }
 
-  const { results: countResults } = await db.prepare(
-    `SELECT COUNT(*) as count FROM oauth_clients ${whereClause}`
-  ).bind(...params).all();
-  const total = countResults[0].count;
+    const { results: countResults } = await db.prepare(
+      `SELECT COUNT(*) as count FROM oauth_clients ${whereClause}`
+    ).bind(...params).all();
+    const total = countResults[0].count;
 
-  const { results } = await db.prepare(`
+    const { results } = await db.prepare(`
       SELECT oc.*, u.username_original as created_by_username
       FROM oauth_clients oc
       JOIN users u ON oc.created_by = u.id
@@ -4846,264 +4846,264 @@ app.get('/admin/oauth/clients', authMiddleware, adminMiddleware, async (c) => {
       LIMIT ? OFFSET ?
     `).bind(...params, limitNum, offset).all();
 
-  return c.json({
-    clients: results.map(client => ({
-      ...client,
-      redirect_uris: JSON.parse(client.redirect_uris),
-      allowed_scopes: JSON.parse(client.allowed_scopes),
-    })),
-    pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      total_pages: Math.ceil(total / limitNum),
-    }
+    return c.json({
+      clients: results.map(client => ({
+        ...client,
+        redirect_uris: JSON.parse(client.redirect_uris),
+        allowed_scopes: JSON.parse(client.allowed_scopes),
+      })),
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        total_pages: Math.ceil(total / limitNum),
+      }
+    });
   });
-});
 
-app.post('/admin/oauth/clients/:id/approve', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.DB;
-  const clientId = c.req.param('id');
-  const admin = c.get('user');
+  app.post('/admin/oauth/clients/:id/approve', authMiddleware, adminMiddleware, async (c) => {
+    const db = c.env.DB;
+    const clientId = c.req.param('id');
+    const admin = c.get('user');
 
-  const result = await db.prepare(
-    'UPDATE oauth_clients SET is_approved = 1, approval_requested = 0, updated_at = ? WHERE id = ?'
-  ).bind(now(), clientId).run();
+    const result = await db.prepare(
+      'UPDATE oauth_clients SET is_approved = 1, approval_requested = 0, updated_at = ? WHERE id = ?'
+    ).bind(now(), clientId).run();
 
-  if (result.meta?.changes === 0) {
-    return c.json({ error: 'Client not found' }, 404);
-  }
+    if (result.meta?.changes === 0) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-    generateId(),
-    admin.user_id,
-    'oauth_client_approved',
-    clientId,
-    'oauth_client',
-    JSON.stringify({ action: 'approved' }),
-    getClientIP(c),
-    now()
-  ).run();
+      generateId(),
+      admin.user_id,
+      'oauth_client_approved',
+      clientId,
+      'oauth_client',
+      JSON.stringify({ action: 'approved' }),
+      getClientIP(c),
+      now()
+    ).run();
 
-  return c.json({ success: true });
-});
+    return c.json({ success: true });
+  });
 
-app.post('/admin/oauth/clients/:id/revoke', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.DB;
-  const clientId = c.req.param('id');
-  const admin = c.get('user');
+  app.post('/admin/oauth/clients/:id/revoke', authMiddleware, adminMiddleware, async (c) => {
+    const db = c.env.DB;
+    const clientId = c.req.param('id');
+    const admin = c.get('user');
 
-  const result = await db.prepare(
-    'UPDATE oauth_clients SET is_approved = 0, updated_at = ? WHERE id = ?'
-  ).bind(now(), clientId).run();
+    const result = await db.prepare(
+      'UPDATE oauth_clients SET is_approved = 0, updated_at = ? WHERE id = ?'
+    ).bind(now(), clientId).run();
 
-  if (result.meta?.changes === 0) {
-    return c.json({ error: 'Client not found' }, 404);
-  }
+    if (result.meta?.changes === 0) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
 
-  await db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, admin_id, action, target_id, target_type, details, ip_address, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-    generateId(),
-    admin.user_id,
-    'oauth_client_revoked',
-    clientId,
-    'oauth_client',
-    JSON.stringify({ action: 'revoked' }),
-    getClientIP(c),
-    now()
-  ).run();
+      generateId(),
+      admin.user_id,
+      'oauth_client_revoked',
+      clientId,
+      'oauth_client',
+      JSON.stringify({ action: 'revoked' }),
+      getClientIP(c),
+      now()
+    ).run();
 
-  return c.json({ success: true });
-});
+    return c.json({ success: true });
+  });
 
 
-// Issue a signed JWT lease for a game the authenticated user owns.
-app.post('/game/lease', authMiddleware, async (c) => {
-  const db = c.env.DB;
-  const user = c.get('user');
-  const { game_slug } = await c.req.json();
+  // Issue a signed JWT lease for a game the authenticated user owns.
+  app.post('/game/lease', authMiddleware, async (c) => {
+    const db = c.env.DB;
+    const user = c.get('user');
+    const { game_slug } = await c.req.json();
 
-  if (!game_slug) {
-    return c.json({ error: 'game_slug is required' }, 400);
-  }
+    if (!game_slug) {
+      return c.json({ error: 'game_slug is required' }, 400);
+    }
 
-  const row = await db.prepare(`
+    const row = await db.prepare(`
     SELECT g.id, g.slug FROM games_owned go
     JOIN games g ON g.id = go.game_id
     WHERE go.user_id = ? AND g.slug = ? AND g.is_active = 1
   `).bind(user.user_id, game_slug).first();
 
-  if (!row) {
-    return c.json({ error: 'You do not own this game' }, 403);
-  }
+    if (!row) {
+      return c.json({ error: 'You do not own this game' }, 403);
+    }
 
-  const privateKey = c.env.OAUTH_PROVIDER_PRIVATE_KEY;
-  if (!privateKey) {
-    return c.json({ error: 'Lease signing is not configured' }, 500);
-  }
+    const privateKey = c.env.OAUTH_PROVIDER_PRIVATE_KEY;
+    if (!privateKey) {
+      return c.json({ error: 'Lease signing is not configured' }, 500);
+    }
 
-  const issuedAt = now();
-  const expiresAt = issuedAt + CONFIG.GAME_LEASE_DURATION;
+    const issuedAt = now();
+    const expiresAt = issuedAt + CONFIG.GAME_LEASE_DURATION;
 
-  const lease = await signJwtRS256({
-    type: 'game_lease',
-    sub: user.user_id,
-    product_id: row.id,
-    product_slug: row.slug,
-    iss: getIssuer(c),
-    iat: issuedAt,
-    exp: expiresAt,
-  }, privateKey);
+    const lease = await signJwtRS256({
+      type: 'game_lease',
+      sub: user.user_id,
+      product_id: row.id,
+      product_slug: row.slug,
+      iss: getIssuer(c),
+      iat: issuedAt,
+      exp: expiresAt,
+    }, privateKey);
 
-  const leaseId = generateId();
-  await db.prepare(`
+    const leaseId = generateId();
+    await db.prepare(`
     INSERT INTO game_leases (id, user_id, game_id, issued_at, expires_at)
     VALUES (?, ?, ?, ?, ?)
   `).bind(leaseId, user.user_id, row.id, issuedAt, expiresAt).run();
 
-  return c.json({ lease, expires_at: expiresAt });
-});
+    return c.json({ lease, expires_at: expiresAt });
+  });
 
-// Verify a game lease JWT (no auth required — called by game servers).
-app.post('/game/lease/verify', async (c) => {
-  const { lease } = await c.req.json();
+  // Verify a game lease JWT (no auth required — called by game servers).
+  app.post('/game/lease/verify', async (c) => {
+    const { lease } = await c.req.json();
 
-  if (!lease) {
-    return c.json({ valid: false, reason: 'lease is required' }, 400);
-  }
-
-  const publicKey = c.env.OAUTH_PROVIDER_PUBLIC_KEY;
-  if (!publicKey) {
-    return c.json({ valid: false, reason: 'Verification not configured' }, 500);
-  }
-
-  try {
-    const parts = lease.split('.');
-    if (parts.length !== 3) {
-      return c.json({ valid: false, reason: 'malformed' });
+    if (!lease) {
+      return c.json({ valid: false, reason: 'lease is required' }, 400);
     }
 
-    const headerPayload = `${parts[0]}.${parts[1]}`;
-    const signature = base64UrlDecode(parts[2]);
-    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[1])));
-
-    if (payload.type !== 'game_lease') {
-      return c.json({ valid: false, reason: 'not_a_lease' });
+    const publicKey = c.env.OAUTH_PROVIDER_PUBLIC_KEY;
+    if (!publicKey) {
+      return c.json({ valid: false, reason: 'Verification not configured' }, 500);
     }
 
-    if (payload.exp && payload.exp < now()) {
-      return c.json({ valid: false, reason: 'expired' });
-    }
+    try {
+      const parts = lease.split('.');
+      if (parts.length !== 3) {
+        return c.json({ valid: false, reason: 'malformed' });
+      }
 
-    const key = await importPublicKey(publicKey);
-    const encoder = new TextEncoder();
-    const valid = await crypto.subtle.verify(
-      'RSASSA-PKCS1-v1_5',
-      key,
-      signature,
-      encoder.encode(headerPayload)
-    );
+      const headerPayload = `${parts[0]}.${parts[1]}`;
+      const signature = base64UrlDecode(parts[2]);
+      const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[1])));
 
-    if (!valid) {
-      return c.json({ valid: false, reason: 'invalid_signature' });
-    }
+      if (payload.type !== 'game_lease') {
+        return c.json({ valid: false, reason: 'not_a_lease' });
+      }
 
-    const db = c.env.DB;
-    const revoked = await db.prepare(`
+      if (payload.exp && payload.exp < now()) {
+        return c.json({ valid: false, reason: 'expired' });
+      }
+
+      const key = await importPublicKey(publicKey);
+      const encoder = new TextEncoder();
+      const valid = await crypto.subtle.verify(
+        'RSASSA-PKCS1-v1_5',
+        key,
+        signature,
+        encoder.encode(headerPayload)
+      );
+
+      if (!valid) {
+        return c.json({ valid: false, reason: 'invalid_signature' });
+      }
+
+      const db = c.env.DB;
+      const revoked = await db.prepare(`
       SELECT id FROM game_leases
       WHERE user_id = ? AND game_id = ? AND revoked_at IS NOT NULL
         AND issued_at = ? AND expires_at = ?
     `).bind(payload.sub, payload.product_id, payload.iat, payload.exp).first();
 
-    if (revoked) {
-      return c.json({ valid: false, reason: 'revoked' });
+      if (revoked) {
+        return c.json({ valid: false, reason: 'revoked' });
+      }
+
+      return c.json({
+        valid: true,
+        user_id: payload.sub,
+        product_id: payload.product_id,
+        product_slug: payload.product_slug,
+        expires_at: payload.exp,
+      });
+    } catch (e) {
+      console.error('Lease verification failed:', e);
+      return c.json({ valid: false, reason: 'verification_error' });
+    }
+  });
+
+  // Admin: revoke all active leases for a user/game combination.
+  app.post('/admin/game/lease/revoke', authMiddleware, adminMiddleware, async (c) => {
+    const db = c.env.DB;
+    const { user_id, game_slug } = await c.req.json();
+
+    if (!user_id || !game_slug) {
+      return c.json({ error: 'user_id and game_slug are required' }, 400);
     }
 
-    return c.json({
-      valid: true,
-      user_id: payload.sub,
-      product_id: payload.product_id,
-      product_slug: payload.product_slug,
-      expires_at: payload.exp,
-    });
-  } catch (e) {
-    console.error('Lease verification failed:', e);
-    return c.json({ valid: false, reason: 'verification_error' });
-  }
-});
+    const game = await db.prepare('SELECT id FROM games WHERE slug = ?').bind(game_slug).first();
+    if (!game) {
+      return c.json({ error: 'Game not found' }, 404);
+    }
 
-// Admin: revoke all active leases for a user/game combination.
-app.post('/admin/game/lease/revoke', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.DB;
-  const { user_id, game_slug } = await c.req.json();
-
-  if (!user_id || !game_slug) {
-    return c.json({ error: 'user_id and game_slug are required' }, 400);
-  }
-
-  const game = await db.prepare('SELECT id FROM games WHERE slug = ?').bind(game_slug).first();
-  if (!game) {
-    return c.json({ error: 'Game not found' }, 404);
-  }
-
-  const result = await db.prepare(`
+    const result = await db.prepare(`
     UPDATE game_leases SET revoked_at = ?
     WHERE user_id = ? AND game_id = ? AND revoked_at IS NULL AND expires_at > ?
   `).bind(now(), user_id, game.id, now()).run();
 
-  return c.json({ message: 'Leases revoked', count: result.meta.changes });
-});
+    return c.json({ message: 'Leases revoked', count: result.meta.changes });
+  });
 
 
-// TODO: Replace ALLOWED_APP_IDS (remove 480 test entry) and set STEAM_API_KEY secret once you have real credentials
-const ALLOWED_APP_IDS = [480, 123456];
+  // TODO: Replace ALLOWED_APP_IDS (remove 480 test entry) and set STEAM_API_KEY secret once you have real credentials
+  const ALLOWED_APP_IDS = [480, 123456];
 
-app.post('/steam/verify', async (c) => {
-  const { ticket, appId } = await c.req.json();
+  app.post('/steam/verify', async (c) => {
+    const { ticket, appId } = await c.req.json();
 
-  if (!ticket || appId === undefined) {
-    return c.json({ valid: false }, 400);
-  }
+    if (!ticket || appId === undefined) {
+      return c.json({ valid: false }, 400);
+    }
 
-  if (!ALLOWED_APP_IDS.includes(appId)) {
-    return c.json({ valid: false }, 400);
-  }
+    if (!ALLOWED_APP_IDS.includes(appId)) {
+      return c.json({ valid: false }, 400);
+    }
 
-  // TODO: Replace test key 64DABCC7574DBDFD0693E2A5DD451CC5 with real STEAM_API_KEY secret
-  const STEAM_API_KEY = c.env.STEAM_API_KEY || '64DABCC7574DBDFD0693E2A5DD451CC5';
+    // TODO: Replace test key 64DABCC7574DBDFD0693E2A5DD451CC5 with real STEAM_API_KEY secret
+    const STEAM_API_KEY = c.env.STEAM_API_KEY || '64DABCC7574DBDFD0693E2A5DD451CC5';
 
-  const valveUrl =
-    `https://partner.steam-api.com/ISteamUserAuth/AuthenticateUserTicket/v1/` +
-    `?key=${STEAM_API_KEY}` +
-    `&appid=${appId}` +
-    `&ticket=${ticket}` +
-    `&identity=rogue-reunion-server`;
+    const valveUrl =
+      `https://partner.steam-api.com/ISteamUserAuth/AuthenticateUserTicket/v1/` +
+      `?key=${STEAM_API_KEY}` +
+      `&appid=${appId}` +
+      `&ticket=${ticket}` +
+      `&identity=qti-auth-server`;
 
-  let data;
-  try {
-    const valveResp = await fetch(valveUrl);
-    data = await valveResp.json();
-  } catch {
-    return c.json({ valid: false }, 502);
-  }
+    let data;
+    try {
+      const valveResp = await fetch(valveUrl);
+      data = await valveResp.json();
+    } catch {
+      return c.json({ valid: false }, 502);
+    }
 
-  const result = data?.response?.params;
+    const result = data?.response?.params;
 
-  if (!result || result.result !== 'OK') {
-    return c.json({ valid: false }, 401);
-  }
+    if (!result || result.result !== 'OK') {
+      return c.json({ valid: false }, 401);
+    }
 
-  return c.json({ valid: true, admin: false });
-});
+    return c.json({ valid: true, admin: false });
+  });
 
 
-app.get('/health', (c) => {
-  return c.json({ status: 'ok', timestamp: now() });
-});
+  app.get('/health', (c) => {
+    return c.json({ status: 'ok', timestamp: now() });
+  });
 
 }
