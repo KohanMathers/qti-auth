@@ -1,8 +1,11 @@
-import { errors, headers, type Msg } from '@nats-io/transport-node';
+import { errors, type Msg } from '@nats-io/transport-node';
+import { type Span, SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import { recordSpanError, withSpan } from '@qtiauth/observability';
 
 import type { Bus } from './connect.ts';
 import { type BusMetrics, noopBusMetrics } from './metrics.ts';
 import { rpcQueueGroup, rpcSubject } from './subjects.ts';
+import { messageTraceContext, messagingAttributes, traceHeaders } from './tracing.ts';
 
 export const DEADLINE_HEADER = 'QTIAuth-Deadline';
 
@@ -60,7 +63,12 @@ function isNoResponders(error: unknown): boolean {
   );
 }
 
-export async function rpcRequest<T>(
+function markFailed(span: Span, type: string): void {
+  span.setAttribute('error.type', type);
+  span.setStatus({ code: SpanStatusCode.ERROR });
+}
+
+export function rpcRequest<T>(
   bus: Bus,
   service: string,
   method: string,
@@ -70,38 +78,47 @@ export async function rpcRequest<T>(
   const subject = rpcSubject(service, method);
   const metrics = options.metrics ?? noopBusMetrics;
   const timeout = options.timeout ?? bus.config.request_timeout;
-  const hdrs = headers();
-  hdrs.set(DEADLINE_HEADER, String(Date.now() + timeout));
 
-  const started = performance.now();
-  const elapsed = () => (performance.now() - started) / 1000;
-  let reply: Msg;
-  try {
-    reply = await bus.nc.request(subject, JSON.stringify(request), { timeout, headers: hdrs });
-  } catch (error) {
-    if (isNoResponders(error)) {
-      metrics.rpcRequest(subject, 'no_responders', elapsed());
-      return { status: 'no_responders' };
-    }
-    if (isTimeout(error)) {
-      metrics.rpcRequest(subject, 'timeout', elapsed());
-      return { status: 'timeout' };
-    }
-    throw error;
-  }
+  return withSpan(
+    `send ${subject}`,
+    { kind: SpanKind.CLIENT, attributes: messagingAttributes('send', subject) },
+    async (span): Promise<RpcResult<T>> => {
+      const hdrs = traceHeaders();
+      hdrs.set(DEADLINE_HEADER, String(Date.now() + timeout));
 
-  const response = reply.json<RpcResponse<T>>();
-  metrics.rpcRequest(subject, response.ok ? 'ok' : 'error', elapsed());
-  return response.ok
-    ? { status: 'ok', data: response.data }
-    : { status: 'error', ...response.error };
+      const started = performance.now();
+      const elapsed = () => (performance.now() - started) / 1000;
+      let reply: Msg;
+      try {
+        reply = await bus.nc.request(subject, JSON.stringify(request), { timeout, headers: hdrs });
+      } catch (error) {
+        if (isNoResponders(error)) {
+          markFailed(span, 'no_responders');
+          metrics.rpcRequest(subject, 'no_responders', elapsed());
+          return { status: 'no_responders' };
+        }
+        if (isTimeout(error)) {
+          markFailed(span, 'timeout');
+          metrics.rpcRequest(subject, 'timeout', elapsed());
+          return { status: 'timeout' };
+        }
+        throw error;
+      }
+
+      const response = reply.json<RpcResponse<T>>();
+      metrics.rpcRequest(subject, response.ok ? 'ok' : 'error', elapsed());
+      if (response.ok) return { status: 'ok', data: response.data };
+      markFailed(span, response.error.code);
+      return { status: 'error', ...response.error };
+    },
+  );
 }
 
 export function serveRpc<Req, Res>(bus: Bus, options: RpcServerOptions<Req, Res>): RpcServer {
   const subject = rpcSubject(bus.service, options.method);
   const inFlight = new Set<Promise<void>>();
 
-  const handle = async (msg: Msg): Promise<void> => {
+  const respond = async (msg: Msg, span: Span): Promise<void> => {
     const deadline = new Date(
       msg.headers?.has(DEADLINE_HEADER) ? Number(msg.headers.get(DEADLINE_HEADER)) : Number.NaN,
     );
@@ -130,12 +147,24 @@ export function serveRpc<Req, Res>(bus: Bus, options: RpcServerOptions<Req, Res>
       if (error instanceof RpcError) {
         response = { ok: false, error: { code: error.code, message: error.message } };
       } else {
+        recordSpanError(span, error);
         options.onError(error, context);
         response = { ok: false, error: { code: 'internal', message: 'Internal error' } };
       }
     }
     if (deadline.getTime() > Date.now()) msg.respond(JSON.stringify(response));
   };
+
+  const handle = (msg: Msg): Promise<void> =>
+    withSpan(
+      `process ${subject}`,
+      {
+        kind: SpanKind.SERVER,
+        parent: messageTraceContext(msg.headers),
+        attributes: messagingAttributes('process', subject),
+      },
+      (span) => respond(msg, span),
+    );
 
   const sub = bus.nc.subscribe(subject, {
     queue: rpcQueueGroup(bus.service),

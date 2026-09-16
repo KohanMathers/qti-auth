@@ -21,6 +21,7 @@ export {
 export {
   DB_SCHEMAS,
   type DbSchema,
+  LOG_LEVELS,
   MODULES,
   type SectionName,
   sections,

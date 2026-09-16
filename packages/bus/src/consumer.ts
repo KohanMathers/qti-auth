@@ -1,8 +1,11 @@
 import type { JsMsg } from '@nats-io/jetstream';
+import { SpanKind } from '@opentelemetry/api';
+import { recordSpanError, withSpan } from '@qtiauth/observability';
 
 import type { Bus, BusConfig } from './connect.ts';
 import { type BusMetrics, type ConsumeOutcome, noopBusMetrics } from './metrics.ts';
 import { ensureConsumer } from './streams.ts';
+import { messageTraceContext, messagingAttributes } from './tracing.ts';
 
 export interface MessageContext {
   consumer: string;
@@ -74,22 +77,38 @@ export async function runPullConsumer(
       },
       Math.max(consumers.ack_wait / 2, 1),
     );
-    let outcome: ConsumeOutcome;
-    try {
-      outcome = await options.handle(msg);
-      msg.ack();
-    } catch (error) {
-      if (error instanceof InvalidMessageError) {
-        outcome = 'rejected';
-        msg.term(error.message);
-      } else {
-        outcome = 'failed';
-        msg.nak(retryDelay(context.attempt, consumers));
-      }
-      options.onError(error, context);
-    } finally {
-      clearInterval(heartbeat);
-    }
+    const outcome = await withSpan(
+      `process ${msg.subject}`,
+      {
+        kind: SpanKind.CONSUMER,
+        parent: messageTraceContext(msg.headers),
+        attributes: {
+          ...messagingAttributes('process', msg.subject),
+          'messaging.consumer.group.name': options.name,
+        },
+      },
+      async (span): Promise<ConsumeOutcome> => {
+        try {
+          const handled = await options.handle(msg);
+          msg.ack();
+          return handled;
+        } catch (error) {
+          recordSpanError(span, error);
+          let failed: ConsumeOutcome;
+          if (error instanceof InvalidMessageError) {
+            failed = 'rejected';
+            msg.term(error.message);
+          } else {
+            failed = 'failed';
+            msg.nak(retryDelay(context.attempt, consumers));
+          }
+          options.onError(error, context);
+          return failed;
+        } finally {
+          clearInterval(heartbeat);
+        }
+      },
+    );
     metrics.consumed(options.name, msg.subject, outcome);
   };
 

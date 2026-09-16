@@ -721,6 +721,102 @@
       },
       "additionalProperties": false
     },
+    "observability": {
+      "description": "Logs, traces, metrics and health checks.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "logs": {
+          "description": "Structured JSON logs, written to standard output.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "level": {
+              "default": "info",
+              "description": "Lowest level written to the log.",
+              "type": "string",
+              "enum": [
+                "trace",
+                "debug",
+                "info",
+                "warn",
+                "error",
+                "fatal"
+              ]
+            },
+            "user_id_hash_key": {
+              "default": "",
+              "description": "Key for hashing user IDs in logs. Use the same key on every service so logs can be joined. Reference a secret.",
+              "type": "string"
+            },
+            "redact_keys": {
+              "default": [],
+              "description": "Extra field names whose values are never logged, on top of the built-in list (passwords, tokens, secrets, codes and the like).",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]+$"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "tracing": {
+          "description": "OpenTelemetry tracing.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "description": "Send traces to an OTLP collector. Trace IDs are still created, logged and passed between services when off.",
+              "type": "boolean"
+            },
+            "endpoint": {
+              "default": "http://tempo:4318/v1/traces",
+              "description": "OTLP/HTTP traces endpoint.",
+              "type": "string",
+              "format": "uri"
+            },
+            "sample_ratio": {
+              "default": 1,
+              "description": "Share of traces to keep, from 0 to 1. Every service must use the same value.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "metrics": {
+          "description": "Prometheus metrics, served on /metrics on the internal network.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "process_metrics": {
+              "default": true,
+              "description": "Also report Node.js process metrics (CPU, memory, event loop, GC).",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "health": {
+          "description": "Health endpoints.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "check_timeout": {
+              "description": "Count a /readyz dependency check as failed if it takes longer than this. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "2s",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "features": {
       "description": "Feature flags inside services.",
       "default": {},

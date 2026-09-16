@@ -1,10 +1,13 @@
 import type { JetStreamClient } from '@nats-io/jetstream';
+import { context, SpanKind } from '@opentelemetry/api';
 import type { EventEnvelope } from '@qtiauth/events';
+import { contextFromTraceIds, untraced, withSpan } from '@qtiauth/observability';
 import { type Kysely, sql } from 'kysely';
 
 import type { Bus } from './connect.ts';
 import { type BusMetrics, noopBusMetrics } from './metrics.ts';
 import { outboxStats } from './outbox.ts';
+import { messagingAttributes, traceHeaders } from './tracing.ts';
 
 const LOCK_NAMESPACE = 'qtiauth.outbox';
 
@@ -24,7 +27,20 @@ export interface OutboxRelayOptions {
 }
 
 export async function publishEvent(js: JetStreamClient, event: EventEnvelope): Promise<void> {
-  await js.publish(event.type, JSON.stringify(event), { msgID: event.event_id });
+  const parent =
+    event.trace_id === null || event.span_id === null
+      ? context.active()
+      : contextFromTraceIds(event.trace_id, event.span_id);
+  await withSpan(
+    `send ${event.type}`,
+    { kind: SpanKind.PRODUCER, parent, attributes: messagingAttributes('send', event.type) },
+    async () => {
+      await js.publish(event.type, JSON.stringify(event), {
+        msgID: event.event_id,
+        headers: traceHeaders(),
+      });
+    },
+  );
 }
 
 export async function relayOutbox<DB>(
@@ -97,9 +113,9 @@ export function startOutboxRelay<DB>(
     while (!stopped.signal.aborted) {
       let published = 0;
       try {
-        published = await relayOutbox(db, bus.js, { batchSize, metrics });
+        published = await untraced(() => relayOutbox(db, bus.js, { batchSize, metrics }));
         if (published < batchSize) {
-          const stats = await outboxStats(db);
+          const stats = await untraced(() => outboxStats(db));
           metrics.outboxBacklog(bus.service, stats.backlog, stats.oldestAgeSeconds);
         }
       } catch (error) {

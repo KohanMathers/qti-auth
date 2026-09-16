@@ -65,6 +65,12 @@ Sent outbox rows are kept for `outbox.sent_retention` and processed event IDs fo
 
 The bus reports publishes and publish failures per subject, consumed messages per consumer and outcome (`processed`, `duplicate`, `failed`, `rejected`), redeliveries, consumer lag, outbox backlog size and oldest unsent age, and request/reply latency by outcome (`ok`, `error`, `timeout`, `no_responders`). Watch the outbox's oldest unsent age: a growing value means a service can't reach NATS.
 
+Pass `prometheusBusMetrics(metrics)` as `metrics` to report these to Prometheus (see [observability.md](observability.md)).
+
+## Tracing
+
+Publishing, consuming and request/reply each create a span, and pass the trace on in a `traceparent` message header. Events also store `trace_id` and `span_id` in their envelope, so an event relayed from the outbox later still belongs to the trace of the request that wrote it. The relay's own polling isn't traced.
+
 ---
 
 ## For developers
@@ -107,13 +113,12 @@ await db.transaction().execute(async (trx) => {
     actor: { type: 'user', id: staffId },
     subject: { type: 'user', id: userId },
     data: { reason },
-    traceId,
   });
 });
 relay.wake();
 ```
 
-`writeEvent` fills in `event_id` (a ULID) and `occurred_at`, checks the envelope, and throws if it isn't called inside a transaction. Start one relay per replica, and stop it on shutdown with `await relay.stop()`. It polls every `outbox.poll_interval`, and `wake()` publishes straight away. Only one replica relays a schema's outbox at a time, which keeps events in order.
+`writeEvent` fills in `event_id` (a ULID), `occurred_at`, and `trace_id` and `span_id` from the active span, checks the envelope, and throws if it isn't called inside a transaction. Start one relay per replica, and stop it on shutdown with `await relay.stop()`. It polls every `outbox.poll_interval`, and `wake()` publishes straight away. Only one replica relays a schema's outbox at a time, which keeps events in order.
 
 ### Consuming events
 

@@ -1,0 +1,26 @@
+{
+  "name": "@qtiauth/observability",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Structured logs, OpenTelemetry tracing, Prometheus metrics and health checks",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/core": "2.11.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.222.0",
+    "@opentelemetry/resources": "2.11.0",
+    "@opentelemetry/sdk-trace-base": "2.11.0",
+    "@opentelemetry/sdk-trace-node": "2.11.0",
+    "@qtiauth/config": "workspace:*",
+    "kysely": "0.29.6",
+    "prom-client": "15.1.3"
+  }
+}

@@ -6,6 +6,7 @@ import {
   parseEventType,
   validateEnvelope,
 } from '@qtiauth/events';
+import { currentTraceIds } from '@qtiauth/observability';
 import { type Kysely, sql } from 'kysely';
 
 import type { BusConfig } from './connect.ts';
@@ -26,6 +27,7 @@ export interface NewEvent<Data extends object> {
   subject: EventSubject | null;
   data: Data;
   traceId?: string | null;
+  spanId?: string | null;
   occurredAt?: Date;
 }
 
@@ -65,6 +67,10 @@ export async function createBusTablesV1(db: Kysely<unknown>): Promise<void> {
 export function createEvent<Data extends object>(input: NewEvent<Data>): EventEnvelope<Data> {
   parseEventType(input.type);
   const occurredAt = input.occurredAt ?? new Date();
+  const trace =
+    input.traceId === undefined
+      ? currentTraceIds()
+      : { traceId: input.traceId, spanId: input.spanId ?? null };
   return {
     event_id: newEventId(occurredAt.getTime()),
     type: input.type,
@@ -72,7 +78,8 @@ export function createEvent<Data extends object>(input: NewEvent<Data>): EventEn
     actor: input.actor,
     subject: input.subject,
     data: input.data,
-    trace_id: input.traceId ?? null,
+    trace_id: trace?.traceId ?? null,
+    span_id: trace?.spanId ?? null,
   };
 }
 

@@ -1,4 +1,6 @@
 import { validateEnvelope } from '@qtiauth/events';
+import { withSpan } from '@qtiauth/observability';
+import { startTestTracing } from '@qtiauth/observability/testing';
 import {
   DummyDriver,
   Kysely,
@@ -20,7 +22,12 @@ const input = {
 describe('createEvent', () => {
   it('builds a valid envelope', () => {
     const occurredAt = new Date('2026-09-16T12:00:00Z');
-    const event = createEvent({ ...input, occurredAt, traceId: 'a'.repeat(32) });
+    const event = createEvent({
+      ...input,
+      occurredAt,
+      traceId: 'a'.repeat(32),
+      spanId: 'b'.repeat(16),
+    });
     expect(event).toMatchObject({
       type: input.type,
       occurred_at: '2026-09-16T12:00:00.000Z',
@@ -28,10 +35,24 @@ describe('createEvent', () => {
       subject: input.subject,
       data: input.data,
       trace_id: 'a'.repeat(32),
+      span_id: 'b'.repeat(16),
     });
     expect(event.event_id).toMatch(/^01M2N1D3G0[0-9A-HJKMNP-TV-Z]{16}$/);
     expect(validateEnvelope(event).valid).toBe(true);
-    expect(createEvent(input).trace_id).toBeNull();
+    expect(createEvent(input)).toMatchObject({ trace_id: null, span_id: null });
+  });
+
+  it('carries the active span so consumers join the same trace', async () => {
+    const tracing = startTestTracing();
+    try {
+      const [event, span] = await withSpan('request', {}, (active) =>
+        Promise.resolve([createEvent(input), active.spanContext()] as const),
+      );
+      expect(event).toMatchObject({ trace_id: span.traceId, span_id: span.spanId });
+      expect(validateEnvelope(event).valid).toBe(true);
+    } finally {
+      await tracing.shutdown();
+    }
   });
 
   it('rejects types outside the naming convention', () => {

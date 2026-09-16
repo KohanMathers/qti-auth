@@ -162,14 +162,19 @@ Spec: §2.4
 **Done when:** killing a service between commit and publish loses no events (tested), and redelivered
 events are processed once.
 
-### P0.6 `@qtiauth/observability` — M
+### P0.6 `@qtiauth/observability` — M ✅
 Spec: §8.6
 
-- [ ] Structured JSON logger with a redaction list and a log-scrubbing test helper.
-- [ ] OpenTelemetry tracing: HTTP, Kysely, NATS, with trace context propagated through event envelopes.
-- [ ] Prometheus registry with a label-cardinality guard (rejects label names like `user_id`, `email`,
-      `ip`).
-- [ ] `/healthz` and `/readyz` helpers.
+- [x] Structured JSON logger with a redaction list and a log-scrubbing test helper (`createLogger`,
+      `REDACTED_KEYS`, `assertLogsScrubbed` in `@qtiauth/observability/testing`,
+      `observability` config section).
+- [x] OpenTelemetry tracing: HTTP, Kysely, NATS, with trace context propagated through event envelopes
+      (`startTracing`, `traceHttpRequest`, `tracedFetch`, `tracedDialect` used by `createDb`, spans in
+      `@qtiauth/bus`, `span_id` in the envelope).
+- [x] Prometheus registry with a label-cardinality guard (rejects label names like `user_id`, `email`,
+      `ip`) (`createMetrics`, `prometheusBusMetrics`).
+- [x] `/healthz` and `/readyz` helpers (`liveness`, `readiness`, `healthResponse`,
+      `databaseHealthCheck`, `busHealthCheck`, `docs/observability.md`).
 
 **Done when:** one request produces a single trace spanning HTTP → DB → bus publish → consumer.
 

@@ -23,6 +23,7 @@ function event(overrides: Partial<EventEnvelope> = {}): EventEnvelope {
     subject: { type: 'user', id: 'user-1' },
     data: { reason: 'spam' },
     trace_id: null,
+    span_id: null,
     ...overrides,
   };
 }

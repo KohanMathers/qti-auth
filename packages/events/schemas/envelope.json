@@ -5,7 +5,16 @@
   "description": "Every domain event published on the bus is wrapped in this envelope. The event type's own schema describes data.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["event_id", "type", "occurred_at", "actor", "subject", "data", "trace_id"],
+  "required": [
+    "event_id",
+    "type",
+    "occurred_at",
+    "actor",
+    "subject",
+    "data",
+    "trace_id",
+    "span_id"
+  ],
   "properties": {
     "event_id": {
       "description": "ULID, unique per event. Consumers deduplicate on it.",
@@ -54,6 +63,10 @@
     "trace_id": {
       "description": "W3C trace ID of the request that caused the event, or null.",
       "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{32}$" }]
+    },
+    "span_id": {
+      "description": "W3C span ID of the span that wrote the event, or null. Consumer spans become part of the same trace.",
+      "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{16}$" }]
     }
   }
 }

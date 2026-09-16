@@ -11,6 +11,7 @@ export {
   type BusMetrics,
   type ConsumeOutcome,
   noopBusMetrics,
+  prometheusBusMetrics,
   type RpcOutcome,
 } from './metrics.ts';
 export {
@@ -63,6 +64,7 @@ export {
   SubjectError,
   workSubject,
 } from './subjects.ts';
+export { busHealthCheck } from './health.ts';
 export {
   consumeCron,
   consumeWork,

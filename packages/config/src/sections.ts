@@ -361,6 +361,71 @@ export const bus = z
   .prefault({})
   .describe('NATS JetStream message bus.');
 
+export const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
+
+export const observability = z
+  .strictObject({
+    logs: z
+      .strictObject({
+        level: z.enum(LOG_LEVELS).default('info').describe('Lowest level written to the log.'),
+        user_id_hash_key: z
+          .string()
+          .default('')
+          .describe(
+            'Key for hashing user IDs in logs. Use the same key on every service so logs can be joined. Reference a secret.',
+          ),
+        redact_keys: z
+          .array(z.string().regex(/^[A-Za-z0-9_-]+$/, 'Must be a field name like session_code'))
+          .default([])
+          .describe(
+            'Extra field names whose values are never logged, on top of the built-in list (passwords, tokens, secrets, codes and the like).',
+          ),
+      })
+      .prefault({})
+      .describe('Structured JSON logs, written to standard output.'),
+    tracing: z
+      .strictObject({
+        enabled: z
+          .boolean()
+          .default(false)
+          .describe(
+            'Send traces to an OTLP collector. Trace IDs are still created, logged and passed between services when off.',
+          ),
+        endpoint: z
+          .url({ protocol: /^https?$/ })
+          .default('http://tempo:4318/v1/traces')
+          .describe('OTLP/HTTP traces endpoint.'),
+        sample_ratio: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(1)
+          .describe('Share of traces to keep, from 0 to 1. Every service must use the same value.'),
+      })
+      .prefault({})
+      .describe('OpenTelemetry tracing.'),
+    metrics: z
+      .strictObject({
+        process_metrics: z
+          .boolean()
+          .default(true)
+          .describe('Also report Node.js process metrics (CPU, memory, event loop, GC).'),
+      })
+      .prefault({})
+      .describe('Prometheus metrics, served on /metrics on the internal network.'),
+    health: z
+      .strictObject({
+        check_timeout: duration(
+          '2s',
+          'Count a /readyz dependency check as failed if it takes longer than this.',
+        ),
+      })
+      .prefault({})
+      .describe('Health endpoints.'),
+  })
+  .prefault({})
+  .describe('Logs, traces, metrics and health checks.');
+
 const oauthProvider = (name: string) =>
   z
     .strictObject({
@@ -505,6 +570,7 @@ export const sections = {
   database,
   migrations,
   bus,
+  observability,
   features,
   captcha,
   email: emailSection,

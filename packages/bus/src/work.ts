@@ -1,4 +1,6 @@
 import { type JetStreamClient, PubHeaders } from '@nats-io/jetstream';
+import { SpanKind } from '@opentelemetry/api';
+import { withSpan } from '@qtiauth/observability';
 
 import type { Bus } from './connect.ts';
 import {
@@ -9,6 +11,7 @@ import {
 } from './consumer.ts';
 import { CRON_STREAM, WORK_STREAM } from './streams.ts';
 import { consumerName, cronSubject, workSubject } from './subjects.ts';
+import { messagingAttributes, traceHeaders } from './tracing.ts';
 
 export interface WorkMessage<T> {
   subject: string;
@@ -38,10 +41,15 @@ export async function publishWork(
   data: unknown,
   options: { id?: string } = {},
 ): Promise<void> {
-  await js.publish(
-    subject,
-    JSON.stringify(data),
-    options.id === undefined ? {} : { msgID: options.id },
+  await withSpan(
+    `send ${subject}`,
+    { kind: SpanKind.PRODUCER, attributes: messagingAttributes('send', subject) },
+    async () => {
+      await js.publish(subject, JSON.stringify(data), {
+        headers: traceHeaders(),
+        ...(options.id === undefined ? {} : { msgID: options.id }),
+      });
+    },
   );
 }
 

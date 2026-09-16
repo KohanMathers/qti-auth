@@ -185,7 +185,8 @@ NATS covers both async events (JetStream streams) and synchronous service-to-ser
     "actor": { "type": "user|service|system", "id": "…" },
     "subject": { "type": "user", "id": "…" },
     "data": { },
-    "trace_id": "…"
+    "trace_id": "…",
+    "span_id": "…"
   }
   ```
 
@@ -497,6 +498,12 @@ bus:
   password: "${env:NATS_PASSWORD}"
   streams:  { replicas: 1, events_max_age: 7d }
   consumers: { max_deliver: 10, dedupe_retention: 14d }
+
+observability:
+  logs:    { level: info, user_id_hash_key: "${env:LOG_USER_ID_HASH_KEY}", redact_keys: [] }
+  tracing: { enabled: false, endpoint: http://tempo:4318/v1/traces, sample_ratio: 1 }
+  metrics: { process_metrics: true }
+  health:  { check_timeout: 2s }
 
 features:
   auth:
@@ -1458,17 +1465,21 @@ Metrics are a first-class deliverable, not an afterthought.
 
 **Logs and traces**
 
-- Structured JSON logs with `trace_id`, `request_id`, hashed `user_id`, service and level.
+- Structured JSON logs with `trace_id`, `request_id`, hashed `user_id`, service and level. User IDs
+  are hashed with a keyed hash shared by every service, so one user's logs can still be joined.
 - **Never logged:** tokens, passwords, TOTP codes, recovery codes, Steam tickets, report content,
   email bodies, raw text-filter input (outside `filter_decisions`).
 - OpenTelemetry traces across gateway → service → NATS → consumer, with trace context carried in the
-  event envelope.
+  event envelope (`trace_id` and `span_id`) and in NATS message headers (`traceparent`). Trace IDs
+  are created and propagated even when no trace collector is configured, so logs can always be
+  correlated.
 
 **Metrics**
 
 - Every service exposes Prometheus `/metrics` on the internal network, and can optionally push OTLP
   metrics.
-- **Cardinality rule:** no user IDs, emails, IPs or other unbounded values in labels.
+- **Cardinality rule:** no user IDs, emails, IPs or other unbounded values in labels. The metrics
+  registry refuses to create a metric with such a label.
 - **Catalogue (minimum):**
 
   | Area | Metrics |

@@ -18,4 +18,5 @@ export interface EventEnvelope<Data extends object = Record<string, unknown>> {
   subject: EventSubject | null;
   data: Data;
   trace_id: string | null;
+  span_id: string | null;
 }

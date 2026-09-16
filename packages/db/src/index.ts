@@ -5,6 +5,7 @@ export {
   type DbCredentials,
   poolConfig,
 } from './connect.ts';
+export { databaseHealthCheck } from './health.ts';
 export {
   loadMigrations,
   migrate,

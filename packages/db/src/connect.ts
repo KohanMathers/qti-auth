@@ -1,4 +1,5 @@
 import type { DbSchema, QtiauthConfig } from '@qtiauth/config';
+import { tracedDialect } from '@qtiauth/observability';
 import { Kysely, PostgresDialect } from 'kysely';
 import pg from 'pg';
 
@@ -36,17 +37,21 @@ export function poolConfig(database: DatabaseConfig, schema: DbSchema): pg.PoolC
   };
 }
 
-function kysely<DB>(config: pg.PoolConfig): Kysely<DB> {
-  return new Kysely<DB>({ dialect: new PostgresDialect({ pool: new pg.Pool(config) }) });
+function kysely<DB>(config: pg.PoolConfig, namespace: string): Kysely<DB> {
+  const dialect = new PostgresDialect({ pool: new pg.Pool(config) });
+  return new Kysely<DB>({ dialect: tracedDialect(dialect, { namespace }) });
 }
 
 export function createDb<DB>(database: DatabaseConfig, schema: DbSchema): Kysely<DB> {
-  return kysely(poolConfig(database, schema));
+  return kysely(poolConfig(database, schema), `${database.name}|${schema}`);
 }
 
 export function createAdminDb(
   database: DatabaseConfig,
   credentials: DbCredentials,
 ): Kysely<unknown> {
-  return kysely({ ...basePoolConfig(database, credentials, 'qtiauth-admin'), max: 1 });
+  return kysely(
+    { ...basePoolConfig(database, credentials, 'qtiauth-admin'), max: 1 },
+    database.name,
+  );
 }
