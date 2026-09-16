@@ -1,0 +1,27 @@
+{
+  "$comment": "Deployment-specific values that must never appear in source. Lives outside the scanned paths so it doesn't flag itself.",
+  "scanPaths": ["packages", "services", "templates", "deploy", "config"],
+  "ignoreFiles": ["CHANGELOG.md"],
+  "rules": [
+    {
+      "id": "production-domain",
+      "pattern": "quiet-?terminal\\.|quiettermin\\.al",
+      "message": "Production domain. Put hosts and URLs in qtiauth.yaml."
+    },
+    {
+      "id": "company-name",
+      "pattern": "quiet\\s*terminal",
+      "message": "Company name. Put branding in qtiauth.yaml."
+    },
+    {
+      "id": "brand-token",
+      "pattern": "\\bqti\\b",
+      "message": "Brand name. Use config, or the project name \"QTIAuth\"."
+    },
+    {
+      "id": "reserved-prefix",
+      "pattern": "\\bqti_",
+      "message": "Brand prefix (e.g. reserved usernames or cookie names). Put it in qtiauth.yaml."
+    }
+  ]
+}

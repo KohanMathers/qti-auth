@@ -1577,7 +1577,7 @@ backups.
 
 | # | Decision |
 |---|---|
-| 1 | **TypeScript on Node 22 LTS.** Hono for HTTP, `pnpm` workspace monorepo with shared packages (`@qtiauth/config`, `@qtiauth/bus`, `@qtiauth/auth-context`, `@qtiauth/text-filter`), Kysely for SQL, Zod for config and payload validation. |
+| 1 | **TypeScript 6.0 on Node 26**, run directly with Node type stripping (no build step). Hono for HTTP, `pnpm` workspace monorepo with shared packages (`@qtiauth/config`, `@qtiauth/bus`, `@qtiauth/auth-context`, `@qtiauth/text-filter`), Kysely for SQL, Zod for config and payload validation. |
 | 2 | Services per §2.2. Auth methods and smaller features are config flags, not containers. |
 | 3 | Passkeys, TOTP and recovery codes in v1. |
 | 4 | Every guardian control and notification in §4.7 in v1. |

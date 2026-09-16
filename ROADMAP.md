@@ -84,26 +84,33 @@ graph TD
 
 Nothing user-facing. Everything later builds on these packages, so get them right.
 
-### P0.1 Monorepo and tooling — S
+### P0.1 Monorepo and tooling — S ✅
 Spec: §11 (decision 1)
 
-- [ ] `pnpm` workspace: `services/*`, `packages/*`, `deploy/`, `docs/`.
-- [ ] TypeScript strict mode, shared `tsconfig`, ESLint, Prettier.
-- [ ] Node 22 LTS pinned (`.nvmrc`, `engines`, Docker base image).
-- [ ] Test runner (Vitest) with Testcontainers for Postgres, NATS and Valkey.
-- [ ] Conventional commits and a changelog per package.
-- [ ] `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`.
+- [x] `pnpm` workspace: `packages/*`, `services/*`, `templates/*`, plus `deploy/` and `docs/`.
+- [x] TypeScript 6.0 strict mode (erasable syntax only, run with Node type stripping), shared
+      `tsconfig.base.json`, ESLint (typescript-eslint strict + stylistic, type-aware), Prettier.
+- [x] Node 26 pinned (`.nvmrc`, `engines`, Docker base image).
+- [x] Vitest `unit` and `integration` projects, with `@qtiauth/testing` Testcontainers helpers for
+      Postgres, Valkey and NATS (JetStream).
+- [x] Conventional commits (commitlint + Husky hook) and changelogs per package (Changesets).
+- [x] `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`.
+- [x] Service template (`templates/service`) with a unit test, an infrastructure integration test and
+      a Dockerfile.
 
 **Done when:** `pnpm test`, `pnpm lint` and `pnpm typecheck` run green on an empty service template.
 
-### P0.2 CI pipeline — S
+### P0.2 CI pipeline — S ✅
 Spec: §3.2, §8.9
 
-- [ ] Lint, typecheck and tests on every PR.
-- [ ] **Hardcoded-values check:** fails on production domains, company names or reserved prefixes such
-      as `QTI_` in source (allowlist: the project name "QTIAuth").
-- [ ] Dependency audit and container image scan (e.g. Trivy).
-- [ ] Multi-arch image builds (amd64, arm64) per service.
+- [x] GitHub Actions: lint, format check, typecheck, unit tests on every PR and push to `main`.
+- [x] Integration tests (Testcontainers on the runner's Docker).
+- [x] **Hardcoded-values check** (`pnpm check:hardcoded`, rules in `scripts/hardcoded-rules.json`):
+      fails on production domains, company names or brand prefixes such as `QTI_` in source
+      (the project name "QTIAuth" is allowed).
+- [x] Dependency audit (`pnpm audit`) and container image scan (Trivy, HIGH and CRITICAL).
+- [x] Multi-arch image builds (amd64, arm64) for every service Dockerfile, without pushing.
+- [x] Commit message check on every commit in a PR.
 
 **Done when:** a PR that adds `quietterminal.co.uk` to source fails CI.
 

@@ -1,0 +1,7 @@
+pnpm-lock.yaml
+coverage/
+dist/
+CHANGELOG.md
+CODE_OF_CONDUCT.md
+SPEC.md
+ROADMAP.md

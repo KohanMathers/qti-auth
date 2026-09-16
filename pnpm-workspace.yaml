@@ -1,0 +1,15 @@
+packages:
+  - packages/*
+  - services/*
+  - templates/*
+
+engineStrict: true
+
+allowBuilds:
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
+
+minimumReleaseAgeExclude:
+  - '@types/node@26.6.1'
+  - prettier@3.9.7

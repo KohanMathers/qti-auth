@@ -1,0 +1,19 @@
+{
+  "name": "@qtiauth/template-service",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Starting point for new QTIAuth services",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "src",
+    "!src/**/*.test.ts"
+  ],
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@qtiauth/testing": "workspace:*"
+  }
+}
