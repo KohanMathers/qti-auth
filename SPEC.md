@@ -152,6 +152,8 @@ gateway refuses config that enables a sub-feature whose service isn't running (f
 - With `migrations.auto_apply: false`, a service with pending migrations refuses to start and logs
   the exact command to run: `docker compose run --rm <service> qtiauth migrate up`.
 - `qtiauth migrate status` / `qtiauth migrate up` are available in every service image.
+- `qtiauth db provision` creates each service's role and schema, connecting as the Postgres
+  administrator. It is safe to run again.
 - **Expand/contract rule:** every migration must stay compatible with the previous release of the
   same service, so replicas can be upgraded one at a time. Destructive steps (dropping columns,
   tightening constraints) ship one release after the code stops using the old shape.
@@ -469,6 +471,13 @@ network:
 geoip:
   source: dbip_lite             # dbip_lite | maxmind | header | none
   header: null
+
+database:
+  host: postgres
+  name: qtiauth
+  roles:                        # one role per service schema (§2.3)
+    identity: { user: qtiauth_identity, password: "${env:DB_IDENTITY_PASSWORD}" }
+    # notify, oidc, safety, support, games likewise
 
 migrations:
   auto_apply: true
@@ -1498,9 +1507,9 @@ Metrics are a first-class deliverable, not an afterthought.
 
 `qtiauth` is available in every service image:
 
-`config check` · `migrate status|up` · `admin create` · `lists update` · `lists audit` ·
-`keys rotate` · `audit verify` · `backup restore` · `backup verify` · `user export <id>` ·
-`user delete <id>`
+`config check` · `db provision` · `migrate status|up` · `admin create` · `lists update` ·
+`lists audit` · `keys rotate` · `audit verify` · `backup restore` · `backup verify` ·
+`user export <id>` · `user delete <id>`
 
 ### 8.9 Security baseline
 

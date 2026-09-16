@@ -29,6 +29,20 @@ geoip:
   source: dbip_lite # dbip_lite | maxmind | header | none
   header: null
 
+database:
+  host: postgres
+  port: 5432
+  name: qtiauth
+  ssl: disable # disable | require | verify-full
+  pool: { max: 10, idle_timeout: 30s, connect_timeout: 10s }
+  roles:
+    identity: { user: qtiauth_identity, password: '${env:DB_IDENTITY_PASSWORD}' }
+    notify: { user: qtiauth_notify, password: '${env:DB_NOTIFY_PASSWORD}' }
+    oidc: { user: qtiauth_oidc, password: '${env:DB_OIDC_PASSWORD}' }
+    safety: { user: qtiauth_safety, password: '${env:DB_SAFETY_PASSWORD}' }
+    support: { user: qtiauth_support, password: '${env:DB_SUPPORT_PASSWORD}' }
+    games: { user: qtiauth_games, password: '${env:DB_GAMES_PASSWORD}' }
+
 migrations:
   auto_apply: true
 

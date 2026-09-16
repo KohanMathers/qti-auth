@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { run } from './cli.ts';
+import { migrateCommands } from './commands/migrate.ts';
 import type { CliIo } from './io.ts';
 
 function capture(env: CliIo['env'] = {}) {
@@ -44,6 +45,15 @@ describe('qtiauth', () => {
     const { io, out } = capture();
     expect(await run([], io)).toBe(2);
     expect(out.stderr).toContain('config check');
+    expect(out.stderr).toContain('db provision');
+  });
+
+  it('runs commands a service adds', async () => {
+    const commands = migrateCommands({ schema: 'identity', migrations: () => Promise.resolve([]) });
+    const { io, out } = capture();
+    expect(await run(['migrate', 'up', '--help'], io, commands)).toBe(0);
+    expect(out.stdout).toContain('Usage: qtiauth migrate up');
+    expect(await run(['config', 'check'], io, commands)).toBe(2);
   });
 
   it('rejects unknown commands', async () => {
@@ -112,5 +122,21 @@ describe('qtiauth config check', () => {
     );
     expect(error?.code).toBe(1);
     expect(error?.stderr).toContain('cookies.session_ttl');
+  });
+});
+
+describe('qtiauth db provision', () => {
+  it('needs the administrator password', async () => {
+    const { io, out } = capture();
+    expect(await run(['db', 'provision', '-c', valid], io)).toBe(1);
+    expect(out.stderr).toBe('Set POSTGRES_PASSWORD to the administrator password\n');
+  });
+
+  it('needs a password for every role before connecting', async () => {
+    const { io, out } = capture({ POSTGRES_PASSWORD: 'admin' });
+    expect(await run(['db', 'provision', '-c', valid], io)).toBe(1);
+    expect(out.stderr).toContain(
+      'database.roles.identity.password, database.roles.notify.password',
+    );
   });
 });

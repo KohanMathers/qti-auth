@@ -1,25 +1,23 @@
 {
-  "name": "@qtiauth/cli",
+  "name": "@qtiauth/db",
   "version": "0.0.0",
   "private": true,
-  "description": "The qtiauth command-line tool",
+  "description": "Postgres access with Kysely, per-service schemas and migrations",
   "license": "MIT",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
-  },
-  "bin": {
-    "qtiauth": "./src/main.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@qtiauth/config": "workspace:*",
-    "@qtiauth/db": "workspace:*"
+    "kysely": "0.29.6",
+    "pg": "8.23.0"
   },
   "devDependencies": {
     "@qtiauth/testing": "workspace:*",
-    "zod": "4.6.5"
+    "@types/pg": "8.23.1"
   }
 }

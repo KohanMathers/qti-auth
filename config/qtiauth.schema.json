@@ -348,6 +348,192 @@
       },
       "additionalProperties": false
     },
+    "database": {
+      "description": "PostgreSQL connection.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "host": {
+          "default": "postgres",
+          "description": "Postgres host.",
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "default": 5432,
+          "description": "Postgres port.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "name": {
+          "default": "qtiauth",
+          "description": "Database name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "ssl": {
+          "default": "disable",
+          "description": "TLS to Postgres. require encrypts without checking the certificate, verify-full also checks it.",
+          "type": "string",
+          "enum": [
+            "disable",
+            "require",
+            "verify-full"
+          ]
+        },
+        "pool": {
+          "description": "Connection pool.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "max": {
+              "default": 10,
+              "description": "Maximum connections per service replica.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "idle_timeout": {
+              "description": "Close idle connections after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "30s",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "connect_timeout": {
+              "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "10s",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "roles": {
+          "description": "One role per service schema. Each role can only use its own schema.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "identity": {
+              "description": "Credentials for the service that owns the identity schema.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "user": {
+                  "default": "qtiauth_identity",
+                  "description": "Postgres role for the identity schema.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "password": {
+                  "default": "",
+                  "description": "The role's password. Reference a secret.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "notify": {
+              "description": "Credentials for the service that owns the notify schema.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "user": {
+                  "default": "qtiauth_notify",
+                  "description": "Postgres role for the notify schema.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "password": {
+                  "default": "",
+                  "description": "The role's password. Reference a secret.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "oidc": {
+              "description": "Credentials for the service that owns the oidc schema.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "user": {
+                  "default": "qtiauth_oidc",
+                  "description": "Postgres role for the oidc schema.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "password": {
+                  "default": "",
+                  "description": "The role's password. Reference a secret.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "safety": {
+              "description": "Credentials for the service that owns the safety schema.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "user": {
+                  "default": "qtiauth_safety",
+                  "description": "Postgres role for the safety schema.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "password": {
+                  "default": "",
+                  "description": "The role's password. Reference a secret.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "support": {
+              "description": "Credentials for the service that owns the support schema.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "user": {
+                  "default": "qtiauth_support",
+                  "description": "Postgres role for the support schema.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "password": {
+                  "default": "",
+                  "description": "The role's password. Reference a secret.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "games": {
+              "description": "Credentials for the service that owns the games schema.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "user": {
+                  "default": "qtiauth_games",
+                  "description": "Postgres role for the games schema.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "password": {
+                  "default": "",
+                  "description": "The role's password. Reference a secret.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "migrations": {
       "description": "Database migrations.",
       "default": {},

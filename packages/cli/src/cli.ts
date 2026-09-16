@@ -1,33 +1,48 @@
 import { configCheck } from './commands/config-check.ts';
-import { type CliIo, EXIT_OK, EXIT_USAGE } from './io.ts';
+import { dbProvision } from './commands/db-provision.ts';
+import { type CliIo, type Command, CommandExit, EXIT_OK, EXIT_USAGE } from './io.ts';
 
-type Command = (args: readonly string[], io: CliIo) => Promise<number>;
-
-const commands: Record<string, Command> = {
+export const commands: Record<string, Command> = {
   'config check': configCheck,
+  'db provision': dbProvision,
 };
 
-const usage = `Usage: qtiauth <command> [options]
+function usage(available: Record<string, Command>): string {
+  return `Usage: qtiauth <command> [options]
 
 Commands:
-${Object.keys(commands)
+${Object.keys(available)
   .map((name) => `  ${name}`)
   .join('\n')}
 
 Run qtiauth <command> --help for a command's options.
 `;
+}
 
-export async function run(argv: readonly string[], io: CliIo): Promise<number> {
+export async function run(
+  argv: readonly string[],
+  io: CliIo,
+  available: Record<string, Command> = commands,
+): Promise<number> {
   const [first, second, ...rest] = argv;
   if (first === undefined || first === '--help' || first === '-h') {
-    (first === undefined ? io.stderr : io.stdout)(usage);
+    (first === undefined ? io.stderr : io.stdout)(usage(available));
     return first === undefined ? EXIT_USAGE : EXIT_OK;
   }
 
-  const command = commands[`${first} ${second ?? ''}`];
+  const command = available[`${first} ${second ?? ''}`];
   if (!command) {
-    io.stderr(`Unknown command: ${[first, second].filter(Boolean).join(' ')}\n\n${usage}`);
+    io.stderr(
+      `Unknown command: ${[first, second].filter(Boolean).join(' ')}\n\n${usage(available)}`,
+    );
     return EXIT_USAGE;
   }
-  return command(rest, io);
+
+  try {
+    return await command(rest, io);
+  } catch (error) {
+    if (!(error instanceof CommandExit)) throw error;
+    io.stderr(`${error.message.trimEnd()}\n`);
+    return error.exitCode;
+  }
 }

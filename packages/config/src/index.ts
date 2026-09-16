@@ -18,4 +18,11 @@ export {
   type ServiceConfig,
   serviceConfigSchema,
 } from './schema.ts';
-export { MODULES, type SectionName, sections, SURFACES } from './sections.ts';
+export {
+  DB_SCHEMAS,
+  type DbSchema,
+  MODULES,
+  type SectionName,
+  sections,
+  SURFACES,
+} from './sections.ts';

@@ -190,6 +190,54 @@ export const geoip = z
   .prefault({})
   .describe('IP geolocation.');
 
+export const DB_SCHEMAS = ['identity', 'notify', 'oidc', 'safety', 'support', 'games'] as const;
+export type DbSchema = (typeof DB_SCHEMAS)[number];
+
+const dbRole = (schema: string) =>
+  z
+    .strictObject({
+      user: z
+        .string()
+        .min(1)
+        .default(`qtiauth_${schema}`)
+        .describe(`Postgres role for the ${schema} schema.`),
+      password: z.string().default('').describe("The role's password. Reference a secret."),
+    })
+    .prefault({})
+    .describe(`Credentials for the service that owns the ${schema} schema.`);
+
+export const database = z
+  .strictObject({
+    host: z.string().min(1).default('postgres').describe('Postgres host.'),
+    port: z.int().min(1).max(65_535).default(5432).describe('Postgres port.'),
+    name: z.string().min(1).default('qtiauth').describe('Database name.'),
+    ssl: z
+      .enum(['disable', 'require', 'verify-full'])
+      .default('disable')
+      .describe(
+        'TLS to Postgres. require encrypts without checking the certificate, verify-full also checks it.',
+      ),
+    pool: z
+      .strictObject({
+        max: z.int().min(1).default(10).describe('Maximum connections per service replica.'),
+        idle_timeout: duration('30s', 'Close idle connections after this long.'),
+        connect_timeout: duration('10s', 'Give up connecting after this long.'),
+      })
+      .prefault({})
+      .describe('Connection pool.'),
+    roles: z
+      .strictObject(
+        Object.fromEntries(DB_SCHEMAS.map((schema) => [schema, dbRole(schema)])) as Record<
+          DbSchema,
+          ReturnType<typeof dbRole>
+        >,
+      )
+      .prefault({})
+      .describe('One role per service schema. Each role can only use its own schema.'),
+  })
+  .prefault({})
+  .describe('PostgreSQL connection.');
+
 export const migrations = z
   .strictObject({
     auto_apply: z
@@ -341,6 +389,7 @@ export const sections = {
   cors,
   network,
   geoip,
+  database,
   migrations,
   features,
   captcha,

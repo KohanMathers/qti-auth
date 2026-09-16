@@ -130,14 +130,16 @@ Spec: §3
 **Done when:** an invalid value produces an error naming the exact YAML path, and `config check`
 exits non-zero.
 
-### P0.4 `@qtiauth/db` — M
+### P0.4 `@qtiauth/db` — M ✅
 Spec: §2.3
 
-- [ ] Kysely setup with per-service schema and role.
-- [ ] Migration runner: forward-only, advisory lock per schema, `auto_apply` on/off, `migrate status|up`.
-- [ ] Refuses to start with pending migrations when `auto_apply: false`, logging the exact command.
-- [ ] Role provisioning script: one role per service, privileges on its own schema only.
-- [ ] Expand/contract migration guide in `docs/`.
+- [x] Kysely setup with per-service schema and role (`createDb`, `database` config section).
+- [x] Migration runner: forward-only, advisory lock per schema, `auto_apply` on/off, `migrate status|up`
+      (`runStartupMigrations`, `migrateCommands` in `@qtiauth/cli`).
+- [x] Refuses to start with pending migrations when `auto_apply: false`, logging the exact command.
+- [x] Role provisioning script: one role per service, privileges on its own schema only
+      (`qtiauth db provision`).
+- [x] Expand/contract migration guide in `docs/database.md`.
 
 **Done when:** two replicas starting at once apply migrations exactly once, and a service role can't
 read another service's schema (tested).
