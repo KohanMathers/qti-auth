@@ -10,7 +10,7 @@ Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 
 - **Node.js 26** (see `.nvmrc`)
 - **pnpm 12.4.2**. If a different pnpm is installed, it downloads the right version automatically.
-- **Docker**, for integration tests (Testcontainers starts Postgres, Valkey and NATS)
+- **Docker** with Compose, for integration tests (Testcontainers starts Postgres, Valkey and NATS) and for running the stack (see [docs/deployment.md](docs/deployment.md))
 
 ## Setup
 
@@ -34,17 +34,18 @@ This also installs the Git hooks.
 
 ## Everyday commands
 
-| Command                             | What it does                                  |
-| ----------------------------------- | --------------------------------------------- |
-| `pnpm test`                         | Unit tests                                    |
-| `pnpm test:integration`             | Integration tests (needs Docker)              |
-| `pnpm lint` / `pnpm lint:fix`       | ESLint                                        |
-| `pnpm format` / `pnpm format:check` | Prettier                                      |
-| `pnpm typecheck`                    | TypeScript across the workspace               |
-| `pnpm check:hardcoded`              | Fails on deployment-specific values in source |
-| `pnpm changeset`                    | Record a change for the changelog             |
-| `pnpm qtiauth <command>`            | Run the `qtiauth` CLI from source             |
-| `pnpm config:schema`                | Regenerate `config/qtiauth.schema.json`       |
+| Command                             | What it does                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------- |
+| `pnpm test`                         | Unit tests                                                                       |
+| `pnpm test:integration`             | Integration tests (needs Docker)                                                 |
+| `pnpm lint` / `pnpm lint:fix`       | ESLint                                                                           |
+| `pnpm format` / `pnpm format:check` | Prettier                                                                         |
+| `pnpm typecheck`                    | TypeScript across the workspace                                                  |
+| `pnpm check:hardcoded`              | Fails on deployment-specific values in source                                    |
+| `pnpm changeset`                    | Record a change for the changelog                                                |
+| `pnpm qtiauth <command>`            | Run the `qtiauth` CLI from source                                                |
+| `pnpm config:schema`                | Regenerate `config/qtiauth.schema.json`                                          |
+| `pnpm stack:dev <compose args>`     | Docker Compose with the development override, e.g. `pnpm stack:dev up -d --wait` |
 
 ## How code is written here
 

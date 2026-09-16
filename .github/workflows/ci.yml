@@ -53,6 +53,26 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:integration
 
+  compose:
+    name: Compose stack
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci
+    steps:
+      - uses: actions/checkout@v7
+      - run: cp .env.example .env
+      - run: >-
+          docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.dev.yaml
+          --profile '*' config --quiet
+      - run: docker compose --env-file .env -f deploy/compose.yaml up --wait --wait-timeout 120
+      - run: >-
+          docker compose --env-file .env -f deploy/compose.yaml --profile games
+          up --wait --wait-timeout 120
+      - if: failure()
+        run: docker compose --env-file .env -f deploy/compose.yaml --profile games logs
+      - if: always()
+        run: docker compose --env-file .env -f deploy/compose.yaml --profile '*' down --volumes
+
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest

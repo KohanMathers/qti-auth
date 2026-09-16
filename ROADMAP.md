@@ -200,14 +200,16 @@ Spec: §2.6, §8.3
 **Done when:** a template service created with the kit has health endpoints, metrics, a manifest and
 OpenAPI with no extra code.
 
-### P0.8 Compose base — S
+### P0.8 Compose base — S ✅
 Spec: §2.2
 
-- [ ] `deploy/compose.yaml` with `postgres`, `valkey`, `nats` (JetStream enabled) and an internal
-      network.
-- [ ] Profile scaffolding for every profile in §2.2 (empty services allowed at this stage).
-- [ ] `.env.example` with every secret documented.
-- [ ] Dev override file with the `console` email provider and exposed debug ports.
+- [x] `deploy/compose.yaml` with `postgres`, `valkey`, `nats` (JetStream enabled) and an internal
+      network (images kept in step with `@qtiauth/testing`, `docs/deployment.md`).
+- [x] Profile scaffolding for every profile in §2.2 (empty services allowed at this stage)
+      (placeholder containers, with QTIAuth services extending `x-qtiauth-service`).
+- [x] `.env.example` with every secret documented.
+- [x] Dev override file with the `console` email provider and exposed debug ports
+      (`deploy/compose.dev.yaml`, `config/qtiauth.dev.yaml`, ports bound to `127.0.0.1`).
 
 **Done when:** `docker compose up` brings up healthy infra, and `--profile games` doesn't error.
 

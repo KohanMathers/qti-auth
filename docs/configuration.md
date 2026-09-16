@@ -2,13 +2,14 @@
 
 QTIAuth reads one YAML file, `qtiauth.yaml`, plus secrets from the environment. This page covers how that file is found, written and checked. For what each setting does, see the JSON Schema at [`config/qtiauth.schema.json`](../config/qtiauth.schema.json), which has a description and default for every setting.
 
-The `database` section and the Postgres roles it references are covered in [database.md](database.md), the `bus` section in [bus.md](bus.md), the `observability` section in [observability.md](observability.md), and the `service` section in [services.md](services.md).
+The `database` section and the Postgres roles it references are covered in [database.md](database.md), the `bus` section in [bus.md](bus.md), the `observability` section in [observability.md](observability.md), and the `service` section in [services.md](services.md). Running the stack is covered in [deployment.md](deployment.md).
 
 ## Where config lives
 
 ```
 config/
   qtiauth.yaml           # every non-secret setting
+  qtiauth.dev.yaml       # development config, used by deploy/compose.dev.yaml
   qtiauth.schema.json    # JSON Schema, generated
 .env                     # secrets only
 ```
@@ -94,4 +95,4 @@ After changing a schema, regenerate the JSON Schema:
 pnpm config:schema
 ```
 
-A unit test fails if `config/qtiauth.schema.json` is out of date, or if the shipped `config/qtiauth.yaml` stops matching the defaults.
+A unit test fails if `config/qtiauth.schema.json` is out of date, if the shipped `config/qtiauth.yaml` stops matching the defaults, or if `config/qtiauth.dev.yaml` differs from them in anything but the `console` email provider or references different secrets. Add a new secret reference to both files.

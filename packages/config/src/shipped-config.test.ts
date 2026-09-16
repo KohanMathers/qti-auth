@@ -30,6 +30,28 @@ describe('shipped config', () => {
     expect({ ...shipped, surfaces: defaults.surfaces }).toEqual(defaults);
   });
 
+  it('config/qtiauth.dev.yaml only switches email to the console provider', async () => {
+    const env = parseEnv(readFileSync(join(root, '.env.example'), 'utf8'));
+    const dev = await loadConfig(qtiauthConfigSchema, {
+      path: join(root, 'config/qtiauth.dev.yaml'),
+      env,
+    });
+    const defaults = qtiauthConfigSchema.parse({});
+    expect(dev).toEqual({ ...defaults, email: { ...defaults.email, provider: 'console' } });
+  });
+
+  it('config/qtiauth.dev.yaml references the same secrets as config/qtiauth.yaml', () => {
+    const references = (path: string) =>
+      [
+        ...readFileSync(join(root, path), 'utf8')
+          .replace(/^#.*$/gm, '')
+          .matchAll(/\$\{env:(\w+)\}/g),
+      ]
+        .map((match) => match[1])
+        .sort();
+    expect(references('config/qtiauth.dev.yaml')).toEqual(references('config/qtiauth.yaml'));
+  });
+
   it('config/qtiauth.schema.json is up to date (run pnpm config:schema)', () => {
     expect(readFileSync(JSON_SCHEMA_PATH, 'utf8')).toBe(renderJsonSchema());
   });

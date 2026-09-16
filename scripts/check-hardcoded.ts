@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 export interface Rule {
@@ -68,7 +68,7 @@ function main(): void {
   ) as RulesFile;
 
   const findings = listTrackedFiles(root, config.scanPaths)
-    .filter((file) => !config.ignoreFiles.includes(basename(file)))
+    .filter((file) => !config.ignoreFiles.includes(basename(file)) && existsSync(join(root, file)))
     .flatMap((file) => {
       const buffer = readFileSync(join(root, file));
       return isBinary(buffer) ? [] : scanText(file, buffer.toString('utf8'), config.rules);

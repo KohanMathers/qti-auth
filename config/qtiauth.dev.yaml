@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=./qtiauth.schema.json
+#
+# Development configuration, used by deploy/compose.dev.yaml. Anything left out uses its default. Emails are printed to the notifier's logs instead of being sent. See docs/deployment.md.
+
+database:
+  roles:
+    identity: { password: '${env:DB_IDENTITY_PASSWORD}' }
+    notify: { password: '${env:DB_NOTIFY_PASSWORD}' }
+    oidc: { password: '${env:DB_OIDC_PASSWORD}' }
+    safety: { password: '${env:DB_SAFETY_PASSWORD}' }
+    support: { password: '${env:DB_SUPPORT_PASSWORD}' }
+    games: { password: '${env:DB_GAMES_PASSWORD}' }
+
+bus:
+  password: '${env:NATS_PASSWORD}'
+
+observability:
+  logs: { user_id_hash_key: '${env:LOG_USER_ID_HASH_KEY}' }
+
+features:
+  auth:
+    social:
+      google:
+        client_id: ${env:GOOGLE_CLIENT_ID}
+        client_secret: ${env:GOOGLE_CLIENT_SECRET}
+      github:
+        client_id: ${env:GITHUB_CLIENT_ID}
+        client_secret: ${env:GITHUB_CLIENT_SECRET}
+      discord:
+        client_id: ${env:DISCORD_CLIENT_ID}
+        client_secret: ${env:DISCORD_CLIENT_SECRET}
+
+email:
+  provider: console

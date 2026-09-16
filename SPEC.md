@@ -432,6 +432,7 @@ Uploads and downloads use presigned URLs, and file bodies never pass through the
 ```
 config/
   qtiauth.yaml             # the one main config file
+  qtiauth.dev.yaml         # development config (console email), used by the Compose dev override
   legal/
     terms.md               # front-matter: id, version, effective_at, material, summary
     privacy.md

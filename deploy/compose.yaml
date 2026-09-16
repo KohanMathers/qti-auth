@@ -1,0 +1,121 @@
+name: qtiauth
+
+x-empty: &empty
+  image: alpine:3.24
+  command: ['sleep', 'infinity']
+  init: true
+  read_only: true
+  user: '65534:65534'
+  cap_drop: [ALL]
+
+x-placeholder: &placeholder
+  <<: *empty
+  network_mode: none
+
+x-qtiauth-service: &qtiauth-service
+  <<: *empty
+  networks: [internal]
+  env_file: ../.env
+  volumes:
+    - ../config:/srv/app/config:ro
+  depends_on:
+    postgres: { condition: service_healthy }
+    valkey: { condition: service_healthy }
+    nats: { condition: service_healthy }
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: qtiauth
+    volumes:
+      - postgres:/var/lib/postgresql
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres', '-d', 'qtiauth']
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:9.1.2-alpine3.24
+    command: ['valkey-server', '--save', '', '--appendonly', 'no']
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+    restart: unless-stopped
+
+  nats:
+    image: nats:2.14.7-alpine3.22
+    command: ['--jetstream', '--store_dir', '/data', '--http_port', '8222']
+    volumes:
+      - nats:/data
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8222/healthz?js-enabled-only=true']
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+    restart: unless-stopped
+
+  oidc:
+    <<: *qtiauth-service
+    profiles: [oidc]
+
+  safety:
+    <<: *qtiauth-service
+    profiles: [safety]
+
+  support:
+    <<: *qtiauth-service
+    profiles: [support]
+
+  games:
+    <<: *qtiauth-service
+    profiles: [games]
+
+  minio:
+    <<: *placeholder
+    profiles: [storage]
+
+  geoip-updater:
+    <<: *placeholder
+    profiles: [geoip]
+
+  caddy:
+    <<: *placeholder
+    profiles: [edge]
+
+  backup:
+    <<: *placeholder
+    profiles: [backup]
+
+  prometheus:
+    <<: *placeholder
+    profiles: [observability]
+
+  grafana:
+    <<: *placeholder
+    profiles: [observability]
+
+  tempo:
+    <<: *placeholder
+    profiles: [observability]
+
+  loki:
+    <<: *placeholder
+    profiles: [observability]
+
+networks:
+  internal:
+    internal: true
+
+volumes:
+  postgres:
+  nats:
