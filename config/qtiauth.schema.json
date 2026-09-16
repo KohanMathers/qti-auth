@@ -1,0 +1,906 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "branding": {
+      "description": "Product and company branding.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "product_name": {
+          "default": "Example Account",
+          "description": "Product name shown to users.",
+          "type": "string",
+          "minLength": 1
+        },
+        "company_name": {
+          "default": "Example Ltd",
+          "description": "Company name used in legal text and emails.",
+          "type": "string",
+          "minLength": 1
+        },
+        "support_email": {
+          "default": "support@example.com",
+          "description": "Support contact address shown to users.",
+          "type": "string",
+          "format": "email",
+          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+        },
+        "logo": {
+          "default": null,
+          "description": "Logo path, relative to the config directory. null shows the product name.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "colors": {
+          "description": "Brand colours.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "primary": {
+              "default": "#3b82f6",
+              "description": "Primary brand colour.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "surfaces": {
+      "description": "Where each web surface is served.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "account": {
+          "description": "Main account site and primary sign-in surface.",
+          "default": {
+            "hosts": [
+              "localhost"
+            ],
+            "base_path": "/"
+          },
+          "type": "object",
+          "properties": {
+            "hosts": {
+              "default": [],
+              "description": "Hostnames this surface answers on.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "hostname",
+                "pattern": "^(?=.{1,253}\\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\\.?$"
+              }
+            },
+            "ports": {
+              "default": [],
+              "description": "Ports this surface answers on, for host-less setups.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "base_path": {
+              "default": "/",
+              "description": "Path prefix the surface is mounted under.",
+              "type": "string",
+              "pattern": "^\\/(?:[\\w.~-]+(?:\\/[\\w.~-]+)*)?$"
+            },
+            "modules": {
+              "default": null,
+              "description": "Modules this surface owns. null uses the default ownership.",
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "identity",
+                      "oidc",
+                      "games",
+                      "safety",
+                      "support",
+                      "admin"
+                    ]
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "support": {
+          "description": "Help centre.",
+          "default": {
+            "hosts": [
+              "localhost"
+            ],
+            "base_path": "/support"
+          },
+          "type": "object",
+          "properties": {
+            "hosts": {
+              "default": [],
+              "description": "Hostnames this surface answers on.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "hostname",
+                "pattern": "^(?=.{1,253}\\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\\.?$"
+              }
+            },
+            "ports": {
+              "default": [],
+              "description": "Ports this surface answers on, for host-less setups.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "base_path": {
+              "default": "/",
+              "description": "Path prefix the surface is mounted under.",
+              "type": "string",
+              "pattern": "^\\/(?:[\\w.~-]+(?:\\/[\\w.~-]+)*)?$"
+            },
+            "modules": {
+              "default": null,
+              "description": "Modules this surface owns. null uses the default ownership.",
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "identity",
+                      "oidc",
+                      "games",
+                      "safety",
+                      "support",
+                      "admin"
+                    ]
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "api": {
+          "description": "Non-browser clients: games, game servers and third-party apps.",
+          "default": {
+            "hosts": [
+              "localhost"
+            ],
+            "base_path": "/api"
+          },
+          "type": "object",
+          "properties": {
+            "hosts": {
+              "default": [],
+              "description": "Hostnames this surface answers on.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "hostname",
+                "pattern": "^(?=.{1,253}\\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\\.?$"
+              }
+            },
+            "ports": {
+              "default": [],
+              "description": "Ports this surface answers on, for host-less setups.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "base_path": {
+              "default": "/",
+              "description": "Path prefix the surface is mounted under.",
+              "type": "string",
+              "pattern": "^\\/(?:[\\w.~-]+(?:\\/[\\w.~-]+)*)?$"
+            },
+            "modules": {
+              "default": null,
+              "description": "Modules this surface owns. null uses the default ownership.",
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "identity",
+                      "oidc",
+                      "games",
+                      "safety",
+                      "support",
+                      "admin"
+                    ]
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "cookies": {
+      "description": "Session cookie settings.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "domain": {
+          "default": null,
+          "description": "Shared cookie domain. null uses host-only __Host- cookies.",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "hostname",
+              "pattern": "^(?=.{1,253}\\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\\.?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session_ttl": {
+          "description": "Maximum session lifetime. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "default": "7d",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "idle_timeout": {
+          "description": "Session ends after this long without activity. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "default": "30d",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "cors": {
+      "description": "Cross-origin requests.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "allowed_origins": {
+          "default": [],
+          "description": "Extra credentialed CORS origins. Surface origins are added automatically.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "network": {
+      "description": "Network settings.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "trusted_proxies": {
+          "default": [],
+          "description": "Proxies whose forwarded client IP headers are trusted.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "geoip": {
+      "description": "IP geolocation.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "source": {
+          "default": "dbip_lite",
+          "description": "Where IP geolocation comes from.",
+          "type": "string",
+          "enum": [
+            "dbip_lite",
+            "maxmind",
+            "header",
+            "none"
+          ]
+        },
+        "header": {
+          "default": null,
+          "description": "Request header holding the country code when source is header.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "migrations": {
+      "description": "Database migrations.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "auto_apply": {
+          "default": true,
+          "description": "Apply pending database migrations when a service starts.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "features": {
+      "description": "Feature flags inside services.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "auth": {
+          "description": "Authentication methods.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "password": {
+              "description": "password sign-in",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable password sign-in.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "magic_link": {
+              "description": "magic link sign-in",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable magic link sign-in.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "passkeys": {
+              "description": "passkeys",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable passkeys.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "totp": {
+              "description": "TOTP two-factor",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable TOTP two-factor.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "social": {
+              "description": "Social and upstream sign-in.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "google": {
+                  "description": "Google sign-in.",
+                  "default": {},
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "default": false,
+                      "description": "Enable sign-in with Google.",
+                      "type": "boolean"
+                    },
+                    "client_id": {
+                      "default": "",
+                      "description": "OAuth client ID.",
+                      "type": "string"
+                    },
+                    "client_secret": {
+                      "default": "",
+                      "description": "OAuth client secret. Reference a secret.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "github": {
+                  "description": "GitHub sign-in.",
+                  "default": {},
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "default": false,
+                      "description": "Enable sign-in with GitHub.",
+                      "type": "boolean"
+                    },
+                    "client_id": {
+                      "default": "",
+                      "description": "OAuth client ID.",
+                      "type": "string"
+                    },
+                    "client_secret": {
+                      "default": "",
+                      "description": "OAuth client secret. Reference a secret.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "discord": {
+                  "description": "Discord sign-in.",
+                  "default": {},
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "default": false,
+                      "description": "Enable sign-in with Discord.",
+                      "type": "boolean"
+                    },
+                    "client_id": {
+                      "default": "",
+                      "description": "OAuth client ID.",
+                      "type": "string"
+                    },
+                    "client_secret": {
+                      "default": "",
+                      "description": "OAuth client secret. Reference a secret.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "steam": {
+                  "description": "Steam sign-in",
+                  "default": {},
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "default": false,
+                      "description": "Enable Steam sign-in.",
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "generic_oidc": {
+                  "default": [],
+                  "description": "Upstream OIDC providers.",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9_-]*$",
+                        "description": "Stable identifier used in URLs and linked accounts."
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Name shown on the sign-in button."
+                      },
+                      "issuer": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "OIDC issuer URL."
+                      },
+                      "client_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "OAuth client ID."
+                      },
+                      "client_secret": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "OAuth client secret. Reference a secret."
+                      },
+                      "scopes": {
+                        "default": [
+                          "openid",
+                          "email",
+                          "profile"
+                        ],
+                        "description": "Scopes to request.",
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "icon": {
+                        "default": null,
+                        "description": "Icon path or URL.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "issuer",
+                      "client_id",
+                      "client_secret"
+                    ],
+                    "additionalProperties": false,
+                    "description": "An upstream OpenID Connect provider."
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "session_security": {
+          "description": "session security checks",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "description": "Enable session security checks.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "oidc": {
+          "description": "OIDC provider features (oidc profile).",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "developer_portal": {
+              "description": "the developer portal",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable the developer portal.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "backchannel_logout": {
+              "description": "back-channel logout",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable back-channel logout.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "games": {
+          "description": "Games features (games profile).",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "licensing": {
+              "description": "offline licensing",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable offline licensing.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "steam": {
+              "description": "Steam integration",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "description": "Enable Steam integration.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "leaderboards": {
+              "description": "Leaderboards.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable leaderboards.",
+                  "type": "boolean"
+                },
+                "require_game_authority": {
+                  "default": true,
+                  "description": "Leaderboard scores need the game server's credential as well as the player's.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "playtime": {
+              "description": "playtime tracking",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable playtime tracking.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "cloud_saves": {
+              "description": "cloud saves (needs object storage)",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "description": "Enable cloud saves (needs object storage).",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "keys": {
+              "description": "key redemption",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable key redemption.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "support": {
+          "description": "Support features (support profile).",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "tickets": {
+              "description": "support tickets",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable support tickets.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "kb": {
+              "description": "the knowledge base",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable the knowledge base.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "guest_tickets": {
+              "description": "tickets from signed-out users",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable tickets from signed-out users.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "attachments": {
+              "description": "ticket attachments (needs object storage)",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "description": "Enable ticket attachments (needs object storage).",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "captcha": {
+      "description": "Bot protection.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "provider": {
+          "default": "altcha",
+          "description": "CAPTCHA provider.",
+          "type": "string",
+          "enum": [
+            "altcha",
+            "turnstile",
+            "hcaptcha",
+            "friendly_captcha",
+            "none"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "email": {
+      "description": "Outgoing email.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "provider": {
+          "default": "smtp",
+          "description": "Email delivery provider. console prints emails instead of sending them.",
+          "type": "string",
+          "enum": [
+            "smtp",
+            "brevo",
+            "postmark",
+            "ses",
+            "resend",
+            "mailgun",
+            "console"
+          ]
+        },
+        "from": {
+          "description": "Sender identities.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "auth": {
+              "description": "Sender for sign-in and verification email.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "name": {
+                  "default": "Example Auth",
+                  "description": "Display name.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "address": {
+                  "default": "auth@example.com",
+                  "description": "Email address.",
+                  "type": "string",
+                  "format": "email",
+                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "security": {
+              "description": "Sender for security alert email.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "name": {
+                  "default": "Example Security",
+                  "description": "Display name.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "address": {
+                  "default": "security@example.com",
+                  "description": "Email address.",
+                  "type": "string",
+                  "format": "email",
+                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "support": {
+              "description": "Sender for support email.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "name": {
+                  "default": "Example Support",
+                  "description": "Display name.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "address": {
+                  "default": "support@example.com",
+                  "description": "Email address.",
+                  "type": "string",
+                  "format": "email",
+                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "description": "QTIAuth configuration (qtiauth.yaml)."
+}

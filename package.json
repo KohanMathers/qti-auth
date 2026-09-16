@@ -28,6 +28,8 @@
     "test:watch": "vitest --project unit",
     "test:integration": "vitest run --project integration",
     "check:hardcoded": "node scripts/check-hardcoded.ts",
+    "config:schema": "pnpm --filter @qtiauth/config schema",
+    "qtiauth": "node packages/cli/src/main.ts",
     "changeset": "changeset",
     "commitcheck": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm check:hardcoded"
   },

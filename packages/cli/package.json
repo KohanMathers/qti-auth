@@ -1,0 +1,17 @@
+{
+  "name": "@qtiauth/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The qtiauth command-line tool",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "qtiauth": "./src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qtiauth/config": "workspace:*"
+  }
+}

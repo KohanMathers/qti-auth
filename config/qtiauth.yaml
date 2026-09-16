@@ -1,0 +1,81 @@
+# yaml-language-server: $schema=./qtiauth.schema.json
+#
+# QTIAuth configuration. Everything that isn't a secret goes here. Secrets live in .env and are referenced as ${env:NAME}, or read from a file with ${file:/run/secrets/name}. Every setting has a default, so any key can be left out. See docs/configuration.md.
+
+branding:
+  product_name: Example Account
+  company_name: Example Ltd
+  support_email: support@example.com
+  logo: null
+  colors: { primary: '#3b82f6' }
+
+surfaces:
+  account: { hosts: [me.example.com], base_path: / }
+  support: { hosts: [me.example.com], base_path: /support }
+  api: { hosts: [me.example.com], base_path: /api }
+
+cookies:
+  domain: null # optional shared cookie domain; null -> host-only __Host- cookies
+  session_ttl: 7d
+  idle_timeout: 30d
+
+cors:
+  allowed_origins: [] # surface origins are added automatically
+
+network:
+  trusted_proxies: []
+
+geoip:
+  source: dbip_lite # dbip_lite | maxmind | header | none
+  header: null
+
+migrations:
+  auto_apply: true
+
+features:
+  auth:
+    password: { enabled: true }
+    magic_link: { enabled: true }
+    passkeys: { enabled: true }
+    totp: { enabled: true }
+    social:
+      google:
+        enabled: false
+        client_id: ${env:GOOGLE_CLIENT_ID}
+        client_secret: ${env:GOOGLE_CLIENT_SECRET}
+      github:
+        enabled: false
+        client_id: ${env:GITHUB_CLIENT_ID}
+        client_secret: ${env:GITHUB_CLIENT_SECRET}
+      discord:
+        enabled: false
+        client_id: ${env:DISCORD_CLIENT_ID}
+        client_secret: ${env:DISCORD_CLIENT_SECRET}
+      steam: { enabled: false }
+      generic_oidc: [] # [{ id, name, issuer, client_id, client_secret, scopes, icon }]
+  session_security: { enabled: true }
+  oidc:
+    developer_portal: { enabled: true }
+    backchannel_logout: { enabled: true }
+  games:
+    licensing: { enabled: true }
+    steam: { enabled: false }
+    leaderboards: { enabled: true, require_game_authority: true }
+    playtime: { enabled: true }
+    cloud_saves: { enabled: false }
+    keys: { enabled: true }
+  support:
+    tickets: { enabled: true }
+    kb: { enabled: true }
+    guest_tickets: { enabled: true }
+    attachments: { enabled: false }
+
+captcha:
+  provider: altcha # altcha | turnstile | hcaptcha | friendly_captcha | none
+
+email:
+  provider: smtp # smtp | brevo | postmark | ses | resend | mailgun | console
+  from:
+    auth: { name: Example Auth, address: auth@example.com }
+    security: { name: Example Security, address: security@example.com }
+    support: { name: Example Support, address: support@example.com }

@@ -114,14 +114,18 @@ Spec: §3.2, §8.9
 
 **Done when:** a PR that adds `quietterminal.co.uk` to source fails CI.
 
-### P0.3 `@qtiauth/config` — M
+### P0.3 `@qtiauth/config` — M ✅
 Spec: §3
 
-- [ ] YAML loader with `${env:NAME}` and `${file:/path}` interpolation.
-- [ ] Zod schemas composed per service, with JSON Schema exported for docs and editor support.
-- [ ] Precise error paths on invalid config. Refuse to start.
-- [ ] `qtiauth config check` command.
-- [ ] Brand-neutral default config and an example `.env.example`.
+- [x] YAML loader with `${env:NAME}` and `${file:/path}` interpolation (after parsing, values only,
+      `$${…}` for literals).
+- [x] Zod schemas for the §3.3 skeleton sections, picked per service with `serviceConfigSchema`,
+      with JSON Schema exported to `config/qtiauth.schema.json` for docs and editor support.
+- [x] Precise error paths (YAML path, line and column) on invalid config, unknown keys rejected.
+      `loadConfigOrExit` refuses to start.
+- [x] `qtiauth config check` command (`@qtiauth/cli`).
+- [x] Brand-neutral default config (`config/qtiauth.yaml`) and an example `.env.example`.
+- [x] Operator docs: `docs/configuration.md`.
 
 **Done when:** an invalid value produces an error naming the exact YAML path, and `config check`
 exits non-zero.

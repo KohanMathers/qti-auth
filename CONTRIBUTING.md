@@ -27,6 +27,7 @@ This also installs the Git hooks.
 | `packages/`          | Shared libraries (`@qtiauth/*`)      |
 | `services/`          | Deployable services, one image each  |
 | `templates/service/` | Starting point for new services      |
+| `config/`            | Brand-neutral default configuration  |
 | `deploy/`            | Docker Compose files                 |
 | `docs/`              | Operator and developer documentation |
 | `scripts/`           | Repository tooling                   |
@@ -42,10 +43,13 @@ This also installs the Git hooks.
 | `pnpm typecheck`                    | TypeScript across the workspace               |
 | `pnpm check:hardcoded`              | Fails on deployment-specific values in source |
 | `pnpm changeset`                    | Record a change for the changelog             |
+| `pnpm qtiauth <command>`            | Run the `qtiauth` CLI from source             |
+| `pnpm config:schema`                | Regenerate `config/qtiauth.schema.json`       |
 
 ## How code is written here
 
 - TypeScript runs directly on Node using type stripping, with no build step. Only erasable syntax is allowed, so no `enum`, `namespace` or constructor parameter properties. The compiler enforces this.
+- Node won't strip types from files under `node_modules`, so images keep the workspace layout (see `templates/service/Dockerfile`). Don't use `pnpm deploy`, which copies workspace packages into `node_modules`.
 - Relative imports include the `.ts` extension: `import { health } from './health.ts'`.
 - Tests sit next to the code: `thing.test.ts` for unit tests, `thing.integration.test.ts` for tests that need containers.
 - Nothing deployment-specific in source. Domains, brand and company names, reserved prefixes and the like belong in config. `pnpm check:hardcoded` enforces this, using the rules in `scripts/hardcoded-rules.json`.
