@@ -326,6 +326,43 @@ importers:
         specifier: 15.1.3
         version: 15.1.3
 
+  packages/service-kit:
+    dependencies:
+      '@hono/node-server':
+        specifier: 2.1.1
+        version: 2.1.1(hono@4.13.8)
+      '@qtiauth/bus':
+        specifier: workspace:*
+        version: link:../bus
+      '@qtiauth/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@qtiauth/config':
+        specifier: workspace:*
+        version: link:../config
+      '@qtiauth/db':
+        specifier: workspace:*
+        version: link:../db
+      '@qtiauth/events':
+        specifier: workspace:*
+        version: link:../events
+      '@qtiauth/observability':
+        specifier: workspace:*
+        version: link:../observability
+      hono:
+        specifier: 4.13.8
+        version: 4.13.8
+      kysely:
+        specifier: 0.29.6
+        version: 0.29.6
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@qtiauth/testing':
+        specifier: workspace:*
+        version: link:../testing
+
   packages/testing:
     dependencies:
       '@testcontainers/nats':
@@ -342,7 +379,23 @@ importers:
         version: 12.1.0
 
   templates/service:
+    dependencies:
+      '@qtiauth/service-kit':
+        specifier: workspace:*
+        version: link:../../packages/service-kit
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
     devDependencies:
+      '@qtiauth/bus':
+        specifier: workspace:*
+        version: link:../../packages/bus
+      '@qtiauth/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@qtiauth/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@qtiauth/testing':
         specifier: workspace:*
         version: link:../../packages/testing
@@ -572,6 +625,12 @@ packages:
     resolution: {integrity: sha512-wtF6h+DY6M3YaDBPAmvuuA6jV8Sif9MjtOI5euKFWRgCDl5PeDpPsHR9u2l6St5ceY8AZgoNDww5+HvEsXFsGg==}
     engines: {node: '>=6'}
     hasBin: true
+
+  '@hono/node-server@2.1.1':
+    resolution: {integrity: sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      hono: ^4
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1470,6 +1529,10 @@ packages:
   hashery@1.5.1:
     resolution: {integrity: sha512-iZyKG96/JwPz1N55vj2Ie2vXbhu440zfUfJvSwEqEbeLluk7NnapfGqa7LH0mOsnDxTF85Mx8/dyR6HfqcbmbQ==}
     engines: {node: '>=20'}
+
+  hono@4.13.8:
+    resolution: {integrity: sha512-/Gng7NfoykZl2pjukW5Z6+8Yxm3BPRf86GTbQnt0SbySkvax4fyL4H3HhY1cCpBGmiW9XDRFzRV+CXK2W8QudQ==}
+    engines: {node: '>=16.9.0'}
 
   hookified@1.15.1:
     resolution: {integrity: sha512-MvG/clsADq1GPM2KGo2nyfaWVyn9naPiXrqIe4jYjXNZQt238kWyOGrsyc/DmRAQ+Re6yeo6yX/yoNCG5KAEVg==}
@@ -2574,6 +2637,10 @@ snapshots:
       protobufjs: 7.6.6
       yargs: 17.7.3
 
+  '@hono/node-server@2.1.1(hono@4.13.8)':
+    dependencies:
+      hono: 4.13.8
+
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -3473,6 +3540,8 @@ snapshots:
   hashery@1.5.1:
     dependencies:
       hookified: 1.15.1
+
+  hono@4.13.8: {}
 
   hookified@1.15.1: {}
 

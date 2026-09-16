@@ -5,11 +5,21 @@
   "description": "Starting point for new QTIAuth services",
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "qtiauth": "./src/cli.ts"
+  },
   "scripts": {
     "start": "node src/main.ts",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@qtiauth/service-kit": "workspace:*",
+    "zod": "4.6.5"
+  },
   "devDependencies": {
+    "@qtiauth/bus": "workspace:*",
+    "@qtiauth/config": "workspace:*",
+    "@qtiauth/observability": "workspace:*",
     "@qtiauth/testing": "workspace:*"
   }
 }

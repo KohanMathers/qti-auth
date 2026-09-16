@@ -71,6 +71,10 @@ observability:
   metrics: { process_metrics: true }
   health: { check_timeout: 2s }
 
+service:
+  http: { port: 8080, shutdown_timeout: 15s }
+  identity_tokens: { clock_tolerance: 5s, keys_refresh: 5m }
+
 features:
   auth:
     password: { enabled: true }

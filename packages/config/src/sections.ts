@@ -426,6 +426,40 @@ export const observability = z
   .prefault({})
   .describe('Logs, traces, metrics and health checks.');
 
+export const service = z
+  .strictObject({
+    http: z
+      .strictObject({
+        port: z
+          .int()
+          .min(1)
+          .max(65_535)
+          .default(8080)
+          .describe('Port each service listens on, on the internal network.'),
+        shutdown_timeout: duration(
+          '15s',
+          'On SIGTERM or SIGINT, wait this long for in-flight requests and background work before exiting anyway.',
+        ),
+      })
+      .prefault({})
+      .describe('Internal HTTP server.'),
+    identity_tokens: z
+      .strictObject({
+        clock_tolerance: duration(
+          '5s',
+          'Allowed clock difference between the gateway and a service when checking internal identity token times.',
+        ),
+        keys_refresh: duration(
+          '5m',
+          "Fetch the gateway's identity token public keys this often. Keys the service hasn't seen are fetched straight away.",
+        ),
+      })
+      .prefault({})
+      .describe('Internal identity tokens minted by the gateway (X-QTIAuth-Identity).'),
+  })
+  .prefault({})
+  .describe('Settings shared by every service.');
+
 const oauthProvider = (name: string) =>
   z
     .strictObject({
@@ -571,6 +605,7 @@ export const sections = {
   migrations,
   bus,
   observability,
+  service,
   features,
   captcha,
   email: emailSection,

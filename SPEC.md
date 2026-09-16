@@ -128,7 +128,9 @@
 are config flags: individual auth methods, each social provider, the developer portal, licensing,
 Steam, leaderboards, cloud saves, guest tickets, and so on.
 
-**Consistency check.** On startup each service announces itself on `qtiauth.sys.announce`. The
+**Consistency check.** On startup each service announces itself on `qtiauth.sys.announce`, and
+announces again whenever anything publishes `qtiauth.sys.discover` (so a gateway that starts later
+can ask). The
 gateway refuses config that enables a sub-feature whose service isn't running (for example
 `features.games.licensing.enabled: true` without the `games` profile) and reports it at
 `GET /api/v1/meta/health`.
@@ -232,8 +234,9 @@ A purpose-built service, not just reverse-proxy config, because it enforces secu
 
 1. **Surface routing.** Maps host and/or port to a surface, and mounts APIs per §2.10.
 2. **Route table from manifests.** On startup each service publishes a route manifest (path, method,
-   policy, permissions it defines) over the bus. The gateway builds its routing table from these,
-   so a disabled service's routes don't exist.
+   module, policy, permissions it defines) over the bus, as part of its announcement. The gateway
+   builds its routing table from these, so a disabled service's routes don't exist. Each service
+   also serves its OpenAPI document over `qtiauth.rpc.<service>.openapi` for the merged document.
 3. **Declared route policy.** Nothing is special-cased by path.
    ```yaml
    - method: POST
@@ -255,6 +258,18 @@ A purpose-built service, not just reverse-proxy config, because it enforces secu
    age band, parental controls and auth context (`amr`, `acr`). Services verify it with the gateway's
    public key, **never** read cookies or bearer tokens themselves, and reject any request without it,
    on top of network isolation.
+   - Header `{ alg: EdDSA, typ: qtiauth-identity+jwt, kid }`. Claims: `iss` (`qtiauth-gateway`),
+     `aud` (the target service's name), `iat`, `exp`, `jti`, `request_id`, `auth` (the route's auth
+     mode), `sub`, `sid`, `client_id`, `scopes`, `permissions`, `account_state`, `restrictions`,
+     `age_band`, `parental_controls`, `amr`, `acr`. Absent values are `null` or `[]`.
+   - Services fetch the gateway's current public keys (a JWKS) over
+     `qtiauth.rpc.gateway.identity_keys`, cache them for `service.identity_tokens.keys_refresh`, and
+     fetch again straight away when a token names a key they haven't seen.
+   - A service refuses a token for another audience, one with a lifetime over 60 seconds, or one
+     outside its validity window by more than `service.identity_tokens.clock_tolerance`.
+   - As defence in depth, services also check the route's auth mode, permissions, scopes and allowed
+     account states against the token. The gateway remains responsible for rate limits, step-up and
+     the legal and parental gates.
 6. **Rate limiting** on every route, including all auth routes (§8.1).
 7. **CORS** from config, plus automatic entries for sibling surface origins (§2.10).
 8. **Security headers,** request IDs, trace propagation, trusted-proxy client IP extraction.
@@ -504,6 +519,10 @@ observability:
   tracing: { enabled: false, endpoint: http://tempo:4318/v1/traces, sample_ratio: 1 }
   metrics: { process_metrics: true }
   health:  { check_timeout: 2s }
+
+service:                        # shared by every service
+  http: { port: 8080, shutdown_timeout: 15s }
+  identity_tokens: { clock_tolerance: 5s, keys_refresh: 5m }
 
 features:
   auth:
@@ -884,13 +903,15 @@ function padded_with(t, bucket):
 Required under UK GDPR.
 
 - **Data export:** every enabled service contributes its part over the bus
-  (`qtiauth.rpc.<service>.export_user`). The result is zipped JSON in object storage, with a download
+  (`qtiauth.rpc.<service>.export_user`, which takes `{ user_id }` and answers
+  `{ service, data }`). The result is zipped JSON in object storage, with a download
   link emailed that expires in 7 days. Without storage, the export is emailed as an attachment when
   it's under the size limit. Otherwise export is unavailable, and the admin health page warns.
 - **Account deletion:** requires step-up. The account moves to `pending_deletion` for
   `accounts.deletion_grace` (default 30 days) and is signed out everywhere. Signing in cancels the
   deletion. When the grace period ends, `identity.user.deleted` is emitted and every service erases
-  or anonymizes the user's data, including objects in storage.
+  or anonymizes the user's data, including objects in storage, in a durable `user_erasure` consumer
+  that reads every `identity.user.deleted` event still in the stream.
 - **Legal holds:** Safety can place a hold (e.g. an open CSEA case). Held data is kept isolated and
   access-restricted, and everything else is deleted.
 - **No deactivation state.** Accounts are kept or deleted.
@@ -1427,9 +1448,12 @@ features:
 - Versioned under `/api/v1/…`. OIDC endpoints and `/.well-known/*` stay at their standard paths.
 - **OpenAPI 3.1** generated per service from route definitions. The gateway serves the merged document
   for enabled services at `/api/v1/openapi.json`.
-- **Errors:** RFC 9457 Problem Details with a stable machine-readable `code` (`ACCOUNT_BANNED`,
-  `LEGAL_ACCEPTANCE_REQUIRED`, `STEP_UP_REQUIRED`, …). User-facing text is the frontend's job.
-- Cursor pagination on every list that can grow.
+- **Errors:** RFC 9457 Problem Details (`application/problem+json`) with a stable machine-readable
+  `code` (`ACCOUNT_BANNED`, `LEGAL_ACCEPTANCE_REQUIRED`, `STEP_UP_REQUIRED`, …), `type`
+  `urn:qtiauth:problem:<code>` and the `request_id`. User-facing text is the frontend's job. Each
+  service registers its codes, and the OpenAPI document lists the codes every operation can return.
+- Cursor pagination on every list that can grow: `?limit=&cursor=`, answered with
+  `{ items, next_cursor }`, where `next_cursor` is opaque and `null` on the last page.
 - API timestamps are RFC 3339 UTC strings.
 
 ### 8.4 Retention
@@ -1534,9 +1558,9 @@ Metrics are a first-class deliverable, not an afterthought.
 
 `qtiauth` is available in every service image:
 
-`config check` · `db provision` · `migrate status|up` · `admin create` · `lists update` ·
-`lists audit` · `keys rotate` · `audit verify` · `backup restore` · `backup verify` ·
-`user export <id>` · `user delete <id>`
+`config check` · `db provision` · `migrate status|up` · `routes manifest` · `routes openapi` ·
+`admin create` · `lists update` · `lists audit` · `keys rotate` · `audit verify` · `backup restore` ·
+`backup verify` · `user export <id>` · `user delete <id>`
 
 ### 8.9 Security baseline
 

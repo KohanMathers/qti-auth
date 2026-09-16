@@ -2,7 +2,7 @@
 
 QTIAuth reads one YAML file, `qtiauth.yaml`, plus secrets from the environment. This page covers how that file is found, written and checked. For what each setting does, see the JSON Schema at [`config/qtiauth.schema.json`](../config/qtiauth.schema.json), which has a description and default for every setting.
 
-The `database` section and the Postgres roles it references are covered in [database.md](database.md), the `bus` section in [bus.md](bus.md), and the `observability` section in [observability.md](observability.md).
+The `database` section and the Postgres roles it references are covered in [database.md](database.md), the `bus` section in [bus.md](bus.md), the `observability` section in [observability.md](observability.md), and the `service` section in [services.md](services.md).
 
 ## Where config lives
 

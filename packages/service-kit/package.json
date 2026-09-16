@@ -1,0 +1,30 @@
+{
+  "name": "@qtiauth/service-kit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Hono service skeleton, internal identity tokens, route manifests, OpenAPI, Problem Details and the service CLI",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@qtiauth/bus": "workspace:*",
+    "@qtiauth/cli": "workspace:*",
+    "@qtiauth/config": "workspace:*",
+    "@qtiauth/db": "workspace:*",
+    "@qtiauth/events": "workspace:*",
+    "@qtiauth/observability": "workspace:*",
+    "hono": "4.13.8",
+    "kysely": "0.29.6",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@qtiauth/testing": "workspace:*"
+  }
+}

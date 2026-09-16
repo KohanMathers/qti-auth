@@ -178,17 +178,24 @@ Spec: §8.6
 
 **Done when:** one request produces a single trace spanning HTTP → DB → bus publish → consumer.
 
-### P0.7 `@qtiauth/service-kit` — M
+### P0.7 `@qtiauth/service-kit` — M ✅
 Spec: §2.6, §8.3
 
-- [ ] Hono service skeleton: config, DB, bus, observability, graceful shutdown.
-- [ ] Internal identity token verification middleware (`X-QTIAuth-Identity`).
-- [ ] Route definition helper that produces the **route manifest** and **OpenAPI** from one source.
-- [ ] RFC 9457 Problem Details error helper and error-code registry.
-- [ ] Cursor pagination helper.
-- [ ] Permission declaration helper.
-- [ ] `export_user` and erasure handler registration.
-- [ ] `qtiauth` CLI framework shared by all services.
+- [x] Hono service skeleton: config, DB, bus, observability, graceful shutdown (`defineService`,
+      `startService`, `runService`, `service` config section, `docs/services.md`).
+- [x] Internal identity token verification middleware (`X-QTIAuth-Identity`) (`verifyIdentityToken`,
+      `signIdentityToken`, `busIdentityKeys` over `qtiauth.rpc.gateway.identity_keys`).
+- [x] Route definition helper that produces the **route manifest** and **OpenAPI** from one source
+      (`createServiceRouter`, `openApiDocument`, announced on `qtiauth.sys.announce`).
+- [x] RFC 9457 Problem Details error helper and error-code registry (`defineErrors`, `ProblemError`,
+      `KIT_ERRORS`).
+- [x] Cursor pagination helper (`paginationQuery`, `pageSchema`, `pageOf`, `decodeCursor`).
+- [x] Permission declaration helper (`definePermissions`, with `wildcard: false` for permissions a
+      wildcard must never match).
+- [x] `export_user` and erasure handler registration (`registerDataRights`, `dataRights` on
+      `startService`).
+- [x] `qtiauth` CLI framework shared by all services (`runServiceCli`, `configCommand` in
+      `@qtiauth/cli`, `routes manifest|openapi`).
 
 **Done when:** a template service created with the kit has health endpoints, metrics, a manifest and
 OpenAPI with no extra code.

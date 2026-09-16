@@ -1,7 +1,8 @@
 import { qtiauthConfigSchema } from '@qtiauth/config';
 
-import { type CliIo, EXIT_OK } from '../io.ts';
-import { configOptionsUsage, loadCommandConfig, parseConfigArgs } from '../options.ts';
+import { configCommand } from '../command.ts';
+import { EXIT_OK } from '../io.ts';
+import { configOptionsUsage } from '../options.ts';
 
 export const usage = `Usage: qtiauth config check [--config <path>] [--env-file <path>]
 
@@ -11,14 +12,11 @@ Options:
 ${configOptionsUsage}
 `;
 
-export async function configCheck(args: readonly string[], io: CliIo): Promise<number> {
-  const values = parseConfigArgs(args, usage);
-  if (values.help) {
-    io.stdout(usage);
-    return EXIT_OK;
-  }
-
-  const { path } = await loadCommandConfig(qtiauthConfigSchema, values, io);
-  io.stdout(`${path} is valid.\n`);
-  return EXIT_OK;
-}
+export const configCheck = configCommand({
+  usage,
+  schema: qtiauthConfigSchema,
+  run: ({ io, path }) => {
+    io.stdout(`${path} is valid.\n`);
+    return Promise.resolve(EXIT_OK);
+  },
+});

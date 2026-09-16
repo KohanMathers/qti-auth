@@ -817,6 +817,55 @@
       },
       "additionalProperties": false
     },
+    "service": {
+      "description": "Settings shared by every service.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "http": {
+          "description": "Internal HTTP server.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "port": {
+              "default": 8080,
+              "description": "Port each service listens on, on the internal network.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "shutdown_timeout": {
+              "description": "On SIGTERM or SIGINT, wait this long for in-flight requests and background work before exiting anyway. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "15s",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "identity_tokens": {
+          "description": "Internal identity tokens minted by the gateway (X-QTIAuth-Identity).",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "clock_tolerance": {
+              "description": "Allowed clock difference between the gateway and a service when checking internal identity token times. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "5s",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "keys_refresh": {
+              "description": "Fetch the gateway's identity token public keys this often. Keys the service hasn't seen are fetched straight away. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "5m",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "features": {
       "description": "Feature flags inside services.",
       "default": {},
