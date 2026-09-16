@@ -46,6 +46,21 @@ database:
 migrations:
   auto_apply: true
 
+bus:
+  servers: [nats://nats:4222]
+  user: null
+  password: '${env:NATS_PASSWORD}'
+  tls: { required: false, ca_file: null }
+  connect_timeout: 10s
+  request_timeout: 5s
+  streams: { replicas: 1, events_max_age: 7d, work_max_age: 7d, duplicate_window: 2m }
+  outbox: { poll_interval: 1s, batch_size: 100, sent_retention: 1d }
+  consumers:
+    ack_wait: 30s
+    max_deliver: 10
+    retry_delay: 1s
+    max_retry_delay: 5m
+    dedupe_retention: 14d
 features:
   auth:
     password: { enabled: true }

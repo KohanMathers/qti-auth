@@ -1,0 +1,26 @@
+{
+  "name": "@qtiauth/bus",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NATS JetStream events, transactional outbox, consumers and request/reply",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nats-io/jetstream": "3.4.0",
+    "@nats-io/transport-node": "3.4.0",
+    "@qtiauth/config": "workspace:*",
+    "@qtiauth/events": "workspace:*",
+    "kysely": "0.29.6"
+  },
+  "devDependencies": {
+    "@qtiauth/db": "workspace:*",
+    "@qtiauth/testing": "workspace:*"
+  }
+}

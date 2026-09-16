@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:envelope",
+  "title": "Event envelope",
+  "description": "Every domain event published on the bus is wrapped in this envelope. The event type's own schema describes data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "type", "occurred_at", "actor", "subject", "data", "trace_id"],
+  "properties": {
+    "event_id": {
+      "description": "ULID, unique per event. Consumers deduplicate on it.",
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "type": {
+      "description": "qtiauth.<service>.<entity>.<verb>.v<n>. Also the NATS subject.",
+      "type": "string",
+      "pattern": "^qtiauth\\.[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+\\.v[1-9][0-9]*$"
+    },
+    "occurred_at": {
+      "description": "When the state change happened.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "description": "Who caused the event.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "enum": ["user", "service", "system"] },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "subject": {
+      "description": "What the event is about, or null.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "id"],
+          "properties": {
+            "type": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+            "id": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "data": {
+      "description": "Event-specific payload, described by the event type's schema.",
+      "type": "object"
+    },
+    "trace_id": {
+      "description": "W3C trace ID of the request that caused the event, or null.",
+      "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{32}$" }]
+    }
+  }
+}

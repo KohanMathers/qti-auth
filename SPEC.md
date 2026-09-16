@@ -171,7 +171,11 @@ NATS covers both async events (JetStream streams) and synchronous service-to-ser
 - **Transactional outbox:** a service writes the event to its own `outbox` table in the same
   transaction as the state change. A relay publishes to JetStream and marks the row sent, so nothing
   is lost if the service crashes between commit and publish.
-- Consumers are idempotent and deduplicate on `event_id`.
+- Consumers are idempotent and deduplicate on `event_id`, recorded in the same transaction as the
+  consumer's own changes.
+- Each event type's `data` has a versioned JSON Schema in `packages/events`. Compatible additions
+  (new optional fields) keep the version. Anything else is a new `.v<n+1>` type, published alongside
+  the old one for at least one release.
 - Envelope:
   ```json
   {
@@ -190,6 +194,11 @@ NATS covers both async events (JetStream streams) and synchronous service-to-ser
 - Subject format: `qtiauth.rpc.<service>.<method>`, e.g. `qtiauth.rpc.identity.get_user_summary`.
 - Requests carry a deadline. Callers must degrade gracefully when an optional service isn't running.
   NATS returns "no responders" immediately, so this costs no timeout.
+
+**Work queues** (async, durable, once per job)
+
+- Subject format: `qtiauth.work.<service>.<queue>`, e.g. `qtiauth.work.notifier.email`. Only the
+  owning service consumes its queues, and each job goes to one replica.
 
 **Core event catalogue (initial)**
 
@@ -481,6 +490,13 @@ database:
 
 migrations:
   auto_apply: true
+
+bus:
+  servers: [nats://nats:4222]
+  user: null
+  password: "${env:NATS_PASSWORD}"
+  streams:  { replicas: 1, events_max_age: 7d }
+  consumers: { max_deliver: 10, dedupe_retention: 14d }
 
 features:
   auth:

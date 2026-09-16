@@ -10,6 +10,10 @@ export function startPostgres(): Promise<StartedPostgreSqlContainer> {
   return new PostgreSqlContainer(IMAGES.postgres).start();
 }
 
+export function natsUrl(nats: StartedNatsContainer): string {
+  return `nats://${nats.getHost()}:${String(nats.getMappedPort(4222))}`;
+}
+
 export function startValkey(): Promise<StartedValkeyContainer> {
   return new ValkeyContainer(IMAGES.valkey).start();
 }

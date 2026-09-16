@@ -144,17 +144,20 @@ Spec: §2.3
 **Done when:** two replicas starting at once apply migrations exactly once, and a service role can't
 read another service's schema (tested).
 
-### P0.5 `@qtiauth/bus` — L
+### P0.5 `@qtiauth/bus` — L ✅
 Spec: §2.4
 
-- [ ] NATS connection management and JetStream stream/consumer provisioning.
-- [ ] Event envelope types and `packages/events` JSON Schemas with a versioning convention.
-- [ ] **Transactional outbox:** table, writer helper that runs inside a Kysely transaction, relay loop,
-      metrics for backlog size and age.
-- [ ] Idempotent consumer helper (dedupe on `event_id`).
-- [ ] Request/reply helper with deadlines and typed "no responders" handling.
-- [ ] Work-queue consumer helper (for cron jobs and email).
-- [ ] Contract test helper.
+- [x] NATS connection management and JetStream stream/consumer provisioning (`connectBus`,
+      `provisionStreams`, `ensureConsumer`, `bus` config section).
+- [x] Event envelope types and `packages/events` JSON Schemas with a versioning convention
+      (`@qtiauth/events`, `loadEventCatalog`, `docs/bus.md`).
+- [x] **Transactional outbox:** table, writer helper that runs inside a Kysely transaction, relay loop,
+      metrics for backlog size and age (`createBusTablesV1`, `writeEvent`, `startOutboxRelay`).
+- [x] Idempotent consumer helper (dedupe on `event_id`) (`consumeEvents`).
+- [x] Request/reply helper with deadlines and typed "no responders" handling (`rpcRequest`,
+      `serveRpc`).
+- [x] Work-queue consumer helper (for cron jobs and email) (`consumeWork`, `consumeCron`).
+- [x] Contract test helper (`assertEventContract`, `@qtiauth/bus/testing`).
 
 **Done when:** killing a service between commit and publish loses no events (tested), and redelivered
 events are processed once.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cors, features, network, surfaces } from './sections.ts';
+import { bus, cors, features, network, surfaces } from './sections.ts';
 
 function messages(result: { error?: { issues: { path: PropertyKey[]; message: string }[] } }) {
   return (result.error?.issues ?? []).map((i) => `${i.path.join('.')}: ${i.message}`);
@@ -99,5 +99,35 @@ describe('features', () => {
       auth: { social: { generic_oidc: [provider, provider] } },
     });
     expect(messages(result)).toEqual(['auth.social.generic_oidc: Provider ids must be unique']);
+  });
+});
+
+describe('bus', () => {
+  it('accepts NATS URLs only', () => {
+    const result = bus.safeParse({
+      servers: ['nats://nats:4222', 'tls://nats.internal:4222', 'http://nats:4222', 'nats'],
+    });
+    expect(messages(result)).toEqual([
+      'servers.2: Must be a NATS URL like nats://nats:4222',
+      'servers.3: Must be a NATS URL like nats://nats:4222',
+    ]);
+  });
+
+  it('needs a user when a password is set', () => {
+    expect(messages(bus.safeParse({ password: 'secret' }))).toEqual([
+      'user: Required when password is set',
+    ]);
+    expect(messages(bus.safeParse({ user: 'qtiauth', password: 'secret' }))).toEqual([]);
+  });
+
+  it('remembers processed events for as long as the stream keeps them', () => {
+    const result = bus.safeParse({
+      streams: { events_max_age: '30d' },
+      consumers: { retry_delay: '1m', max_retry_delay: '30s' },
+    });
+    expect(messages(result)).toEqual([
+      'consumers.dedupe_retention: Must be at least streams.events_max_age, or redelivered events could run twice',
+      'consumers.max_retry_delay: Must be at least retry_delay',
+    ]);
   });
 });

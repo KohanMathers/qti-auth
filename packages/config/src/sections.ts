@@ -248,6 +248,119 @@ export const migrations = z
   .prefault({})
   .describe('Database migrations.');
 
+function isNatsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return ['nats:', 'tls:'].includes(url.protocol) && url.hostname !== '' && url.pathname === '';
+  } catch {
+    return false;
+  }
+}
+
+export const bus = z
+  .strictObject({
+    servers: z
+      .array(z.string().refine(isNatsUrl, 'Must be a NATS URL like nats://nats:4222'))
+      .min(1)
+      .default(['nats://nats:4222'])
+      .describe('NATS servers to connect to.'),
+    user: z
+      .string()
+      .min(1)
+      .nullable()
+      .default(null)
+      .describe('NATS user. null connects without credentials.'),
+    password: z.string().default('').describe("The NATS user's password. Reference a secret."),
+    tls: z
+      .strictObject({
+        required: z
+          .boolean()
+          .default(false)
+          .describe('Refuse to connect without TLS. TLS is used anyway when the server offers it.'),
+        ca_file: z
+          .string()
+          .min(1)
+          .nullable()
+          .default(null)
+          .describe('CA certificate file for verifying the server. null uses the system CAs.'),
+      })
+      .prefault({})
+      .describe('TLS to NATS.'),
+    connect_timeout: duration('10s', 'Give up connecting after this long.'),
+    request_timeout: duration('5s', 'Default deadline for request/reply calls between services.'),
+    streams: z
+      .strictObject({
+        replicas: z
+          .int()
+          .min(1)
+          .max(5)
+          .default(1)
+          .describe('JetStream replicas per stream. Use 3 on a NATS cluster.'),
+        events_max_age: duration('7d', 'Keep domain events in the stream for this long.'),
+        work_max_age: duration(
+          '7d',
+          'Drop cron ticks and work-queue jobs nobody took after this long.',
+        ),
+        duplicate_window: duration(
+          '2m',
+          'JetStream drops a message whose ID it has already seen within this window.',
+        ),
+      })
+      .prefault({})
+      .describe('JetStream streams, created or updated when a service starts.'),
+    outbox: z
+      .strictObject({
+        poll_interval: duration('1s', 'Check the outbox for unsent events this often.'),
+        batch_size: z
+          .int()
+          .min(1)
+          .max(1000)
+          .default(100)
+          .describe('Events published per outbox transaction.'),
+        sent_retention: duration('1d', 'Delete published events from the outbox after this long.'),
+      })
+      .prefault({})
+      .describe('Transactional outbox relay.'),
+    consumers: z
+      .strictObject({
+        ack_wait: duration('30s', 'Redeliver a message if a consumer neither acks nor extends it.'),
+        max_deliver: z
+          .int()
+          .min(1)
+          .default(10)
+          .describe('Give up on a message after this many delivery attempts.'),
+        retry_delay: duration('1s', 'Delay before the first retry. Doubles with each attempt.'),
+        max_retry_delay: duration('5m', 'Longest delay between retries.'),
+        dedupe_retention: duration(
+          '14d',
+          'Remember processed event IDs for this long. Must be at least streams.events_max_age.',
+        ),
+      })
+      .prefault({})
+      .describe('Event, cron and work-queue consumers.'),
+  })
+  .superRefine((b, ctx) => {
+    if (b.password && b.user === null) {
+      ctx.addIssue({ code: 'custom', message: 'Required when password is set', path: ['user'] });
+    }
+    if (b.consumers.dedupe_retention < b.streams.events_max_age) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Must be at least streams.events_max_age, or redelivered events could run twice',
+        path: ['consumers', 'dedupe_retention'],
+      });
+    }
+    if (b.consumers.max_retry_delay < b.consumers.retry_delay) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Must be at least retry_delay',
+        path: ['consumers', 'max_retry_delay'],
+      });
+    }
+  })
+  .prefault({})
+  .describe('NATS JetStream message bus.');
+
 const oauthProvider = (name: string) =>
   z
     .strictObject({
@@ -391,6 +504,7 @@ export const sections = {
   geoip,
   database,
   migrations,
+  bus,
   features,
   captcha,
   email: emailSection,
