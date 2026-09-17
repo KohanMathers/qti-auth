@@ -1596,11 +1596,6 @@
           "type": "string",
           "enum": [
             "smtp",
-            "brevo",
-            "postmark",
-            "ses",
-            "resend",
-            "mailgun",
             "console"
           ]
         },
@@ -1671,6 +1666,105 @@
                 }
               },
               "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "default_locale": {
+          "default": "en-GB",
+          "description": "Locale used when an email's locale has no templates. Every template must exist in this locale.",
+          "type": "string"
+        },
+        "templates_dir": {
+          "default": "templates/email",
+          "description": "Directory of template overrides, one subdirectory per locale, relative to the config directory. A file here replaces the built-in file of the same name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "smtp": {
+          "description": "SMTP provider settings.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "host": {
+              "default": "localhost",
+              "description": "SMTP server host.",
+              "type": "string",
+              "minLength": 1
+            },
+            "port": {
+              "default": 587,
+              "description": "SMTP server port.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "security": {
+              "default": "starttls",
+              "description": "starttls upgrades the connection and refuses servers that cannot, tls connects over TLS (usually port 465), none never uses TLS.",
+              "type": "string",
+              "enum": [
+                "starttls",
+                "tls",
+                "none"
+              ]
+            },
+            "user": {
+              "default": null,
+              "description": "SMTP user. null sends without authenticating.",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "password": {
+              "default": "",
+              "description": "The SMTP user's password. Reference a secret.",
+              "type": "string"
+            },
+            "connect_timeout": {
+              "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "10s",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "send_timeout": {
+              "description": "Give up on a send when the server goes quiet for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "30s",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "queue": {
+          "description": "Outgoing email queue. With the defaults, an email is retried for about 6 hours before it fails.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "max_attempts": {
+              "default": 20,
+              "description": "Try sending an email this many times before marking it failed.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "retry_delay": {
+              "description": "Delay before the first retry. Doubles with each attempt. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "10s",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "max_retry_delay": {
+              "description": "Longest delay between retries. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "default": "30m",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
           },
           "additionalProperties": false
@@ -1818,6 +1912,20 @@
             "additionalProperties": false,
             "description": "A scheduled job."
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "retention": {
+      "description": "How long data is kept. retention.sweep deletes anything older.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "delivery_logs": {
+          "description": "Keep email delivery log entries for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "default": "30d",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }
       },
       "additionalProperties": false

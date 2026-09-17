@@ -74,6 +74,14 @@ services:
     networks: [internal, public]
     ports: ['8000:8000']
 
+  notifier:
+    <<: *qtiauth-service
+    image: qtiauth/notifier:dev
+    build:
+      context: ..
+      dockerfile: services/notifier/Dockerfile
+    command: ['node', 'src/main.ts']
+
   scheduler:
     <<: *qtiauth-service
     image: qtiauth/scheduler:dev

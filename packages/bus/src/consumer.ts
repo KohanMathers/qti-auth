@@ -13,9 +13,15 @@ export interface MessageContext {
   attempt: number;
 }
 
+export type RetrySettings = Pick<
+  BusConfig['consumers'],
+  'max_deliver' | 'retry_delay' | 'max_retry_delay'
+>;
+
 export interface ConsumerOptions {
   onError: (error: unknown, message: MessageContext) => void;
   metrics?: BusMetrics;
+  retry?: RetrySettings;
 }
 
 export interface RunningConsumer {
@@ -49,7 +55,7 @@ export async function runPullConsumer(
   bus: Bus,
   options: PullConsumerOptions,
 ): Promise<RunningConsumer> {
-  const { consumers } = bus.config;
+  const consumers = { ...bus.config.consumers, ...options.retry };
   const metrics = options.metrics ?? noopBusMetrics;
   await ensureConsumer(bus.jsm, {
     stream: options.stream,

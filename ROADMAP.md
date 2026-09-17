@@ -261,14 +261,18 @@ Spec: §2.8
 
 **Done when:** a job with 3 consumer replicas runs exactly once per tick.
 
-### P1.3 Notifier: email — M
+### P1.3 Notifier: email — M ✅
 Spec: §5.1
 
-- [ ] Provider interface with `console` and `smtp` implementations.
-- [ ] MJML + text templates, per-locale directories, config overrides, typed variables validated at
-      startup.
-- [ ] JetStream outbound queue with priorities and retries.
-- [ ] Delivery log.
+- [x] Provider interface with `console` and `smtp` implementations (`services/notifier`,
+      `EmailProvider`, `consoleProvider`, `smtpProvider`, `email` config section, `docs/notifier.md`).
+- [x] MJML + text templates, per-locale directories, config overrides, typed variables validated at
+      startup (`EMAIL_TEMPLATES` in `@qtiauth/email`, `loadTemplates`, `email.templates_dir`,
+      `qtiauth templates check`).
+- [x] JetStream outbound queue with priorities and retries (`queueEmail`,
+      `qtiauth.work.notifier.email.high|normal`, `email.queue`, per-consumer `retry` in `@qtiauth/bus`).
+- [x] Delivery log (`email_deliveries` in the `notify` schema, swept by `retention.sweep` after
+      `retention.delivery_logs`, covered by `export_user` and erasure, `qtiauth_email_*` metrics).
 
 **Done when:** a missing template variable stops startup, and a dead SMTP server delays mail without
 failing the triggering request.

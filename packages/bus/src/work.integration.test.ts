@@ -102,6 +102,34 @@ describe('work queues', () => {
     expect(onError).toHaveBeenCalledOnce();
   });
 
+  it('uses the retry settings a consumer gives instead of the bus defaults', async () => {
+    const bus = await service('notifier');
+    const attempts: number[] = [];
+    const consumer = track(
+      await consumeWork(bus, {
+        queue: 'email',
+        retry: { max_deliver: 3, retry_delay: 10, max_retry_delay: 10 },
+        handler: async (job) => {
+          attempts.push(job.attempt);
+          await Promise.resolve();
+          throw new Error('provider outage');
+        },
+        onError: () => undefined,
+      }),
+    );
+
+    await publishWork(bus.js, workSubject('notifier', 'email'), { to: 'user' });
+
+    await vi.waitFor(() => {
+      expect(attempts).toEqual([1, 2, 3]);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(attempts).toEqual([1, 2, 3]);
+    const info = await bus.jsm.consumers.info(WORK_STREAM, consumer.name);
+    expect(info.config.max_deliver).toBe(3);
+    await bus.jsm.streams.purge(WORK_STREAM, { filter: workSubject('notifier', 'email') });
+  });
+
   it('terminates jobs that are not JSON', async () => {
     const bus = await service('notifier');
     const onError = vi.fn();

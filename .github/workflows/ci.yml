@@ -56,15 +56,19 @@ jobs:
   compose:
     name: Compose stack
     runs-on: ubuntu-latest
-    env:
-      POSTGRES_PASSWORD: ci
     steps:
       - uses: actions/checkout@v7
       - run: cp .env.example .env
       - run: sed -i "s|^KEY_ENCRYPTION_KEY=.*|KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)|" .env
+      - run: |
+          for name in POSTGRES_PASSWORD DB_IDENTITY_PASSWORD DB_NOTIFY_PASSWORD DB_OIDC_PASSWORD \
+            DB_SAFETY_PASSWORD DB_SUPPORT_PASSWORD DB_GAMES_PASSWORD; do
+            sed -i "s|^$name=.*|$name=$(openssl rand -hex 32)|" .env
+          done
       - run: >-
           docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.dev.yaml
           --profile '*' config --quiet
+      - run: docker compose --env-file .env -f deploy/compose.yaml run --rm notifier qtiauth db provision
       - run: docker compose --env-file .env -f deploy/compose.yaml up --wait --wait-timeout 120
       - run: >-
           docker compose --env-file .env -f deploy/compose.yaml --profile games

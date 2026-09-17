@@ -4,6 +4,7 @@ export {
   InvalidMessageError,
   type MessageContext,
   retryDelay,
+  type RetrySettings,
   type RunningConsumer,
 } from './consumer.ts';
 export {

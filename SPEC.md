@@ -612,6 +612,10 @@ email:
     auth:     { name: "Example Auth",     address: "auth@example.com" }
     security: { name: "Example Security", address: "security@example.com" }
     support:  { name: "Example Support",  address: "support@example.com" }
+  default_locale: en-GB
+  templates_dir: templates/email  # relative to the config directory (§5.1)
+  smtp: { host: localhost, port: 587, security: starttls, user: null, password: "${env:SMTP_PASSWORD}" }
+  queue: { max_attempts: 20, retry_delay: 10s, max_retry_delay: 30m }
 
 accounts:   { … }               # §4.1, §4.12
 password:   { … }               # §4.2
@@ -623,7 +627,7 @@ legal:      { … }               # §4.9
 usernames:  { … }               # §4.10
 safety:     { … }               # §6.2
 rate_limits: { … }              # §8.1
-retention:  { … }               # §8.4
+retention:  { delivery_logs: 30d, … }   # §8.4
 backups:    { … }               # §8.7
 ```
 
@@ -1030,11 +1034,24 @@ Required under UK GDPR.
 - **Templates:** MJML + plain text per locale in `config/templates/email/`. Defaults ship in the image,
   and any file of the same name in config overrides the default. Template variables are strictly
   typed, and a missing variable fails at startup, not at send time.
+  - Each template is `<locale>/<template>.subject.txt`, `<template>.txt` and `<template>.mjml`, with
+    `{{ variable }}` placeholders. Every template can also use `brand.product_name`,
+    `brand.company_name`, `brand.support_email` and `brand.primary_color` from `branding`.
+  - Templates and their variables are declared in `packages/email`. The notifier refuses to start if
+    a template uses a variable it isn't given, has invalid MJML, or is missing from
+    `email.default_locale`. `qtiauth templates check` runs the same checks.
+  - An email uses its locale, then its language alone, then `email.default_locale`.
 - **Sender identities** per category: auth, security, support.
 - **Delivery log:** status, provider ID, retries. Bounce and complaint webhooks where the provider
   supports them, with automatic suppression of hard-bouncing addresses.
 - **Outbound queue:** a JetStream work queue with retries, so a provider outage delays mail instead of
   failing the user's request. Sign-in, reset and verification emails are high priority.
+  - Services call `queueEmail` from `packages/email`, which checks the variables before publishing to
+    `qtiauth.work.notifier.email.high` or `.normal`, by the template's priority. Each queue has its
+    own consumer, so normal mail never holds up high-priority mail.
+  - A failed send is retried from `email.queue.retry_delay`, doubling up to `max_retry_delay`, for
+    `max_attempts` attempts (about 6 hours by default), then marked `failed`. Delivery is at least
+    once, and an email the delivery log records as `sent` is never sent again.
 
 ### 5.2 Webhooks
 

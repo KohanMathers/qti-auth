@@ -164,7 +164,7 @@ await consumeCron(bus, {
 });
 ```
 
-A service consumes only its own queues. Jobs that run longer than `ack_wait` are kept alive automatically. `publishCronTick(bus.js, job, scheduledAt)` is what the scheduler publishes, and `consumeCron` reports each run's outcome and duration through `metrics` (see [scheduler.md](scheduler.md)).
+A service consumes only its own queues. Jobs that run longer than `ack_wait` are kept alive automatically. Pass `retry: { max_deliver, retry_delay, max_retry_delay }` to give a consumer its own retries instead of the `consumers` settings, as the notifier does so email is retried for hours. `publishCronTick(bus.js, job, scheduledAt)` is what the scheduler publishes, and `consumeCron` reports each run's outcome and duration through `metrics` (see [scheduler.md](scheduler.md)).
 
 ### Request/reply
 

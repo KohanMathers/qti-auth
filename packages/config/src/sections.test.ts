@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   bus,
   cors,
+  emailSection,
   features,
   gateway,
   network,
   rateLimits,
+  retention,
   scheduler,
   surfaces,
 } from './sections.ts';
@@ -226,5 +228,38 @@ describe('scheduler', () => {
     expect(messages(scheduler.safeParse({ jobs: { 'reports.digest': {} } }))).toEqual([
       'jobs.reports.digest.schedule: Required for a job that is not built in',
     ]);
+  });
+});
+
+describe('email', () => {
+  it('checks the locale, SMTP credentials and retry delays', () => {
+    const result = emailSection.safeParse({
+      provider: 'brevo',
+      default_locale: 'en_gb',
+      smtp: { password: 'secret' },
+      queue: { retry_delay: '1m', max_retry_delay: '30s' },
+    });
+    expect(messages(result)).toEqual([
+      expect.stringMatching(/^provider: /),
+      'default_locale: Must be a canonical locale like en-GB',
+      'smtp.user: Required when password is set',
+      'queue.max_retry_delay: Must be at least retry_delay',
+    ]);
+  });
+
+  it('defaults to STARTTLS on port 587 and retries for hours', () => {
+    const email = emailSection.parse({});
+    expect(email.smtp).toMatchObject({ host: 'localhost', port: 587, security: 'starttls' });
+    expect(email.queue).toEqual({
+      max_attempts: 20,
+      retry_delay: 10_000,
+      max_retry_delay: 1_800_000,
+    });
+  });
+});
+
+describe('retention', () => {
+  it('keeps delivery logs for 30 days by default', () => {
+    expect(retention.parse({})).toEqual({ delivery_logs: 2_592_000_000 });
   });
 });

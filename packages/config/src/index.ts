@@ -22,6 +22,7 @@ export {
   type CronJob,
   DB_SCHEMAS,
   type DbSchema,
+  EMAIL_PROVIDERS,
   LOG_LEVELS,
   MODULES,
   RATE_LIMIT_DIMENSIONS,

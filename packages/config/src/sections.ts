@@ -900,10 +900,20 @@ export const captcha = z
   .prefault({})
   .describe('Bot protection.');
 
+export const EMAIL_PROVIDERS = ['smtp', 'console'] as const;
+
+function isLocale(value: string): boolean {
+  try {
+    return Intl.getCanonicalLocales(value)[0] === value;
+  } catch {
+    return false;
+  }
+}
+
 export const emailSection = z
   .strictObject({
     provider: z
-      .enum(['smtp', 'brevo', 'postmark', 'ses', 'resend', 'mailgun', 'console'])
+      .enum(EMAIL_PROVIDERS)
       .default('smtp')
       .describe('Email delivery provider. console prints emails instead of sending them.'),
     from: z
@@ -914,9 +924,77 @@ export const emailSection = z
       })
       .prefault({})
       .describe('Sender identities.'),
+    default_locale: z
+      .string()
+      .refine(isLocale, 'Must be a canonical locale like en-GB')
+      .default('en-GB')
+      .describe(
+        "Locale used when an email's locale has no templates. Every template must exist in this locale.",
+      ),
+    templates_dir: z
+      .string()
+      .min(1)
+      .default('templates/email')
+      .describe(
+        'Directory of template overrides, one subdirectory per locale, relative to the config directory. A file here replaces the built-in file of the same name.',
+      ),
+    smtp: z
+      .strictObject({
+        host: z.string().min(1).default('localhost').describe('SMTP server host.'),
+        port: z.int().min(1).max(65_535).default(587).describe('SMTP server port.'),
+        security: z
+          .enum(['starttls', 'tls', 'none'])
+          .default('starttls')
+          .describe(
+            'starttls upgrades the connection and refuses servers that cannot, tls connects over TLS (usually port 465), none never uses TLS.',
+          ),
+        user: z
+          .string()
+          .min(1)
+          .nullable()
+          .default(null)
+          .describe('SMTP user. null sends without authenticating.'),
+        password: z.string().default('').describe("The SMTP user's password. Reference a secret."),
+        connect_timeout: duration('10s', 'Give up connecting after this long.'),
+        send_timeout: duration(
+          '30s',
+          'Give up on a send when the server goes quiet for this long.',
+        ),
+      })
+      .refine((smtp) => !smtp.password || smtp.user !== null, {
+        message: 'Required when password is set',
+        path: ['user'],
+      })
+      .prefault({})
+      .describe('SMTP provider settings.'),
+    queue: z
+      .strictObject({
+        max_attempts: z
+          .int()
+          .min(1)
+          .default(20)
+          .describe('Try sending an email this many times before marking it failed.'),
+        retry_delay: duration('10s', 'Delay before the first retry. Doubles with each attempt.'),
+        max_retry_delay: duration('30m', 'Longest delay between retries.'),
+      })
+      .refine((queue) => queue.max_retry_delay >= queue.retry_delay, {
+        message: 'Must be at least retry_delay',
+        path: ['max_retry_delay'],
+      })
+      .prefault({})
+      .describe(
+        'Outgoing email queue. With the defaults, an email is retried for about 6 hours before it fails.',
+      ),
   })
   .prefault({})
   .describe('Outgoing email.');
+
+export const retention = z
+  .strictObject({
+    delivery_logs: duration('30d', 'Keep email delivery log entries for this long.'),
+  })
+  .prefault({})
+  .describe('How long data is kept. retention.sweep deletes anything older.');
 
 export const sections = {
   branding,
@@ -938,6 +1016,7 @@ export const sections = {
   security,
   rate_limits: rateLimits,
   scheduler,
+  retention,
 };
 
 export type SectionName = keyof typeof sections;
