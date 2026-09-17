@@ -30,14 +30,23 @@ describe('shipped config', () => {
     expect({ ...shipped, surfaces: defaults.surfaces }).toEqual(defaults);
   });
 
-  it('config/qtiauth.dev.yaml only switches email to the console provider', async () => {
+  it('config/qtiauth.dev.yaml only switches email to the console provider and adds local origins', async () => {
     const env = parseEnv(readFileSync(join(root, '.env.example'), 'utf8'));
     const dev = await loadConfig(qtiauthConfigSchema, {
       path: join(root, 'config/qtiauth.dev.yaml'),
       env,
     });
     const defaults = qtiauthConfigSchema.parse({});
-    expect(dev).toEqual({ ...defaults, email: { ...defaults.email, provider: 'console' } });
+    const origins = ['http://localhost:8000'];
+    expect(dev).toEqual({
+      ...defaults,
+      surfaces: {
+        account: { ...defaults.surfaces.account, origins },
+        support: { ...defaults.surfaces.support, origins },
+        api: { ...defaults.surfaces.api, origins },
+      },
+      email: { ...defaults.email, provider: 'console' },
+    });
   });
 
   it('config/qtiauth.dev.yaml references the same secrets as config/qtiauth.yaml', () => {

@@ -50,7 +50,9 @@ const PROFILES: Record<string, string[]> = {
   observability: ['prometheus', 'grafana', 'tempo', 'loki'],
 };
 
-const QTIAUTH_SERVICES = ['oidc', 'safety', 'support', 'games'];
+const QTIAUTH_SERVICES = ['gateway', 'oidc', 'safety', 'support', 'games'];
+
+const PUBLIC_SERVICES: Record<string, string[]> = { gateway: ['8000:8000'] };
 
 function servicesByProfile(compose: ComposeFile): Record<string, string[]> {
   const byProfile: Record<string, string[]> = {};
@@ -88,13 +90,15 @@ describe('deploy/compose.yaml', () => {
       expect(base.services[name]?.depends_on, name).toEqual(
         Object.fromEntries(INFRA.map((dep) => [dep, { condition: 'service_healthy' }])),
       );
-      expect(base.services[name]?.networks, name).toEqual(['internal']);
+      expect(base.services[name]?.networks, name).toEqual(
+        name in PUBLIC_SERVICES ? ['internal', 'public'] : ['internal'],
+      );
     }
   });
 
-  it('publishes no ports', () => {
+  it('publishes ports only for the gateway', () => {
     for (const [name, service] of Object.entries(base.services)) {
-      expect(service.ports, name).toBeUndefined();
+      expect(service.ports, name).toEqual(PUBLIC_SERVICES[name]);
     }
   });
 });

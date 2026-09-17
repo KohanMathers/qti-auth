@@ -220,22 +220,28 @@ Spec: §2.2
 A thin, real, end-to-end slice: **sign up and sign in with a magic link through the gateway, on one
 host.** Proves the architecture before building breadth.
 
-### P1.1 Gateway core — L
+### P1.1 Gateway core — L ✅
 Spec: §2.6, §2.7, §8.1, §8.3, §8.9
 
-- [ ] Service announce handling and dynamic route table from manifests.
-- [ ] Single-host surface routing (`account`, `api`), with core API mounted per §2.10.
-- [ ] Declared route policy enforcement: auth mode, permissions, account states, legal/parental gates
-      (gates return the right codes even before the features exist).
-- [ ] Session cookie resolution via Valkey with Postgres fallback over RPC.
-- [ ] **Internal identity token:** EdDSA key generated and stored encrypted, 60 s tokens, key rotation
-      job.
-- [ ] Rate limiting: named policies, sliding window in Valkey, `RateLimit-*` headers, fail-open/closed.
-- [ ] Trusted-proxy client IP extraction.
-- [ ] CORS from config.
-- [ ] Security headers.
-- [ ] Merged OpenAPI at `/api/v1/openapi.json`.
-- [ ] `/api/v1/meta/features` and `/api/v1/meta/health` with the consistency check (§2.2).
+- [x] Service announce handling and dynamic route table from manifests (`services/gateway`,
+      `startDiscovery`, `buildRouteTable`, `gateway` config section, `docs/gateway.md`).
+- [x] Single-host surface routing (`account`, `api`), with core API mounted per §2.10
+      (`matchSurface`, `mountPath`, `surfaces.<name>.origins`).
+- [x] Declared route policy enforcement: auth mode, permissions, account states, legal/parental gates
+      (gates return the right codes even before the features exist) (`checkPolicy`).
+- [x] Session cookie resolution via Valkey with Postgres fallback over RPC (`createSessionResolver`,
+      `qtiauth.rpc.identity.resolve_session`, cache cleared by identity events through
+      `consumeIdempotentEvents`, `@qtiauth/valkey`, `valkey` config section).
+- [x] **Internal identity token:** EdDSA key generated and stored encrypted, 60 s tokens, key rotation
+      job (`openKeyring` over NATS KV, envelope encryption with `KEY_ENCRYPTION_KEY`, `keys.rotate`).
+- [x] Rate limiting: named policies, sliding window in Valkey, `RateLimit-*` headers, fail-open/closed
+      (`createRateLimiter`, `rate_limits` config section with policy groups).
+- [x] Trusted-proxy client IP extraction (`clientIp`).
+- [x] CORS from config (`allowedOrigins`, plus the `Origin` check for state-changing requests).
+- [x] Security headers (`applySecurityHeaders`, `gateway.hsts`).
+- [x] Merged OpenAPI at `/api/v1/openapi.json` (`mergeOpenApi`, per surface, with gateway error codes).
+- [x] `/api/v1/meta/features` and `/api/v1/meta/health` with the consistency check (§2.2)
+      (`featuresReport`, `healthReport`).
 
 **Done when:**
 - A request without the internal token is rejected by a service even from inside the network.

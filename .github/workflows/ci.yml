@@ -61,6 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: cp .env.example .env
+      - run: sed -i "s|^KEY_ENCRYPTION_KEY=.*|KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)|" .env
       - run: >-
           docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.dev.yaml
           --profile '*' config --quiet

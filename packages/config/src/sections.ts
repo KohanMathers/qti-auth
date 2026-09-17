@@ -2,7 +2,7 @@ import { isIP } from 'node:net';
 
 import * as z from 'zod';
 
-import { duration } from './duration.ts';
+import { duration, requiredDuration } from './duration.ts';
 
 function toggle(enabled: boolean, description: string) {
   return z
@@ -102,6 +102,13 @@ const surface = (defaultBasePath: string, purpose: string) =>
         .nullable()
         .default(null)
         .describe('Modules this surface owns. null uses the default ownership.'),
+      origins: z
+        .array(z.string().refine(isOrigin, 'Must be an origin like https://app.example.com'))
+        .nullable()
+        .default(null)
+        .describe(
+          'Public origins browsers use for this surface, for CORS, the Origin check and feature discovery. null uses https://<host> for each host.',
+        ),
     })
     .refine((s) => s.hosts.length > 0 || s.ports.length > 0, {
       message: 'Set at least one of hosts or ports',
@@ -139,6 +146,11 @@ export const surfaces = z
 
 export const cookies = z
   .strictObject({
+    name: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]+$/, 'Must be letters, digits, - or _')
+      .default('qtiauth_session')
+      .describe('Session cookie name. Gets the __Host- prefix when domain is null.'),
     domain: z
       .hostname('Must be a domain, without a leading dot')
       .nullable()
@@ -460,6 +472,228 @@ export const service = z
   .prefault({})
   .describe('Settings shared by every service.');
 
+export const valkey = z
+  .strictObject({
+    host: z.string().min(1).default('valkey').describe('Valkey host.'),
+    port: z.int().min(1).max(65_535).default(6379).describe('Valkey port.'),
+    user: z
+      .string()
+      .min(1)
+      .nullable()
+      .default(null)
+      .describe('Valkey ACL user. null uses the default user.'),
+    password: z
+      .string()
+      .default('')
+      .describe('Valkey password. Empty connects without one. Reference a secret.'),
+    database: z.int().min(0).default(0).describe('Logical database number.'),
+    tls: z
+      .strictObject({
+        enabled: z.boolean().default(false).describe('Connect over TLS.'),
+        ca_file: z
+          .string()
+          .min(1)
+          .nullable()
+          .default(null)
+          .describe('CA certificate file for verifying the server. null uses the system CAs.'),
+      })
+      .prefault({})
+      .describe('TLS to Valkey.'),
+    connect_timeout: duration('5s', 'Give up connecting after this long.'),
+    command_timeout: duration(
+      '1s',
+      'Treat Valkey as unavailable when a command takes longer than this.',
+    ),
+  })
+  .prefault({})
+  .describe('Valkey, for rate limits, the session cache and short-lived state.');
+
+const SERVICE_NAME = /^[a-z][a-z0-9_]*$/;
+
+export const gateway = z
+  .strictObject({
+    http: z
+      .strictObject({
+        port: z
+          .int()
+          .min(1)
+          .max(65_535)
+          .default(8000)
+          .describe(
+            'Public port for surfaces bound to hosts. Surfaces bound to ports listen on their own ports.',
+          ),
+        max_body_size: z
+          .int()
+          .min(1)
+          .default(1_048_576)
+          .describe('Largest request body the gateway accepts, in bytes.'),
+        upstream_timeout: duration('30s', 'Give up on a service response after this long.'),
+      })
+      .prefault({})
+      .describe('Public HTTP listener.'),
+    upstreams: z
+      .record(
+        z.string().regex(SERVICE_NAME, 'Must be a service name like identity'),
+        z.url({ protocol: /^https?$/ }),
+      )
+      .default({})
+      .describe(
+        'Base URL per service. Services not listed are reached at http://<service>:<service.http.port>.',
+      ),
+    discovery: z
+      .strictObject({
+        interval: duration('30s', 'Ask every service to announce itself this often.'),
+        expiry: duration(
+          '90s',
+          "Forget a service instance that hasn't announced itself for this long.",
+        ),
+        startup_grace: duration(
+          '5s',
+          "After starting, wait this long for announcements before reporting services that aren't running.",
+        ),
+      })
+      .refine((d) => d.expiry > d.interval, {
+        message: 'Must be longer than interval',
+        path: ['expiry'],
+      })
+      .prefault({})
+      .describe('Service discovery over qtiauth.sys.announce.'),
+    session_cache: z
+      .strictObject({
+        ttl: duration(
+          '1m',
+          'Keep a resolved session in Valkey for this long. Revocations and account changes clear it sooner.',
+        ),
+      })
+      .prefault({})
+      .describe('Session lookup cache.'),
+    identity_keys: z
+      .strictObject({
+        encryption_key: z
+          .string()
+          .default('')
+          .describe(
+            'Base64 32-byte key that encrypts the signing keys at rest. Required to start the gateway. Reference a secret.',
+          ),
+        rotate_after: duration('30d', 'Replace the signing key once it is this old.'),
+        retain_after_rotation: duration(
+          '1h',
+          'Keep publishing a replaced key for this long, so tokens it signed can still be checked.',
+        ),
+      })
+      .prefault({})
+      .describe('Signing keys for internal identity tokens (X-QTIAuth-Identity).'),
+    hsts: z
+      .strictObject({
+        max_age: duration('365d', 'How long browsers remember to use HTTPS only.'),
+        include_subdomains: z
+          .boolean()
+          .default(false)
+          .describe('Apply HSTS to every subdomain of each surface host too.'),
+        preload: z
+          .boolean()
+          .default(false)
+          .describe('Ask to be included in browser preload lists.'),
+      })
+      .prefault({})
+      .describe('Strict-Transport-Security header.'),
+  })
+  .prefault({})
+  .describe('Gateway: the single public entry point.');
+
+export const RATE_LIMIT_DIMENSIONS = ['ip', 'user', 'client', 'email', 'account'] as const;
+export type RateLimitDimension = (typeof RATE_LIMIT_DIMENSIONS)[number];
+
+const RATE_LIMIT_NAME = /^[a-z][a-z0-9_]*$/;
+
+const rateLimitPolicy = z
+  .strictObject({
+    per: z
+      .union([z.enum(RATE_LIMIT_DIMENSIONS), z.array(z.enum(RATE_LIMIT_DIMENSIONS)).min(1)])
+      .transform((per) => [...new Set(Array.isArray(per) ? per : [per])])
+      .describe(
+        'What requests are counted by. A list counts each combination separately, e.g. [ip, account] counts each IP and account pair.',
+      ),
+    limit: z.int().min(1).describe('Requests allowed per window.'),
+    window: requiredDuration('Sliding window length.'),
+    on_store_failure: z
+      .enum(['open', 'closed'])
+      .default('open')
+      .describe('When Valkey is unreachable, let requests through (open) or refuse them (closed).'),
+  })
+  .describe('A rate limit.');
+
+const rateLimitGroup = z
+  .strictObject({
+    policies: z
+      .array(z.string().regex(RATE_LIMIT_NAME))
+      .min(1)
+      .describe('Policies that all apply. A request is refused if any of them is exceeded.'),
+  })
+  .describe('Several rate limits applied together.');
+
+export type RateLimitPolicy = z.output<typeof rateLimitPolicy>;
+export type RateLimitGroup = z.output<typeof rateLimitGroup>;
+
+const DEFAULT_RATE_LIMITS = {
+  global: { per: 'ip', limit: 300, window: '1m' },
+  auth_password: { per: ['ip', 'account'], limit: 10, window: '15m', on_store_failure: 'closed' },
+  magic_link_email: { per: 'email', limit: 3, window: '1h', on_store_failure: 'closed' },
+  magic_link_ip: { per: 'ip', limit: 10, window: '1h', on_store_failure: 'closed' },
+  magic_link_ip_day: { per: 'ip', limit: 20, window: '1d', on_store_failure: 'closed' },
+  magic_link: { policies: ['magic_link_email', 'magic_link_ip', 'magic_link_ip_day'] },
+  ticket_create: { per: 'user', limit: 5, window: '1h' },
+  guest_ticket: { per: 'ip', limit: 3, window: '1h' },
+  key_redeem: { per: ['ip', 'user'], limit: 10, window: '1h' },
+  kb_feedback: { per: 'ip', limit: 30, window: '1h' },
+} as const;
+
+export const rateLimits = z
+  .record(
+    z.string().regex(RATE_LIMIT_NAME, 'Must be a policy name like ticket_create'),
+    z.union([rateLimitPolicy, rateLimitGroup]),
+  )
+  .default({})
+  .transform((policies) => ({
+    ...z.record(z.string(), z.union([rateLimitPolicy, rateLimitGroup])).parse(DEFAULT_RATE_LIMITS),
+    ...policies,
+  }))
+  .superRefine((policies, ctx) => {
+    if (!('limit' in (policies['global'] ?? {}))) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'global must be a single policy. It applies to every request',
+        path: ['global'],
+      });
+    }
+    for (const [name, policy] of Object.entries(policies)) {
+      if (!('policies' in policy)) continue;
+      policy.policies.forEach((member, index) => {
+        const target = policies[member];
+        if (target === undefined || 'policies' in target) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `Must name a single policy, not ${target === undefined ? 'an unknown one' : 'a group'}`,
+            path: [name, 'policies', index],
+          });
+        }
+      });
+    }
+  })
+  .describe(
+    'Named rate-limit policies, referenced by routes. Policies you set replace the built-in policy of the same name.',
+  );
+
+export const security = z
+  .strictObject({
+    step_up_window: duration(
+      '10m',
+      'Routes that need step-up accept a session that reached aal2 within this long.',
+    ),
+  })
+  .prefault({})
+  .describe('Account security.');
+
 const oauthProvider = (name: string) =>
   z
     .strictObject({
@@ -606,9 +840,13 @@ export const sections = {
   bus,
   observability,
   service,
+  valkey,
+  gateway,
   features,
   captcha,
   email: emailSection,
+  security,
+  rate_limits: rateLimits,
 };
 
 export type SectionName = keyof typeof sections;

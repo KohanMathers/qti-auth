@@ -1,3 +1,4 @@
+import type { JsMsg } from '@nats-io/jetstream';
 import { type EventCatalog, type EventEnvelope, validateEnvelope } from '@qtiauth/events';
 import { type Kysely, sql, type Transaction } from 'kysely';
 
@@ -20,6 +21,28 @@ export interface EventConsumerOptions<DB> extends ConsumerOptions {
   catalog?: EventCatalog;
 }
 
+export interface IdempotentEventConsumerOptions extends ConsumerOptions {
+  name: string;
+  types: readonly string[];
+  handler: (event: EventEnvelope) => Promise<void>;
+  startFrom?: 'all' | 'new';
+  catalog?: EventCatalog;
+}
+
+function parseEvent(msg: JsMsg, catalog: EventCatalog | undefined): EventEnvelope {
+  const value = parseJson(msg);
+  const result = catalog ? catalog.validate(value) : validateEnvelope(value);
+  if (!result.valid) {
+    throw new InvalidMessageError(`Invalid event on ${msg.subject}: ${result.issues.join(', ')}`);
+  }
+  if (result.event.type !== msg.subject) {
+    throw new InvalidMessageError(
+      `Event type ${result.event.type} was published on ${msg.subject}`,
+    );
+  }
+  return result.event;
+}
+
 export async function consumeEvents<DB>(
   bus: Bus,
   db: Kysely<DB>,
@@ -33,18 +56,7 @@ export async function consumeEvents<DB>(
     subjects: options.types,
     startFrom: options.startFrom ?? 'new',
     handle: async (msg) => {
-      const value = parseJson(msg);
-      const result = options.catalog ? options.catalog.validate(value) : validateEnvelope(value);
-      if (!result.valid) {
-        throw new InvalidMessageError(
-          `Invalid event on ${msg.subject}: ${result.issues.join(', ')}`,
-        );
-      }
-      const { event } = result;
-      if (event.type !== msg.subject) {
-        throw new InvalidMessageError(`Event type ${event.type} was published on ${msg.subject}`);
-      }
-
+      const event = parseEvent(msg, options.catalog);
       return db.transaction().execute(async (trx) => {
         const { rows } = await sql`
           insert into processed_events (consumer, event_id)
@@ -56,6 +68,23 @@ export async function consumeEvents<DB>(
         await options.handler(event, trx);
         return 'processed';
       });
+    },
+  });
+}
+
+export function consumeIdempotentEvents(
+  bus: Bus,
+  options: IdempotentEventConsumerOptions,
+): Promise<RunningConsumer> {
+  return runPullConsumer(bus, {
+    ...options,
+    stream: EVENTS_STREAM,
+    name: consumerName(bus.service, options.name),
+    subjects: options.types,
+    startFrom: options.startFrom ?? 'new',
+    handle: async (msg) => {
+      await options.handler(parseEvent(msg, options.catalog));
+      return 'processed';
     },
   });
 }

@@ -15,6 +15,7 @@ surfaces:
   api: { hosts: [me.example.com], base_path: /api }
 
 cookies:
+  name: qtiauth_session
   domain: null # optional shared cookie domain; null -> host-only __Host- cookies
   session_ttl: 7d
   idle_timeout: 30d
@@ -75,6 +76,27 @@ service:
   http: { port: 8080, shutdown_timeout: 15s }
   identity_tokens: { clock_tolerance: 5s, keys_refresh: 5m }
 
+valkey:
+  host: valkey
+  port: 6379
+  user: null
+  password: '${env:VALKEY_PASSWORD}'
+  database: 0
+  tls: { enabled: false, ca_file: null }
+  connect_timeout: 5s
+  command_timeout: 1s
+
+gateway:
+  http: { port: 8000, max_body_size: 1048576, upstream_timeout: 30s }
+  upstreams: {} # service -> base URL; default http://<service>:<service.http.port>
+  discovery: { interval: 30s, expiry: 90s, startup_grace: 5s }
+  session_cache: { ttl: 1m }
+  identity_keys:
+    encryption_key: '${env:KEY_ENCRYPTION_KEY}'
+    rotate_after: 30d
+    retain_after_rotation: 1h
+  hsts: { max_age: 365d, include_subdomains: false, preload: false }
+
 features:
   auth:
     password: { enabled: true }
@@ -122,3 +144,18 @@ email:
     auth: { name: Example Auth, address: auth@example.com }
     security: { name: Example Security, address: security@example.com }
     support: { name: Example Support, address: support@example.com }
+
+security:
+  step_up_window: 10m
+
+rate_limits: # per: ip | user | client | email | account, or a list counted as one combination
+  global: { per: ip, limit: 300, window: 1m }
+  auth_password: { per: [ip, account], limit: 10, window: 15m, on_store_failure: closed }
+  magic_link_email: { per: email, limit: 3, window: 1h, on_store_failure: closed }
+  magic_link_ip: { per: ip, limit: 10, window: 1h, on_store_failure: closed }
+  magic_link_ip_day: { per: ip, limit: 20, window: 1d, on_store_failure: closed }
+  magic_link: { policies: [magic_link_email, magic_link_ip, magic_link_ip_day] }
+  ticket_create: { per: user, limit: 5, window: 1h }
+  guest_ticket: { per: ip, limit: 3, window: 1h }
+  key_redeem: { per: [ip, user], limit: 10, window: 1h }
+  kb_feedback: { per: ip, limit: 30, window: 1h }

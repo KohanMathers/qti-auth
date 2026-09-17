@@ -53,6 +53,8 @@ Spans record the route template (`/api/v1/users/:id`), never the full URL, and p
 
 Each service serves Prometheus metrics on `/metrics` on the internal network. Every metric is named `qtiauth_…` and has a `service` label. With `metrics.process_metrics`, Node.js CPU, memory, event loop and garbage collection metrics are included too.
 
+The gateway's request, rate-limit, session and key metrics are listed in [gateway.md](gateway.md#metrics).
+
 Labels never hold unbounded values. A service refuses to start if it defines a metric with a label named `id`, anything ending in `_id`, or `user`, `username`, `email`, `ip`, `ip_address`, `address`, `session`, `token`, `url`, `path`, `query` or `user_agent`.
 
 ## Health

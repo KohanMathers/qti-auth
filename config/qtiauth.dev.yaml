@@ -1,6 +1,11 @@
 # yaml-language-server: $schema=./qtiauth.schema.json
 #
-# Development configuration, used by deploy/compose.dev.yaml. Anything left out uses its default. Emails are printed to the notifier's logs instead of being sent. See docs/deployment.md.
+# Development configuration, used by deploy/compose.dev.yaml. Anything left out uses its default. Emails are printed to the notifier's logs instead of being sent, and the surfaces accept browsers on http://localhost:8000. See docs/deployment.md.
+
+surfaces:
+  account: { hosts: [localhost], base_path: /, origins: ['http://localhost:8000'] }
+  support: { hosts: [localhost], base_path: /support, origins: ['http://localhost:8000'] }
+  api: { hosts: [localhost], base_path: /api, origins: ['http://localhost:8000'] }
 
 database:
   roles:
@@ -13,6 +18,12 @@ database:
 
 bus:
   password: '${env:NATS_PASSWORD}'
+
+valkey:
+  password: '${env:VALKEY_PASSWORD}'
+
+gateway:
+  identity_keys: { encryption_key: '${env:KEY_ENCRYPTION_KEY}' }
 
 observability:
   logs: { user_id_hash_key: '${env:LOG_USER_ID_HASH_KEY}' }

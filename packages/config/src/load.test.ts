@@ -30,6 +30,7 @@ describe('parseConfig', () => {
       ports: [],
       base_path: '/support',
       modules: null,
+      origins: null,
     });
   });
 
@@ -110,7 +111,12 @@ describe('serviceConfigSchema', () => {
       ...parseOptions,
     });
     expect(config).toEqual({
-      cookies: { domain: null, session_ttl: 604_800_000, idle_timeout: 3_600_000 },
+      cookies: {
+        name: 'qtiauth_session',
+        domain: null,
+        session_ttl: 604_800_000,
+        idle_timeout: 3_600_000,
+      },
     });
   });
 

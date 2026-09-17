@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as z from 'zod';
 
-import { duration, parseDuration } from './duration.ts';
+import { duration, parseDuration, requiredDuration } from './duration.ts';
 
 describe('parseDuration', () => {
   it.each([
@@ -31,5 +31,14 @@ describe('duration', () => {
     expect(schema.safeParse({ ttl: '0s' }).error?.issues[0]?.message).toBe(
       'Duration must be positive',
     );
+  });
+});
+
+describe('requiredDuration', () => {
+  const schema = z.object({ window: requiredDuration('Window.') });
+
+  it('has no default', () => {
+    expect(schema.safeParse({}).success).toBe(false);
+    expect(schema.parse({ window: '15m' })).toEqual({ window: 900_000 });
   });
 });

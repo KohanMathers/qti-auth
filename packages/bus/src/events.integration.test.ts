@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { type Bus, connectBus } from './connect.ts';
 import { InvalidMessageError, type RunningConsumer } from './consumer.ts';
-import { consumeEvents, type EventConsumerOptions } from './events.ts';
+import { consumeEvents, consumeIdempotentEvents, type EventConsumerOptions } from './events.ts';
 import { type ConsumeOutcome, noopBusMetrics } from './metrics.ts';
 import { createBusTablesV1, createEvent } from './outbox.ts';
 import { EVENTS_STREAM, provisionStreams } from './streams.ts';
@@ -100,7 +100,9 @@ beforeEach(async () => {
 afterEach(async () => {
   await Promise.all(consumers.map((consumer) => consumer.stop()));
   consumers = [];
-  await bus.jsm.consumers.delete(EVENTS_STREAM, 'identity-bans');
+  for (const name of ['identity-bans', 'identity-cache']) {
+    await bus.jsm.consumers.delete(EVENTS_STREAM, name).catch(() => false);
+  }
 });
 
 afterAll(async () => {
@@ -209,5 +211,35 @@ describe('consumeEvents', () => {
     });
     expect(outcomes.filter((outcome) => outcome === 'duplicate')).toHaveLength(1);
     expect(await bans()).toEqual(events.map((event) => event.subject?.id));
+  });
+});
+
+describe('consumeIdempotentEvents', () => {
+  it('handles events without a database and retries failures', async () => {
+    const seen: string[] = [];
+    let attempts = 0;
+    consumers.push(
+      await consumeIdempotentEvents(bus, {
+        name: 'cache',
+        types: [TYPE],
+        handler: (event) => {
+          if (++attempts === 1) return Promise.reject(new Error('cache unavailable'));
+          seen.push(event.subject?.id ?? '');
+          return Promise.resolve();
+        },
+        onError: () => undefined,
+        metrics: {
+          ...noopBusMetrics,
+          consumed: (_consumer, _subject, outcome) => outcomes.push(outcome),
+        },
+      }),
+    );
+    await publish(banned('u6'));
+    await publish('{not json');
+
+    await vi.waitFor(() => {
+      expect(outcomes).toEqual(expect.arrayContaining(['failed', 'processed', 'rejected']));
+    });
+    expect(seen).toEqual(['u6']);
   });
 });

@@ -6,7 +6,12 @@ export {
   retryDelay,
   type RunningConsumer,
 } from './consumer.ts';
-export { consumeEvents, type EventConsumerOptions } from './events.ts';
+export {
+  consumeEvents,
+  consumeIdempotentEvents,
+  type EventConsumerOptions,
+  type IdempotentEventConsumerOptions,
+} from './events.ts';
 export {
   type BusMetrics,
   type ConsumeOutcome,

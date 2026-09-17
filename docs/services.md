@@ -48,13 +48,13 @@ Every service also records `qtiauth_http_requests_total` and `qtiauth_http_reque
 
 Services never read cookies or bearer tokens. The gateway resolves the caller and sends every request on with a 60-second EdDSA token in `X-QTIAuth-Identity`, minted for that one service. A service refuses any request without a valid token, including requests to routes that need no sign-in.
 
-Services fetch the gateway's public keys over `qtiauth.rpc.gateway.identity_keys`. They keep using the keys they have if a refresh fails, so a gateway restart doesn't interrupt anything. Until a service has fetched keys at least once, requests get `503 SERVICE_UNAVAILABLE`.
+Services fetch the gateway's public keys over `qtiauth.rpc.gateway.identity_keys` (see [gateway.md](gateway.md#internal-identity-keys)). They keep using the keys they have if a refresh fails, so a gateway restart doesn't interrupt anything. Until a service has fetched keys at least once, requests get `503 SERVICE_UNAVAILABLE`.
 
 As well as the gateway's checks, each service checks the route's auth mode, permissions, OAuth scopes and allowed account states against the token.
 
 ## Route manifests and discovery
 
-A service announces itself on `qtiauth.sys.announce` when it starts, and again whenever anything publishes `qtiauth.sys.discover`. The announcement carries the service name, version, a per-process `instance_id` and its route manifest: every route's method, path, module and policy, plus the permissions the service defines. The gateway builds its route table from these, so a service that isn't running has no routes.
+A service announces itself on `qtiauth.sys.announce` when it starts, and again whenever anything publishes `qtiauth.sys.discover`. The announcement carries the service name, version, a per-process `instance_id` and its route manifest: every route's method, path, module and policy, plus the permissions the service defines. The gateway builds its route table from these, so a service that isn't running has no routes (see [gateway.md](gateway.md#surfaces-and-route-tables)).
 
 Print a service's manifest or OpenAPI document without starting it:
 

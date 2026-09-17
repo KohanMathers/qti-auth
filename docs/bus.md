@@ -142,6 +142,8 @@ await consumer.stop();
 - The durable consumer is named `<service>-<name>`. A new consumer starts with events published after it's created. Pass `startFrom: 'all'` to also read what's still in the stream, for example to build a read-model.
 - Pass `catalog` (from `loadEventCatalog`) to check each event's data against its schema.
 
+A service without a database, or a handler that's safe to run twice, can use `consumeIdempotentEvents(bus, { name, types, handler, onError })` instead. Its handler takes just the event and nothing records what was processed, so a redelivered event runs the handler again. The gateway uses it to clear cached sessions.
+
 ### Work queues and cron
 
 ```ts

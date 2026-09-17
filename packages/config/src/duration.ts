@@ -19,7 +19,7 @@ export function parseDuration(value: string): number | undefined {
   return ms > 0 && Number.isSafeInteger(ms) ? ms : undefined;
 }
 
-export function duration(defaultValue: string, description: string) {
+export function requiredDuration(description: string) {
   return z
     .string()
     .regex(DURATION_PATTERN, 'Must be a duration like 30s, 15m, 12h or 7d')
@@ -31,6 +31,11 @@ export function duration(defaultValue: string, description: string) {
       }
       return ms;
     })
+    .describe(`${description} Written as <integer><unit> (ms, s, m, h, d, w).`);
+}
+
+export function duration(defaultValue: string, description: string) {
+  return requiredDuration(description)
     .prefault(defaultValue)
     .describe(`${description} Written as <integer><unit> (ms, s, m, h, d, w).`);
 }

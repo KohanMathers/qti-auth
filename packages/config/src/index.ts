@@ -1,4 +1,4 @@
-export { duration, parseDuration } from './duration.ts';
+export { duration, parseDuration, requiredDuration } from './duration.ts';
 export { ConfigError, type ConfigIssue, type ConfigPath, formatPath } from './errors.ts';
 export { interpolate, type InterpolateOptions } from './interpolate.ts';
 export {
@@ -23,6 +23,10 @@ export {
   type DbSchema,
   LOG_LEVELS,
   MODULES,
+  RATE_LIMIT_DIMENSIONS,
+  type RateLimitDimension,
+  type RateLimitGroup,
+  type RateLimitPolicy,
   type SectionName,
   sections,
   SURFACES,

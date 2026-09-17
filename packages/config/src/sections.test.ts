@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { bus, cors, features, network, surfaces } from './sections.ts';
+import { bus, cors, features, gateway, network, rateLimits, surfaces } from './sections.ts';
 
 function messages(result: { error?: { issues: { path: PropertyKey[]; message: string }[] } }) {
   return (result.error?.issues ?? []).map((i) => `${i.path.join('.')}: ${i.message}`);
@@ -128,6 +128,54 @@ describe('bus', () => {
     expect(messages(result)).toEqual([
       'consumers.dedupe_retention: Must be at least streams.events_max_age, or redelivered events could run twice',
       'consumers.max_retry_delay: Must be at least retry_delay',
+    ]);
+  });
+});
+
+describe('gateway', () => {
+  it('checks upstream names and discovery timings', () => {
+    const result = gateway.safeParse({
+      upstreams: { identity: 'http://identity:8080', Games: 'http://games:8080', oidc: 'oidc' },
+      discovery: { interval: '1m', expiry: '30s' },
+    });
+    expect(messages(result)).toEqual([
+      expect.stringMatching(/^upstreams\.Games: /),
+      expect.stringMatching(/^upstreams\.oidc: /),
+      'discovery.expiry: Must be longer than interval',
+    ]);
+  });
+});
+
+describe('rate_limits', () => {
+  it('keeps the built-in policies and lets config replace them', () => {
+    const policies = rateLimits.parse({ global: { per: 'ip', limit: 50, window: '10s' } });
+    expect(policies['global']).toEqual({
+      per: ['ip'],
+      limit: 50,
+      window: 10_000,
+      on_store_failure: 'open',
+    });
+    expect(policies['auth_password']).toMatchObject({
+      per: ['ip', 'account'],
+      on_store_failure: 'closed',
+    });
+  });
+
+  it('checks groups and the global policy', () => {
+    const result = rateLimits.safeParse({
+      global: { policies: ['magic_link_ip'] },
+      signup: { policies: ['magic_link', 'missing'] },
+      broken: { per: 'device', limit: 0 },
+    });
+    expect(messages(result)).toEqual([expect.stringMatching(/^broken: /)]);
+    const groups = rateLimits.safeParse({
+      global: { policies: ['magic_link_ip'] },
+      signup: { policies: ['magic_link', 'missing'] },
+    });
+    expect(messages(groups)).toEqual([
+      'global: global must be a single policy. It applies to every request',
+      'signup.policies.0: Must name a single policy, not a group',
+      'signup.policies.1: Must name a single policy, not an unknown one',
     ]);
   });
 });

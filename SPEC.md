@@ -130,7 +130,8 @@ Steam, leaderboards, cloud saves, guest tickets, and so on.
 
 **Consistency check.** On startup each service announces itself on `qtiauth.sys.announce`, and
 announces again whenever anything publishes `qtiauth.sys.discover` (so a gateway that starts later
-can ask). The
+can ask). The gateway asks every `gateway.discovery.interval` and forgets an instance that hasn't
+announced itself for `gateway.discovery.expiry`. The
 gateway refuses config that enables a sub-feature whose service isn't running (for example
 `features.games.licensing.enabled: true` without the `games` profile) and reports it at
 `GET /api/v1/meta/health`.
@@ -237,6 +238,9 @@ A purpose-built service, not just reverse-proxy config, because it enforces secu
    module, policy, permissions it defines) over the bus, as part of its announcement. The gateway
    builds its routing table from these, so a disabled service's routes don't exist. Each service
    also serves its OpenAPI document over `qtiauth.rpc.<service>.openapi` for the merged document.
+   Two services declaring the same method and path on a surface is a conflict, and a route naming an
+   unknown rate-limit policy is invalid. Neither kind of route is served, and both are reported at
+   `GET /api/v1/meta/health`.
 3. **Declared route policy.** Nothing is special-cased by path.
    ```yaml
    - method: POST
@@ -253,11 +257,24 @@ A purpose-built service, not just reverse-proxy config, because it enforces secu
 4. **Session resolution.** Reads the surface's session cookie, resolves the binding and session
    through Valkey (falling back to `qtiauth.rpc.identity.resolve_session`), and runs session-security
    checks (§4.8).
+   - `qtiauth.rpc.identity.resolve_session` takes `{ binding_token_hash, cookie_scope }` (the
+     base64url SHA-256 of the cookie token, and `cookies.domain` or the request host) and answers
+     `{ session: null }` or the session's ID, user ID, account state, permissions, restrictions, age
+     band, parental controls, `amr`, `acr`, `step_up_at`, `legal_acceptance_required` and
+     `expires_at`.
+   - Resolved sessions are cached in Valkey for `gateway.session_cache.ttl`. The cache is cleared
+     for a session or user by `identity.session.revoked` / `flagged`, the `identity.user.*` state
+     events, parental consent changes, and for everyone by `identity.legal.version_published`.
 5. **Internal identity token.** For each proxied request the gateway mints a 60-second EdDSA JWT in
    `X-QTIAuth-Identity`. It holds user ID, session ID, permissions, account state, restrictions,
    age band, parental controls and auth context (`amr`, `acr`). Services verify it with the gateway's
    public key, **never** read cookies or bearer tokens themselves, and reject any request without it,
    on top of network isolation.
+   - The signing keys are Ed25519, kept in the NATS key-value bucket `qtiauth_gateway` so every
+     gateway replica shares them, and envelope-encrypted with `KEY_ENCRYPTION_KEY`
+     (`gateway.identity_keys.encryption_key`). The `keys.rotate` job replaces the key once it's
+     `gateway.identity_keys.rotate_after` old, and the replaced key stays published for
+     `gateway.identity_keys.retain_after_rotation`.
    - Header `{ alg: EdDSA, typ: qtiauth-identity+jwt, kid }`. Claims: `iss` (`qtiauth-gateway`),
      `aud` (the target service's name), `iat`, `exp`, `jti`, `request_id`, `auth` (the route's auth
      mode), `sub`, `sid`, `client_id`, `scopes`, `permissions`, `account_state`, `restrictions`,
@@ -295,7 +312,8 @@ First-party sessions and third-party tokens are completely separate.
   nothing to forge and revocation is immediate.
 - The first-party web app never uses `Authorization: Bearer` session tokens, so session tokens are
   never readable by JavaScript.
-- CSRF: `SameSite=Lax`, plus an `Origin` check on every state-changing request.
+- CSRF: `SameSite=Lax`, plus an `Origin` check on every state-changing request. A state-changing
+  request carrying a session cookie without an `Origin` header is refused.
 
 ### 2.8 Scheduler
 
@@ -368,12 +386,17 @@ surfaces:
   api:     { ports: [8082], base_path: / }
 ```
 
-Module ownership can be overridden per surface with `surfaces.<name>.modules`.
+Module ownership can be overridden per surface with `surfaces.<name>.modules`. Each surface's
+public origins default to `https://<host>` for each host, and can be set with
+`surfaces.<name>.origins` (needed for surfaces bound only to ports, or served over another scheme or
+port).
 
 **API mounting**
 
 - **The core API** (identity and meta: `/api/v1/me`, auth, sessions, legal, notification
   preferences, `/api/v1/meta/*`) is mounted on **every** web surface at `<surface base>/api`.
+- On the `api` surface, a route's `/api` prefix is replaced by the surface's base path, so with
+  `base_path: /api` the core API is at `/api/v1/…`, and with `base_path: /` at `/v1/…`.
 - **Module APIs are mounted only on the surface that owns them.** If the account app needs support
   data, it calls the support surface's host and base path, never a duplicate mount on the account
   surface.
@@ -484,6 +507,7 @@ branding:
 
 surfaces: { … }                 # §2.10
 cookies:
+  name: qtiauth_session         # __Host- prefix is added when domain is null
   domain: null                  # optional shared cookie domain; null → host-only __Host- cookies
   session_ttl: 7d
   idle_timeout: 30d
@@ -524,6 +548,18 @@ observability:
 service:                        # shared by every service
   http: { port: 8080, shutdown_timeout: 15s }
   identity_tokens: { clock_tolerance: 5s, keys_refresh: 5m }
+
+valkey:
+  host: valkey
+  password: "${env:VALKEY_PASSWORD}"
+
+gateway:
+  http: { port: 8000, max_body_size: 1048576, upstream_timeout: 30s }
+  upstreams: {}                 # default http://<service>:<service.http.port>
+  discovery: { interval: 30s, expiry: 90s, startup_grace: 5s }
+  session_cache: { ttl: 1m }
+  identity_keys: { encryption_key: "${env:KEY_ENCRYPTION_KEY}", rotate_after: 30d, retain_after_rotation: 1h }
+  hsts: { max_age: 365d, include_subdomains: false, preload: false }
 
 features:
   auth:
@@ -566,7 +602,7 @@ email:
 
 accounts:   { … }               # §4.1, §4.12
 password:   { … }               # §4.2
-security:   { … }               # §4.5
+security:   { step_up_window: 10m, … }   # §4.5
 age:        { … }               # §4.6
 parental:   { … }               # §4.7
 session_security: { … }         # §4.8
@@ -1436,6 +1472,14 @@ features:
   ```
 - Sliding window in Valkey. Responses are `429` with `Retry-After` and `RateLimit-*` headers.
 - **Fail-open or fail-closed per policy** when Valkey is unreachable. Auth policies default to closed.
+- `global` applies to every request as well as the route's own policy, including unknown paths and
+  CORS preflights.
+- `per` is `ip`, `user` (the IP for anonymous callers), `client` (the IP without an OAuth client),
+  `email` (the JSON body's `email`) or `account` (the body's `identifier`, `email` or `username`).
+  A list counts each combination of values separately.
+- A policy can instead group others, `{ policies: [a, b] }`, which applies all of them, for routes
+  such as magic-link start that need several limits.
+- Policies in config replace built-in policies of the same name. The rest stay available.
 
 ### 8.2 Bot protection
 

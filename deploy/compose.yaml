@@ -64,6 +64,16 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  gateway:
+    <<: *qtiauth-service
+    image: qtiauth/gateway:dev
+    build:
+      context: ..
+      dockerfile: services/gateway/Dockerfile
+    command: ['node', 'src/main.ts']
+    networks: [internal, public]
+    ports: ['8000:8000']
+
   oidc:
     <<: *qtiauth-service
     profiles: [oidc]
@@ -115,6 +125,7 @@ services:
 networks:
   internal:
     internal: true
+  public: {}
 
 volumes:
   postgres:

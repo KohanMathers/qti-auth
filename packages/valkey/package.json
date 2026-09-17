@@ -1,0 +1,21 @@
+{
+  "name": "@qtiauth/valkey",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Valkey connections and health checks",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qtiauth/config": "workspace:*",
+    "iovalkey": "0.4.0"
+  },
+  "devDependencies": {
+    "@qtiauth/testing": "workspace:*"
+  }
+}
