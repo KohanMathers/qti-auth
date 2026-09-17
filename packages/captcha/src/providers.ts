@@ -93,8 +93,6 @@ export function createCaptcha(
     case 'hcaptcha':
       return vendor('hcaptcha', config, options, verifyHcaptcha);
     case 'friendly_captcha':
-      return vendor('friendly_captcha', config, options, (payload, settings) =>
-        verifyFriendlyCaptcha(payload, settings),
-      );
+      return vendor('friendly_captcha', config, options, verifyFriendlyCaptcha);
   }
 }

@@ -147,7 +147,7 @@ The pages are deliberately plain: they're stand-ins until the web app arrives, a
 
 Signup is `POST /api/v1/auth/password/signup` with `{ email, password, date_of_birth, locale? }`. The account is created in `pending_email_verification` and a confirmation email is sent. The account becomes `active` when `POST /api/v1/auth/email/verify` is used. Login is allowed before that; `/api/v1/me` shows the pending state.
 
-Login is `POST /api/v1/auth/password/login` with `{ email, password }`. Unknown addresses and wrong passwords both answer `401 CREDENTIALS_INCORRECT` ("Email or password incorrect") after an Argon2id check and the same progressive delay, so timing does not give the address away. If the account has TOTP enrolled, the answer is `200 { "status": "second_factor_required", "challenge", "methods", "expires_at" }` instead of a session, and sign-in finishes at `/api/v1/auth/2fa` or with a passkey.
+Login is `POST /api/v1/auth/password/login` with `{ email, password }`. Unknown addresses and wrong passwords both answer `401 CREDENTIALS_INCORRECT` ("Email or password incorrect") after an Argon2id check and the same progressive delay, so timing does not give the address away. If the account has a second factor enrolled — TOTP or a passkey — the answer is `200 { "status": "second_factor_required", "challenge", "methods", "expires_at" }` instead of a session, and sign-in finishes at `/api/v1/auth/2fa` or with a passkey.
 
 Forgot password is `POST /api/v1/auth/password/forgot` with `{ email }`, always `202 { "status": "sent" }`. The reset form has a **"Don't log me out of other sessions"** checkbox, **unticked by default**, so `POST /api/v1/auth/password/reset` revokes every other session unless `keep_other_sessions` is true.
 
@@ -197,7 +197,7 @@ Google, GitHub, Discord, Steam (OpenID 2.0) and generic OIDC issuers can be used
 
 ## Passkeys and two-factor
 
-Passkeys (WebAuthn) work as a primary sign-in or as a second factor. Several can be registered, each with a name and last-used time. A passkey-only sign-in creates a session at `aal2`. Password sign-in is `aal1` unless TOTP is enrolled, in which case a second factor is required and the resulting session is `aal2`.
+Passkeys (WebAuthn) work as a primary sign-in or as a second factor. Several can be registered, each with a name and last-used time. A passkey-only sign-in creates a session at `aal2`. Password sign-in is `aal1` unless a second factor is enrolled — TOTP or a passkey — in which case a second factor is required and the resulting session is `aal2`. The same set counts for `security.require_2fa_for_permissions`, so enrolment and the sign-in challenge always agree.
 
 TOTP is RFC 6238 (SHA-1, 6 digits, 30-second step, ±1 window). The secret is encrypted at rest with `security.encryption_key`. Confirming enrolment issues 10 hashed single-use recovery codes, which can be replaced at `POST /api/v1/me/recovery-codes` after a recent step-up.
 
@@ -255,7 +255,7 @@ A session ends when it's `cookies.session_ttl` old, when it hasn't been used for
 
 ### Session security
 
-`features.session_security.enabled` (on by default) scores each request against the signals captured at sign-in: IP, subnet (/24 IPv4, /48 IPv6), country, User-Agent, and optionally a TLS fingerprint header plus low-weight client timezone, screen and fingerprint headers (`X-QTIAuth-Timezone`, `X-QTIAuth-Screen`, `X-QTIAuth-Client-Fingerprint`). Trust moves `full` → `partial` → `challenge` → `blocked`.
+`features.session_security.enabled` (on by default) scores each request against the signals captured at sign-in: IP, subnet (/24 IPv4, /48 IPv6), country, User-Agent, and optionally a TLS fingerprint header plus low-weight client timezone, screen and fingerprint headers (`X-QTIAuth-Timezone`, `X-QTIAuth-Screen`, `X-QTIAuth-Client-Fingerprint`). Trust moves `full` → `partial` → `challenge` → `blocked`. Only the signals present on both sides count, and the weak ones cannot challenge or end a session by themselves: with less than a country's worth of weight to compare, the worst verdict is `partial`, so a client that only reports a new timezone or screen size is never signed out. The gateway caches a resolved session per subnet rather than per address, so an IP that changes within its subnet reuses the cached session while a move to another subnet or country is checked again.
 
 `session_security.on_country_change` decides what happens when the country changes:
 

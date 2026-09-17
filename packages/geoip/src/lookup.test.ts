@@ -7,7 +7,7 @@ import { sections } from '@qtiauth/config';
 import { describe, expect, it } from 'vitest';
 
 import { DBIP_ATTRIBUTION } from './attribution.ts';
-import { openGeoIp } from './lookup.ts';
+import { openGeoIp, RECHECK_INTERVAL_MS } from './lookup.ts';
 
 const CSV = `"1.0.0.0","1.0.0.255","AU"
 "8.8.8.0","8.8.8.255","US"
@@ -71,6 +71,37 @@ describe('openGeoIp', () => {
     const geoip = openGeoIp(sections.geoip.parse({ source: 'header', header: 'cf-ipcountry' }));
     expect(geoip.available).toBe(true);
     expect(geoip.lookup('1.0.0.1')).toBeNull();
+    geoip.close();
+  });
+
+  it('parses a broken database once and reports the error', () => {
+    const path = csvFile('dbip.csv.gz', Buffer.from([0x1f, 0x8b, 0x00, 0x01]));
+    const errors: unknown[] = [];
+    let clock = 0;
+    const geoip = openGeoIp(sections.geoip.parse({ source: 'dbip_lite', database_path: path }), {
+      onError: (error) => errors.push(error),
+      now: () => clock,
+    });
+    expect(geoip.lookup('1.0.0.1')).toBeNull();
+    clock += RECHECK_INTERVAL_MS * 3;
+    expect(geoip.lookup('1.0.0.1')).toBeNull();
+    expect(geoip.available).toBe(false);
+    expect(errors).toHaveLength(1);
+    geoip.close();
+  });
+
+  it('re-reads the database only after the recheck interval', () => {
+    const path = csvFile('dbip.csv', CSV);
+    let clock = 0;
+    const geoip = openGeoIp(sections.geoip.parse({ source: 'dbip_lite', database_path: path }), {
+      now: () => clock,
+    });
+    expect(geoip.lookup('1.0.0.1')).toBe('AU');
+
+    writeFileSync(path, `"1.0.0.0","1.0.0.255","NZ"\n`);
+    expect(geoip.lookup('1.0.0.1')).toBe('AU');
+    clock += RECHECK_INTERVAL_MS;
+    expect(geoip.lookup('1.0.0.1')).toBe('NZ');
     geoip.close();
   });
 });

@@ -20,6 +20,7 @@
     "@nats-io/kv": "3.4.0",
     "@qtiauth/bus": "workspace:*",
     "@qtiauth/config": "workspace:*",
+    "@qtiauth/email": "workspace:*",
     "@qtiauth/events": "workspace:*",
     "@qtiauth/geoip": "workspace:*",
     "@qtiauth/observability": "workspace:*",

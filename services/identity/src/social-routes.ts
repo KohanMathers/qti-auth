@@ -4,7 +4,7 @@ import * as z from 'zod';
 import { SIGNED_IN_STATES } from './accounts.ts';
 import { isValidDateOfBirth } from './age.ts';
 import { canRemovePrimaryMethod, lastSignInMethodError } from './factors.ts';
-import { completeSocialSignup, finishSocial, socialEnabled, startSocial } from './flows.ts';
+import { completeSocialSignup, finishSocial, socialProviderEnabled, startSocial } from './flows.ts';
 import { NO_STORE, sessionHeaders } from './headers.ts';
 import { isCanonicalLocale, preferredLocale } from './locale.ts';
 import { enabledSocialProviders, findSocialProvider } from './providers.ts';
@@ -67,7 +67,7 @@ function localeOf(ctx: Context, request: Request, locale: string | undefined): s
 }
 
 function requireProvider(ctx: Context, providerId: string): void {
-  if (!socialEnabled(ctx, providerId)) throw new ProblemError('AUTH_METHOD_DISABLED');
+  if (!socialProviderEnabled(ctx, providerId)) throw new ProblemError('AUTH_METHOD_DISABLED');
 }
 
 async function start(
@@ -133,19 +133,10 @@ function completeResponse(
         },
       };
     case 'signed_in':
-      if (result.created) {
-        return {
-          status: 201 as const,
-          headers: sessionHeaders(result.session),
-          body: {
-            status: 'signed_in',
-            user_id: result.userId,
-            return_to: result.returnTo,
-          },
-        };
-      }
+      // 201 when the sign-in created the account, 200 when it signed in to one
+      // that already existed.
       return {
-        status: 200 as const,
+        status: result.created ? (201 as const) : (200 as const),
         headers: sessionHeaders(result.session),
         body: {
           status: 'signed_in',

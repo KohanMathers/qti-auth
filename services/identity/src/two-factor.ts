@@ -104,12 +104,17 @@ export async function confirmTotpEnrol(
   });
 }
 
+export type DisableTotpResult =
+  { status: 'not_enabled' } | { status: 'wrong_code' } | { status: 'disabled' };
+
 export async function disableTotp(
   db: Kysely<Database>,
   options: { userId: string; code: string; key: Buffer; now: Date },
-): Promise<'not_enabled' | 'wrong_code' | 'disabled'> {
+): Promise<DisableTotpResult> {
   const identity = await findTotpIdentity(db, options.userId);
-  if (identity?.secret === undefined || identity.secret === null) return 'not_enabled';
+  if (identity?.secret === undefined || identity.secret === null) {
+    return { status: 'not_enabled' };
+  }
   if (
     !verifyTotp(
       openTotpSecret(identity.secret, options.key, options.userId),
@@ -117,10 +122,10 @@ export async function disableTotp(
       options.now,
     )
   ) {
-    return 'wrong_code';
+    return { status: 'wrong_code' };
   }
   await deleteTotp(db, options.userId);
-  return 'disabled';
+  return { status: 'disabled' };
 }
 
 export async function completeSecondFactor(
@@ -199,6 +204,13 @@ export async function completeSecondFactor(
   });
 }
 
+export type StepUpResult =
+  | { status: 'not_found' }
+  // Covers a wrong code, a code for a factor that is not enrolled, and no code
+  // at all: the caller must not learn which from the answer.
+  | { status: 'wrong_code' }
+  | { status: 'upgraded' };
+
 export async function stepUpSession(
   db: Kysely<Database>,
   options: {
@@ -209,11 +221,13 @@ export async function stepUpSession(
     key: Buffer;
     now: Date;
   },
-): Promise<'not_found' | 'wrong_code' | 'upgraded'> {
+): Promise<StepUpResult> {
   let amr: string[];
   if (options.totp !== undefined) {
     const identity = await findTotpIdentity(db, options.userId);
-    if (identity?.secret === undefined || identity.secret === null) return 'wrong_code';
+    if (identity?.secret === undefined || identity.secret === null) {
+      return { status: 'wrong_code' };
+    }
     if (
       !verifyTotp(
         openTotpSecret(identity.secret, options.key, options.userId),
@@ -221,7 +235,7 @@ export async function stepUpSession(
         options.now,
       )
     ) {
-      return 'wrong_code';
+      return { status: 'wrong_code' };
     }
     amr = TOTP_AMR;
     await recordIdentityUse(db, options.userId, TOTP_METHOD, options.now);
@@ -233,11 +247,11 @@ export async function stepUpSession(
         now: options.now,
       }))
     ) {
-      return 'wrong_code';
+      return { status: 'wrong_code' };
     }
     amr = RECOVERY_AMR;
   } else {
-    return 'wrong_code';
+    return { status: 'wrong_code' };
   }
   const upgraded = await upgradeSession(db, {
     sessionId: options.sessionId,
@@ -245,7 +259,7 @@ export async function stepUpSession(
     amr,
     now: options.now,
   });
-  return upgraded ? 'upgraded' : 'not_found';
+  return upgraded ? { status: 'upgraded' } : { status: 'not_found' };
 }
 
 export async function beginPasskeyRegister(

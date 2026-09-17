@@ -72,6 +72,7 @@ import {
   requestHost,
   surfacePublicUrl,
   type Surface,
+  type SurfaceName,
 } from './surfaces.ts';
 
 export type GatewayConfig = Pick<
@@ -114,6 +115,45 @@ function lookupMethod(method: string): string {
   return method === 'HEAD' ? 'GET' : method;
 }
 
+/**
+ * Where a top-level navigation goes instead of a problem document when it is
+ * refused for want of a usable session: the account surface's login page, or the
+ * binding flow when the cookie cannot reach this host.
+ */
+function denialRedirect(input: {
+  code: string;
+  cookies: GatewayConfig['cookies'];
+  account: Surface | undefined;
+  host: string | null;
+  /** Path within the matched surface, which is what a surface-relative return_to wants. */
+  surfacePath: string;
+  /** Path as the browser sees it, which is where the bind callback sends it back. */
+  browserPath: string;
+  search: string;
+  surface: SurfaceName;
+  bindAttempted: boolean;
+}): { location: string; setBindCookie: boolean } | null {
+  const { account } = input;
+  if (account === undefined) return null;
+
+  if (input.code === 'REAUTHENTICATION_REQUIRED') {
+    const login = surfacePublicUrl(account, LOGIN_PATH);
+    return login === null ? null : { location: login, setBindCookie: false };
+  }
+
+  const needsBinding = needsSessionBinding(input.cookies, input.host, account);
+  if (input.surfacePath === BIND_PATH && !needsBinding) {
+    const returnTo = encodeURIComponent(`${input.surfacePath}${input.search}`);
+    const login = surfacePublicUrl(account, `${LOGIN_PATH}?return_to=${returnTo}`);
+    return login === null ? null : { location: login, setBindCookie: false };
+  }
+  if (needsBinding && !input.bindAttempted) {
+    const location = bindStartUrl(account, input.surface, `${input.browserPath}${input.search}`);
+    return location === null ? null : { location, setBindCookie: true };
+  }
+  return null;
+}
+
 export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHandler {
   const { config, log, metrics, rateLimiter, sessions } = options;
   const now = options.now ?? Date.now;
@@ -149,6 +189,10 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
     let bindCookie: string | undefined;
     let flowBinding: string | undefined;
     let upstream: string | undefined;
+
+    let clientSignals: ReturnType<typeof sessionSignals> | undefined;
+    const signalsOf = (): ReturnType<typeof sessionSignals> =>
+      (clientSignals ??= sessionSignals(request, ip, config, options.geoip));
 
     const problem = (code: string, init: ConstructorParameters<typeof ProblemError>[1] = {}) =>
       problemResponse(
@@ -300,12 +344,15 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
 
       let session: ResolvedSession | null = null;
       const token = readCookie(request.headers.get('cookie'), cookieName);
-      const signals = sessionSignals(request, ip, config, options.geoip);
-      if (token !== null) {
+      // Identity needs the caller's session id even on routes that do not take a
+      // session, to restore a challenged session and to bind a linking flow.
+      // Nothing else can use it, so nothing else pays for a lookup.
+      const needsSession = route.auth === 'session' || entry.service === RESOLVE_SESSION_SERVICE;
+      if (token !== null && needsSession) {
         const resolved = await sessions.resolve(
           token,
           config.cookies.domain ?? host ?? '',
-          config.features.session_security.enabled ? signals : undefined,
+          config.features.session_security.enabled ? signalsOf() : undefined,
         );
         if (resolved.status === 'unavailable') return problem('SERVICE_UNAVAILABLE');
         if (resolved.status === 'ok') {
@@ -330,43 +377,29 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         now: now(),
       });
       if (denial) {
-        if (
+        const redirectable =
+          route.auth === 'session' &&
           (denial.code === 'AUTHENTICATION_REQUIRED' ||
             denial.code === 'REAUTHENTICATION_REQUIRED') &&
-          route.auth === 'session'
-        ) {
-          const topLevel = isTopLevelNavigation(request);
-          const attempted =
-            readCookie(request.headers.get('cookie'), bindAttemptCookieName(config.cookies)) !==
-            null;
-          const account = options.surfaces.find((surface) => surface.name === 'account');
-          if (topLevel && account) {
-            if (denial.code === 'REAUTHENTICATION_REQUIRED') {
-              const login = surfacePublicUrl(account, LOGIN_PATH);
-              if (login !== null)
-                return new Response(null, { status: 302, headers: { location: login } });
-            }
-            if (matched.path === BIND_PATH && !needsSessionBinding(config.cookies, host, account)) {
-              const returnTo = `${matched.path}${url.search}`;
-              const login = surfacePublicUrl(
-                account,
-                `${LOGIN_PATH}?return_to=${encodeURIComponent(returnTo)}`,
-              );
-              if (login !== null)
-                return new Response(null, { status: 302, headers: { location: login } });
-            }
-            if (!attempted && needsSessionBinding(config.cookies, host, account)) {
-              const location = bindStartUrl(
-                account,
-                matched.surface.name,
-                `${url.pathname}${url.search}`,
-              );
-              if (location !== null) {
-                bindCookie = bindAttemptCookie(config.cookies);
-                return new Response(null, { status: 302, headers: { location } });
-              }
-            }
-          }
+          isTopLevelNavigation(request);
+        const redirect = redirectable
+          ? denialRedirect({
+              code: denial.code,
+              cookies: config.cookies,
+              account: options.surfaces.find((surface) => surface.name === 'account'),
+              host,
+              surfacePath: matched.path,
+              browserPath: url.pathname,
+              search: url.search,
+              surface: matched.surface.name,
+              bindAttempted:
+                readCookie(request.headers.get('cookie'), bindAttemptCookieName(config.cookies)) !==
+                null,
+            })
+          : null;
+        if (redirect !== null) {
+          if (redirect.setBindCookie) bindCookie = bindAttemptCookie(config.cookies);
+          return new Response(null, { status: 302, headers: { location: redirect.location } });
         }
         return problem(denial.code, {
           ...(denial.extensions === undefined ? {} : { extensions: denial.extensions }),
@@ -398,6 +431,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         entry.service === RESOLVE_SESSION_SERVICE
           ? readCookie(request.headers.get('cookie'), flowName)
           : null;
+      const signals = signalsOf();
       const result = await send({
         url: `${options.upstreamUrl(entry.service)}${found.prefix}${matched.path}${url.search}`,
         method: request.method,

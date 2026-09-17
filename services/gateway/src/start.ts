@@ -102,7 +102,11 @@ export async function startGateway(
     }
 
     const metrics = prometheusGatewayMetrics(ctx.metrics);
-    const geoip = openGeoIp(config.geoip);
+    const geoip = openGeoIp(config.geoip, {
+      onError: (error, path) => {
+        log.warn('geoip database could not be read', { error, path });
+      },
+    });
     stack.push(() => {
       geoip.close();
       return Promise.resolve();
@@ -274,10 +278,11 @@ export async function startGateway(
           routeProblems: table.problems,
           starting: Date.now() - startedAt < config.gateway.discovery.startup_grace,
           surfaces,
+          geoip,
         }),
       features: () =>
         featuresReport({ config, surfaces, isRunning: (service) => registry.isRunning(service) }),
-      about: () => aboutReport(config, geoip.attribution),
+      about: () => aboutReport(config, geoip),
       openapi: async (surface) => {
         const services = registry.services().filter((service) => service.name !== GATEWAY_SERVICE);
         const entries = await Promise.all(

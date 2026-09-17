@@ -49,14 +49,14 @@ export function createAltchaChallenge(settings: AltchaSettings, now: Date): Altc
 }
 
 export function parseAltchaPayload(payload: string): AltchaPayload | undefined {
-  const texts = [payload];
-  for (const encoding of ['base64url', 'base64'] as const) {
-    try {
-      texts.push(Buffer.from(payload, encoding).toString('utf8'));
-    } catch {
-      // not that encoding
-    }
-  }
+  // Widgets send the payload as JSON or base64 of that JSON; decoding never
+  // throws, so a wrong guess just fails to parse below.
+  const texts = [
+    payload,
+    ...(['base64url', 'base64'] as const).map((encoding) =>
+      Buffer.from(payload, encoding).toString('utf8'),
+    ),
+  ];
   for (const text of texts) {
     try {
       const parsed = JSON.parse(text) as Partial<AltchaPayload>;

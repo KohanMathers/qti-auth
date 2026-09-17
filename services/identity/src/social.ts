@@ -2,7 +2,7 @@ import { randomUUIDv7 } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
 import type { AgeBand } from '@qtiauth/service-kit';
-import type { Kysely } from 'kysely';
+import type { Expression, ExpressionBuilder, Kysely, SqlBool } from 'kysely';
 
 import {
   accountsWithEmail,
@@ -32,6 +32,7 @@ import {
   type OauthStateStore,
   type SocialIntent,
 } from './oauth-state.ts';
+import { PASSKEY_METHOD } from './passkeys.ts';
 import {
   findSocialProvider,
   type SocialConfig,
@@ -570,6 +571,14 @@ async function touchIdentity(db: Kysely<Database>, id: string, now: Date): Promi
   await db.updateTable('identities').set({ last_used_at: now }).where('id', '=', id).execute();
 }
 
+/**
+ * A connected upstream identity: it has a provider subject, and is not one of
+ * the passkeys that share the identities table.
+ */
+function isSocial(eb: ExpressionBuilder<Database, 'identities'>): Expression<SqlBool> {
+  return eb.and([eb('subject', 'is not', null), eb('type', 'not in', [PASSKEY_METHOD])]);
+}
+
 export function listSocialIdentities(
   db: Kysely<Database>,
   userId: string,
@@ -578,8 +587,7 @@ export function listSocialIdentities(
     .selectFrom('identities')
     .select(['id', 'type', 'created_at', 'last_used_at'])
     .where('user_id', '=', userId)
-    .where('subject', 'is not', null)
-    .where('type', 'not in', ['passkey'])
+    .where(isSocial)
     .orderBy('created_at')
     .orderBy('id')
     .execute()
@@ -598,8 +606,7 @@ export async function socialIdentityCount(db: Kysely<Database>, userId: string):
     .selectFrom('identities')
     .select((eb) => eb.fn.countAll<string>().as('count'))
     .where('user_id', '=', userId)
-    .where('subject', 'is not', null)
-    .where('type', 'not in', ['passkey'])
+    .where(isSocial)
     .executeTakeFirst();
   return Number(row?.count ?? 0);
 }
@@ -612,8 +619,7 @@ export async function deleteSocialIdentity(
     .deleteFrom('identities')
     .where('id', '=', options.id)
     .where('user_id', '=', options.userId)
-    .where('subject', 'is not', null)
-    .where('type', 'not in', ['passkey'])
+    .where(isSocial)
     .executeTakeFirst();
   return Number(result.numDeletedRows) === 1;
 }
@@ -627,8 +633,7 @@ export async function findSocialIdentity(
     .select(['id', 'type', 'created_at', 'last_used_at'])
     .where('id', '=', options.id)
     .where('user_id', '=', options.userId)
-    .where('subject', 'is not', null)
-    .where('type', 'not in', ['passkey'])
+    .where(isSocial)
     .executeTakeFirst();
   if (row === undefined) return undefined;
   return { id: row.id, type: row.type, createdAt: row.created_at, lastUsedAt: row.last_used_at };

@@ -18,6 +18,7 @@ import {
   readCookie,
   type SessionCache,
   sessionCookieName,
+  signalsMatch,
 } from './sessions.ts';
 
 const START = Date.parse('2026-09-17T12:00:00Z');
@@ -90,6 +91,52 @@ describe('cookies', () => {
     );
     expect(readCookie('qtiauth_session=abc', '__Host-qtiauth_session')).toBeNull();
     expect(readCookie(null, 'x')).toBeNull();
+  });
+});
+
+describe('signalsMatch', () => {
+  const signals = (
+    overrides: Partial<NonNullable<ResolveSessionRequest['signals']>> = {},
+  ): NonNullable<ResolveSessionRequest['signals']> => ({
+    ip: '203.0.113.10',
+    user_agent: 'Firefox',
+    country: 'GB',
+    tls_fingerprint: null,
+    timezone: 'Europe/London',
+    screen: '1920x1080',
+    client_fingerprint: null,
+    ...overrides,
+  });
+
+  it('matches when nothing was captured or nothing is being sent', () => {
+    expect(signalsMatch(undefined, signals())).toBe(true);
+    expect(signalsMatch(null, signals())).toBe(true);
+    expect(signalsMatch(signals(), undefined)).toBe(true);
+  });
+
+  it('keeps the cache for another address in the same subnet', () => {
+    expect(signalsMatch(signals(), signals({ ip: '203.0.113.40' }))).toBe(true);
+  });
+
+  it('drops the cache for another subnet, country or client', () => {
+    expect(signalsMatch(signals(), signals({ ip: '198.51.100.7' }))).toBe(false);
+    expect(signalsMatch(signals(), signals({ country: 'US' }))).toBe(false);
+    expect(signalsMatch(signals(), signals({ user_agent: 'Safari' }))).toBe(false);
+    expect(signalsMatch(signals(), signals({ timezone: 'America/New_York' }))).toBe(false);
+  });
+
+  it('does not depend on key order', () => {
+    const cached = { ...signals() };
+    const current = {
+      client_fingerprint: null,
+      screen: '1920x1080',
+      timezone: 'Europe/London',
+      tls_fingerprint: null,
+      country: 'GB',
+      user_agent: 'Firefox',
+      ip: '203.0.113.10',
+    };
+    expect(signalsMatch(cached, current)).toBe(true);
   });
 });
 

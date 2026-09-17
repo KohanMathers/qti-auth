@@ -1,10 +1,10 @@
-import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
 import { ProblemError, type Router } from '@qtiauth/service-kit';
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
 import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { canRemovePasskey, lastSignInMethodError, totpEnrolled } from './factors.ts';
-import { finishTwoFactor, notifyNewDevice, passkeysEnabled, totpEnabled } from './flows.ts';
+import { finishTwoFactor, passkeysEnabled, totpEnabled, trackSession } from './flows.ts';
 import { NO_STORE, revokedHeaders, sessionHeaders } from './headers.ts';
 import { identityMetrics } from './metrics.ts';
 import { deletePasskey, listPasskeys, PASSKEY_NAME_MAX, renamePasskey } from './passkeys.ts';
@@ -85,6 +85,29 @@ const passkeySchema = z.object({
   last_used_at: z.iso.datetime().nullable(),
 });
 
+/**
+ * Enrolling is the one thing an account held at the 2FA enrolment gate, pending
+ * legal acceptance or pending parental consent still has to be able to do, so
+ * the routes that read or add a factor carry these and the routes that remove
+ * one deliberately do not.
+ */
+const ENROLMENT_POLICY = {
+  allow_account_states: SIGNED_IN_STATES,
+  allow_pending_legal: true,
+  allow_pending_parental_consent: true,
+  allow_pending_2fa_enrolment: true,
+} as const;
+
+/**
+ * Stepping up needs a factor that is already enrolled, so these routes allow the
+ * pending states but not the enrolment gate.
+ */
+const STEP_UP_POLICY = {
+  allow_account_states: SIGNED_IN_STATES,
+  allow_pending_legal: true,
+  allow_pending_parental_consent: true,
+} as const;
+
 function listedPasskey(passkey: Awaited<ReturnType<typeof listPasskeys>>[number]) {
   return {
     id: passkey.id,
@@ -110,10 +133,7 @@ export function factorRoutes(router: Router<Context>): void {
     summary: 'Whether two-factor methods are set up on this account',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
-    allow_pending_legal: true,
-    allow_pending_parental_consent: true,
-    allow_pending_2fa_enrolment: true,
+    ...ENROLMENT_POLICY,
     rate_limit: 'global',
     responses: {
       200: {
@@ -148,10 +168,7 @@ export function factorRoutes(router: Router<Context>): void {
     description: 'Returns an otpauth URI and secret to add to an authenticator app, then confirm.',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
-    allow_pending_legal: true,
-    allow_pending_parental_consent: true,
-    allow_pending_2fa_enrolment: true,
+    ...ENROLMENT_POLICY,
     rate_limit: 'global',
     responses: {
       200: {
@@ -197,10 +214,7 @@ export function factorRoutes(router: Router<Context>): void {
     summary: 'Finish authenticator-app enrolment',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
-    allow_pending_legal: true,
-    allow_pending_parental_consent: true,
-    allow_pending_2fa_enrolment: true,
+    ...ENROLMENT_POLICY,
     rate_limit: 'global',
     request: {
       body: z.object({ challenge: challengeSchema, code: totpSchema }),
@@ -263,8 +277,8 @@ export function factorRoutes(router: Router<Context>): void {
         key: encryptionKey(ctx.config),
         now: new Date(),
       });
-      if (result === 'not_enabled') throw new ProblemError('TOTP_NOT_ENABLED');
-      if (result === 'wrong_code') throw new ProblemError('TOTP_INVALID');
+      if (result.status === 'not_enabled') throw new ProblemError('TOTP_NOT_ENABLED');
+      if (result.status === 'wrong_code') throw new ProblemError('TOTP_INVALID');
       return { status: 204, headers: revokedHeaders([sessionId]) };
     },
   });
@@ -299,10 +313,7 @@ export function factorRoutes(router: Router<Context>): void {
     summary: 'Passkeys on this account',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
-    allow_pending_legal: true,
-    allow_pending_parental_consent: true,
-    allow_pending_2fa_enrolment: true,
+    ...ENROLMENT_POLICY,
     rate_limit: 'global',
     responses: {
       200: {
@@ -329,10 +340,7 @@ export function factorRoutes(router: Router<Context>): void {
     summary: 'Begin passkey registration',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
-    allow_pending_legal: true,
-    allow_pending_parental_consent: true,
-    allow_pending_2fa_enrolment: true,
+    ...ENROLMENT_POLICY,
     rate_limit: 'global',
     responses: {
       200: {
@@ -375,10 +383,7 @@ export function factorRoutes(router: Router<Context>): void {
     summary: 'Finish passkey registration',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
-    allow_pending_legal: true,
-    allow_pending_parental_consent: true,
-    allow_pending_2fa_enrolment: true,
+    ...ENROLMENT_POLICY,
     rate_limit: 'global',
     request: {
       body: z.object({
@@ -605,10 +610,7 @@ export function factorRoutes(router: Router<Context>): void {
       ctx.outbox.wake();
       if (result.secondFactor) metrics.twoFactor('passkey', 'success');
       metrics.signIn(result.authMethod, 'success');
-      if (!result.session.restored) {
-        metrics.sessionCreated(result.authMethod, result.session.evicted.length);
-      }
-      await notifyNewDevice(ctx, result.session);
+      await trackSession(ctx, result.authMethod, result.session);
       log.info('signed in', {
         method: result.authMethod,
         user_id: result.userId,
@@ -630,9 +632,7 @@ export function factorRoutes(router: Router<Context>): void {
     summary: 'Raise this session to aal2 with an authenticator or recovery code',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
-    allow_pending_legal: true,
-    allow_pending_parental_consent: true,
+    ...STEP_UP_POLICY,
     rate_limit: 'global',
     request: {
       body: z.object({
@@ -656,11 +656,11 @@ export function factorRoutes(router: Router<Context>): void {
         key: encryptionKey(ctx.config),
         now: new Date(),
       });
-      if (result === 'not_found') {
+      if (result.status === 'not_found') {
         metrics.stepUp('failure');
         throw new ProblemError('SESSION_NOT_FOUND');
       }
-      if (result === 'wrong_code') {
+      if (result.status === 'wrong_code') {
         metrics.stepUp('failure');
         metrics.twoFactor(factor, 'failure');
         throw new ProblemError(factor === 'totp' ? 'TOTP_INVALID' : 'RECOVERY_CODE_INVALID');
@@ -678,9 +678,7 @@ export function factorRoutes(router: Router<Context>): void {
     summary: 'Begin passkey step-up for this session',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
-    allow_pending_legal: true,
-    allow_pending_parental_consent: true,
+    ...STEP_UP_POLICY,
     rate_limit: 'global',
     responses: {
       200: {
@@ -722,9 +720,7 @@ export function factorRoutes(router: Router<Context>): void {
     summary: 'Finish passkey step-up for this session',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
-    allow_pending_legal: true,
-    allow_pending_parental_consent: true,
+    ...STEP_UP_POLICY,
     rate_limit: 'global',
     request: {
       body: z.object({

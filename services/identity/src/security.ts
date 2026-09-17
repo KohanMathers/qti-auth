@@ -8,13 +8,7 @@ import type { Kysely } from 'kysely';
 
 import type { Database, SecurityEventKind } from './database.ts';
 import { sessionFlaggedEvent } from './events.ts';
-import {
-  type TrustLevel,
-  type TrustSignals,
-  trustLevelForScore,
-  trustScore,
-  worseTrust,
-} from './trust.ts';
+import { type TrustLevel, type TrustSignals, trustVerdict, worseTrust } from './trust.ts';
 
 export interface SessionSecuritySettings {
   enabled: boolean;
@@ -123,7 +117,7 @@ export function evaluateSecurity(
   if (countryChanged && (policy === 'ignore' || policy === 'notify')) {
     scored.country = baseline.country;
   }
-  const level = trustLevelForScore(trustScore(baseline, scored));
+  const { level } = trustVerdict(baseline, scored);
   if (level === 'blocked') {
     return {
       trust: 'blocked',
@@ -182,6 +176,54 @@ export async function recordSecurityEvent(
     .execute();
 }
 
+/**
+ * Marks the event an alert email covers as notified, so `recentlyNotified` can
+ * rate limit the next one. Only that event is marked; when the outcome changed
+ * nothing there is no row to mark, so the alert is recorded as its own event.
+ */
+export async function markAlertNotified(
+  db: Kysely<Database>,
+  options: {
+    userId: string;
+    sessionId: string | null;
+    kind: SecurityEventKind;
+    trustTo: string | null;
+    countryFrom: string | null;
+    countryTo: string | null;
+    since: Date;
+    now: Date;
+  },
+): Promise<void> {
+  const pending = await db
+    .selectFrom('session_security_events')
+    .select('id')
+    .where('user_id', '=', options.userId)
+    .where('notified', '=', false)
+    .where('created_at', '>', options.since)
+    .orderBy('created_at', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  if (pending !== undefined) {
+    await db
+      .updateTable('session_security_events')
+      .set({ notified: true })
+      .where('id', '=', pending.id)
+      .execute();
+    return;
+  }
+  await recordSecurityEvent(db, {
+    userId: options.userId,
+    sessionId: options.sessionId,
+    kind: options.kind,
+    trustFrom: null,
+    trustTo: options.trustTo,
+    countryFrom: options.countryFrom,
+    countryTo: options.countryTo,
+    notified: true,
+    now: options.now,
+  });
+}
+
 export async function recentlyNotified(
   db: Kysely<Database>,
   userId: string,
@@ -210,6 +252,56 @@ export async function sweepSecurityEvents(
   return deletedRows(result);
 }
 
+export interface SessionSecurityState {
+  acr: string;
+  trustLevel: string;
+  lastCountry: string | null;
+}
+
+export interface ResolvedSecurity {
+  acr: string;
+  trustLevel: TrustLevel;
+  blocked: boolean;
+  notify: boolean;
+  countryFrom: string | null;
+  countryTo: string | null;
+}
+
+export function securityNotifies(outcome: SecurityOutcome): boolean {
+  return outcome.action === 'notify' || outcome.action === 'block';
+}
+
+/**
+ * Whether the outcome differs from what the session row already says. Session
+ * resolution runs on every request that misses the gateway cache, so an outcome
+ * that changes nothing must not write.
+ */
+export function securityNeedsWrite(
+  outcome: SecurityOutcome,
+  state: SessionSecurityState,
+  country: string | null,
+): boolean {
+  if (outcome.action === 'block') return true;
+  return (
+    outcome.acr !== state.acr || outcome.trust !== state.trustLevel || country !== state.lastCountry
+  );
+}
+
+export function unchangedSecurity(
+  outcome: SecurityOutcome,
+  baseline: TrustSignals,
+  current: TrustSignals,
+): ResolvedSecurity {
+  return {
+    acr: outcome.acr,
+    trustLevel: outcome.trust,
+    blocked: false,
+    notify: securityNotifies(outcome),
+    countryFrom: baseline.country,
+    countryTo: current.country,
+  };
+}
+
 export async function applyResolvedSecurity(
   trx: Kysely<Database>,
   options: {
@@ -217,26 +309,15 @@ export async function applyResolvedSecurity(
     userId: string;
     acr: string;
     trustLevel: string;
+    lastCountry: string | null;
     baseline: TrustSignals;
     current: TrustSignals;
-    settings: SessionSecuritySettings;
+    outcome: SecurityOutcome;
     now: Date;
   },
-): Promise<{
-  acr: string;
-  trustLevel: TrustLevel;
-  blocked: boolean;
-  notify: boolean;
-  countryFrom: string | null;
-  countryTo: string | null;
-}> {
-  const outcome = evaluateSecurity(
-    options.baseline,
-    options.current,
-    options.acr,
-    options.settings.onCountryChange,
-  );
-  const notify = outcome.action === 'notify' || outcome.action === 'block';
+): Promise<ResolvedSecurity> {
+  const { outcome } = options;
+  const notify = securityNotifies(outcome);
   const changed = outcome.action !== 'none' || outcome.trust !== options.trustLevel;
   if (outcome.action !== 'block') {
     const patch: {
@@ -244,13 +325,18 @@ export async function applyResolvedSecurity(
       trust_level?: TrustLevel;
       last_country?: string | null;
       step_up_at?: Date | null;
-    } = { last_country: options.current.country };
+    } = {};
+    if (options.current.country !== options.lastCountry) {
+      patch.last_country = options.current.country;
+    }
     if (outcome.acr !== options.acr || outcome.trust !== options.trustLevel) {
       patch.acr = outcome.acr;
       patch.trust_level = outcome.trust;
       if (outcome.acr === 'aal0') patch.step_up_at = null;
     }
-    await trx.updateTable('sessions').set(patch).where('id', '=', options.sessionId).execute();
+    if (Object.keys(patch).length > 0) {
+      await trx.updateTable('sessions').set(patch).where('id', '=', options.sessionId).execute();
+    }
   }
 
   if (changed) {

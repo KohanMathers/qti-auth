@@ -10,9 +10,11 @@ import type { CreatedSession } from './sessions.ts';
 export const NO_STORE = { 'cache-control': 'no-store' };
 
 export function sessionHeaders(
-  session: Pick<CreatedSession, 'id' | 'token' | 'expiresAt' | 'evicted' | 'restored'>,
+  session: Pick<CreatedSession, 'id' | 'token' | 'expiresAt' | 'evicted'>,
 ): Record<string, string> {
-  if (session.restored) return revokedHeaders([...session.evicted, session.id]);
+  // No token means a challenged session was restored: the cookie the browser
+  // already holds still works, so the gateway only has to drop its cached copy.
+  if (session.token === null) return revokedHeaders([...session.evicted, session.id]);
   return {
     ...revokedHeaders(session.evicted),
     [SESSION_TOKEN_HEADER]: session.token,

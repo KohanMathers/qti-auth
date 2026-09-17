@@ -13,12 +13,12 @@ import {
 import { closeValkey, connectValkey } from '@qtiauth/valkey';
 
 import { countAccountsByState } from './accounts.ts';
+import { attachBindStore, valkeyBindStore } from './bind-state.ts';
 import { sweepChallenges } from './challenges.ts';
 import type { Database } from './database.ts';
 import { eraseUser, exportUser } from './data-rights.ts';
 import { sweepTokens } from './email-tokens.ts';
 import { sweepAuthFailures } from './failures.ts';
-import { attachBindStore, valkeyBindStore } from './bind-state.ts';
 import { attachGeoIp } from './geoip-state.ts';
 import { identityMetrics } from './metrics.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
@@ -71,7 +71,11 @@ export function identityService(options: IdentityOptions = {}) {
       accountOrigin(config);
       encryptionKey(config);
       const stack: Stoppable[] = [];
-      const geoip = openGeoIp(config.geoip);
+      const geoip = openGeoIp(config.geoip, {
+        onError: (error, path) => {
+          log.warn('geoip database could not be read', { error, path });
+        },
+      });
       attachGeoIp(ctx, geoip);
       stack.push({
         stop: () => {

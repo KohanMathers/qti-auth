@@ -12,6 +12,7 @@ import {
   type VerifyResult,
 } from './magic-links.ts';
 import { identityMetrics } from './metrics.ts';
+import { oauthStoreOf, type SocialIntent } from './oauth-state.ts';
 import {
   completePasswordSignup,
   consumePasswordReset,
@@ -28,7 +29,6 @@ import {
   type SetPasswordResult,
   verifyEmailAddress,
 } from './password-auth.ts';
-import { oauthStoreOf, type SocialIntent } from './oauth-state.ts';
 import { PASSWORD_METHOD } from './passwords.ts';
 import { anySocialEnabled, findSocialProvider, metricMethod } from './providers.ts';
 import type { Context } from './service.ts';
@@ -91,7 +91,12 @@ export async function notifyNewDevice(ctx: Context, session: CreatedSession): Pr
     .execute();
 }
 
-async function trackSession(ctx: Context, method: string, session: CreatedSession): Promise<void> {
+/** Counts a new session and sends the new-device notice, for every sign-in path. */
+export async function trackSession(
+  ctx: Context,
+  method: string,
+  session: CreatedSession,
+): Promise<void> {
   if (!session.restored)
     identityMetrics(ctx.metrics).sessionCreated(method, session.evicted.length);
   await notifyNewDevice(ctx, session);
@@ -508,11 +513,14 @@ export async function finishTwoFactor(
   return result;
 }
 
-export function socialEnabled(ctx: Context, providerId?: string): boolean {
-  if (providerId !== undefined) {
-    return findSocialProvider(ctx.config.features.auth.social, providerId) !== undefined;
-  }
+/** Whether any upstream provider is configured, for showing social sign-in at all. */
+export function socialEnabled(ctx: Context): boolean {
   return anySocialEnabled(ctx.config.features.auth.social);
+}
+
+/** Whether this particular provider is configured. */
+export function socialProviderEnabled(ctx: Context, providerId: string): boolean {
+  return findSocialProvider(ctx.config.features.auth.social, providerId) !== undefined;
 }
 
 export async function startSocial(

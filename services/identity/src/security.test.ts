@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluateSecurity } from './security.ts';
+import { evaluateSecurity, securityNeedsWrite, unchangedSecurity } from './security.ts';
 import type { TrustSignals } from './trust.ts';
 
 function signals(overrides: Partial<TrustSignals> = {}): TrustSignals {
@@ -51,5 +51,41 @@ describe('evaluateSecurity', () => {
         countryChanged: true,
       },
     );
+  });
+});
+
+describe('securityNeedsWrite', () => {
+  const state = { acr: 'aal1', trustLevel: 'full', lastCountry: 'GB' };
+
+  it('does not write when the session row already says this', () => {
+    const outcome = evaluateSecurity(signals(), signals(), 'aal1', 'challenge');
+    expect(securityNeedsWrite(outcome, state, 'GB')).toBe(false);
+  });
+
+  it('writes when the country moved on', () => {
+    const outcome = evaluateSecurity(signals(), signals(), 'aal1', 'challenge');
+    expect(securityNeedsWrite(outcome, state, 'FR')).toBe(true);
+  });
+
+  it('writes when the assurance level or trust changes', () => {
+    const challenged = evaluateSecurity(signals(), signals({ country: 'US' }), 'aal1', 'challenge');
+    expect(securityNeedsWrite(challenged, state, 'US')).toBe(true);
+
+    const blocked = evaluateSecurity(signals(), signals({ country: 'US' }), 'aal1', 'block');
+    expect(securityNeedsWrite(blocked, state, 'US')).toBe(true);
+  });
+});
+
+describe('unchangedSecurity', () => {
+  it('reports the outcome without claiming a block', () => {
+    const outcome = evaluateSecurity(signals(), signals({ country: 'US' }), 'aal1', 'notify');
+    expect(unchangedSecurity(outcome, signals(), signals({ country: 'US' }))).toEqual({
+      acr: 'aal1',
+      trustLevel: outcome.trust,
+      blocked: false,
+      notify: true,
+      countryFrom: 'GB',
+      countryTo: 'US',
+    });
   });
 });

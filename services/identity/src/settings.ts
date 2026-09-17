@@ -7,16 +7,16 @@ import {
   SESSION_TIMEZONE_HEADER,
 } from '@qtiauth/service-kit';
 
+import type { EmailChangeSettings } from './email-change.ts';
 import { emailNormalizer } from './email.ts';
 import { parseEncryptionKey } from './encrypt.ts';
-import type { EmailChangeSettings } from './email-change.ts';
 import { geoIpOf } from './geoip-state.ts';
 import type { MagicLinkSettings } from './magic-links.ts';
 import type { RelyingParty } from './passkeys.ts';
 import type { PasswordSettings } from './password-auth.ts';
-import type { IdentityConfig } from './service.ts';
-import type { SessionClient, SessionSettings } from './sessions.ts';
 import type { SessionSecuritySettings } from './security.ts';
+import type { Context, IdentityConfig } from './service.ts';
+import type { SessionClient, SessionSettings } from './sessions.ts';
 import type { SocialSettings } from './social.ts';
 
 export const RETURN_TO = /^\/(?![/\\])[^\s\\]*$/;
@@ -114,7 +114,7 @@ export function sessionClient(
 }
 
 export function clientFor(
-  ctx: { config: IdentityConfig },
+  ctx: Context,
   request: Request,
   identity?: { sid: string | null } | null,
 ): SessionClient {

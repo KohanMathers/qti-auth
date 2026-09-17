@@ -23,17 +23,35 @@ const WEIGHTS = {
   clientFingerprint: 1,
 } as const;
 
+/**
+ * Weight that has to be comparable before a mismatch may challenge or end a
+ * session. Anything less is only the weak signals (TLS fingerprint, timezone,
+ * screen size), which change for ordinary reasons and cannot carry that verdict
+ * on their own.
+ */
+export const CHALLENGE_MIN_WEIGHT = WEIGHTS.country;
+
+export interface TrustVerdict {
+  score: number;
+  /** Total weight of the signals present on both sides, so comparable at all. */
+  comparable: number;
+  level: TrustLevel;
+}
+
 function same(left: string | null, right: string | null): boolean | null {
   if (left === null || right === null || left === '' || right === '') return null;
   return left === right;
 }
 
-export function trustScore(baseline: TrustSignals, current: TrustSignals): number {
+function weighted(
+  baseline: TrustSignals,
+  current: TrustSignals,
+): { points: number; comparable: number } {
   let points = 0;
-  let total = 0;
+  let comparable = 0;
   const add = (weight: number, match: boolean | null) => {
     if (match === null) return;
-    total += weight;
+    comparable += weight;
     if (match) points += weight;
   };
 
@@ -47,15 +65,30 @@ export function trustScore(baseline: TrustSignals, current: TrustSignals): numbe
   add(WEIGHTS.screen, same(baseline.screen, current.screen));
   add(WEIGHTS.clientFingerprint, same(baseline.clientFingerprint, current.clientFingerprint));
 
-  if (total === 0) return 100;
-  return Math.round((points / total) * 100);
+  return { points, comparable };
 }
 
-export function trustLevelForScore(score: number): TrustLevel {
+export function trustScore(baseline: TrustSignals, current: TrustSignals): number {
+  const { points, comparable } = weighted(baseline, current);
+  if (comparable === 0) return 100;
+  return Math.round((points / comparable) * 100);
+}
+
+export function trustLevelForScore(
+  score: number,
+  comparable = Number.POSITIVE_INFINITY,
+): TrustLevel {
   if (score >= 85) return 'full';
   if (score >= 55) return 'partial';
+  if (comparable < CHALLENGE_MIN_WEIGHT) return 'partial';
   if (score >= 25) return 'challenge';
   return 'blocked';
+}
+
+export function trustVerdict(baseline: TrustSignals, current: TrustSignals): TrustVerdict {
+  const { points, comparable } = weighted(baseline, current);
+  const score = comparable === 0 ? 100 : Math.round((points / comparable) * 100);
+  return { score, comparable, level: trustLevelForScore(score, comparable) };
 }
 
 export function rank(level: TrustLevel): number {

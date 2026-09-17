@@ -1,7 +1,16 @@
-import { KEY_PREFIX, type Valkey } from '@qtiauth/valkey';
+import type { Valkey } from '@qtiauth/valkey';
+
+import { contextAttachment } from './attachments.ts';
+import {
+  memoryTtlStore,
+  type TtlStore,
+  type TtlStoreSettings,
+  valkeyTtlStore,
+} from './ttl-store.ts';
 
 export const OAUTH_STATE_TTL = 10 * 60_000;
-const KEY = `${KEY_PREFIX}identity:oauth:`;
+
+const SETTINGS: TtlStoreSettings = { namespace: 'identity:oauth:', defaultTtl: OAUTH_STATE_TTL };
 
 export type SocialIntent = 'signin' | 'link';
 
@@ -19,46 +28,17 @@ export interface OauthState {
   createdAt: number;
 }
 
-export interface OauthStateStore {
-  put: (state: string, value: OauthState, ttlMs?: number) => Promise<void>;
-  take: (state: string) => Promise<OauthState | undefined>;
-}
+export type OauthStateStore = TtlStore<OauthState>;
 
-const attached = new WeakMap<object, OauthStateStore>();
+const attachment = contextAttachment<OauthStateStore>();
 
-export function attachOauthStore(ctx: object, store: OauthStateStore): void {
-  attached.set(ctx, store);
-}
-
-export function oauthStoreOf(ctx: object): OauthStateStore | undefined {
-  return attached.get(ctx);
-}
+export const attachOauthStore = attachment.attach;
+export const oauthStoreOf = attachment.of;
 
 export function memoryOauthStore(): OauthStateStore {
-  const items = new Map<string, { value: OauthState; expiresAt: number }>();
-  return {
-    put(state, value, ttlMs = OAUTH_STATE_TTL) {
-      items.set(state, { value, expiresAt: Date.now() + ttlMs });
-      return Promise.resolve();
-    },
-    take(state) {
-      const item = items.get(state);
-      items.delete(state);
-      if (item === undefined || item.expiresAt <= Date.now()) return Promise.resolve(undefined);
-      return Promise.resolve(item.value);
-    },
-  };
+  return memoryTtlStore<OauthState>(SETTINGS);
 }
 
 export function valkeyOauthStore(client: Valkey): OauthStateStore {
-  return {
-    async put(state, value, ttlMs = OAUTH_STATE_TTL) {
-      await client.set(`${KEY}${state}`, JSON.stringify(value), 'PX', ttlMs);
-    },
-    async take(state) {
-      const raw = await client.getdel(`${KEY}${state}`);
-      if (raw === null) return undefined;
-      return JSON.parse(raw) as OauthState;
-    },
-  };
+  return valkeyTtlStore<OauthState>(client, SETTINGS);
 }

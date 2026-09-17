@@ -23,7 +23,7 @@ import {
   useEmailToken,
 } from './email-tokens.ts';
 import { type UserCreatedData, userCreatedEvent } from './events.ts';
-import { secondFactorMethods, type SecondFactorMethod, totpEnrolled } from './factors.ts';
+import { hasSecondFactor, type SecondFactorMethod, secondFactorMethods } from './factors.ts';
 import {
   clearAuthFailures,
   countedFailures,
@@ -273,7 +273,10 @@ export async function loginWithPassword(
     if (!account || account.state === 'deleted') return undefined;
     if (rehashed) await upsertPassword(trx, account.id, secret, now);
     await recordIdentityUse(trx, account.id, PASSWORD_METHOD, now);
-    if (await totpEnrolled(trx, account.id)) {
+    // Anything that counts as enrolment for security.require_2fa_for_permissions
+    // has to be asked for here too, or a passkey-only account would satisfy the
+    // enrolment gate and still never be challenged.
+    if (await hasSecondFactor(trx, account.id)) {
       const methods = await secondFactorMethods(trx, account.id);
       const challenge = await insertChallenge(trx, {
         kind: 'second_factor',
@@ -306,9 +309,6 @@ export async function loginWithPassword(
     return { status: 'invalid' };
   }
   await clearAuthFailures(db, keys);
-  if (signedIn.status === 'second_factor_required') {
-    return { ...signedIn, rehashed };
-  }
   return { ...signedIn, rehashed };
 }
 

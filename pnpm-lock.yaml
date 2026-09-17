@@ -439,6 +439,9 @@ importers:
       '@qtiauth/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@qtiauth/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@qtiauth/events':
         specifier: workspace:*
         version: link:../../packages/events

@@ -59,6 +59,24 @@ export type CaptchaCheck =
   | { status: 'required'; widget: CaptchaWidget }
   | { status: 'invalid'; widget: CaptchaWidget };
 
+/** Whether this IP has used up its allowance of attempts for the action. */
+async function captchaIsRequired(
+  ctx: Context,
+  request: Request,
+  action: CaptchaAction,
+  now: Date,
+): Promise<boolean> {
+  const { captcha } = ctx.config;
+  if (captcha.provider === 'none') return false;
+  const attempts = await countedIpAttempts(ctx.db, {
+    ip: clientIp(request),
+    scope: ACTION_SCOPE[action],
+    window: captcha.window,
+    now,
+  });
+  return captchaRequired(attempts, captcha);
+}
+
 export async function checkCaptcha(
   ctx: Context,
   request: Request,
@@ -66,15 +84,8 @@ export async function checkCaptcha(
   payload: string | undefined,
 ): Promise<CaptchaCheck> {
   const { captcha } = ctx.config;
-  if (captcha.provider === 'none') return { status: 'ok' };
   const now = new Date();
-  const attempts = await countedIpAttempts(ctx.db, {
-    ip: clientIp(request),
-    scope: ACTION_SCOPE[action],
-    window: captcha.window,
-    now,
-  });
-  if (!captchaRequired(attempts, captcha)) return { status: 'ok' };
+  if (!(await captchaIsRequired(ctx, request, action, now))) return { status: 'ok' };
 
   const provider = captchaProvider(captcha);
   const metrics = identityMetrics(ctx.metrics);
@@ -137,19 +148,9 @@ export async function inspectCaptcha(
   site_key: string | null;
   challenge: NonNullable<CaptchaWidget['challenge']> | null;
 }> {
+  const now = new Date();
   const provider = captchaProvider(ctx.config.captcha);
-  const required =
-    ctx.config.captcha.provider !== 'none' &&
-    captchaRequired(
-      await countedIpAttempts(ctx.db, {
-        ip: clientIp(request),
-        scope: ACTION_SCOPE[action],
-        window: ctx.config.captcha.window,
-        now: new Date(),
-      }),
-      ctx.config.captcha,
-    );
-  if (!required) {
+  if (!(await captchaIsRequired(ctx, request, action, now))) {
     return {
       required: false,
       provider: provider.name,
@@ -158,7 +159,7 @@ export async function inspectCaptcha(
     };
   }
   identityMetrics(ctx.metrics).captcha('shown');
-  const widget = provider.issue(new Date());
+  const widget = provider.issue(now);
   return {
     required: true,
     provider: widget.provider,

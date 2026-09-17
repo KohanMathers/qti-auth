@@ -196,6 +196,7 @@ describe('featuresReport', () => {
       services: running('identity', 'notifier', 'scheduler'),
       routeProblems: [],
       starting: false,
+      geoip: { available: false, attribution: null },
     });
     expect(report.status).toBe('ok');
     expect(report.problems).toEqual([{ code: 'GEOIP_UNAVAILABLE', source: 'none' }]);

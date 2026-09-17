@@ -1,5 +1,6 @@
 import type { QtiauthConfig } from '@qtiauth/config';
-import { type GeoipAttribution, geoipAvailable } from '@qtiauth/geoip';
+import { escapeHtml } from '@qtiauth/email';
+import type { GeoIp } from '@qtiauth/geoip';
 import * as z from 'zod';
 
 import type { RunningService } from './discovery.ts';
@@ -94,23 +95,18 @@ export const aboutSchema = z.object({
 
 export type About = z.output<typeof aboutSchema>;
 
-export function aboutReport(config: MetaConfig, attribution: GeoipAttribution | null): About {
+/** What meta reports needs from the opened database: the one source of truth for availability. */
+export type GeoipStatus = Pick<GeoIp, 'available' | 'attribution'>;
+
+export function aboutReport(config: MetaConfig, geoip: GeoipStatus): About {
   return {
     product_name: config.branding.product_name,
     geoip: {
       source: config.geoip.source,
-      available: geoipAvailable(config.geoip),
-      attribution,
+      available: geoip.available,
+      attribution: geoip.attribution,
     },
   };
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 }
 
 export function aboutHtml(about: About): string {
@@ -153,7 +149,14 @@ export interface HealthInput {
   routeProblems: readonly RouteProblem[];
   starting: boolean;
   surfaces?: readonly Surface[];
+  geoip?: GeoipStatus;
 }
+
+/** Problems worth reporting that do not make the stack degraded. */
+const ADVISORY_PROBLEMS = new Set<HealthProblem['code']>([
+  'CROSS_SITE_SURFACES',
+  'GEOIP_UNAVAILABLE',
+]);
 
 export function healthReport(input: HealthInput): Health {
   const running = new Set(input.services.map((service) => service.name));
@@ -176,13 +179,11 @@ export function healthReport(input: HealthInput): Health {
         code: 'CROSS_SITE_SURFACES' as const,
         surfaces: pair.surfaces,
       })),
-    ...(geoipAvailable(input.config.geoip)
+    ...(input.geoip === undefined || input.geoip.available
       ? []
       : [{ code: 'GEOIP_UNAVAILABLE' as const, source: input.config.geoip.source }]),
   ];
-  const degrading = problems.filter(
-    (problem) => problem.code !== 'CROSS_SITE_SURFACES' && problem.code !== 'GEOIP_UNAVAILABLE',
-  );
+  const degrading = problems.filter((problem) => !ADVISORY_PROBLEMS.has(problem.code));
   let status: Health['status'] = 'ok';
   if (degrading.length > 0) status = input.starting ? 'starting' : 'degraded';
   return {

@@ -1,12 +1,13 @@
+import type { Kysely } from 'kysely';
+
 import { accountsWithEmail, activateVerifiedEmail, findAccount, lockEmail } from './accounts.ts';
-import type { Database } from './database.ts';
+import type { Database, EmailTokenPurpose } from './database.ts';
 import {
   insertEmailToken,
   takeEmailToken,
   type TokenFailure,
   useEmailToken,
 } from './email-tokens.ts';
-import type { Kysely } from 'kysely';
 
 export interface EmailChangeSettings {
   changeTtl: number;
@@ -103,20 +104,45 @@ export async function startEmailChange(
   });
 }
 
-export function confirmEmailChange(
+/**
+ * Moves the account to the address the token carries. Both directions of an
+ * email change do the same work: take the link, check the address still has room
+ * for this account, and set it. Reverting also cancels any confirmation still
+ * outstanding, so the change cannot be re-applied after the user undid it.
+ */
+async function applyEmailToken(
   db: Kysely<Database>,
-  options: { token: string; settings: EmailChangeSettings; now: Date },
-): Promise<ConfirmEmailChangeResult> {
+  options: {
+    token: string;
+    purpose: Extract<EmailTokenPurpose, 'email_change' | 'email_revert'>;
+    settings: EmailChangeSettings;
+    now: Date;
+  },
+): Promise<
+  | { status: 'invalid'; reason: TokenFailure }
+  | { status: 'account_limit' }
+  | { status: 'applied'; userId: string; email: string }
+> {
   return db.transaction().execute(async (trx) => {
-    const taken = await takeEmailToken(trx, options.token, 'email_change', options.now);
+    const taken = await takeEmailToken(trx, options.token, options.purpose, options.now);
     if (taken.status === 'invalid') return taken;
     const { row } = taken;
     if (row.user_id === null) return { status: 'invalid' as const, reason: 'unknown' as const };
+    const userId = row.user_id;
     await lockEmail(trx, row.email_normalized);
     const existing = await accountsWithEmail(trx, row.email_normalized);
-    const others = existing.filter((account) => account.id !== row.user_id);
+    const others = existing.filter((account) => account.id !== userId);
     if (others.length >= options.settings.maxPerEmail) return { status: 'account_limit' as const };
     await useEmailToken(trx, row.id, options.now);
+    if (options.purpose === 'email_revert') {
+      await trx
+        .updateTable('email_tokens')
+        .set({ used_at: options.now })
+        .where('user_id', '=', userId)
+        .where('purpose', '=', 'email_change')
+        .where('used_at', 'is', null)
+        .execute();
+    }
     await trx
       .updateTable('users')
       .set({
@@ -125,45 +151,27 @@ export function confirmEmailChange(
         email_verified_at: options.now,
         updated_at: options.now,
       })
-      .where('id', '=', row.user_id)
+      .where('id', '=', userId)
       .execute();
-    await activateVerifiedEmail(trx, row.user_id, options.now);
-    return { status: 'confirmed' as const, userId: row.user_id, email: row.email };
+    await activateVerifiedEmail(trx, userId, options.now);
+    return { status: 'applied' as const, userId, email: row.email };
   });
 }
 
-export function revertEmailChange(
+export async function confirmEmailChange(
+  db: Kysely<Database>,
+  options: { token: string; settings: EmailChangeSettings; now: Date },
+): Promise<ConfirmEmailChangeResult> {
+  const result = await applyEmailToken(db, { ...options, purpose: 'email_change' });
+  if (result.status !== 'applied') return result;
+  return { status: 'confirmed', userId: result.userId, email: result.email };
+}
+
+export async function revertEmailChange(
   db: Kysely<Database>,
   options: { token: string; settings: EmailChangeSettings; now: Date },
 ): Promise<RevertEmailChangeResult> {
-  return db.transaction().execute(async (trx) => {
-    const taken = await takeEmailToken(trx, options.token, 'email_revert', options.now);
-    if (taken.status === 'invalid') return taken;
-    const { row } = taken;
-    if (row.user_id === null) return { status: 'invalid' as const, reason: 'unknown' as const };
-    await lockEmail(trx, row.email_normalized);
-    const existing = await accountsWithEmail(trx, row.email_normalized);
-    const others = existing.filter((account) => account.id !== row.user_id);
-    if (others.length >= options.settings.maxPerEmail) return { status: 'account_limit' as const };
-    await useEmailToken(trx, row.id, options.now);
-    await trx
-      .updateTable('email_tokens')
-      .set({ used_at: options.now })
-      .where('user_id', '=', row.user_id)
-      .where('purpose', '=', 'email_change')
-      .where('used_at', 'is', null)
-      .execute();
-    await trx
-      .updateTable('users')
-      .set({
-        email: row.email,
-        email_normalized: row.email_normalized,
-        email_verified_at: options.now,
-        updated_at: options.now,
-      })
-      .where('id', '=', row.user_id)
-      .execute();
-    await activateVerifiedEmail(trx, row.user_id, options.now);
-    return { status: 'reverted' as const, userId: row.user_id, email: row.email };
-  });
+  const result = await applyEmailToken(db, { ...options, purpose: 'email_revert' });
+  if (result.status !== 'applied') return result;
+  return { status: 'reverted', userId: result.userId, email: result.email };
 }

@@ -1,7 +1,16 @@
-import { KEY_PREFIX, type Valkey } from '@qtiauth/valkey';
+import type { Valkey } from '@qtiauth/valkey';
+
+import { contextAttachment } from './attachments.ts';
+import {
+  memoryTtlStore,
+  type TtlStore,
+  type TtlStoreSettings,
+  valkeyTtlStore,
+} from './ttl-store.ts';
 
 export const BIND_CODE_TTL = 60_000;
-const KEY = `${KEY_PREFIX}identity:bind:`;
+
+const SETTINGS: TtlStoreSettings = { namespace: 'identity:bind:', defaultTtl: BIND_CODE_TTL };
 
 export interface BindCode {
   sessionId: string;
@@ -11,46 +20,17 @@ export interface BindCode {
   createdAt: number;
 }
 
-export interface BindStore {
-  put: (code: string, value: BindCode, ttlMs?: number) => Promise<void>;
-  take: (code: string) => Promise<BindCode | undefined>;
-}
+export type BindStore = TtlStore<BindCode>;
 
-const attached = new WeakMap<object, BindStore>();
+const attachment = contextAttachment<BindStore>();
 
-export function attachBindStore(ctx: object, store: BindStore): void {
-  attached.set(ctx, store);
-}
-
-export function bindStoreOf(ctx: object): BindStore | undefined {
-  return attached.get(ctx);
-}
+export const attachBindStore = attachment.attach;
+export const bindStoreOf = attachment.of;
 
 export function memoryBindStore(): BindStore {
-  const items = new Map<string, { value: BindCode; expiresAt: number }>();
-  return {
-    put(code, value, ttlMs = BIND_CODE_TTL) {
-      items.set(code, { value, expiresAt: Date.now() + ttlMs });
-      return Promise.resolve();
-    },
-    take(code) {
-      const item = items.get(code);
-      items.delete(code);
-      if (item === undefined || item.expiresAt <= Date.now()) return Promise.resolve(undefined);
-      return Promise.resolve(item.value);
-    },
-  };
+  return memoryTtlStore<BindCode>(SETTINGS);
 }
 
 export function valkeyBindStore(client: Valkey): BindStore {
-  return {
-    async put(code, value, ttlMs = BIND_CODE_TTL) {
-      await client.set(`${KEY}${code}`, JSON.stringify(value), 'PX', ttlMs);
-    },
-    async take(code) {
-      const raw = await client.getdel(`${KEY}${code}`);
-      if (raw === null) return undefined;
-      return JSON.parse(raw) as BindCode;
-    },
-  };
+  return valkeyTtlStore<BindCode>(client, SETTINGS);
 }

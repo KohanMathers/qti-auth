@@ -5,8 +5,6 @@ import type { Database } from './database.ts';
 import { bindCookieScope } from './sessions.ts';
 import { newToken } from './tokens.ts';
 
-export { BIND_CODE_TTL };
-
 export async function issueBindCode(
   store: BindStore,
   binding: { sessionId: string; target: string; origin: string; returnPath: string },
@@ -24,7 +22,8 @@ export async function issueBindCode(
 }
 
 export type CompleteBindResult =
-  { status: 'ok'; token: string; expiresAt: Date; returnPath: string } | { status: 'invalid' };
+  | { status: 'ok'; sessionId: string; token: string; expiresAt: Date; returnPath: string }
+  | { status: 'invalid' };
 
 export async function completeBind(
   db: Kysely<Database>,
@@ -51,6 +50,7 @@ export async function completeBind(
   if (bound === null) return { status: 'invalid' };
   return {
     status: 'ok',
+    sessionId: stored.sessionId,
     token: bound.token,
     expiresAt: bound.expiresAt,
     returnPath: stored.returnPath,

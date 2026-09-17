@@ -9,6 +9,15 @@ import { openMmdb, type MmdbLookup } from './mmdb.ts';
 
 export type GeoipConfig = QtiauthConfig['geoip'];
 
+/** How long a stat of the database file is trusted before checking for a newer one. */
+export const RECHECK_INTERVAL_MS = 30_000;
+
+export interface GeoipOptions {
+  /** Called once per failed load, so a broken database does not fail silently. */
+  onError?: (error: unknown, path: string) => void;
+  now?: () => number;
+}
+
 export interface GeoIp {
   source: GeoipConfig['source'];
   available: boolean;
@@ -19,7 +28,7 @@ export interface GeoIp {
 
 type Loaded =
   | { kind: 'csv'; ranges: CountryRange[]; mtime: number; path: string }
-  | { kind: 'mmdb'; lookup: MmdbLookup; mtime: number; path: string; close: () => void };
+  | { kind: 'mmdb'; lookup: MmdbLookup; mtime: number; path: string };
 
 function mtimeOf(path: string): number | null {
   try {
@@ -41,13 +50,12 @@ function attributionFor(source: GeoipConfig['source']): GeoipAttribution | null 
 
 function loadFile(path: string, mtime: number): Loaded {
   if (isMmdb(path)) {
-    const opened = openMmdb(path);
-    return { kind: 'mmdb', lookup: opened.lookup, close: opened.close, mtime, path };
+    return { kind: 'mmdb', lookup: openMmdb(path).lookup, mtime, path };
   }
   return { kind: 'csv', ranges: loadCountryCsv(path), mtime, path };
 }
 
-export function openGeoIp(config: GeoipConfig): GeoIp {
+export function openGeoIp(config: GeoipConfig, options: GeoipOptions = {}): GeoIp {
   const attribution = attributionFor(config.source);
   if (config.source === 'none' || config.source === 'header') {
     return {
@@ -59,25 +67,39 @@ export function openGeoIp(config: GeoipConfig): GeoIp {
     };
   }
 
+  const now = options.now ?? Date.now;
   let loaded: Loaded | null = null;
+  // The file that failed to load, so a corrupt database is parsed once rather
+  // than on every lookup.
+  let failed: { path: string; mtime: number } | null = null;
+  let checkedAt: number | null = null;
+
+  const isCurrent = (candidate: { path: string; mtime: number }, mtime: number): boolean =>
+    candidate.path === config.database_path && candidate.mtime === mtime;
+
   const ensure = (): Loaded | null => {
+    const time = now();
+    if (checkedAt !== null && time - checkedAt < RECHECK_INTERVAL_MS) return loaded;
+    checkedAt = time;
     const mtime = mtimeOf(config.database_path);
     if (mtime === null) {
-      if (loaded?.kind === 'mmdb') loaded.close();
       loaded = null;
       return null;
     }
-    if (loaded !== null && loaded.path === config.database_path && loaded.mtime === mtime) {
-      return loaded;
+    if (loaded !== null && isCurrent(loaded, mtime)) return loaded;
+    if (failed !== null && isCurrent(failed, mtime)) {
+      loaded = null;
+      return null;
     }
-    if (loaded?.kind === 'mmdb') loaded.close();
     try {
       loaded = loadFile(config.database_path, mtime);
-      return loaded;
-    } catch {
+      failed = null;
+    } catch (error) {
       loaded = null;
-      return null;
+      failed = { path: config.database_path, mtime };
+      options.onError?.(error, config.database_path);
     }
+    return loaded;
   };
 
   return {
@@ -95,14 +117,9 @@ export function openGeoIp(config: GeoipConfig): GeoIp {
       return normalizeCountry(lookupRange(file.ranges, value));
     },
     close: () => {
-      if (loaded?.kind === 'mmdb') loaded.close();
       loaded = null;
+      failed = null;
+      checkedAt = null;
     },
   };
-}
-
-export function geoipAvailable(config: GeoipConfig): boolean {
-  if (config.source === 'none') return false;
-  if (config.source === 'header') return true;
-  return mtimeOf(config.database_path) !== null;
 }

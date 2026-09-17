@@ -1,7 +1,7 @@
 import type { RpcResult } from '@qtiauth/bus';
 import type { QtiauthConfig } from '@qtiauth/config';
 import { type EventEnvelope, IDENTITY_EVENTS } from '@qtiauth/events';
-import { normalizeCountry, type GeoIp } from '@qtiauth/geoip';
+import { type GeoIp, ipSubnet, normalizeCountry } from '@qtiauth/geoip';
 import type { Metrics } from '@qtiauth/observability';
 import {
   hashSessionToken,
@@ -155,12 +155,31 @@ export function isSessionToken(token: string): boolean {
   return TOKEN.test(token);
 }
 
+/** Signals that must be unchanged for a cached session to be reused. */
+const CACHED_SIGNALS = [
+  'user_agent',
+  'country',
+  'tls_fingerprint',
+  'timezone',
+  'screen',
+  'client_fingerprint',
+] as const;
+
+function subnetOf(ip: string | null): string | null {
+  if (ip === null || ip === '') return null;
+  return ipSubnet(ip);
+}
+
 export function signalsMatch(
   cached: ResolveSessionRequest['signals'] | null | undefined,
   current: ResolveSessionRequest['signals'] | undefined,
 ): boolean {
   if (current === undefined || cached === undefined || cached === null) return true;
-  return JSON.stringify(cached) === JSON.stringify(current);
+  // Compared by subnet rather than by exact address: a mobile client's IP can
+  // change on every request, which would make the cache useless, while a move
+  // to another subnet or country still goes back to identity for a fresh check.
+  if (subnetOf(cached.ip) !== subnetOf(current.ip)) return false;
+  return CACHED_SIGNALS.every((name) => cached[name] === current[name]);
 }
 
 export function prometheusSessionMetrics(metrics: Metrics): SessionMetrics {

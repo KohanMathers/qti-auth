@@ -30,9 +30,10 @@ import {
   registerWithPassword,
   sendMagicLink,
   sendPasswordReset,
-  socialEnabled,
-  startSocial,
   signup,
+  socialEnabled,
+  socialProviderEnabled,
+  startSocial,
   totpEnabled,
   verify,
 } from './flows.ts';
@@ -1173,8 +1174,8 @@ ${passkeysEnabled(ctx) ? '<p><a href="passkeys">Passkeys</a></p>' : ''}`,
           key: encryptionKey(ctx.config),
           now: new Date(),
         });
-        if (result === 'wrong_code') return totpDisableForm(ctx, 'That code is incorrect.');
-        if (result === 'not_enabled') return totpStartForm(ctx);
+        if (result.status === 'wrong_code') return totpDisableForm(ctx, 'That code is incorrect.');
+        if (result.status === 'not_enabled') return totpStartForm(ctx);
         return page(ctx, {
           title: 'Authenticator app is off',
           headers: revokedHeaders([sessionId]),
@@ -1270,7 +1271,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     },
     responses: { 302: { description: 'Redirect to the provider' }, ...htmlResponses },
     handler: async ({ ctx, params, query, request, log, identity }) => {
-      if (!socialEnabled(ctx, params.provider)) {
+      if (!socialProviderEnabled(ctx, params.provider)) {
         return page(ctx, {
           status: 403,
           title: 'This sign-in method is turned off',
@@ -1313,7 +1314,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     request: { params: z.object({ provider: z.string().max(64) }) },
     responses: { 302: { description: 'Redirect to the provider' }, ...htmlResponses },
     handler: async ({ ctx, params, identity, request, log }) => {
-      if (!socialEnabled(ctx, params.provider)) {
+      if (!socialProviderEnabled(ctx, params.provider)) {
         return page(ctx, {
           status: 403,
           title: 'This sign-in method is turned off',
@@ -1356,7 +1357,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     request: { params: z.object({ provider: z.string().max(64) }) },
     responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
     handler: async ({ ctx, params, request, log, identity }) => {
-      if (!socialEnabled(ctx, params.provider)) {
+      if (!socialProviderEnabled(ctx, params.provider)) {
         return page(ctx, {
           status: 403,
           title: 'This sign-in method is turned off',
@@ -1680,11 +1681,10 @@ ${hiddenInput('token', query.token)}
       return redirect(
         result.returnPath,
         sessionHeaders({
+          id: result.sessionId,
           token: result.token,
           expiresAt: result.expiresAt,
           evicted: [],
-          restored: false,
-          id: '',
         }),
       );
     },

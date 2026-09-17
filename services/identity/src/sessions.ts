@@ -7,7 +7,7 @@ import type { Kysely } from 'kysely';
 
 import { dateOfBirthColumn } from './accounts.ts';
 import { type AgeBands, ageBand, ageOn } from './age.ts';
-import type { Database, RevocationReason } from './database.ts';
+import type { Database, RevocationReason, SecurityEventKind } from './database.ts';
 import { countryName, describePlace, deviceKey, parseDevice } from './device.ts';
 import { sessionCreatedEvent, sessionRevokedEvent } from './events.ts';
 import { loadPermissions, twoFactorEnrolmentRequired } from './factors.ts';
@@ -15,10 +15,14 @@ import {
   applyResolvedSecurity,
   baselineFromSession,
   currentSignals,
+  evaluateSecurity,
+  markAlertNotified,
   recentlyNotified,
   recordSecurityEvent,
   type RequestSignals,
+  securityNeedsWrite,
   type SessionSecuritySettings,
+  unchangedSecurity,
 } from './security.ts';
 import { newToken } from './tokens.ts';
 
@@ -66,7 +70,8 @@ export interface NewSession {
 
 export interface CreatedSession {
   id: string;
-  token: string;
+  /** null when an existing session was restored, so no new cookie is issued. */
+  token: string | null;
   expiresAt: Date;
   evicted: string[];
   restored: boolean;
@@ -314,7 +319,7 @@ async function restoreChallengedSession(
   });
   return {
     id: row.id,
-    token: '',
+    token: null,
     expiresAt: sessionExpiry(row, session.settings.idleTimeout),
     evicted: [],
     restored: true,
@@ -407,6 +412,7 @@ export async function resolveSession(
       'sessions.screen',
       'sessions.client_fingerprint',
       'sessions.trust_level',
+      'sessions.last_country',
       'users.state',
       dateOfBirthColumn.as('date_of_birth'),
     ])
@@ -425,30 +431,37 @@ export async function resolveSession(
   const security = options.security;
   if (security !== undefined && security.enabled && options.signals !== undefined) {
     const current = currentSignals(options.signals, options.lookupCountry ?? (() => null));
-    const applied = await db.transaction().execute(async (trx) => {
-      const result = await applyResolvedSecurity(trx, {
-        sessionId: row.id,
-        userId: row.user_id,
-        acr: row.acr,
-        trustLevel: row.trust_level,
-        baseline: baselineFromSession(row),
-        current,
-        settings: security,
-        now,
-      });
-      if (result.blocked) {
-        await revokeSessions(trx, {
-          userId: row.user_id,
-          reason: 'blocked',
-          now,
-          only: [row.id],
-        });
-      }
-      return result;
-    });
+    const baseline = baselineFromSession(row);
+    const state = { acr: row.acr, trustLevel: row.trust_level, lastCountry: row.last_country };
+    const outcome = evaluateSecurity(baseline, current, row.acr, security.onCountryChange);
+    const applied = securityNeedsWrite(outcome, state, current.country)
+      ? await db.transaction().execute(async (trx) => {
+          const result = await applyResolvedSecurity(trx, {
+            sessionId: row.id,
+            userId: row.user_id,
+            ...state,
+            baseline,
+            current,
+            outcome,
+            now,
+          });
+          if (result.blocked) {
+            await revokeSessions(trx, {
+              userId: row.user_id,
+              reason: 'blocked',
+              now,
+              only: [row.id],
+            });
+          }
+          return result;
+        })
+      : unchangedSecurity(outcome, baseline, current);
     if (applied.notify) {
       alert = await securityAlert(db, {
         userId: row.user_id,
+        sessionId: row.id,
+        kind: outcome.countryChanged ? 'country_change' : 'trust_transition',
+        trustTo: applied.trustLevel,
         countryFrom: applied.countryFrom,
         countryTo: applied.countryTo,
         blocked: applied.blocked,
@@ -502,6 +515,9 @@ async function securityAlert(
   db: Kysely<Database>,
   options: {
     userId: string;
+    sessionId: string;
+    kind: SecurityEventKind;
+    trustTo: string | null;
     countryFrom: string | null;
     countryTo: string | null;
     blocked: boolean;
@@ -509,11 +525,8 @@ async function securityAlert(
     now: Date;
   },
 ): Promise<SecurityAlert | null> {
-  if (
-    await recentlyNotified(db, options.userId, new Date(options.now.getTime() - options.interval))
-  ) {
-    return null;
-  }
+  const since = new Date(options.now.getTime() - options.interval);
+  if (await recentlyNotified(db, options.userId, since)) return null;
   const account = await db
     .selectFrom('users')
     .select(['email', 'locale'])
@@ -525,13 +538,16 @@ async function securityAlert(
   const summary = options.blocked
     ? `A session was ended after a sign-in from ${to}`
     : `A session moved from ${from} to ${to}`;
-  await db
-    .updateTable('session_security_events')
-    .set({ notified: true })
-    .where('user_id', '=', options.userId)
-    .where('notified', '=', false)
-    .where('created_at', '>', new Date(options.now.getTime() - options.interval))
-    .execute();
+  await markAlertNotified(db, {
+    userId: options.userId,
+    sessionId: options.sessionId,
+    kind: options.kind,
+    trustTo: options.trustTo,
+    countryFrom: options.countryFrom,
+    countryTo: options.countryTo,
+    since,
+    now: options.now,
+  });
   return {
     email: account.email,
     locale: account.locale,

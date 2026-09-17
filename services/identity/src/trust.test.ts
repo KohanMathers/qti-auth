@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { trustLevelForScore, trustScore, worseTrust, type TrustSignals } from './trust.ts';
+import {
+  CHALLENGE_MIN_WEIGHT,
+  trustLevelForScore,
+  trustScore,
+  type TrustSignals,
+  trustVerdict,
+  worseTrust,
+} from './trust.ts';
 
 function signals(overrides: Partial<TrustSignals> = {}): TrustSignals {
   return {
@@ -40,6 +47,42 @@ describe('trustScore', () => {
     expect(trustScore(signals({ tlsFingerprint: null }), signals({ tlsFingerprint: 'abc' }))).toBe(
       100,
     );
+  });
+});
+
+describe('trustVerdict', () => {
+  const unknown: TrustSignals = {
+    ip: null,
+    subnet: null,
+    country: null,
+    userAgent: null,
+    tlsFingerprint: null,
+    timezone: null,
+    screen: null,
+    clientFingerprint: null,
+  };
+
+  it('does not challenge on weak signals alone', () => {
+    const verdict = trustVerdict(
+      { ...unknown, timezone: 'Europe/London', screen: '1920x1080' },
+      { ...unknown, timezone: 'America/New_York', screen: '1280x720' },
+    );
+    expect(verdict.score).toBe(0);
+    expect(verdict.comparable).toBeLessThan(CHALLENGE_MIN_WEIGHT);
+    expect(verdict.level).toBe('partial');
+  });
+
+  it('still blocks when strong signals disagree', () => {
+    const verdict = trustVerdict(
+      signals(),
+      signals({ ip: '198.51.100.2', subnet: '198.51.100.0/24', country: 'US' }),
+    );
+    expect(verdict.comparable).toBeGreaterThanOrEqual(CHALLENGE_MIN_WEIGHT);
+    expect(verdict.level).toBe('blocked');
+  });
+
+  it('is full when nothing can be compared', () => {
+    expect(trustVerdict(unknown, unknown)).toEqual({ score: 100, comparable: 0, level: 'full' });
   });
 });
 

@@ -62,6 +62,10 @@ async function verifySite(
   }
 }
 
+/**
+ * Friendly Captcha's siteverify takes no caller IP, so this drops the argument
+ * the other vendors' verifiers accept and stays usable in their place.
+ */
 export async function verifyFriendlyCaptcha(
   payload: string,
   settings: RemoteCaptchaSettings,
