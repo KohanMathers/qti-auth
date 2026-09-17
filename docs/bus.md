@@ -63,7 +63,7 @@ Sent outbox rows are kept for `outbox.sent_retention` and processed event IDs fo
 
 ## Metrics
 
-The bus reports publishes and publish failures per subject, consumed messages per consumer and outcome (`processed`, `duplicate`, `failed`, `rejected`), redeliveries, consumer lag, outbox backlog size and oldest unsent age, and request/reply latency by outcome (`ok`, `error`, `timeout`, `no_responders`). Watch the outbox's oldest unsent age: a growing value means a service can't reach NATS.
+The bus reports publishes and publish failures per subject, consumed messages per consumer and outcome (`processed`, `duplicate`, `failed`, `rejected`), redeliveries, consumer lag, outbox backlog size and oldest unsent age, request/reply latency by outcome (`ok`, `error`, `timeout`, `no_responders`), and cron job runs and their duration by outcome (`succeeded`, `failed`). Watch the outbox's oldest unsent age: a growing value means a service can't reach NATS.
 
 Pass `prometheusBusMetrics(metrics)` as `metrics` to report these to Prometheus (see [observability.md](observability.md)).
 
@@ -164,7 +164,7 @@ await consumeCron(bus, {
 });
 ```
 
-A service consumes only its own queues. Jobs that run longer than `ack_wait` are kept alive automatically. `publishCronTick(bus.js, job, scheduledAt)` is what the scheduler publishes.
+A service consumes only its own queues. Jobs that run longer than `ack_wait` are kept alive automatically. `publishCronTick(bus.js, job, scheduledAt)` is what the scheduler publishes, and `consumeCron` reports each run's outcome and duration through `metrics` (see [scheduler.md](scheduler.md)).
 
 ### Request/reply
 

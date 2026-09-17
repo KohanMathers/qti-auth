@@ -21,9 +21,9 @@ Fill in `.env`. `POSTGRES_PASSWORD` is required, and Compose refuses to start wi
 docker compose --env-file .env -f deploy/compose.yaml up -d --wait
 ```
 
-`--wait` returns once Postgres, Valkey, NATS and the gateway report healthy. QTIAuth services start only after the infrastructure is healthy. `KEY_ENCRYPTION_KEY` is required too, since the gateway won't start without it.
+`--wait` returns once Postgres, Valkey, NATS, the gateway and the scheduler report healthy. QTIAuth services start only after the infrastructure is healthy. `KEY_ENCRYPTION_KEY` is required too, since the gateway won't start without it.
 
-The gateway is built from source the first time. Rebuild it after pulling changes with `docker compose --env-file .env -f deploy/compose.yaml build`.
+The gateway and scheduler are built from source the first time. Rebuild them after pulling changes with `docker compose --env-file .env -f deploy/compose.yaml build`.
 
 ## Profiles
 
@@ -101,6 +101,6 @@ Add `--volumes` to delete the database and JetStream data as well.
 
 ### Adding a service
 
-Each QTIAuth service extends `x-qtiauth-service` in `deploy/compose.yaml`, which puts it on the `internal` network, mounts `config/`, passes `.env` and waits for healthy infra. Replace the placeholder `image` and `command` with a `build` of the service's Dockerfile and `command: ['node', 'src/main.ts']`, as `gateway` does. Add every QTIAuth service to `deploy/compose.dev.yaml` as `*dev-service`, so it reads the development config.
+Each QTIAuth service extends `x-qtiauth-service` in `deploy/compose.yaml`, which puts it on the `internal` network, mounts `config/`, passes `.env` and waits for healthy infra. Replace the placeholder `image` and `command` with a `build` of the service's Dockerfile and `command: ['node', 'src/main.ts']`, as `gateway` and `scheduler` do. Add every QTIAuth service to `deploy/compose.dev.yaml` as `*dev-service`, so it reads the development config.
 
 The infra images in `deploy/compose.yaml` match the images integration tests run (`IMAGES` in `@qtiauth/testing`). A unit test fails if they drift, so update both together. The same tests check that every profile has its services, that only the gateway publishes a port and that `.env.example` documents every variable the Compose files use.

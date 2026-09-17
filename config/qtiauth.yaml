@@ -159,3 +159,19 @@ rate_limits: # per: ip | user | client | email | account, or a list counted as o
   guest_ticket: { per: ip, limit: 3, window: 1h }
   key_redeem: { per: [ip, user], limit: 10, window: 1h }
   kb_feedback: { per: ip, limit: 30, window: 1h }
+
+scheduler:
+  timezone: UTC
+  jobs:
+    retention.sweep: { schedule: '0 3 * * *', enabled: true }
+    parental.expire_pending: { schedule: '0 * * * *', enabled: true }
+    accounts.purge_deleted: { schedule: '30 3 * * *', enabled: true }
+    age.recompute_bands: { schedule: '5 0 * * *', enabled: true }
+    deletion_ledger.prune: { schedule: '0 4 * * *', enabled: true }
+    keys.rotate: { schedule: '0 0 * * *', enabled: true }
+    webhooks.retry: { schedule: '* * * * *', enabled: true }
+    support.auto_close: { schedule: '0 * * * *', enabled: true }
+    achievements.recompute_rarity: { schedule: '0 2 * * *', enabled: true }
+    leaderboards.reset_periodic: { schedule: '* * * * *', enabled: true }
+    steam.ownership_sync: { schedule: '0 5 * * *', enabled: true }
+    backup.run: { schedule: '30 2 * * *', enabled: true }

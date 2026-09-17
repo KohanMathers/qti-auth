@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { type Bus, type BusConfig, connectBus } from './connect.ts';
 import { InvalidMessageError, type RunningConsumer } from './consumer.ts';
+import { noopBusMetrics } from './metrics.ts';
 import { CRON_STREAM, provisionStreams, WORK_STREAM } from './streams.ts';
 import { workSubject } from './subjects.ts';
 import { consumeCron, consumeWork, type CronTick, publishCronTick, publishWork } from './work.ts';
@@ -154,6 +155,32 @@ describe('cron', () => {
     expect(runs.sort()).toEqual([
       `identity ${tick.job} ${tick.scheduled_at} ${id}`,
       `notifier ${tick.job} ${tick.scheduled_at} ${id}`,
+    ]);
+  });
+
+  it('records each run of a job, including failed runs', async () => {
+    const bus = await service('identity');
+    const cronRun = vi.fn();
+    track(
+      await consumeCron(bus, {
+        job: 'accounts.purge_deleted',
+        metrics: { ...noopBusMetrics, cronRun },
+        handler: async (tick) => {
+          await Promise.resolve();
+          if (tick.attempt === 1) throw new Error('database unavailable');
+        },
+        onError: () => undefined,
+      }),
+    );
+
+    await publishCronTick(bus.js, 'accounts.purge_deleted', new Date('2026-09-16T03:30:00Z'));
+
+    await vi.waitFor(() => {
+      expect(cronRun).toHaveBeenCalledTimes(2);
+    });
+    expect(cronRun.mock.calls).toEqual([
+      ['accounts.purge_deleted', 'failed', expect.any(Number)],
+      ['accounts.purge_deleted', 'succeeded', expect.any(Number)],
     ]);
   });
 });

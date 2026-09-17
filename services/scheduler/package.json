@@ -1,0 +1,26 @@
+{
+  "name": "@qtiauth/scheduler",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Publishes cron ticks onto the bus for the services that own each job",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "qtiauth": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qtiauth/bus": "workspace:*",
+    "@qtiauth/cli": "workspace:*",
+    "@qtiauth/config": "workspace:*",
+    "@qtiauth/observability": "workspace:*",
+    "@qtiauth/service-kit": "workspace:*",
+    "croner": "10.0.1"
+  },
+  "devDependencies": {
+    "@qtiauth/testing": "workspace:*"
+  }
+}

@@ -1783,6 +1783,44 @@
           }
         ]
       }
+    },
+    "scheduler": {
+      "description": "Scheduler: publishes cron ticks for the services that own each job.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "default": "UTC",
+          "description": "Time zone the job schedules are written in.",
+          "type": "string"
+        },
+        "jobs": {
+          "description": "Jobs published on qtiauth.sys.cron.<job>. Settings you give override the built-in job of the same name, and other built-in jobs stay as they are.",
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "schedule": {
+                "description": "When the job runs, as a cron pattern: minute, hour, day of month, month and day of week, with an optional seconds field first. Required for jobs that are not built in.",
+                "type": "string"
+              },
+              "enabled": {
+                "default": true,
+                "description": "Publish ticks for this job.",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "description": "A scheduled job."
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

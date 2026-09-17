@@ -2,6 +2,7 @@ import type { Metrics } from '@qtiauth/observability';
 
 export type ConsumeOutcome = 'processed' | 'duplicate' | 'failed' | 'rejected';
 export type RpcOutcome = 'ok' | 'error' | 'timeout' | 'no_responders';
+export type CronRunOutcome = 'succeeded' | 'failed';
 
 export interface BusMetrics {
   published: (subject: string) => void;
@@ -11,6 +12,7 @@ export interface BusMetrics {
   consumerLag: (consumer: string, pending: number) => void;
   outboxBacklog: (service: string, size: number, oldestAgeSeconds: number) => void;
   rpcRequest: (subject: string, outcome: RpcOutcome, seconds: number) => void;
+  cronRun: (job: string, outcome: CronRunOutcome, seconds: number) => void;
 }
 
 const ignore = (): void => undefined;
@@ -23,6 +25,7 @@ export const noopBusMetrics: BusMetrics = {
   consumerLag: ignore,
   outboxBacklog: ignore,
   rpcRequest: ignore,
+  cronRun: ignore,
 };
 
 export function prometheusBusMetrics(metrics: Metrics): BusMetrics {
@@ -65,6 +68,17 @@ export function prometheusBusMetrics(metrics: Metrics): BusMetrics {
     labelNames: ['subject', 'outcome'],
     buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
   });
+  const cronRuns = metrics.counter({
+    name: 'qtiauth_cron_runs_total',
+    help: 'Scheduled job runs, by job and outcome. A failed run is retried.',
+    labelNames: ['cron_job', 'outcome'],
+  });
+  const cronDuration = metrics.histogram({
+    name: 'qtiauth_cron_run_duration_seconds',
+    help: 'How long scheduled job runs take, by job and outcome.',
+    labelNames: ['cron_job', 'outcome'],
+    buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60, 300, 900, 1800, 3600],
+  });
 
   return {
     published: (subject) => {
@@ -88,6 +102,10 @@ export function prometheusBusMetrics(metrics: Metrics): BusMetrics {
     },
     rpcRequest: (subject, outcome, seconds) => {
       rpc.observe({ subject, outcome }, seconds);
+    },
+    cronRun: (job, outcome, seconds) => {
+      cronRuns.inc({ cron_job: job, outcome });
+      cronDuration.observe({ cron_job: job, outcome }, seconds);
     },
   };
 }

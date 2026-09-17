@@ -18,6 +18,7 @@ describe('prometheusBusMetrics', () => {
     bus.consumerLag('notifier-bans', 4);
     bus.outboxBacklog('identity', 3, 12.5);
     bus.rpcRequest('qtiauth.rpc.games.export_user', 'no_responders', 0.002);
+    bus.cronRun('retention.sweep', 'failed', 1.5);
 
     const text = await metrics.render();
     for (const line of [
@@ -29,6 +30,8 @@ describe('prometheusBusMetrics', () => {
       'qtiauth_bus_outbox_backlog{service="identity"} 3',
       'qtiauth_bus_outbox_oldest_age_seconds{service="identity"} 12.5',
       'qtiauth_bus_rpc_duration_seconds_count{service="identity",subject="qtiauth.rpc.games.export_user",outcome="no_responders"} 1',
+      'qtiauth_cron_runs_total{cron_job="retention.sweep",outcome="failed",service="identity"} 1',
+      'qtiauth_cron_run_duration_seconds_sum{service="identity",cron_job="retention.sweep",outcome="failed"} 1.5',
     ]) {
       expect(text).toContain(line);
     }

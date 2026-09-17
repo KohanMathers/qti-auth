@@ -9,6 +9,7 @@ import {
   type RunningConsumer,
   runPullConsumer,
 } from './consumer.ts';
+import { noopBusMetrics } from './metrics.ts';
 import { CRON_STREAM, WORK_STREAM } from './streams.ts';
 import { consumerName, cronSubject, workSubject } from './subjects.ts';
 import { messagingAttributes, traceHeaders } from './tracing.ts';
@@ -100,10 +101,22 @@ export function consumeWork<T>(
 }
 
 export function consumeCron(bus: Bus, options: CronConsumerOptions): Promise<RunningConsumer> {
+  const metrics = options.metrics ?? noopBusMetrics;
   return consumeJobs(bus, {
     ...options,
     stream: CRON_STREAM,
     name: consumerName(bus.service, 'cron', options.job),
     subject: cronSubject(options.job),
+    handler: async (tick: WorkMessage<CronTick>) => {
+      const started = performance.now();
+      const seconds = () => (performance.now() - started) / 1000;
+      try {
+        await options.handler(tick);
+      } catch (error) {
+        metrics.cronRun(options.job, 'failed', seconds());
+        throw error;
+      }
+      metrics.cronRun(options.job, 'succeeded', seconds());
+    },
   });
 }

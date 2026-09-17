@@ -321,6 +321,14 @@ First-party sessions and third-party tokens are completely separate.
 by exactly one instance of the owning service (JetStream work-queue consumer), so replicas never
 double-run a job. The scheduler holds no job logic.
 
+- Schedules are cron patterns in `scheduler.jobs.<job>.schedule` (five fields, or six with seconds
+  first), read in `scheduler.timezone` (default `UTC`). Config overrides a built-in job's schedule or
+  `enabled` flag, and can add jobs.
+- Each tick carries `{ job, scheduled_at }` and uses `<job>@<scheduled_at>` as its JetStream message
+  ID, so several scheduler replicas can run without duplicating ticks.
+- A failed publish is retried within `bus.streams.duplicate_window` and before the job's next tick,
+  then dropped. Ticks due while the scheduler is down are not caught up.
+
 | Job | Owner | Default schedule |
 |---|---|---|
 | `retention.sweep` | every service | daily 03:00 |
@@ -328,11 +336,11 @@ double-run a job. The scheduler holds no job logic.
 | `accounts.purge_deleted` | identity | daily 03:30 |
 | `age.recompute_bands` | identity | daily 00:05 |
 | `deletion_ledger.prune` | identity | daily 04:00 |
-| `keys.rotate` | gateway, oidc, games | daily (rotates when due) |
+| `keys.rotate` | gateway, oidc, games | daily 00:00 (rotates when due) |
 | `webhooks.retry` | notifier | every minute |
 | `support.auto_close` | support | hourly |
 | `achievements.recompute_rarity` | games | daily 02:00 |
-| `leaderboards.reset_periodic` | games | per leaderboard config |
+| `leaderboards.reset_periodic` | games | every minute (resets leaderboards whose period has ended, per leaderboard config) |
 | `steam.ownership_sync` | games | daily 05:00 |
 | `backup.run` | backup | daily 02:30 |
 
@@ -560,6 +568,11 @@ gateway:
   session_cache: { ttl: 1m }
   identity_keys: { encryption_key: "${env:KEY_ENCRYPTION_KEY}", rotate_after: 30d, retain_after_rotation: 1h }
   hsts: { max_age: 365d, include_subdomains: false, preload: false }
+
+scheduler:
+  timezone: UTC
+  jobs:                         # built-in jobs and schedules in §2.8
+    retention.sweep: { schedule: "0 3 * * *", enabled: true }
 
 features:
   auth:

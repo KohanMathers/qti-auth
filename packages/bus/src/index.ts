@@ -15,6 +15,7 @@ export {
 export {
   type BusMetrics,
   type ConsumeOutcome,
+  type CronRunOutcome,
   noopBusMetrics,
   prometheusBusMetrics,
   type RpcOutcome,

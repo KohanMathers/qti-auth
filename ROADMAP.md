@@ -248,12 +248,16 @@ Spec: §2.6, §2.7, §8.1, §8.3, §8.9
 - Every route, including auth routes, is rate-limited (tested by an exhaustive manifest check).
 - Enabling a sub-feature of a service that isn't running shows up as a health error.
 
-### P1.2 Scheduler — S
+### P1.2 Scheduler — S ✅
 Spec: §2.8
 
-- [ ] Cron schedules from config, published as `qtiauth.sys.cron.<job>`.
-- [ ] Work-queue consumption so each job runs once across replicas.
-- [ ] Job metrics (runs, duration, failures).
+- [x] Cron schedules from config, published as `qtiauth.sys.cron.<job>` (`services/scheduler`,
+      `startScheduler`, `scheduler` config section, `qtiauth jobs list`, `docs/scheduler.md`).
+- [x] Work-queue consumption so each job runs once across replicas (`consumeCron`, ticks deduplicated
+      by `<job>@<scheduled_at>` so scheduler replicas are safe too).
+- [x] Job metrics (runs, duration, failures) (`qtiauth_cron_runs_total` and
+      `qtiauth_cron_run_duration_seconds` from `consumeCron`, `qtiauth_scheduler_ticks_total`,
+      `qtiauth_scheduler_publish_failures_total`, `qtiauth_scheduler_next_tick_timestamp_seconds`).
 
 **Done when:** a job with 3 consumer replicas runs exactly once per tick.
 

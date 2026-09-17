@@ -19,6 +19,7 @@ export {
   serviceConfigSchema,
 } from './schema.ts';
 export {
+  type CronJob,
   DB_SCHEMAS,
   type DbSchema,
   LOG_LEVELS,

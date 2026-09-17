@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 
+import { Cron } from 'croner';
 import * as z from 'zod';
 
 import { duration, requiredDuration } from './duration.ts';
@@ -694,6 +695,95 @@ export const security = z
   .prefault({})
   .describe('Account security.');
 
+const CRON_JOB_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
+
+function isCronPattern(value: string): boolean {
+  try {
+    new Cron(value, { timezone: 'UTC', paused: true }).nextRun();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const cronJob = z
+  .strictObject({
+    schedule: z
+      .string()
+      .refine(isCronPattern, 'Must be a cron pattern like 0 3 * * *')
+      .optional()
+      .describe(
+        'When the job runs, as a cron pattern: minute, hour, day of month, month and day of week, with an optional seconds field first. Required for jobs that are not built in.',
+      ),
+    enabled: z.boolean().default(true).describe('Publish ticks for this job.'),
+  })
+  .describe('A scheduled job.');
+
+export interface CronJob {
+  schedule: string;
+  enabled: boolean;
+}
+
+const DEFAULT_CRON_JOBS: Record<string, CronJob> = {
+  'retention.sweep': { schedule: '0 3 * * *', enabled: true },
+  'parental.expire_pending': { schedule: '0 * * * *', enabled: true },
+  'accounts.purge_deleted': { schedule: '30 3 * * *', enabled: true },
+  'age.recompute_bands': { schedule: '5 0 * * *', enabled: true },
+  'deletion_ledger.prune': { schedule: '0 4 * * *', enabled: true },
+  'keys.rotate': { schedule: '0 0 * * *', enabled: true },
+  'webhooks.retry': { schedule: '* * * * *', enabled: true },
+  'support.auto_close': { schedule: '0 * * * *', enabled: true },
+  'achievements.recompute_rarity': { schedule: '0 2 * * *', enabled: true },
+  'leaderboards.reset_periodic': { schedule: '* * * * *', enabled: true },
+  'steam.ownership_sync': { schedule: '0 5 * * *', enabled: true },
+  'backup.run': { schedule: '30 2 * * *', enabled: true },
+};
+
+export const scheduler = z
+  .strictObject({
+    timezone: z
+      .string()
+      .refine(isTimezone, 'Must be an IANA time zone like UTC or Europe/London')
+      .default('UTC')
+      .describe('Time zone the job schedules are written in.'),
+    jobs: z
+      .record(z.string().regex(CRON_JOB_NAME, 'Must be a job name like retention.sweep'), cronJob)
+      .default({})
+      .superRefine((jobs, ctx) => {
+        for (const [name, job] of Object.entries(jobs)) {
+          if (job.schedule === undefined && !(name in DEFAULT_CRON_JOBS)) {
+            ctx.addIssue({
+              code: 'custom',
+              message: 'Required for a job that is not built in',
+              path: [name, 'schedule'],
+            });
+          }
+        }
+      })
+      .transform((jobs): Record<string, CronJob> => {
+        const merged = { ...DEFAULT_CRON_JOBS };
+        for (const [name, job] of Object.entries(jobs)) {
+          const schedule = job.schedule ?? DEFAULT_CRON_JOBS[name]?.schedule ?? '';
+          merged[name] = { schedule, enabled: job.enabled };
+        }
+        return merged;
+      })
+      .describe(
+        'Jobs published on qtiauth.sys.cron.<job>. Settings you give override the built-in job of the same name, and other built-in jobs stay as they are.',
+      ),
+  })
+  .prefault({})
+  .describe('Scheduler: publishes cron ticks for the services that own each job.');
+
 const oauthProvider = (name: string) =>
   z
     .strictObject({
@@ -847,6 +937,7 @@ export const sections = {
   email: emailSection,
   security,
   rate_limits: rateLimits,
+  scheduler,
 };
 
 export type SectionName = keyof typeof sections;

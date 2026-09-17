@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { bus, cors, features, gateway, network, rateLimits, surfaces } from './sections.ts';
+import {
+  bus,
+  cors,
+  features,
+  gateway,
+  network,
+  rateLimits,
+  scheduler,
+  surfaces,
+} from './sections.ts';
 
 function messages(result: { error?: { issues: { path: PropertyKey[]; message: string }[] } }) {
   return (result.error?.issues ?? []).map((i) => `${i.path.join('.')}: ${i.message}`);
@@ -176,6 +185,46 @@ describe('rate_limits', () => {
       'global: global must be a single policy. It applies to every request',
       'signup.policies.0: Must name a single policy, not a group',
       'signup.policies.1: Must name a single policy, not an unknown one',
+    ]);
+  });
+});
+
+describe('scheduler', () => {
+  it('keeps the built-in jobs and lets config change them', () => {
+    const { jobs } = scheduler.parse({
+      jobs: {
+        'keys.rotate': { enabled: false },
+        'retention.sweep': { schedule: '0 1 * * *' },
+        'reports.digest': { schedule: '*/30 * * * * *' },
+      },
+    });
+    expect(jobs['keys.rotate']).toEqual({ schedule: '0 0 * * *', enabled: false });
+    expect(jobs['retention.sweep']).toEqual({ schedule: '0 1 * * *', enabled: true });
+    expect(jobs['reports.digest']).toEqual({ schedule: '*/30 * * * * *', enabled: true });
+    expect(jobs['webhooks.retry']).toEqual({ schedule: '* * * * *', enabled: true });
+  });
+
+  it('checks job names, patterns and the time zone', () => {
+    const result = scheduler.safeParse({
+      timezone: 'Mars/Olympus_Mons',
+      jobs: {
+        'retention.sweep': { schedule: '0 3 * *' },
+        'hourly.check': { schedule: '61 * * * *' },
+      },
+    });
+    expect(messages(result)).toEqual([
+      'timezone: Must be an IANA time zone like UTC or Europe/London',
+      'jobs.retention.sweep.schedule: Must be a cron pattern like 0 3 * * *',
+      'jobs.hourly.check.schedule: Must be a cron pattern like 0 3 * * *',
+    ]);
+    expect(messages(scheduler.safeParse({ jobs: { 'Retention.Sweep': {} } }))).toEqual([
+      expect.stringMatching(/^jobs\.Retention\.Sweep: /),
+    ]);
+  });
+
+  it('needs a schedule for jobs that are not built in', () => {
+    expect(messages(scheduler.safeParse({ jobs: { 'reports.digest': {} } }))).toEqual([
+      'jobs.reports.digest.schedule: Required for a job that is not built in',
     ]);
   });
 });
