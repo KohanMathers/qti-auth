@@ -15,6 +15,7 @@ describe('identity service', () => {
       '0004_email_tokens',
       '0005_passwords',
       '0006_captcha',
+      '0007_factors',
     ]);
   });
 
@@ -22,29 +23,49 @@ describe('identity service', () => {
     const policies = Object.keys(sections.rate_limits.parse({}));
     const { routes } = router.manifest();
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
+      'DELETE /api/v1/me/passkeys/:passkey_id',
       'DELETE /api/v1/sessions/:session_id',
       'GET /api/v1/captcha',
       'GET /api/v1/me',
+      'GET /api/v1/me/factors',
+      'GET /api/v1/me/passkeys',
       'GET /api/v1/sessions',
       'GET /auth/forgot-password',
       'GET /auth/login',
       'GET /auth/magic-link',
       'GET /auth/magic-link/start',
+      'GET /auth/passkey',
+      'GET /auth/passkeys',
       'GET /auth/register',
       'GET /auth/reset-password',
       'GET /auth/signup',
+      'GET /auth/totp',
+      'GET /auth/two-factor',
       'GET /auth/verify-email',
+      'POST /api/v1/auth/2fa',
       'POST /api/v1/auth/email/verify',
       'POST /api/v1/auth/email/verify/start',
       'POST /api/v1/auth/logout',
       'POST /api/v1/auth/magic-link/signup',
       'POST /api/v1/auth/magic-link/start',
       'POST /api/v1/auth/magic-link/verify',
+      'POST /api/v1/auth/passkey/authenticate',
+      'POST /api/v1/auth/passkey/authenticate/start',
       'POST /api/v1/auth/password/forgot',
       'POST /api/v1/auth/password/login',
       'POST /api/v1/auth/password/reset',
       'POST /api/v1/auth/password/signup',
+      'POST /api/v1/me/passkeys/:passkey_id',
+      'POST /api/v1/me/passkeys/register',
+      'POST /api/v1/me/passkeys/register/start',
       'POST /api/v1/me/password',
+      'POST /api/v1/me/recovery-codes',
+      'POST /api/v1/me/step-up',
+      'POST /api/v1/me/step-up/passkey',
+      'POST /api/v1/me/step-up/passkey/start',
+      'POST /api/v1/me/totp',
+      'POST /api/v1/me/totp/disable',
+      'POST /api/v1/me/totp/start',
       'POST /api/v1/sessions/revoke-all',
       'POST /api/v1/sessions/revoke-others',
       'POST /auth/forgot-password',
@@ -54,6 +75,8 @@ describe('identity service', () => {
       'POST /auth/register',
       'POST /auth/reset-password',
       'POST /auth/signup',
+      'POST /auth/totp',
+      'POST /auth/two-factor',
       'POST /auth/verify-email',
     ]);
     for (const route of routes) {
@@ -77,6 +100,7 @@ describe('identity service', () => {
       auth: 'session',
       allow_pending_legal: true,
       allow_pending_parental_consent: true,
+      allow_pending_2fa_enrolment: true,
       allow_account_states: expect.arrayContaining(['active', 'banned', 'locked']) as unknown,
     });
     expect(route('POST', '/api/v1/auth/password/login')).toMatchObject({
@@ -93,6 +117,14 @@ describe('identity service', () => {
     expect(route('POST', '/api/v1/me/password')).toMatchObject({
       auth: 'session',
       rate_limit: 'global',
+    });
+    expect(route('POST', '/api/v1/me/recovery-codes')).toMatchObject({
+      auth: 'session',
+      step_up: true,
+    });
+    expect(route('POST', '/api/v1/me/totp/start')).toMatchObject({
+      auth: 'session',
+      allow_pending_2fa_enrolment: true,
     });
     expect(route('GET', '/api/v1/sessions')).toMatchObject({
       auth: 'session',
@@ -113,6 +145,8 @@ describe('identity service', () => {
         'CREDENTIALS_INCORRECT',
         'PASSWORD_REJECTED',
         'CAPTCHA_REQUIRED',
+        'PASSKEY_INVALID',
+        'STEP_UP_REQUIRED',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

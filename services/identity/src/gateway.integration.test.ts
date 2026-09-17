@@ -12,6 +12,7 @@ import { natsUrl, startNats, startPostgres, startValkey } from '@qtiauth/testing
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './database.ts';
+import { softwarePasskey } from './passkey-testing.ts';
 import { definition } from './service.ts';
 import { identityService } from './start.ts';
 import { type CapturedEmails, captureEmails } from './testing.ts';
@@ -142,6 +143,7 @@ beforeAll(async () => {
         failure_delay: { step: '1ms', max: '1ms' },
       },
       captcha: { after: 1000, altcha: { hmac_key: 'integration-captcha-key', max_number: 400 } },
+      security: { encryption_key: Buffer.alloc(32, 9).toString('base64') },
     }),
   });
 
@@ -353,6 +355,69 @@ describe('identity through the gateway', () => {
     );
     expect(login.status).toBe(200);
     expect(client.cookie()).not.toBeNull();
+  });
+
+  it('signs a passkey-only account in at aal2, and refuses recovery-code rotation without step-up', async () => {
+    const client = browser();
+    await signUpInBrowser(client, 'passkey-walker@example.com');
+    const authenticator = await softwarePasskey(ORIGIN);
+    const start = await client.request('/api/v1/me/passkeys/register/start', json({}));
+    const creation = (await start.json()) as {
+      challenge: string;
+      options: Parameters<typeof authenticator.register>[0];
+    };
+    secrets.push(creation.challenge);
+    const attested = await authenticator.register(creation.options);
+    const registered = await client.request(
+      '/api/v1/me/passkeys/register',
+      json({ challenge: creation.challenge, name: 'Laptop', response: attested }),
+    );
+    expect(registered.status).toBe(201);
+    await client.request('/api/v1/auth/logout', { method: 'POST' });
+
+    const begin = await client.request('/api/v1/auth/passkey/authenticate/start', json({}));
+    const assertion = (await begin.json()) as {
+      challenge: string;
+      options: Parameters<typeof authenticator.authenticate>[0];
+    };
+    secrets.push(assertion.challenge);
+    const asserted = await authenticator.authenticate(assertion.options);
+    const signedIn = await client.request(
+      '/api/v1/auth/passkey/authenticate',
+      json({ challenge: assertion.challenge, response: asserted }),
+    );
+    expect(signedIn.status).toBe(200);
+    expect(client.cookie()).not.toBeNull();
+    const me = await client.request('/api/v1/me');
+    expect(await me.json()).toMatchObject({
+      email: 'passkey-walker@example.com',
+      session: { acr: 'aal2', amr: ['webauthn'] },
+    });
+
+    const aal1 = browser();
+    await signUpInBrowser(aal1, 'step-up-walker@example.com');
+    const refused = await aal1.request('/api/v1/me/recovery-codes', { method: 'POST' });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: 'STEP_UP_REQUIRED' });
+  });
+
+  it('lets staff without 2FA reach enrolment but not the rest of the product', async () => {
+    const client = browser();
+    await signUpInBrowser(client, 'staff-walker@example.com');
+    const me = (await (await client.request('/api/v1/me')).json()) as { id: string };
+    await identity.context.db
+      .insertInto('user_permissions')
+      .values({ user_id: me.id, permission: 'users.read' })
+      .execute();
+    await client.request('/api/v1/auth/logout', { method: 'POST' });
+    const token = await openLink(client, 'staff-walker@example.com');
+    const confirm = await client.request('/auth/magic-link', form({ token }));
+    expect(confirm.status).toBe(200);
+
+    expect(await (await client.request('/api/v1/sessions')).json()).toMatchObject({
+      code: 'TWO_FACTOR_ENROLMENT_REQUIRED',
+    });
+    expect((await client.request('/api/v1/me/totp/start', json({}))).status).toBe(200);
   });
 
   it('keeps session tokens and links out of every log', () => {

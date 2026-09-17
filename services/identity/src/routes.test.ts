@@ -129,6 +129,33 @@ describe('when passwords are turned off', () => {
   });
 });
 
+describe('when passkeys are turned off', () => {
+  const disabled = () => app({ features: { auth: { passkeys: { enabled: false } } } });
+
+  it('refuses passkey routes', async () => {
+    const start = await disabled().request('/api/v1/auth/passkey/authenticate/start', json({}));
+    expect(await start.json()).toMatchObject({ code: 'AUTH_METHOD_DISABLED' });
+    const page = await disabled().request('/auth/passkey', { headers: anonymous });
+    expect(page.status).toBe(403);
+  });
+});
+
+describe('when TOTP is turned off', () => {
+  const disabled = () => app({ features: { auth: { totp: { enabled: false } } } });
+
+  it('refuses TOTP routes', async () => {
+    const twoFactor = await disabled().request(
+      '/api/v1/auth/2fa',
+      json({ challenge: 'x'.repeat(43), totp: '123456' }),
+    );
+    expect(await twoFactor.json()).toMatchObject({ code: 'AUTH_METHOD_DISABLED' });
+    const page = await disabled().request('/auth/totp', {
+      headers: identityHeaders(key, 'identity'),
+    });
+    expect(page.status).toBe(403);
+  });
+});
+
 describe('password pages', () => {
   it('asks for a click on a reset link, escaping what it echoes', async () => {
     const response = await app().request(
@@ -144,7 +171,9 @@ describe('password pages', () => {
 
   it('links to forgot-password from the login page', async () => {
     const response = await app().request('/auth/login', { headers: anonymous });
-    expect(await response.text()).toContain('href="forgot-password"');
+    const html = await response.text();
+    expect(html).toContain('href="forgot-password"');
+    expect(html).toContain('href="passkey"');
   });
 
   it('asks for a click on a verification link', async () => {

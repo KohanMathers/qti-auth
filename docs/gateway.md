@@ -30,6 +30,8 @@ valkey:
 
 security:
   step_up_window: 10m
+  encryption_key: '${env:APP_ENCRYPTION_KEY}'
+  require_2fa_for_permissions: [users.*, safety.*, support.*]
 ```
 
 - `http.port` is the public port for surfaces bound to hosts. Surfaces bound to `ports` listen on those ports as well. None of them may be `service.http.port`, which keeps `/metrics` and the other internal endpoints off the public listener.
@@ -38,6 +40,8 @@ security:
 - `identity_keys.encryption_key` is required. It's a base64 32-byte key (`openssl rand -base64 32`). See [identity keys](#internal-identity-keys).
 - `session_cache.ttl` is how long a resolved session is cached in Valkey. Revocations and account changes clear it sooner.
 - `security.step_up_window` is how recently a session must have reached `aal2` for a route that needs step-up.
+- `security.encryption_key` encrypts TOTP secrets in identity. See [identity.md](identity.md).
+- `security.require_2fa_for_permissions` is which staff permissions need a passkey or TOTP before the rest of the product is available. Until then the session carries `two_factor_enrolment_required` and only enrolment routes are allowed.
 
 Surfaces, cookies, CORS, trusted proxies and rate limits have their own sections, covered below.
 
@@ -93,6 +97,7 @@ For `auth: session` routes, in order:
 | Account state not in `allow_account_states`                                 | `403 ACCOUNT_BANNED`, `ACCOUNT_LOCKED`, `PARENTAL_CONSENT_PENDING` or `ACCOUNT_STATE_NOT_ALLOWED` |
 | Pending parental consent, without `allow_pending_parental_consent`          | `403 PARENTAL_CONSENT_PENDING`                                                                    |
 | Updated legal documents not yet accepted, without `allow_pending_legal`     | `403 LEGAL_ACCEPTANCE_REQUIRED`                                                                   |
+| Two-factor enrolment still required, without `allow_pending_2fa_enrolment`  | `403 TWO_FACTOR_ENROLMENT_REQUIRED`                                                               |
 | A required permission isn't granted                                         | `403 PERMISSION_DENIED`                                                                           |
 | `step_up: true` and the session didn't reach `aal2` within `step_up_window` | `403 STEP_UP_REQUIRED`                                                                            |
 
@@ -248,6 +253,7 @@ Identity answers `qtiauth.rpc.identity.resolve_session`:
     "acr": "aal1",
     "step_up_at": null,
     "legal_acceptance_required": false,
+    "two_factor_enrolment_required": false,
     "expires_at": "2026-09-24T12:00:00Z"
   }
 }

@@ -52,6 +52,7 @@ function route(overrides: Partial<ManifestRoute>): ManifestRoute {
     allow_account_states: ['active'],
     allow_pending_legal: false,
     allow_pending_parental_consent: false,
+    allow_pending_2fa_enrolment: false,
     rate_limit: 'global',
     step_up: false,
     ...overrides,
@@ -89,6 +90,7 @@ function session(overrides: Partial<ResolvedSession> = {}): ResolvedSession {
     acr: 'aal1',
     step_up_at: null,
     legal_acceptance_required: false,
+    two_factor_enrolment_required: false,
     expires_at: new Date(Date.now() + 86_400_000).toISOString(),
     ...overrides,
   };
@@ -334,6 +336,7 @@ describe('gateway handler', () => {
       [{ account_state: 'banned' }, '/api/v1/me', 'ACCOUNT_BANNED'],
       [{ account_state: 'pending_parental_consent' }, '/api/v1/me', 'PARENTAL_CONSENT_PENDING'],
       [{ legal_acceptance_required: true }, '/api/v1/me', 'LEGAL_ACCEPTANCE_REQUIRED'],
+      [{ two_factor_enrolment_required: true }, '/api/v1/me', 'TWO_FACTOR_ENROLMENT_REQUIRED'],
     ];
     for (const [overrides, path, code] of cases) {
       const { request } = await setup({ session: session(overrides) });

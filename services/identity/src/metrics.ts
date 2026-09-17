@@ -7,6 +7,9 @@ export type MagicLinkEvent = 'sent' | 'used' | 'expired' | 'invalid';
 export type SignInResult = 'success' | 'failure';
 export type BreachCheckResult = 'rejected' | 'passed' | 'unavailable';
 export type CaptchaResult = 'shown' | 'solved' | 'failed';
+export type TwoFactorFactor = 'totp' | 'passkey' | 'recovery';
+export type TwoFactorResult = 'success' | 'failure';
+export type StepUpResult = 'prompt' | 'success' | 'failure';
 
 export interface IdentityMetrics {
   magicLink: (event: MagicLinkEvent) => void;
@@ -15,6 +18,9 @@ export interface IdentityMetrics {
   passwordFailure: () => void;
   breachCheck: (result: BreachCheckResult) => void;
   captcha: (result: CaptchaResult) => void;
+  twoFactor: (factor: TwoFactorFactor, result: TwoFactorResult) => void;
+  passkeyRegistration: () => void;
+  stepUp: (result: StepUpResult) => void;
   sessionCreated: (method: string, evicted: number) => void;
   sessionsRevoked: (reason: RevocationReason, count: number) => void;
   accounts: (counts: Partial<Record<AccountState, number>>) => void;
@@ -62,6 +68,20 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     help: 'CAPTCHA prompts, by result: shown, solved or failed.',
     labelNames: ['result'],
   });
+  const twoFactor = metrics.counter({
+    name: 'qtiauth_auth_2fa_challenges_total',
+    help: 'Two-factor challenges, by factor (totp, passkey or recovery) and result.',
+    labelNames: ['factor', 'result'],
+  });
+  const passkeyRegistrations = metrics.counter({
+    name: 'qtiauth_auth_passkey_registrations_total',
+    help: 'Passkeys registered.',
+  });
+  const stepUp = metrics.counter({
+    name: 'qtiauth_auth_step_up_total',
+    help: 'Step-up prompts and completions, by result: prompt, success or failure.',
+    labelNames: ['result'],
+  });
   const sessionsCreated = metrics.counter({
     name: 'qtiauth_sessions_created_total',
     help: 'Sessions started, by sign-in method.',
@@ -104,6 +124,15 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     captcha: (result) => {
       captcha.inc({ result });
+    },
+    twoFactor: (factor, result) => {
+      twoFactor.inc({ factor, result });
+    },
+    passkeyRegistration: () => {
+      passkeyRegistrations.inc();
+    },
+    stepUp: (result) => {
+      stepUp.inc({ result });
     },
     sessionCreated: (method, evicted) => {
       sessionsCreated.inc({ method });

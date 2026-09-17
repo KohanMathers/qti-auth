@@ -690,12 +690,42 @@ export const rateLimits = z
     'Named rate-limit policies, referenced by routes. Policies you set replace the built-in policy of the same name.',
   );
 
+const PERMISSION_GRANT = /^(?:\*|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*(?:\.\*)?)$/;
+
+export const DEFAULT_REQUIRE_2FA_PERMISSIONS = [
+  'users.*',
+  'safety.*',
+  'support.*',
+  'games.*',
+  'oidc.clients.*',
+  'webhooks.manage',
+  'audit.read',
+  'roles.manage',
+] as const;
+
 export const security = z
   .strictObject({
     step_up_window: duration(
       '10m',
       'Routes that need step-up accept a session that reached aal2 within this long.',
     ),
+    encryption_key: z
+      .string()
+      .default('')
+      .describe(
+        'Base64 32-byte key that encrypts TOTP secrets at rest. Required when TOTP is enabled. Reference a secret.',
+      ),
+    require_2fa_for_permissions: z
+      .array(
+        z
+          .string()
+          .regex(PERMISSION_GRANT, 'Must be a permission, a prefix like users.*, or *')
+          .describe('A permission or prefix that requires two-factor enrolment.'),
+      )
+      .default([...DEFAULT_REQUIRE_2FA_PERMISSIONS])
+      .describe(
+        'Staff whose permissions match any of these must enrol a passkey or TOTP before using the rest of the product. Prefixes end in .* .',
+      ),
   })
   .prefault({})
   .describe('Account security.');

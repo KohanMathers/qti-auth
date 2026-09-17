@@ -24,6 +24,7 @@ function table(overrides: Partial<ManifestRoute> = {}): TableRoute {
       allow_account_states: ['active'],
       allow_pending_legal: false,
       allow_pending_parental_consent: false,
+      allow_pending_2fa_enrolment: false,
       rate_limit: 'global',
       step_up: false,
       ...overrides,
@@ -44,6 +45,7 @@ function session(overrides: Partial<ResolvedSession> = {}): ResolvedSession {
     acr: 'aal1',
     step_up_at: null,
     legal_acceptance_required: false,
+    two_factor_enrolment_required: false,
     expires_at: new Date(NOW + 86_400_000).toISOString(),
     ...overrides,
   };
@@ -92,6 +94,10 @@ describe('checkPolicy', () => {
     const pending = session({ legal_acceptance_required: true });
     expect(code(table(), pending)).toBe('LEGAL_ACCEPTANCE_REQUIRED');
     expect(code(table({ allow_pending_legal: true }), pending)).toBeNull();
+
+    const enrol = session({ two_factor_enrolment_required: true });
+    expect(code(table(), enrol)).toBe('TWO_FACTOR_ENROLMENT_REQUIRED');
+    expect(code(table({ allow_pending_2fa_enrolment: true }), enrol)).toBeNull();
   });
 
   it('checks permissions, honouring wildcard: false', () => {
@@ -157,10 +163,14 @@ describe('impliedGatewayErrors', () => {
         'LEGAL_ACCEPTANCE_REQUIRED',
         'PARENTAL_CONSENT_PENDING',
         'STEP_UP_REQUIRED',
+        'TWO_FACTOR_ENROLMENT_REQUIRED',
       ]),
     );
     expect(impliedGatewayErrors(table({ allow_pending_legal: true }))).not.toContain(
       'LEGAL_ACCEPTANCE_REQUIRED',
+    );
+    expect(impliedGatewayErrors(table({ allow_pending_2fa_enrolment: true }))).not.toContain(
+      'TWO_FACTOR_ENROLMENT_REQUIRED',
     );
   });
 });

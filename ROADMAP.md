@@ -337,15 +337,15 @@ Spec: §8.2
 
 **Done when:** CAPTCHA appears only after the threshold and is required until solved.
 
-### P2.3 Passkeys, TOTP, recovery codes, step-up — L
+### P2.3 Passkeys, TOTP, recovery codes, step-up — L ✅
 Spec: §4.5
 
-- [ ] WebAuthn registration and authentication, as primary sign-in or second factor, with named
+- [x] WebAuthn registration and authentication, as primary sign-in or second factor, with named
       credentials and last-used time.
-- [ ] TOTP with encrypted secrets (`APP_ENCRYPTION_KEY`).
-- [ ] 10 hashed single-use recovery codes, regenerable.
-- [ ] `aal1`/`aal2` on sessions, step-up window, `STEP_UP_REQUIRED` errors, route policy `step_up`.
-- [ ] Staff 2FA enforcement by permission (enrolment-only access until enrolled). Permissions arrive
+- [x] TOTP with encrypted secrets (`APP_ENCRYPTION_KEY`).
+- [x] 10 hashed single-use recovery codes, regenerable.
+- [x] `aal1`/`aal2` on sessions, step-up window, `STEP_UP_REQUIRED` errors, route policy `step_up`.
+- [x] Staff 2FA enforcement by permission (enrolment-only access until enrolled). Permissions arrive
       in P2b.4, so this is tested with a stub permission until then.
 
 **Done when:** passkey-only accounts reach `aal2`, and a route with `step_up: true` rejects an `aal1`

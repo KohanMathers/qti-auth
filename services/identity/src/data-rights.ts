@@ -28,7 +28,7 @@ export async function exportUser(
     .executeTakeFirst();
   if (!user) return {};
 
-  const [identities, sessions, tokens] = await Promise.all([
+  const [identities, sessions, tokens, unusedRecovery] = await Promise.all([
     db
       .selectFrom('identities')
       .select(['type', 'subject', 'created_at', 'last_used_at'])
@@ -57,6 +57,12 @@ export async function exportUser(
       .where('email_normalized', '=', user.email_normalized)
       .orderBy('created_at')
       .execute(),
+    db
+      .selectFrom('recovery_codes')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('user_id', '=', userId)
+      .where('used_at', 'is', null)
+      .executeTakeFirst(),
   ]);
 
   return {
@@ -89,6 +95,7 @@ export async function exportUser(
       expires_at: iso(token.expires_at),
       used_at: iso(token.used_at),
     })),
+    recovery_codes: { unused: Number(unusedRecovery?.count ?? 0) },
   };
 }
 

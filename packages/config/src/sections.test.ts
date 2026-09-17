@@ -15,6 +15,7 @@ import {
   rateLimits,
   retention,
   scheduler,
+  security,
   surfaces,
 } from './sections.ts';
 
@@ -296,6 +297,30 @@ describe('accounts', () => {
 describe('magic_link', () => {
   it('expires links after 15 minutes and signups after 30', () => {
     expect(magicLink.parse({})).toEqual({ ttl: 900_000, signup_ttl: 1_800_000 });
+  });
+});
+
+describe('security', () => {
+  it('requires two-factor for admin, safety and support permissions by default', () => {
+    const parsed = security.parse({});
+    expect(parsed.step_up_window).toBe(600_000);
+    expect(parsed.encryption_key).toBe('');
+    expect(parsed.require_2fa_for_permissions).toEqual([
+      'users.*',
+      'safety.*',
+      'support.*',
+      'games.*',
+      'oidc.clients.*',
+      'webhooks.manage',
+      'audit.read',
+      'roles.manage',
+    ]);
+  });
+
+  it('rejects a permission that is not dotted lowercase words', () => {
+    expect(messages(security.safeParse({ require_2fa_for_permissions: ['Users'] }))).toEqual([
+      'require_2fa_for_permissions.0: Must be a permission, a prefix like users.*, or *',
+    ]);
   });
 });
 

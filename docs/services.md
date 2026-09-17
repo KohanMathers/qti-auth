@@ -195,7 +195,7 @@ router.route({
 });
 ```
 
-The one definition produces the manifest, the OpenAPI operation, request validation and the policy checks. Policy fields follow [SPEC §2.6](../SPEC.md#26-gateway): `auth` and `rate_limit` are required, `permissions` and `scopes` default to none, `allow_account_states` to `['active']`, and `allow_pending_legal`, `allow_pending_parental_consent` and `step_up` to `false`.
+The one definition produces the manifest, the OpenAPI operation, request validation and the policy checks. Policy fields follow [SPEC §2.6](../SPEC.md#26-gateway): `auth` and `rate_limit` are required, `permissions` and `scopes` default to none, `allow_account_states` to `['active']`, and `allow_pending_legal`, `allow_pending_parental_consent`, `allow_pending_2fa_enrolment` and `step_up` to `false`.
 
 `router.route` throws `RouteDefinitionError` straight away for a mistake the gateway would otherwise find later: a malformed path, `request.params` that don't match the path, a body on `GET`, an undeclared permission or error code, scopes on a session route, `step_up` without `auth: session`, and duplicate paths or operation IDs. A test that imports the router is enough to catch them.
 

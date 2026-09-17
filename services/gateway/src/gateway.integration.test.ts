@@ -100,6 +100,7 @@ function session(): ResolvedSession {
     acr: 'aal1',
     step_up_at: null,
     legal_acceptance_required: false,
+    two_factor_enrolment_required: false,
     expires_at: new Date(Date.now() + 86_400_000).toISOString(),
   };
 }

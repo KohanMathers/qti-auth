@@ -7,6 +7,10 @@ export const GATEWAY_ERRORS = defineErrors({
   LEGAL_ACCEPTANCE_REQUIRED: { status: 403, title: 'Updated legal documents must be accepted' },
   PARENTAL_CONSENT_PENDING: { status: 403, title: 'Parental consent is still pending' },
   STEP_UP_REQUIRED: { status: 403, title: 'Recent two-factor authentication is required' },
+  TWO_FACTOR_ENROLMENT_REQUIRED: {
+    status: 403,
+    title: 'Two-factor authentication must be set up first',
+  },
   ORIGIN_NOT_ALLOWED: { status: 403, title: 'The request origin is not allowed' },
   METHOD_NOT_ALLOWED: { status: 405, title: 'The route does not accept this method' },
   PAYLOAD_TOO_LARGE: { status: 413, title: 'The request body is too large' },

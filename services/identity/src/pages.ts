@@ -2,6 +2,7 @@ import type { CaptchaWidget } from '@qtiauth/captcha';
 import type { Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
+import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { isValidDateOfBirth } from './age.ts';
 import {
   type CaptchaCheck,
@@ -10,36 +11,48 @@ import {
   checkCaptcha,
   noteCaptchaAttempt,
 } from './captcha.ts';
+import { type SecondFactorMethod, totpEnrolled } from './factors.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
+  finishTwoFactor,
   inspectPasswordReset,
   loginPassword,
   magicLinkEnabled,
+  passkeysEnabled,
   passwordEnabled,
   registerWithPassword,
   sendMagicLink,
   sendPasswordReset,
   signup,
+  totpEnabled,
   verify,
 } from './flows.ts';
-import { sessionHeaders } from './headers.ts';
+import { revokedHeaders, sessionHeaders } from './headers.ts';
 import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts';
 import { preferredLocale } from './locale.ts';
+import { listPasskeys } from './passkeys.ts';
 import type { PasswordPolicyReason } from './passwords.ts';
 import type { Context } from './service.ts';
+import { signedIn as sessionUser } from './session-routes.ts';
 import type { CreatedSession } from './sessions.ts';
 import {
   accountPath,
+  encryptionKey,
   FORGOT_PASSWORD_PAGE,
   LOGIN_PAGE,
   MAGIC_LINK_PAGE,
   MAGIC_LINK_START_PAGE,
+  PASSKEY_PAGE,
+  PASSKEYS_PAGE,
   REGISTER_PAGE,
   RESET_PASSWORD_PAGE,
   SIGNUP_CHOICE_PAGE,
+  TOTP_PAGE,
+  TWO_FACTOR_PAGE,
   VERIFY_EMAIL_PAGE,
 } from './settings.ts';
+import { beginTotpEnrol, confirmTotpEnrol, disableTotp } from './two-factor.ts';
 
 const htmlResponses = { 200: { description: 'An HTML page' } };
 
@@ -80,6 +93,22 @@ function passwordDisabled(ctx: Context): Response {
   });
 }
 
+function passkeyDisabled(ctx: Context): Response {
+  return page(ctx, {
+    status: 403,
+    title: 'Passkeys are turned off',
+    body: paragraph('Sign in another way.'),
+  });
+}
+
+function totpDisabled(ctx: Context): Response {
+  return page(ctx, {
+    status: 403,
+    title: 'Authenticator apps are turned off',
+    body: paragraph('Sign in another way.'),
+  });
+}
+
 function invalidLink(ctx: Context): Response {
   return page(ctx, {
     status: 400,
@@ -116,6 +145,8 @@ function signedIn(ctx: Context, session: CreatedSession, returnTo: string | null
     body: `<ul>
 <li><a href="../api/v1/me">Your account</a></li>
 <li><a href="../api/v1/sessions">Your sessions</a></li>
+${passkeysEnabled(ctx) ? '<li><a href="passkeys">Passkeys</a></li>' : ''}
+${totpEnabled(ctx) ? '<li><a href="totp">Authenticator app</a></li>' : ''}
 </ul>
 <form method="post" action="../api/v1/auth/logout"><button type="submit">Sign out</button></form>`,
   });
@@ -195,8 +226,98 @@ function loginForm(
 ${captchaBlock(widget)}
 <p><button type="submit">Sign in</button></p>
 </form>
+${passkeysEnabled(ctx) ? '<p><a href="passkey">Sign in with a passkey</a></p>' : ''}
 <p><a href="forgot-password">Forgot password</a></p>`,
   });
+}
+
+function twoFactorForm(
+  ctx: Context,
+  challenge: string,
+  methods: readonly SecondFactorMethod[],
+  error?: string,
+): Response {
+  const totp = methods.includes('totp');
+  const recovery = methods.includes('recovery');
+  const passkey = methods.includes('passkey');
+  return page(ctx, {
+    status: error === undefined ? 200 : 400,
+    title: 'Confirm it’s you',
+    body: `${error === undefined ? '' : alert(error)}
+<form method="post" action="two-factor">
+${hiddenInput('challenge', challenge)}
+${
+  totp
+    ? `<p><label for="totp">Authenticator code</label><br>
+<input id="totp" name="totp" inputmode="numeric" autocomplete="one-time-code"></p>`
+    : ''
+}
+${
+  recovery
+    ? `<p><label for="recovery_code">Recovery code</label><br>
+<input id="recovery_code" name="recovery_code" autocomplete="off"></p>`
+    : ''
+}
+<p><button type="submit">Continue</button></p>
+</form>
+${passkey ? `<p><a href="passkey?second_factor=${encodeURIComponent(challenge)}">Use a passkey</a></p>` : ''}`,
+  });
+}
+
+function totpStartForm(ctx: Context, error?: string): Response {
+  return page(ctx, {
+    status: error === undefined ? 200 : 400,
+    title: 'Set up an authenticator app',
+    body: `${error === undefined ? '' : alert(error)}
+<form method="post" action="totp">
+<p><button type="submit">Set up</button></p>
+</form>`,
+  });
+}
+
+function totpConfirmForm(
+  ctx: Context,
+  challenge: string,
+  secret: string,
+  otpauth: string,
+  error?: string,
+): Response {
+  return page(ctx, {
+    status: error === undefined ? 200 : 400,
+    title: 'Confirm your authenticator app',
+    body: `${error === undefined ? '' : alert(error)}
+<p>Secret: <code>${escapeHtml(secret)}</code></p>
+<p><a href="${escapeHtml(otpauth)}">Add to authenticator</a></p>
+<form method="post" action="totp">
+${hiddenInput('challenge', challenge)}
+${hiddenInput('secret', secret)}
+${hiddenInput('otpauth', otpauth)}
+<p><label for="code">Authenticator code</label><br>
+<input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required></p>
+<p><button type="submit">Confirm</button></p>
+</form>`,
+  });
+}
+
+function totpDisableForm(ctx: Context, error?: string): Response {
+  return page(ctx, {
+    status: error === undefined ? 200 : 400,
+    title: 'Authenticator app is on',
+    body: `${error === undefined ? '' : alert(error)}
+<form method="post" action="totp">
+<p><label for="code">Authenticator code</label><br>
+<input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required></p>
+<p><button type="submit">Turn off</button></p>
+</form>`,
+  });
+}
+
+function passkeySignInMarkup(secondFactor: string | undefined): string {
+  const extra =
+    secondFactor === undefined
+      ? ''
+      : `<p>After a password sign-in, finish with <code>POST /api/v1/auth/passkey/authenticate/start</code> and the second-factor challenge.</p>`;
+  return `${paragraph('Passkey sign-in uses the JSON API: start at /api/v1/auth/passkey/authenticate/start, then POST the authenticator assertion to /api/v1/auth/passkey/authenticate.')}${extra}`;
 }
 
 function resetForm(
@@ -558,6 +679,9 @@ ${magic ? `<p><a href="magic-link/start">Sign up with a magic link</a></p>` : ''
           next.status === 'ok' ? undefined : next.widget,
         );
       }
+      if (result.status === 'second_factor_required') {
+        return twoFactorForm(ctx, result.challenge, result.methods);
+      }
       return signedIn(ctx, result.session, null);
     },
   });
@@ -753,6 +877,230 @@ ${hiddenInput('token', query.token)}
       const result = await completeEmailVerification({ ctx, request, log }, { token });
       if (result.status === 'invalid') return invalidLink(ctx);
       return signedIn(ctx, result.session, null);
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: TWO_FACTOR_PAGE,
+    operation_id: 'twoFactorPage',
+    summary: 'Enter an authenticator or recovery code after password sign-in',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { query: z.object({ challenge: z.string().max(256).optional() }) },
+    responses: htmlResponses,
+    handler: ({ ctx, query }) => {
+      if (query.challenge === undefined) {
+        return Promise.resolve(
+          page(ctx, {
+            status: 400,
+            title: 'Sign in again',
+            body: paragraph('This confirmation has expired. Sign in with your password again.'),
+          }),
+        );
+      }
+      return Promise.resolve(twoFactorForm(ctx, query.challenge, ['totp', 'recovery', 'passkey']));
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: TWO_FACTOR_PAGE,
+    operation_id: 'twoFactorPageSubmit',
+    summary: 'Confirm a second factor from the form',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'auth_password',
+    responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
+    handler: async ({ ctx, request, log }) => {
+      const form = await readForm(request);
+      const challenge = form['challenge'] ?? '';
+      const totpRaw = form['totp']?.trim();
+      const recoveryRaw = form['recovery_code']?.trim();
+      const totp = totpRaw === undefined || totpRaw === '' ? undefined : totpRaw;
+      const recoveryCode =
+        recoveryRaw === undefined || recoveryRaw === '' ? undefined : recoveryRaw;
+      const result = await finishTwoFactor(
+        { ctx, request, log },
+        { challenge, totp, recoveryCode },
+      );
+      if (result.status === 'invalid') {
+        return twoFactorForm(
+          ctx,
+          challenge,
+          ['totp', 'recovery', 'passkey'],
+          'This confirmation has expired. Sign in with your password again.',
+        );
+      }
+      if (result.status === 'wrong_code') {
+        return twoFactorForm(
+          ctx,
+          challenge,
+          ['totp', 'recovery', 'passkey'],
+          totp !== undefined
+            ? 'That authenticator code is incorrect.'
+            : 'That recovery code is incorrect.',
+        );
+      }
+      return signedIn(ctx, result.session, null);
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: TOTP_PAGE,
+    operation_id: 'totpPage',
+    summary: 'Set up or turn off an authenticator app',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    allow_pending_legal: true,
+    allow_pending_parental_consent: true,
+    allow_pending_2fa_enrolment: true,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity }) => {
+      if (!totpEnabled(ctx)) return totpDisabled(ctx);
+      const { userId } = sessionUser(identity);
+      if (await totpEnrolled(ctx.db, userId)) {
+        return totpDisableForm(ctx);
+      }
+      return totpStartForm(ctx);
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: TOTP_PAGE,
+    operation_id: 'totpPageSubmit',
+    summary: 'Start, confirm or turn off authenticator-app sign-in from the form',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    allow_pending_legal: true,
+    allow_pending_parental_consent: true,
+    allow_pending_2fa_enrolment: true,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity, request }) => {
+      if (!totpEnabled(ctx)) return totpDisabled(ctx);
+      const { userId, sessionId } = sessionUser(identity);
+      const form = await readForm(request);
+      const code = form['code'] ?? '';
+      const challenge = form['challenge'];
+      if (challenge !== undefined) {
+        const result = await confirmTotpEnrol(ctx.db, {
+          userId,
+          challenge,
+          code,
+          key: encryptionKey(ctx.config),
+          now: new Date(),
+        });
+        if (result.status === 'wrong_code') {
+          return totpConfirmForm(
+            ctx,
+            challenge,
+            form['secret'] ?? '',
+            form['otpauth'] ?? '',
+            'That code is incorrect.',
+          );
+        }
+        if (result.status !== 'enabled')
+          return totpStartForm(ctx, 'Start again from the beginning.');
+        return page(ctx, {
+          title: 'Authenticator app is on',
+          headers: revokedHeaders([sessionId]),
+          body: `${paragraph('Store these recovery codes. Each works once.')}<pre>${escapeHtml(result.recoveryCodes.join('\n'))}</pre>
+${passkeysEnabled(ctx) ? '<p><a href="passkeys">Passkeys</a></p>' : ''}`,
+        });
+      }
+      if (code !== '') {
+        const result = await disableTotp(ctx.db, {
+          userId,
+          code,
+          key: encryptionKey(ctx.config),
+          now: new Date(),
+        });
+        if (result === 'wrong_code') return totpDisableForm(ctx, 'That code is incorrect.');
+        if (result === 'not_enabled') return totpStartForm(ctx);
+        return page(ctx, {
+          title: 'Authenticator app is off',
+          headers: revokedHeaders([sessionId]),
+          body: paragraph('You can set it up again at any time.'),
+        });
+      }
+      const account = await findAccount(ctx.db, userId);
+      if (!account) {
+        return page(ctx, {
+          status: 404,
+          title: 'Account not found',
+          body: paragraph('Sign in again.'),
+        });
+      }
+      const started = await beginTotpEnrol(ctx.db, {
+        userId,
+        email: account.email,
+        issuer: ctx.config.branding.product_name,
+        now: new Date(),
+      });
+      if (started.status === 'already_enabled') return totpDisableForm(ctx);
+      return totpConfirmForm(ctx, started.challenge, started.secret, started.otpauth);
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: PASSKEY_PAGE,
+    operation_id: 'passkeyPage',
+    summary: 'Sign in with a passkey',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: {
+      query: z.object({ second_factor: z.string().max(256).optional() }),
+    },
+    responses: htmlResponses,
+    handler: ({ ctx, query }) => {
+      if (!passkeysEnabled(ctx)) return Promise.resolve(passkeyDisabled(ctx));
+      return Promise.resolve(
+        page(ctx, {
+          title: 'Sign in with a passkey',
+          body: passkeySignInMarkup(query.second_factor),
+        }),
+      );
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: PASSKEYS_PAGE,
+    operation_id: 'passkeysPage',
+    summary: 'Manage passkeys on this account',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    allow_pending_legal: true,
+    allow_pending_parental_consent: true,
+    allow_pending_2fa_enrolment: true,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity }) => {
+      if (!passkeysEnabled(ctx)) return passkeyDisabled(ctx);
+      const { userId } = sessionUser(identity);
+      const passkeys = await listPasskeys(ctx.db, userId);
+      const items =
+        passkeys.length === 0
+          ? paragraph('No passkeys yet.')
+          : `<ul>${passkeys
+              .map((passkey) => `<li>${escapeHtml(passkey.name)}</li>`)
+              .join('')}</ul>`;
+      return page(ctx, {
+        title: 'Passkeys',
+        body: `${items}
+${paragraph('Register a passkey with POST /api/v1/me/passkeys/register/start, then POST the attestation to /api/v1/me/passkeys/register.')}
+${totpEnabled(ctx) ? '<p><a href="totp">Authenticator app</a></p>' : ''}`,
+      });
     },
   });
 }

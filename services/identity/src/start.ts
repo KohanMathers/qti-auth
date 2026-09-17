@@ -10,6 +10,7 @@ import {
 } from '@qtiauth/service-kit';
 
 import { countAccountsByState } from './accounts.ts';
+import { sweepChallenges } from './challenges.ts';
 import type { Database } from './database.ts';
 import { eraseUser, exportUser } from './data-rights.ts';
 import { sweepTokens } from './email-tokens.ts';
@@ -17,7 +18,7 @@ import { sweepAuthFailures } from './failures.ts';
 import { identityMetrics } from './metrics.ts';
 import { type Context, type definition, router } from './service.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
-import { accountOrigin } from './settings.ts';
+import { accountOrigin, encryptionKey } from './settings.ts';
 
 export const RETENTION_JOB = 'retention.sweep';
 export const STATS_INTERVAL = 60_000;
@@ -60,6 +61,7 @@ export function identityService(options: IdentityOptions = {}) {
       const { config, log, bus, db } = ctx;
       // Emails link to the account surface; fail now rather than on the first send.
       accountOrigin(config);
+      encryptionKey(config);
       const stack: Stoppable[] = [];
       try {
         stack.push(
@@ -79,6 +81,7 @@ export function identityService(options: IdentityOptions = {}) {
                   cookieScope: parsed.data.cookie_scope,
                   idleTimeout: config.cookies.idle_timeout,
                   bands: config.age.bands,
+                  require2faFor: config.security.require_2fa_for_permissions,
                   now: new Date(),
                 }),
               };
@@ -101,6 +104,10 @@ export function identityService(options: IdentityOptions = {}) {
                 now,
               });
               const tokens = await sweepTokens(db, { retention: config.retention.tokens, now });
+              const challenges = await sweepChallenges(db, {
+                retention: config.retention.tokens,
+                now,
+              });
               const failures = await sweepAuthFailures(db, {
                 retention: config.retention.tokens,
                 now,
@@ -109,6 +116,7 @@ export function identityService(options: IdentityOptions = {}) {
               log.info('retention sweep finished', {
                 sessions,
                 email_tokens: tokens,
+                auth_challenges: challenges,
                 auth_failures: failures,
                 outbox: pruned.outbox,
                 processed_events: pruned.processedEvents,

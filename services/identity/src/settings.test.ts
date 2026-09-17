@@ -7,6 +7,7 @@ import {
   emailLinkUrl,
   IdentityConfigError,
   magicLinkUrl,
+  relyingParty,
   RESET_PASSWORD_PAGE,
   sessionClient,
 } from './settings.ts';
@@ -36,6 +37,21 @@ describe('magic link URLs', () => {
 
   it('need an origin for an account surface bound only to ports', () => {
     expect(() => accountOrigin(surfaces({ ports: [8080] }))).toThrow(IdentityConfigError);
+  });
+});
+
+describe('relyingParty', () => {
+  it('uses the account origin host and includes every configured origin', () => {
+    expect(
+      relyingParty({
+        ...surfaces({ hosts: ['me.example.com'] }),
+        branding: sections.branding.parse({}),
+      }),
+    ).toEqual({
+      name: 'Example Account',
+      rpID: 'me.example.com',
+      origins: ['https://me.example.com'],
+    });
   });
 });
 

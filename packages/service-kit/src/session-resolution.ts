@@ -26,6 +26,7 @@ export const resolvedSessionSchema = z.strictObject({
   acr: z.string().min(1).nullable(),
   step_up_at: z.iso.datetime().nullable(),
   legal_acceptance_required: z.boolean(),
+  two_factor_enrolment_required: z.boolean(),
   expires_at: z.iso.datetime(),
 });
 

@@ -7,6 +7,7 @@ import packageJson from '../package.json' with { type: 'json' };
 import { authRoutes } from './auth-routes.ts';
 import type { Database } from './database.ts';
 import { IDENTITY_ERRORS } from './errors.ts';
+import { factorRoutes } from './factor-routes.ts';
 import { pageRoutes } from './pages.ts';
 import { sessionRoutes } from './session-routes.ts';
 
@@ -42,5 +43,6 @@ export type IdentityConfig = Context['config'];
 export const router = createServiceRouter<Context>(definition);
 
 authRoutes(router);
+factorRoutes(router);
 sessionRoutes(router);
 pageRoutes(router);

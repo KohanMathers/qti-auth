@@ -48,6 +48,10 @@ export function checkPolicy(
     return { code: 'LEGAL_ACCEPTANCE_REQUIRED' };
   }
 
+  if (session.two_factor_enrolment_required && !route.allow_pending_2fa_enrolment) {
+    return { code: 'TWO_FACTOR_ENROLMENT_REQUIRED' };
+  }
+
   const required = route.permissions.map(
     (name) => table.permissions.get(name) ?? { name, description: '', wildcard: false },
   );
@@ -77,6 +81,7 @@ export function impliedGatewayErrors(table: TableRoute): (GatewayErrorCode | Kit
   codes.push('AUTHENTICATION_REQUIRED', 'ACCOUNT_BANNED', 'ACCOUNT_LOCKED');
   if (!route.allow_pending_parental_consent) codes.push('PARENTAL_CONSENT_PENDING');
   if (!route.allow_pending_legal) codes.push('LEGAL_ACCEPTANCE_REQUIRED');
+  if (!route.allow_pending_2fa_enrolment) codes.push('TWO_FACTOR_ENROLMENT_REQUIRED');
   if (route.step_up) codes.push('STEP_UP_REQUIRED');
   return codes;
 }

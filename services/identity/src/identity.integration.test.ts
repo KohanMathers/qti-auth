@@ -38,10 +38,12 @@ import { natsUrl, startNats, startPostgres } from '@qtiauth/testing';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './database.ts';
+import { softwarePasskey } from './passkey-testing.ts';
 import { definition } from './service.ts';
 import { identityService } from './start.ts';
 import { type CapturedEmails, captureEmails } from './testing.ts';
 import { hashToken } from './tokens.ts';
+import { decodeBase32, totpAt } from './totp.ts';
 
 const HOST = 'me.example.com';
 const key = generateIdentityKey();
@@ -205,6 +207,7 @@ beforeAll(async () => {
         failure_delay: { step: '1ms', max: '1ms' },
       },
       captcha: { after: 1000, altcha: { hmac_key: 'integration-captcha-key', max_number: 400 } },
+      security: { encryption_key: Buffer.alloc(32, 9).toString('base64') },
     }),
   });
 });
@@ -252,6 +255,7 @@ describe('signing up and signing in', () => {
           amr: ['email'],
           acr: 'aal1',
           legal_acceptance_required: false,
+          two_factor_enrolment_required: false,
         },
       },
     });
@@ -600,6 +604,101 @@ describe('passwords', () => {
     expect(keepReset.status).toBe(200);
     secrets.push(keepReset.headers.get(SESSION_TOKEN_HEADER) ?? '');
     expect(await resolve(kept.token)).not.toBeNull();
+  });
+});
+
+describe('passkeys and two-factor', () => {
+  const origin = `https://${HOST}`;
+
+  it('asks for TOTP after a password sign-in, then the session is aal2', async () => {
+    const registered = await registerPassword('totp@example.com');
+    const user = await verifyPasswordEmail(registered.verifyToken);
+    const asUser = signedInAs(user.userId, user.sessionId);
+    const start = await post('/api/v1/me/totp/start', {}, asUser);
+    expect(start.status).toBe(200);
+    const enrolment = (await start.json()) as { challenge: string; secret: string };
+    secrets.push(enrolment.challenge, enrolment.secret);
+    const secret = decodeBase32(enrolment.secret);
+    expect(secret).toBeInstanceOf(Buffer);
+    if (!(secret instanceof Buffer)) return;
+    const confirm = await post(
+      '/api/v1/me/totp',
+      { challenge: enrolment.challenge, code: totpAt(secret, new Date()) },
+      asUser,
+    );
+    const enabled = (await confirm.json()) as { recovery_codes: string[] };
+    expect(confirm.status).toBe(200);
+    expect(enabled.recovery_codes).toHaveLength(10);
+    secrets.push(...enabled.recovery_codes);
+
+    const login = await loginPassword('totp@example.com');
+    const next = (await login.json()) as {
+      status: string;
+      challenge: string;
+      methods: string[];
+    };
+    expect(next).toMatchObject({ status: 'second_factor_required', methods: ['totp', 'recovery'] });
+    secrets.push(next.challenge);
+    expect(login.headers.get(SESSION_TOKEN_HEADER)).toBeNull();
+
+    const finished = await post('/api/v1/auth/2fa', {
+      challenge: next.challenge,
+      totp: totpAt(secret, new Date()),
+    });
+    expect(finished.status).toBe(200);
+    const session = await finish(finished);
+    expect(await resolve(session.token)).toMatchObject({ acr: 'aal2', amr: ['pwd', 'otp'] });
+  });
+
+  it('signs a passkey-only account in at aal2', async () => {
+    const user = await signUp('passkey@example.com');
+    const authenticator = await softwarePasskey(origin);
+    const asUser = signedInAs(user.userId, user.sessionId);
+    const start = await post('/api/v1/me/passkeys/register/start', {}, asUser);
+    const creation = (await start.json()) as {
+      challenge: string;
+      options: Parameters<typeof authenticator.register>[0];
+    };
+    secrets.push(creation.challenge);
+    const attested = await authenticator.register(creation.options);
+    const registered = await post(
+      '/api/v1/me/passkeys/register',
+      { challenge: creation.challenge, name: 'Laptop', response: attested },
+      asUser,
+    );
+    expect(registered.status).toBe(201);
+
+    const begin = await post('/api/v1/auth/passkey/authenticate/start', {});
+    const assertion = (await begin.json()) as {
+      challenge: string;
+      options: Parameters<typeof authenticator.authenticate>[0];
+    };
+    secrets.push(assertion.challenge);
+    const asserted = await authenticator.authenticate(assertion.options);
+    const signedIn = await post('/api/v1/auth/passkey/authenticate', {
+      challenge: assertion.challenge,
+      response: asserted,
+    });
+    expect(signedIn.status).toBe(200);
+    const session = await finish(signedIn);
+    expect(await resolve(session.token)).toMatchObject({
+      user_id: user.userId,
+      acr: 'aal2',
+      amr: ['webauthn'],
+      two_factor_enrolment_required: false,
+    });
+  });
+
+  it('marks staff without a second factor as needing enrolment', async () => {
+    const user = await signUp('staff-2fa@example.com');
+    await identity.context.db
+      .insertInto('user_permissions')
+      .values({ user_id: user.userId, permission: 'users.read' })
+      .execute();
+    expect(await resolve(user.token)).toMatchObject({
+      two_factor_enrolment_required: true,
+      permissions: ['users.read'],
+    });
   });
 });
 

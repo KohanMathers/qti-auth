@@ -4,6 +4,7 @@ import * as z from 'zod';
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
 import { CAPTCHA_ACTIONS, inspectCaptcha, noteCaptchaAttempt, requireCaptcha } from './captcha.ts';
+import { SECOND_FACTOR_METHODS } from './factors.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
@@ -235,8 +236,20 @@ export function authRoutes(router: Router<Context>): void {
     },
     responses: {
       200: {
-        description: 'Signed in. Sets the session cookie.',
-        schema: z.object({ status: z.literal('signed_in'), user_id: z.uuid() }),
+        description: 'Signed in, or a second factor is required.',
+        schema: z.discriminatedUnion('status', [
+          z.object({ status: z.literal('signed_in'), user_id: z.uuid() }),
+          z.object({
+            status: z.literal('second_factor_required'),
+            challenge: z
+              .string()
+              .describe('Pass to /api/v1/auth/2fa or a passkey authenticate start.'),
+            methods: z
+              .array(z.enum(SECOND_FACTOR_METHODS))
+              .describe('Which second factors this account can use.'),
+            expires_at: z.iso.datetime(),
+          }),
+        ]),
       },
     },
     errors: [
@@ -253,6 +266,18 @@ export function authRoutes(router: Router<Context>): void {
         { email: body.email, password: body.password },
       );
       if (result.status === 'invalid') throw new ProblemError('CREDENTIALS_INCORRECT');
+      if (result.status === 'second_factor_required') {
+        return {
+          status: 200,
+          headers: NO_STORE,
+          body: {
+            status: 'second_factor_required' as const,
+            challenge: result.challenge,
+            methods: result.methods,
+            expires_at: result.expiresAt.toISOString(),
+          },
+        };
+      }
       return {
         status: 200,
         headers: sessionHeaders(result.session),
@@ -674,6 +699,7 @@ export function authRoutes(router: Router<Context>): void {
     allow_account_states: SIGNED_IN_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
+    allow_pending_2fa_enrolment: true,
     rate_limit: 'global',
     responses: { 204: { description: 'Signed out. The session cookie is cleared.' } },
     handler: async ({ ctx, identity, log }) => {

@@ -1,5 +1,7 @@
 import { emailNormalizer } from './email.ts';
+import { parseEncryptionKey } from './encrypt.ts';
 import type { MagicLinkSettings } from './magic-links.ts';
+import type { RelyingParty } from './passkeys.ts';
 import type { PasswordSettings } from './password-auth.ts';
 import type { IdentityConfig } from './service.ts';
 import type { SessionClient, SessionSettings } from './sessions.ts';
@@ -12,6 +14,10 @@ export const LOGIN_PAGE = '/auth/login';
 export const FORGOT_PASSWORD_PAGE = '/auth/forgot-password';
 export const RESET_PASSWORD_PAGE = '/auth/reset-password';
 export const VERIFY_EMAIL_PAGE = '/auth/verify-email';
+export const PASSKEY_PAGE = '/auth/passkey';
+export const TWO_FACTOR_PAGE = '/auth/two-factor';
+export const TOTP_PAGE = '/auth/totp';
+export const PASSKEYS_PAGE = '/auth/passkeys';
 
 export class IdentityConfigError extends Error {
   constructor(message: string) {
@@ -121,6 +127,22 @@ export function clientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded === null) return '';
   return forwarded.split(',')[0]?.trim() ?? '';
+}
+
+export function encryptionKey(config: IdentityConfig): Buffer {
+  return parseEncryptionKey(config.security.encryption_key, 'security.encryption_key');
+}
+
+export function relyingParty(config: Pick<IdentityConfig, 'surfaces' | 'branding'>): RelyingParty {
+  const origin = accountOrigin(config);
+  const origins = new Set<string>(config.surfaces.account.origins ?? []);
+  origins.add(origin);
+  for (const host of config.surfaces.account.hosts) origins.add(`https://${host}`);
+  return {
+    name: config.branding.product_name,
+    rpID: new URL(origin).hostname,
+    origins: [...origins],
+  };
 }
 
 export function emailLinkUrl(

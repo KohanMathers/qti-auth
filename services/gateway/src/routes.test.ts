@@ -24,6 +24,7 @@ function route(overrides: Partial<ManifestRoute>): ManifestRoute {
     allow_account_states: ['active'],
     allow_pending_legal: false,
     allow_pending_parental_consent: false,
+    allow_pending_2fa_enrolment: false,
     rate_limit: 'global',
     step_up: false,
     ...overrides,

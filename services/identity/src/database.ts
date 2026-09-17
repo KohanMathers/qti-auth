@@ -18,6 +18,15 @@ export type AuthFailureKind = (typeof AUTH_FAILURE_KINDS)[number];
 export const AUTH_FAILURE_SCOPES = ['password', 'magic_link', 'signup'] as const;
 export type AuthFailureScope = (typeof AUTH_FAILURE_SCOPES)[number];
 
+export const AUTH_CHALLENGE_KINDS = [
+  'second_factor',
+  'passkey_register',
+  'passkey_authenticate',
+  'totp_enrol',
+  'step_up',
+] as const;
+export type AuthChallengeKind = (typeof AUTH_CHALLENGE_KINDS)[number];
+
 export interface UsersTable {
   id: string;
   state: AccountState;
@@ -85,6 +94,31 @@ export interface AuthFailuresTable {
   updated_at: Date;
 }
 
+export interface AuthChallengesTable {
+  id: string;
+  token_hash: string;
+  user_id: string | null;
+  session_id: string | null;
+  kind: AuthChallengeKind;
+  payload: string;
+  created_at: Generated<Date>;
+  expires_at: Date;
+  used_at: Date | null;
+}
+
+export interface RecoveryCodesTable {
+  id: string;
+  user_id: string;
+  code_hash: string;
+  created_at: Generated<Date>;
+  used_at: Date | null;
+}
+
+export interface UserPermissionsTable {
+  user_id: string;
+  permission: string;
+}
+
 export interface Database {
   users: UsersTable;
   identities: IdentitiesTable;
@@ -92,4 +126,7 @@ export interface Database {
   session_bindings: SessionBindingsTable;
   email_tokens: EmailTokensTable;
   auth_failures: AuthFailuresTable;
+  auth_challenges: AuthChallengesTable;
+  recovery_codes: RecoveryCodesTable;
+  user_permissions: UserPermissionsTable;
 }

@@ -1881,6 +1881,30 @@
           "description": "Routes that need step-up accept a session that reached aal2 within this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "encryption_key": {
+          "default": "",
+          "description": "Base64 32-byte key that encrypts TOTP secrets at rest. Required when TOTP is enabled. Reference a secret.",
+          "type": "string"
+        },
+        "require_2fa_for_permissions": {
+          "default": [
+            "users.*",
+            "safety.*",
+            "support.*",
+            "games.*",
+            "oidc.clients.*",
+            "webhooks.manage",
+            "audit.read",
+            "roles.manage"
+          ],
+          "description": "Staff whose permissions match any of these must enrol a passkey or TOTP before using the rest of the product. Prefixes end in .* .",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:\\*|[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*(?:\\.\\*)?)$",
+            "description": "A permission or prefix that requires two-factor enrolment."
+          }
         }
       },
       "additionalProperties": false

@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords and magic links, and manages their sessions. The other sign-in methods, usernames, roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links and passkeys, and offers TOTP, recovery codes and step-up. The other sign-in methods, usernames, roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -47,6 +47,19 @@ age:
 parental:
   consent_age: 13
 
+security:
+  step_up_window: 10m
+  encryption_key: '${env:APP_ENCRYPTION_KEY}'
+  require_2fa_for_permissions:
+    - users.*
+    - safety.*
+    - support.*
+    - games.*
+    - oidc.clients.*
+    - webhooks.manage
+    - audit.read
+    - roles.manage
+
 retention:
   sessions: 30d
   tokens: 24h
@@ -61,10 +74,13 @@ retention:
 - `cookies.session_ttl` is the longest a session lasts, and `cookies.idle_timeout` ends it sooner if it isn't used.
 - `age.bands` is the age in whole years each band starts at. Anyone younger than `13_to_15` is `under_13`.
 - `parental.consent_age` is the age below which an account needs a parent or guardian's approval.
+- `security.encryption_key` is a base64 32-byte key (`openssl rand -base64 32`) that encrypts TOTP secrets at rest. Identity will not start without it. Set `APP_ENCRYPTION_KEY` in `.env`.
+- `security.step_up_window` is how recently a session must have reached `aal2` for a route that needs step-up, and for adding a password after a magic-link sign-in.
+- `security.require_2fa_for_permissions` is the staff permissions that require a passkey or TOTP. Matching accounts can sign in but only reach enrolment until they set one up. Permissions themselves arrive in a later release; until then this is tested with a stub grant.
 - `retention.sessions` is how long ended sessions are kept, and `retention.tokens` how long used or expired emailed tokens are kept after they expire.
-- `features.auth.magic_link.enabled: false` turns magic links off. `features.auth.password.enabled: false` turns passwords off.
+- `features.auth.magic_link.enabled: false` turns magic links off. `features.auth.password.enabled: false` turns passwords off. `features.auth.passkeys.enabled: false` turns passkeys off. `features.auth.totp.enabled: false` turns authenticator-app sign-in off.
 
-Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha` and `features`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one.
+Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha`, `security` and `features`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one. Passkey origins are those same account origins.
 
 ## Accounts
 
@@ -108,7 +124,7 @@ The pages are deliberately plain: they're stand-ins until the web app arrives, a
 
 Signup is `POST /api/v1/auth/password/signup` with `{ email, password, date_of_birth, locale? }`. The account is created in `pending_email_verification` and a confirmation email is sent. The account becomes `active` when `POST /api/v1/auth/email/verify` is used. Login is allowed before that; `/api/v1/me` shows the pending state.
 
-Login is `POST /api/v1/auth/password/login` with `{ email, password }`. Unknown addresses and wrong passwords both answer `401 CREDENTIALS_INCORRECT` ("Email or password incorrect") after an Argon2id check and the same progressive delay, so timing does not give the address away.
+Login is `POST /api/v1/auth/password/login` with `{ email, password }`. Unknown addresses and wrong passwords both answer `401 CREDENTIALS_INCORRECT` ("Email or password incorrect") after an Argon2id check and the same progressive delay, so timing does not give the address away. If the account has TOTP enrolled, the answer is `200 { "status": "second_factor_required", "challenge", "methods", "expires_at" }` instead of a session, and sign-in finishes at `/api/v1/auth/2fa` or with a passkey.
 
 Forgot password is `POST /api/v1/auth/password/forgot` with `{ email }`, always `202 { "status": "sent" }`. The reset form has a **"Don't log me out of other sessions"** checkbox, **unticked by default**, so `POST /api/v1/auth/password/reset` revokes every other session unless `keep_other_sessions` is true.
 
@@ -130,6 +146,37 @@ Passwords equal to or containing the email local part (3 or more characters) are
 | `GET`/`POST /auth/forgot-password`     | Request a reset                                             |
 | `GET`/`POST /auth/reset-password`      | Scanner-safe confirm, then the reset form                   |
 | `GET`/`POST /auth/verify-email`        | Scanner-safe confirm                                        |
+
+## Passkeys and two-factor
+
+Passkeys (WebAuthn) work as a primary sign-in or as a second factor. Several can be registered, each with a name and last-used time. A passkey-only sign-in creates a session at `aal2`. Password sign-in is `aal1` unless TOTP is enrolled, in which case a second factor is required and the resulting session is `aal2`.
+
+TOTP is RFC 6238 (SHA-1, 6 digits, 30-second step, ±1 window). The secret is encrypted at rest with `security.encryption_key`. Confirming enrolment issues 10 hashed single-use recovery codes, which can be replaced at `POST /api/v1/me/recovery-codes` after a recent step-up.
+
+Staff whose permissions match `security.require_2fa_for_permissions` can sign in without a second factor, but the gateway only lets them hit routes with `allow_pending_2fa_enrolment: true` (enrolment and sign-out) until they register a passkey or TOTP.
+
+| Endpoint                                       | Does                                                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `POST /api/v1/auth/passkey/authenticate/start` | WebAuthn options. Pass `second_factor` after a password sign-in that needs a second factor |
+| `POST /api/v1/auth/passkey/authenticate`       | Finish passkey sign-in                                                                     |
+| `POST /api/v1/auth/2fa`                        | Finish password sign-in with `{ challenge, totp }` or `{ challenge, recovery_code }`       |
+| `GET /api/v1/me/factors`                       | Whether TOTP, recovery codes and passkeys are set up                                       |
+| `GET /api/v1/me/passkeys`                      | Named passkeys                                                                             |
+| `POST /api/v1/me/passkeys/register/start`      | WebAuthn creation options                                                                  |
+| `POST /api/v1/me/passkeys/register`            | `{ challenge, name, response }`                                                            |
+| `POST /api/v1/me/passkeys/:passkey_id`         | Rename                                                                                     |
+| `DELETE /api/v1/me/passkeys/:passkey_id`       | Remove, unless it is the last sign-in method                                               |
+| `POST /api/v1/me/totp/start`                   | `otpauth` URI, secret and challenge                                                        |
+| `POST /api/v1/me/totp`                         | Confirm with `{ challenge, code }`. Returns recovery codes                                 |
+| `POST /api/v1/me/totp/disable`                 | Turn TOTP off with a current code                                                          |
+| `POST /api/v1/me/recovery-codes`               | Replace recovery codes. Needs `step_up: true`                                              |
+| `POST /api/v1/me/step-up`                      | Raise this session to `aal2` with TOTP or a recovery code                                  |
+| `POST /api/v1/me/step-up/passkey/start`        | WebAuthn options to step up                                                                |
+| `POST /api/v1/me/step-up/passkey`              | Finish passkey step-up                                                                     |
+| `GET`/`POST /auth/two-factor`                  | Interim authenticator/recovery form after password sign-in                                 |
+| `GET`/`POST /auth/totp`                        | Interim authenticator enrolment                                                            |
+| `GET /auth/passkey`                            | Interim passkey sign-in page                                                               |
+| `GET /auth/passkeys`                           | Interim passkey list                                                                       |
 
 ## CAPTCHA
 
@@ -154,24 +201,32 @@ A session ends when it's `cookies.session_ttl` old, when it hasn't been used for
 
 Errors, on top of the [codes every service can return](services.md#errors):
 
-| Code                           | Status | When                                                                   |
-| ------------------------------ | ------ | ---------------------------------------------------------------------- |
-| `MAGIC_LINK_INVALID`           | 400    | The link is unknown, has expired or has already been used              |
-| `SIGNUP_TOKEN_INVALID`         | 400    | The signup token is unknown, has expired or has already been used      |
-| `PASSWORD_REJECTED`            | 400    | The password fails length, composition, containment or HIBP            |
-| `RESET_TOKEN_INVALID`          | 400    | The reset link is unknown, has expired or has already been used        |
-| `EMAIL_VERIFICATION_INVALID`   | 400    | The confirmation link is unknown, has expired or has already been used |
-| `CURRENT_PASSWORD_REQUIRED`    | 400    | Changing a password without the current one                            |
-| `CURRENT_PASSWORD_INCORRECT`   | 400    | The current password does not match                                    |
-| `CAPTCHA_INVALID`              | 400    | A CAPTCHA was required and the solution was wrong                      |
-| `CREDENTIALS_INCORRECT`        | 401    | Email or password incorrect                                            |
-| `AUTH_METHOD_DISABLED`         | 403    | `features.auth.magic_link` or `features.auth.password` is off          |
-| `STEP_UP_REQUIRED`             | 403    | Adding a password without a recent magic-link sign-in                  |
-| `CAPTCHA_REQUIRED`             | 403    | This IP is over the CAPTCHA threshold and no valid solution was sent   |
-| `PARENTAL_CONSENT_UNAVAILABLE` | 403    | The user is younger than `parental.consent_age`                        |
-| `ACCOUNT_NOT_FOUND`            | 404    | The signed-in account no longer exists                                 |
-| `SESSION_NOT_FOUND`            | 404    | No active session with that ID belongs to the user                     |
-| `ACCOUNT_LIMIT_REACHED`        | 409    | The address already has `accounts.max_per_email` accounts              |
+| Code                           | Status | When                                                                         |
+| ------------------------------ | ------ | ---------------------------------------------------------------------------- |
+| `MAGIC_LINK_INVALID`           | 400    | The link is unknown, has expired or has already been used                    |
+| `SIGNUP_TOKEN_INVALID`         | 400    | The signup token is unknown, has expired or has already been used            |
+| `PASSWORD_REJECTED`            | 400    | The password fails length, composition, containment or HIBP                  |
+| `RESET_TOKEN_INVALID`          | 400    | The reset link is unknown, has expired or has already been used              |
+| `EMAIL_VERIFICATION_INVALID`   | 400    | The confirmation link is unknown, has expired or has already been used       |
+| `CURRENT_PASSWORD_REQUIRED`    | 400    | Changing a password without the current one                                  |
+| `CURRENT_PASSWORD_INCORRECT`   | 400    | The current password does not match                                          |
+| `CHALLENGE_INVALID`            | 400    | The challenge is unknown, has expired or has already been used               |
+| `PASSKEY_INVALID`              | 400    | The passkey could not be verified                                            |
+| `TOTP_INVALID`                 | 400    | The authenticator code is incorrect                                          |
+| `TOTP_NOT_ENABLED`             | 400    | Authenticator-app sign-in is not set up                                      |
+| `RECOVERY_CODE_INVALID`        | 400    | The recovery code is incorrect or has been used                              |
+| `CAPTCHA_INVALID`              | 400    | A CAPTCHA was required and the solution was wrong                            |
+| `CREDENTIALS_INCORRECT`        | 401    | Email or password incorrect                                                  |
+| `AUTH_METHOD_DISABLED`         | 403    | `features.auth.magic_link`, `password`, `passkeys` or `totp` is off          |
+| `STEP_UP_REQUIRED`             | 403    | A route that needs a recent `aal2` session, or adding a password without one |
+| `CAPTCHA_REQUIRED`             | 403    | This IP is over the CAPTCHA threshold and no valid solution was sent         |
+| `PARENTAL_CONSENT_UNAVAILABLE` | 403    | The user is younger than `parental.consent_age`                              |
+| `ACCOUNT_NOT_FOUND`            | 404    | The signed-in account no longer exists                                       |
+| `SESSION_NOT_FOUND`            | 404    | No active session with that ID belongs to the user                           |
+| `PASSKEY_NOT_FOUND`            | 404    | No passkey with that ID belongs to the user                                  |
+| `ACCOUNT_LIMIT_REACHED`        | 409    | The address already has `accounts.max_per_email` accounts                    |
+| `TOTP_ALREADY_ENABLED`         | 409    | Authenticator-app sign-in is already set up                                  |
+| `LAST_SIGN_IN_METHOD`          | 409    | Removing this passkey would leave the account with no sign-in method         |
 
 ## Events
 
@@ -185,27 +240,30 @@ The gateway clears cached sessions when it sees `session.revoked`. Schemas are i
 
 ## Retention and data rights
 
-`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens `retention.tokens` after they expired, and auth-failure counters `retention.tokens` after they were last updated.
+`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, and auth-failure counters `retention.tokens` after they were last updated.
 
-A user's export has their account, sign-in methods, sessions and any tokens still kept for their address. Password hashes are not exported. Erasure deletes the account, its sign-in methods and sessions, and the tokens and password-failure counters too unless another account uses the same address.
+A user's export has their account, sign-in methods (without password hashes or TOTP secrets), sessions, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its sign-in methods, recovery codes, sessions, and the tokens and password-failure counters too unless another account uses the same address.
 
 ## Metrics
 
-| Metric                                   | Labels               |
-| ---------------------------------------- | -------------------- |
-| `qtiauth_auth_magic_links_total`         | `event`              |
-| `qtiauth_auth_sign_ins_total`            | `method`, `result`   |
-| `qtiauth_auth_signups_total`             | `method`, `age_band` |
-| `qtiauth_auth_password_failures_total`   |                      |
-| `qtiauth_auth_breach_checks_total`       | `result`             |
-| `qtiauth_auth_captcha_total`             | `result`             |
-| `qtiauth_sessions_created_total`         | `method`             |
-| `qtiauth_session_bindings_created_total` |                      |
-| `qtiauth_sessions_revoked_total`         | `reason`             |
-| `qtiauth_sessions_active`                |                      |
-| `qtiauth_accounts`                       | `state`              |
+| Metric                                     | Labels               |
+| ------------------------------------------ | -------------------- |
+| `qtiauth_auth_magic_links_total`           | `event`              |
+| `qtiauth_auth_sign_ins_total`              | `method`, `result`   |
+| `qtiauth_auth_signups_total`               | `method`, `age_band` |
+| `qtiauth_auth_password_failures_total`     |                      |
+| `qtiauth_auth_breach_checks_total`         | `result`             |
+| `qtiauth_auth_captcha_total`               | `result`             |
+| `qtiauth_auth_2fa_challenges_total`        | `factor`, `result`   |
+| `qtiauth_auth_passkey_registrations_total` |                      |
+| `qtiauth_auth_step_up_total`               | `result`             |
+| `qtiauth_sessions_created_total`           | `method`             |
+| `qtiauth_session_bindings_created_total`   |                      |
+| `qtiauth_sessions_revoked_total`           | `reason`             |
+| `qtiauth_sessions_active`                  |                      |
+| `qtiauth_accounts`                         | `state`              |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 

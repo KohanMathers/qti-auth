@@ -24,7 +24,21 @@ export const IDENTITY_ERRORS = defineErrors({
   CURRENT_PASSWORD_INCORRECT: { status: 400, title: 'The current password is incorrect' },
   STEP_UP_REQUIRED: {
     status: 403,
-    title: 'Sign in with a magic link first to add a password',
+    title: 'Recent two-factor authentication is required',
+  },
+  CHALLENGE_INVALID: {
+    status: 400,
+    title: 'The challenge is unknown, has expired or has already been used',
+  },
+  PASSKEY_INVALID: { status: 400, title: 'The passkey could not be verified' },
+  PASSKEY_NOT_FOUND: { status: 404, title: 'No such passkey' },
+  TOTP_INVALID: { status: 400, title: 'The authenticator code is incorrect' },
+  TOTP_ALREADY_ENABLED: { status: 409, title: 'Authenticator app sign-in is already set up' },
+  TOTP_NOT_ENABLED: { status: 400, title: 'Authenticator app sign-in is not set up' },
+  RECOVERY_CODE_INVALID: { status: 400, title: 'The recovery code is incorrect or has been used' },
+  LAST_SIGN_IN_METHOD: {
+    status: 409,
+    title: 'This is your last available sign-in method',
   },
   CAPTCHA_REQUIRED: { status: 403, title: 'Complete the CAPTCHA to continue' },
   CAPTCHA_INVALID: { status: 400, title: 'The CAPTCHA was not completed correctly' },

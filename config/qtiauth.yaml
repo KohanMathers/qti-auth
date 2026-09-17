@@ -159,6 +159,16 @@ email:
 
 security:
   step_up_window: 10m
+  encryption_key: '${env:APP_ENCRYPTION_KEY}'
+  require_2fa_for_permissions:
+    - users.*
+    - safety.*
+    - support.*
+    - games.*
+    - oidc.clients.*
+    - webhooks.manage
+    - audit.read
+    - roles.manage
 
 accounts:
   max_per_email: 2

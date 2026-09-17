@@ -63,6 +63,7 @@ export interface RoutePolicy {
   allow_account_states: readonly AccountState[];
   allow_pending_legal: boolean;
   allow_pending_parental_consent: boolean;
+  allow_pending_2fa_enrolment: boolean;
   rate_limit: string;
   step_up: boolean;
 }
@@ -87,6 +88,7 @@ export interface RouteDefinition<
   allow_account_states?: readonly AccountState[];
   allow_pending_legal?: boolean;
   allow_pending_parental_consent?: boolean;
+  allow_pending_2fa_enrolment?: boolean;
   rate_limit: string;
   step_up?: boolean;
   request?: { params?: P; query?: Q; body?: B };
@@ -130,6 +132,7 @@ export const manifestRouteSchema = z.strictObject({
   allow_account_states: z.array(z.enum(ACCOUNT_STATES)),
   allow_pending_legal: z.boolean(),
   allow_pending_parental_consent: z.boolean(),
+  allow_pending_2fa_enrolment: z.boolean(),
   rate_limit: z.string().regex(RATE_LIMIT),
   step_up: z.boolean(),
 });
@@ -207,6 +210,7 @@ export function manifestRoute(route: RouteInfo): ManifestRoute {
     allow_account_states: [...route.allow_account_states],
     allow_pending_legal: route.allow_pending_legal,
     allow_pending_parental_consent: route.allow_pending_parental_consent,
+    allow_pending_2fa_enrolment: route.allow_pending_2fa_enrolment,
     rate_limit: route.rate_limit,
     step_up: route.step_up,
   };
@@ -335,6 +339,7 @@ export function createRouter<Ctx>(options: RouterOptions): Router<Ctx> {
         allow_account_states: definition.allow_account_states ?? ['active'],
         allow_pending_legal: definition.allow_pending_legal ?? false,
         allow_pending_parental_consent: definition.allow_pending_parental_consent ?? false,
+        allow_pending_2fa_enrolment: definition.allow_pending_2fa_enrolment ?? false,
         rate_limit: definition.rate_limit,
         step_up: definition.step_up ?? false,
         request: definition.request ?? {},

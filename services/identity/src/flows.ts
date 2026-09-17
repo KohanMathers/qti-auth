@@ -31,13 +31,16 @@ import type { Context } from './service.ts';
 import {
   clientIp,
   emailLinkUrl,
+  encryptionKey,
   magicLinkSettings,
   magicLinkUrl,
   passwordSettings,
   RESET_PASSWORD_PAGE,
   sessionClient,
+  sessionSettings,
   VERIFY_EMAIL_PAGE,
 } from './settings.ts';
+import { completeSecondFactor } from './two-factor.ts';
 
 export interface FlowInput {
   ctx: Context;
@@ -55,6 +58,14 @@ export function magicLinkEnabled(ctx: Context): boolean {
 
 export function passwordEnabled(ctx: Context): boolean {
   return ctx.config.features.auth.password.enabled;
+}
+
+export function passkeysEnabled(ctx: Context): boolean {
+  return ctx.config.features.auth.passkeys.enabled;
+}
+
+export function totpEnabled(ctx: Context): boolean {
+  return ctx.config.features.auth.totp.enabled;
 }
 
 export async function sendMagicLink(
@@ -230,6 +241,9 @@ export async function loginPassword(
       metrics.signIn(PASSWORD_METHOD, 'failure');
       metrics.passwordFailure();
       log.info('password sign-in failed', { method: PASSWORD_METHOD });
+      break;
+    case 'second_factor_required':
+      log.info('password sign-in needs a second factor', { user_id: result.userId });
       break;
     case 'signed_in':
       ctx.outbox.wake();
@@ -413,5 +427,38 @@ export async function updatePassword(
       log.info(result.added ? 'password added' : 'password changed', { user_id: input.userId });
       break;
   }
+  return result;
+}
+
+export async function finishTwoFactor(
+  { ctx, request, log }: FlowInput,
+  input: { challenge: string; totp?: string | undefined; recoveryCode?: string | undefined },
+): Promise<Awaited<ReturnType<typeof completeSecondFactor>>> {
+  const metrics = identityMetrics(ctx.metrics);
+  const factor = input.totp !== undefined ? 'totp' : 'recovery';
+  const result = await completeSecondFactor(ctx.db, {
+    challenge: input.challenge,
+    totp: input.totp,
+    recoveryCode: input.recoveryCode,
+    key: encryptionKey(ctx.config),
+    client: sessionClient(ctx.config, request),
+    sessions: sessionSettings(ctx.config),
+    now: new Date(),
+  });
+  if (result.status === 'invalid' || result.status === 'wrong_code') {
+    metrics.twoFactor(factor, 'failure');
+    log.info('second factor failed', { reason: result.status });
+    return result;
+  }
+  ctx.outbox.wake();
+  metrics.twoFactor(result.method, 'success');
+  metrics.signIn(result.authMethod, 'success');
+  metrics.sessionCreated(result.authMethod, result.session.evicted.length);
+  log.info('signed in', {
+    method: result.method,
+    user_id: result.userId,
+    session_id: result.session.id,
+    evicted_sessions: result.session.evicted.length,
+  });
   return result;
 }

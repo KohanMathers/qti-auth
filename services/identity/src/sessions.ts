@@ -9,6 +9,7 @@ import { dateOfBirthColumn } from './accounts.ts';
 import { type AgeBands, ageBand, ageOn } from './age.ts';
 import type { Database, RevocationReason } from './database.ts';
 import { sessionCreatedEvent, sessionRevokedEvent } from './events.ts';
+import { loadPermissions, twoFactorEnrolmentRequired } from './factors.ts';
 import { newToken } from './tokens.ts';
 
 export const MAX_USER_AGENT_LENGTH = 512;
@@ -168,6 +169,7 @@ export async function resolveSession(
     cookieScope: string;
     idleTimeout: number;
     bands: AgeBands;
+    require2faFor: readonly string[];
     now: Date;
   },
 ): Promise<ResolvedSession | null> {
@@ -207,11 +209,12 @@ export async function resolveSession(
     lastActive = now;
   }
 
+  const permissions = await loadPermissions(db, row.user_id);
   return {
     session_id: row.id,
     user_id: row.user_id,
     account_state: row.state,
-    permissions: [],
+    permissions,
     restrictions: [],
     age_band: ageBand(ageOn(row.date_of_birth, now), options.bands),
     parental_controls: null,
@@ -219,6 +222,11 @@ export async function resolveSession(
     acr: row.acr,
     step_up_at: row.step_up_at?.toISOString() ?? null,
     legal_acceptance_required: false,
+    two_factor_enrolment_required: await twoFactorEnrolmentRequired(db, {
+      userId: row.user_id,
+      permissions,
+      patterns: options.require2faFor,
+    }),
     expires_at: sessionExpiry(
       { expires_at: row.expires_at, last_active_at: lastActive },
       idleTimeout,
@@ -252,6 +260,41 @@ export function listSessions(
     );
   }
   return query.execute();
+}
+
+export async function loadSession(
+  db: Kysely<Database>,
+  options: { sessionId: string; userId: string },
+): Promise<
+  { auth_method: string; created_at: Date; acr: string; step_up_at: Date | null } | undefined
+> {
+  return db
+    .selectFrom('sessions')
+    .select(['auth_method', 'created_at', 'acr', 'step_up_at'])
+    .where('id', '=', options.sessionId)
+    .where('user_id', '=', options.userId)
+    .executeTakeFirst();
+}
+
+export async function upgradeSession(
+  trx: Kysely<Database>,
+  options: { sessionId: string; userId: string; amr: readonly string[]; now: Date },
+): Promise<boolean> {
+  const row = await trx
+    .selectFrom('sessions')
+    .select('amr')
+    .where('id', '=', options.sessionId)
+    .where('user_id', '=', options.userId)
+    .where('revoked_at', 'is', null)
+    .executeTakeFirst();
+  if (!row) return false;
+  const amr = [...new Set([...row.amr, ...options.amr])];
+  await trx
+    .updateTable('sessions')
+    .set({ amr, acr: 'aal2', step_up_at: options.now })
+    .where('id', '=', options.sessionId)
+    .execute();
+  return true;
 }
 
 export async function countActiveSessions(

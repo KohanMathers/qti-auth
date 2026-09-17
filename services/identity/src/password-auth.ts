@@ -14,6 +14,7 @@ import {
   upsertPassword,
 } from './accounts.ts';
 import { type AgeBands, ageBand, ageOn } from './age.ts';
+import { insertChallenge } from './challenges.ts';
 import type { Database } from './database.ts';
 import {
   insertEmailToken,
@@ -22,6 +23,7 @@ import {
   useEmailToken,
 } from './email-tokens.ts';
 import { type UserCreatedData, userCreatedEvent } from './events.ts';
+import { secondFactorMethods, type SecondFactorMethod, totpEnrolled } from './factors.ts';
 import {
   clearAuthFailures,
   countedFailures,
@@ -48,6 +50,7 @@ import {
 import {
   type CreatedSession,
   createSession,
+  loadSession,
   revokeSessions,
   type SessionClient,
   type SessionSettings,
@@ -80,6 +83,14 @@ export type PasswordLoginResult =
       status: 'signed_in';
       userId: string;
       session: CreatedSession;
+      rehashed: boolean;
+    }
+  | {
+      status: 'second_factor_required';
+      userId: string;
+      challenge: string;
+      methods: SecondFactorMethod[];
+      expiresAt: Date;
       rehashed: boolean;
     };
 
@@ -262,6 +273,22 @@ export async function loginWithPassword(
     if (!account || account.state === 'deleted') return undefined;
     if (rehashed) await upsertPassword(trx, account.id, secret, now);
     await recordIdentityUse(trx, account.id, PASSWORD_METHOD, now);
+    if (await totpEnrolled(trx, account.id)) {
+      const methods = await secondFactorMethods(trx, account.id);
+      const challenge = await insertChallenge(trx, {
+        kind: 'second_factor',
+        userId: account.id,
+        payload: { methods, amr: PASSWORD_AMR, authMethod: PASSWORD_METHOD },
+        now,
+      });
+      return {
+        status: 'second_factor_required' as const,
+        userId: account.id,
+        challenge: challenge.token,
+        methods,
+        expiresAt: challenge.expiresAt,
+      };
+    }
     const session = await createSession(trx, {
       userId: account.id,
       authMethod: PASSWORD_METHOD,
@@ -271,7 +298,7 @@ export async function loginWithPassword(
       settings: settings.sessions,
       now,
     });
-    return { userId: account.id, session };
+    return { status: 'signed_in' as const, userId: account.id, session };
   });
 
   if (signedIn === undefined) {
@@ -279,7 +306,10 @@ export async function loginWithPassword(
     return { status: 'invalid' };
   }
   await clearAuthFailures(db, keys);
-  return { status: 'signed_in', ...signedIn, rehashed };
+  if (signedIn.status === 'second_factor_required') {
+    return { ...signedIn, rehashed };
+  }
+  return { ...signedIn, rehashed };
 }
 
 export async function issuePasswordReset(
@@ -450,11 +480,14 @@ export function verifyEmailAddress(
   });
 }
 
-function recentMagicLink(
-  session: { auth_method: string; created_at: Date },
+function recentStepUp(
+  session: { auth_method: string; created_at: Date; acr: string; step_up_at: Date | null },
   window: number,
   now: Date,
-) {
+): boolean {
+  if (session.acr === 'aal2' && session.step_up_at !== null) {
+    return now.getTime() - session.step_up_at.getTime() <= window;
+  }
   return (
     session.auth_method === MAGIC_LINK_METHOD &&
     now.getTime() - session.created_at.getTime() <= window
@@ -484,13 +517,8 @@ export async function setAccountPassword(
       return { status: 'current_incorrect' };
     }
   } else {
-    const session = await db
-      .selectFrom('sessions')
-      .select(['auth_method', 'created_at'])
-      .where('id', '=', options.sessionId)
-      .where('user_id', '=', options.userId)
-      .executeTakeFirst();
-    if (!session || !recentMagicLink(session, settings.stepUpWindow, now)) {
+    const session = await loadSession(db, { sessionId: options.sessionId, userId: options.userId });
+    if (!session || !recentStepUp(session, settings.stepUpWindow, now)) {
       return { status: 'step_up_required' };
     }
   }
