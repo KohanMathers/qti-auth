@@ -6,6 +6,7 @@ import type { RevocationReason } from './database.ts';
 export type MagicLinkEvent = 'sent' | 'used' | 'expired' | 'invalid';
 export type SignInResult = 'success' | 'failure';
 export type BreachCheckResult = 'rejected' | 'passed' | 'unavailable';
+export type CaptchaResult = 'shown' | 'solved' | 'failed';
 
 export interface IdentityMetrics {
   magicLink: (event: MagicLinkEvent) => void;
@@ -13,6 +14,7 @@ export interface IdentityMetrics {
   signup: (method: string, band: AgeBand) => void;
   passwordFailure: () => void;
   breachCheck: (result: BreachCheckResult) => void;
+  captcha: (result: CaptchaResult) => void;
   sessionCreated: (method: string, evicted: number) => void;
   sessionsRevoked: (reason: RevocationReason, count: number) => void;
   accounts: (counts: Partial<Record<AccountState, number>>) => void;
@@ -55,6 +57,11 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     help: 'Have I Been Pwned password checks, by result: rejected, passed or unavailable.',
     labelNames: ['result'],
   });
+  const captcha = metrics.counter({
+    name: 'qtiauth_auth_captcha_total',
+    help: 'CAPTCHA prompts, by result: shown, solved or failed.',
+    labelNames: ['result'],
+  });
   const sessionsCreated = metrics.counter({
     name: 'qtiauth_sessions_created_total',
     help: 'Sessions started, by sign-in method.',
@@ -94,6 +101,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     breachCheck: (result) => {
       breachChecks.inc({ result });
+    },
+    captcha: (result) => {
+      captcha.inc({ result });
     },
     sessionCreated: (method, evicted) => {
       sessionsCreated.inc({ method });

@@ -17,6 +17,7 @@ describe('isRedactedKey', () => {
       'steam_ticket',
       'report_content',
       'email_body',
+      'captcha',
     ]) {
       expect(isRedactedKey(key), key).toBe(true);
     }

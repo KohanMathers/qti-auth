@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@qtiauth/bus": "workspace:*",
+    "@qtiauth/captcha": "workspace:*",
     "@qtiauth/config": "workspace:*",
     "@qtiauth/db": "workspace:*",
     "@qtiauth/email": "workspace:*",

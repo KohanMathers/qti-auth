@@ -15,6 +15,9 @@ export type EmailTokenPurpose = (typeof EMAIL_TOKEN_PURPOSES)[number];
 export const AUTH_FAILURE_KINDS = ['ip', 'account'] as const;
 export type AuthFailureKind = (typeof AUTH_FAILURE_KINDS)[number];
 
+export const AUTH_FAILURE_SCOPES = ['password', 'magic_link', 'signup'] as const;
+export type AuthFailureScope = (typeof AUTH_FAILURE_SCOPES)[number];
+
 export interface UsersTable {
   id: string;
   state: AccountState;
@@ -77,6 +80,7 @@ export interface EmailTokensTable {
 export interface AuthFailuresTable {
   kind: AuthFailureKind;
   key: string;
+  scope: AuthFailureScope;
   failures: number;
   updated_at: Date;
 }

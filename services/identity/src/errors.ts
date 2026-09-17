@@ -26,6 +26,8 @@ export const IDENTITY_ERRORS = defineErrors({
     status: 403,
     title: 'Sign in with a magic link first to add a password',
   },
+  CAPTCHA_REQUIRED: { status: 403, title: 'Complete the CAPTCHA to continue' },
+  CAPTCHA_INVALID: { status: 400, title: 'The CAPTCHA was not completed correctly' },
   ACCOUNT_LIMIT_REACHED: {
     status: 409,
     title: 'No more accounts can be created with this email address',

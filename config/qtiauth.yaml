@@ -137,6 +137,7 @@ features:
 
 captcha:
   provider: altcha # altcha | turnstile | hcaptcha | friendly_captcha | none
+  after: 3
 
 email:
   provider: smtp # smtp | brevo | postmark | ses | resend | mailgun | console

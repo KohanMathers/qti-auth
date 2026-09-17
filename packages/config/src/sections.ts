@@ -1077,15 +1077,85 @@ export const features = z
   .prefault({})
   .describe('Feature flags inside services.');
 
+export const CAPTCHA_PROVIDERS = [
+  'altcha',
+  'turnstile',
+  'hcaptcha',
+  'friendly_captcha',
+  'none',
+] as const;
+
+export type CaptchaProviderName = (typeof CAPTCHA_PROVIDERS)[number];
+
+const vendorCaptcha = (name: string) =>
+  z
+    .strictObject({
+      site_key: z.string().default('').describe(`${name} site key, public in the widget.`),
+      secret_key: z.string().default('').describe(`${name} secret key. Reference a secret.`),
+    })
+    .prefault({})
+    .describe(`${name} settings.`);
+
 export const captcha = z
   .strictObject({
     provider: z
-      .enum(['altcha', 'turnstile', 'hcaptcha', 'friendly_captcha', 'none'])
+      .enum(CAPTCHA_PROVIDERS)
       .default('altcha')
-      .describe('CAPTCHA provider.'),
+      .describe(
+        'CAPTCHA provider. altcha is self-hosted proof-of-work. none disables CAPTCHA. The others verify with that vendor.',
+      ),
+    after: z
+      .int()
+      .min(0)
+      .max(10_000)
+      .default(3)
+      .describe(
+        'Show a CAPTCHA after this many failed password attempts from an IP, or this many signup or magic-link starts from an IP. 0 shows it on the first attempt.',
+      ),
+    window: duration('15m', 'Attempts older than this do not count towards the CAPTCHA threshold.'),
+    altcha: z
+      .strictObject({
+        hmac_key: z
+          .string()
+          .default('')
+          .describe(
+            'HMAC key for Altcha challenges. Empty generates a key at startup; set it when running more than one identity replica.',
+          ),
+        max_number: z
+          .int()
+          .min(100)
+          .max(10_000_000)
+          .default(100_000)
+          .describe('Altcha proof-of-work upper bound. Higher is harder for the client.'),
+        expires: duration('2m', 'An Altcha challenge works for this long.'),
+      })
+      .prefault({})
+      .describe('Altcha (self-hosted proof-of-work).'),
+    turnstile: vendorCaptcha('Cloudflare Turnstile'),
+    hcaptcha: vendorCaptcha('hCaptcha'),
+    friendly_captcha: vendorCaptcha('Friendly Captcha'),
+  })
+  .superRefine((value, ctx) => {
+    if (value.provider === 'none' || value.provider === 'altcha') return;
+    const settings = value[value.provider];
+    const path = value.provider;
+    if (!settings.site_key) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Required when this provider is selected',
+        path: [path, 'site_key'],
+      });
+    }
+    if (!settings.secret_key) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Required when this provider is selected',
+        path: [path, 'secret_key'],
+      });
+    }
   })
   .prefault({})
-  .describe('Bot protection.');
+  .describe('Bot protection. Shown after captcha.after attempts from an IP, then required.');
 
 export const EMAIL_PROVIDERS = ['smtp', 'console'] as const;
 

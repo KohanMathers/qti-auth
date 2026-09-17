@@ -240,6 +240,12 @@ importers:
         specifier: workspace:*
         version: link:../testing
 
+  packages/captcha:
+    dependencies:
+      '@qtiauth/config':
+        specifier: workspace:*
+        version: link:../config
+
   packages/cli:
     dependencies:
       '@qtiauth/config':
@@ -452,6 +458,9 @@ importers:
       '@qtiauth/bus':
         specifier: workspace:*
         version: link:../../packages/bus
+      '@qtiauth/captcha':
+        specifier: workspace:*
+        version: link:../../packages/captcha
       '@qtiauth/config':
         specifier: workspace:*
         version: link:../../packages/config

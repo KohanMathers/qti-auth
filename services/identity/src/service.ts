@@ -21,6 +21,7 @@ export const definition = defineService({
     'surfaces',
     'cookies',
     'features',
+    'captcha',
     'email',
     'accounts',
     'magic_link',

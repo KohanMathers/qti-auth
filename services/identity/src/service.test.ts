@@ -14,6 +14,7 @@ describe('identity service', () => {
       '0003_sessions',
       '0004_email_tokens',
       '0005_passwords',
+      '0006_captcha',
     ]);
   });
 
@@ -22,6 +23,7 @@ describe('identity service', () => {
     const { routes } = router.manifest();
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
       'DELETE /api/v1/sessions/:session_id',
+      'GET /api/v1/captcha',
       'GET /api/v1/me',
       'GET /api/v1/sessions',
       'GET /auth/forgot-password',
@@ -81,6 +83,10 @@ describe('identity service', () => {
       auth: 'none',
       rate_limit: 'auth_password',
     });
+    expect(route('GET', '/api/v1/captcha')).toMatchObject({
+      auth: 'none',
+      rate_limit: 'global',
+    });
     expect(route('POST', '/api/v1/auth/password/forgot')).toMatchObject({
       rate_limit: 'magic_link',
     });
@@ -106,6 +112,7 @@ describe('identity service', () => {
         'SESSION_NOT_FOUND',
         'CREDENTIALS_INCORRECT',
         'PASSWORD_REJECTED',
+        'CAPTCHA_REQUIRED',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

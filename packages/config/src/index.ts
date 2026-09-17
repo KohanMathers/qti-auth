@@ -22,6 +22,8 @@ export {
   type CronJob,
   DB_SCHEMAS,
   type DbSchema,
+  CAPTCHA_PROVIDERS,
+  type CaptchaProviderName,
   EMAIL_PROVIDERS,
   LOG_LEVELS,
   MODULES,

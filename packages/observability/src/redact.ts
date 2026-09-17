@@ -20,6 +20,7 @@ export const REDACTED_KEYS = [
   'emailbody',
   'filterinput',
   'signature',
+  'captcha',
 ] as const;
 
 const MAX_DEPTH = 10;

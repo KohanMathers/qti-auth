@@ -1,3 +1,4 @@
+import { solveAltcha } from '@qtiauth/captcha';
 import { type Bus, connectBus } from '@qtiauth/bus';
 import { sections } from '@qtiauth/config';
 import {
@@ -140,6 +141,7 @@ beforeAll(async () => {
         breach_check: false,
         failure_delay: { step: '1ms', max: '1ms' },
       },
+      captcha: { after: 1000, altcha: { hmac_key: 'integration-captcha-key', max_number: 400 } },
     }),
   });
 
@@ -297,6 +299,60 @@ describe('identity through the gateway', () => {
     );
     expect(saved.status).toBe(200);
     expect(await saved.text()).toContain('You’re signed in');
+  });
+
+  it('challenges password login through the gateway once the IP is over the threshold', async () => {
+    const client = browser();
+    const email = 'captcha-walker@example.com';
+    const register = await client.request(
+      '/auth/register',
+      form({ email, password: 'long-enough-secret', date_of_birth: '1990-02-03' }),
+    );
+    expect(register.status).toBe(200);
+    secrets.push((await emails.nextLink(email)).searchParams.get('token') ?? '');
+
+    const now = new Date();
+    for (const key of ['127.0.0.1', '::1']) {
+      await identity.context.db
+        .insertInto('auth_failures')
+        .values({ kind: 'ip', key, scope: 'password', failures: 1000, updated_at: now })
+        .onConflict((conflict) =>
+          conflict.columns(['kind', 'key', 'scope']).doUpdateSet({
+            failures: 1000,
+            updated_at: now,
+          }),
+        )
+        .execute();
+    }
+    const blocked = await client.request(
+      '/auth/login',
+      form({ email, password: 'long-enough-secret' }),
+    );
+    expect(blocked.status).toBe(403);
+    expect(await blocked.text()).toContain('Complete the CAPTCHA to continue.');
+
+    const challenge = await client.request('/api/v1/captcha?action=password_login');
+    const body = (await challenge.json()) as {
+      required: boolean;
+      challenge: {
+        algorithm: 'SHA-256';
+        challenge: string;
+        salt: string;
+        signature: string;
+        maxnumber: number;
+      };
+    };
+    expect(body.required).toBe(true);
+    const login = await client.request(
+      '/api/v1/auth/password/login',
+      json({
+        email,
+        password: 'long-enough-secret',
+        captcha: solveAltcha(body.challenge),
+      }),
+    );
+    expect(login.status).toBe(200);
+    expect(client.cookie()).not.toBeNull();
   });
 
   it('keeps session tokens and links out of every log', () => {

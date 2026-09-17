@@ -3,6 +3,7 @@ import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
+import { CAPTCHA_ACTIONS, inspectCaptcha, noteCaptchaAttempt, requireCaptcha } from './captcha.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
@@ -87,6 +88,13 @@ function rejectedPassword(reason: PasswordPolicyReason): never {
 
 const passwordSchema = z.string().min(1).max(256).describe('The password.');
 
+const captchaSchema = z
+  .string()
+  .min(1)
+  .max(8192)
+  .optional()
+  .describe('CAPTCHA solution. Required after captcha.after attempts from this IP.');
+
 export function authRoutes(router: Router<Context>): void {
   router.route({
     method: 'POST',
@@ -107,6 +115,7 @@ export function authRoutes(router: Router<Context>): void {
           .optional()
           .describe('Language for the email. Defaults to Accept-Language.'),
         return_to: returnToSchema.optional(),
+        captcha: captchaSchema,
       }),
     },
     responses: {
@@ -115,9 +124,10 @@ export function authRoutes(router: Router<Context>): void {
         schema: z.object({ status: z.literal('sent') }),
       },
     },
-    errors: ['AUTH_METHOD_DISABLED'],
+    errors: ['AUTH_METHOD_DISABLED', 'CAPTCHA_REQUIRED', 'CAPTCHA_INVALID'],
     handler: async ({ ctx, body, request, log }) => {
       requireMagicLink(ctx);
+      await requireCaptcha(ctx, request, 'magic_link', body.captcha);
       await sendMagicLink(
         { ctx, request, log },
         {
@@ -129,6 +139,7 @@ export function authRoutes(router: Router<Context>): void {
           returnTo: body.return_to ?? null,
         },
       );
+      await noteCaptchaAttempt(ctx, request, 'magic_link');
       return { status: 202, body: { status: 'sent' as const }, headers: NO_STORE };
     },
   });
@@ -156,6 +167,7 @@ export function authRoutes(router: Router<Context>): void {
           .refine(isCanonicalLocale, 'Must be a canonical locale like en-GB')
           .optional()
           .describe('Language for the verification email. Defaults to Accept-Language.'),
+        captcha: captchaSchema,
       }),
     },
     responses: {
@@ -172,9 +184,12 @@ export function authRoutes(router: Router<Context>): void {
       'PASSWORD_REJECTED',
       'ACCOUNT_LIMIT_REACHED',
       'PARENTAL_CONSENT_UNAVAILABLE',
+      'CAPTCHA_REQUIRED',
+      'CAPTCHA_INVALID',
     ],
     handler: async ({ ctx, body, request, log }) => {
       requirePassword(ctx);
+      await requireCaptcha(ctx, request, 'password_signup', body.captcha);
       const result = await registerWithPassword(
         { ctx, request, log },
         {
@@ -184,6 +199,7 @@ export function authRoutes(router: Router<Context>): void {
           locale: localeOf(ctx, request, body.locale),
         },
       );
+      await noteCaptchaAttempt(ctx, request, 'password_signup');
       switch (result.status) {
         case 'rejected':
           return rejectedPassword(result.reason);
@@ -214,6 +230,7 @@ export function authRoutes(router: Router<Context>): void {
       body: z.object({
         email: z.email().max(254),
         password: passwordSchema,
+        captcha: captchaSchema,
       }),
     },
     responses: {
@@ -222,9 +239,15 @@ export function authRoutes(router: Router<Context>): void {
         schema: z.object({ status: z.literal('signed_in'), user_id: z.uuid() }),
       },
     },
-    errors: ['AUTH_METHOD_DISABLED', 'CREDENTIALS_INCORRECT'],
+    errors: [
+      'AUTH_METHOD_DISABLED',
+      'CREDENTIALS_INCORRECT',
+      'CAPTCHA_REQUIRED',
+      'CAPTCHA_INVALID',
+    ],
     handler: async ({ ctx, body, request, log }) => {
       requirePassword(ctx);
+      await requireCaptcha(ctx, request, 'password_login', body.captcha);
       const result = await loginPassword(
         { ctx, request, log },
         { email: body.email, password: body.password },
@@ -236,6 +259,47 @@ export function authRoutes(router: Router<Context>): void {
         body: { status: 'signed_in' as const, user_id: result.userId },
       };
     },
+  });
+
+  router.route({
+    method: 'GET',
+    path: '/api/v1/captcha',
+    operation_id: 'getCaptcha',
+    summary: 'Whether a CAPTCHA is required for an auth action from this IP',
+    description:
+      'Returns the provider and, when a CAPTCHA is required, a challenge or site key to solve before retrying.',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: {
+      query: z.object({
+        action: z.enum(CAPTCHA_ACTIONS).describe('The auth action about to be submitted.'),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Whether a CAPTCHA is required, and how to solve it',
+        schema: z.object({
+          required: z.boolean(),
+          provider: z.string(),
+          site_key: z.string().nullable(),
+          challenge: z
+            .object({
+              algorithm: z.string(),
+              challenge: z.string(),
+              salt: z.string(),
+              signature: z.string(),
+              maxnumber: z.number(),
+            })
+            .nullable(),
+        }),
+      },
+    },
+    handler: async ({ ctx, query, request }) => ({
+      status: 200,
+      headers: NO_STORE,
+      body: await inspectCaptcha(ctx, request, query.action),
+    }),
   });
 
   router.route({

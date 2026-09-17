@@ -1572,13 +1572,13 @@
       "additionalProperties": false
     },
     "captcha": {
-      "description": "Bot protection.",
+      "description": "Bot protection. Shown after captcha.after attempts from an IP, then required.",
       "default": {},
       "type": "object",
       "properties": {
         "provider": {
           "default": "altcha",
-          "description": "CAPTCHA provider.",
+          "description": "CAPTCHA provider. altcha is self-hosted proof-of-work. none disables CAPTCHA. The others verify with that vendor.",
           "type": "string",
           "enum": [
             "altcha",
@@ -1587,6 +1587,99 @@
             "friendly_captcha",
             "none"
           ]
+        },
+        "after": {
+          "default": 3,
+          "description": "Show a CAPTCHA after this many failed password attempts from an IP, or this many signup or magic-link starts from an IP. 0 shows it on the first attempt.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "window": {
+          "default": "15m",
+          "description": "Attempts older than this do not count towards the CAPTCHA threshold. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "altcha": {
+          "description": "Altcha (self-hosted proof-of-work).",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "hmac_key": {
+              "default": "",
+              "description": "HMAC key for Altcha challenges. Empty generates a key at startup; set it when running more than one identity replica.",
+              "type": "string"
+            },
+            "max_number": {
+              "default": 100000,
+              "description": "Altcha proof-of-work upper bound. Higher is harder for the client.",
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 10000000
+            },
+            "expires": {
+              "default": "2m",
+              "description": "An Altcha challenge works for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "turnstile": {
+          "description": "Cloudflare Turnstile settings.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "site_key": {
+              "default": "",
+              "description": "Cloudflare Turnstile site key, public in the widget.",
+              "type": "string"
+            },
+            "secret_key": {
+              "default": "",
+              "description": "Cloudflare Turnstile secret key. Reference a secret.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "hcaptcha": {
+          "description": "hCaptcha settings.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "site_key": {
+              "default": "",
+              "description": "hCaptcha site key, public in the widget.",
+              "type": "string"
+            },
+            "secret_key": {
+              "default": "",
+              "description": "hCaptcha secret key. Reference a secret.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "friendly_captcha": {
+          "description": "Friendly Captcha settings.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "site_key": {
+              "default": "",
+              "description": "Friendly Captcha site key, public in the widget.",
+              "type": "string"
+            },
+            "secret_key": {
+              "default": "",
+              "description": "Friendly Captcha secret key. Reference a secret.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

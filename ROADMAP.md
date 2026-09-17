@@ -328,11 +328,11 @@ Spec: §4.2
 **Done when:** timing and response for unknown vs known email are indistinguishable in tests, and
 reset revokes other sessions unless the box is ticked.
 
-### P2.2 CAPTCHA — S
+### P2.2 CAPTCHA — S ✅
 Spec: §8.2
 
-- [ ] Provider interface with `altcha` (default), `turnstile`, `hcaptcha`, `friendly_captcha`, `none`.
-- [ ] Adaptive triggering from rate/failure thresholds, wired into signup, password login and
+- [x] Provider interface with `altcha` (default), `turnstile`, `hcaptcha`, `friendly_captcha`, `none`.
+- [x] Adaptive triggering from rate/failure thresholds, wired into signup, password login and
       magic-link start.
 
 **Done when:** CAPTCHA appears only after the threshold and is required until solved.

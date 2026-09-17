@@ -29,6 +29,11 @@ password:
   verification_ttl: 15m
   failure_delay: { step: 250ms, max: 2s }
 
+captcha:
+  provider: altcha
+  after: 3
+  window: 15m
+
 sessions:
   max_per_user: 10
 
@@ -51,6 +56,7 @@ retention:
 - `accounts.email_normalization` decides when two addresses count as the same, per domain. Case is always ignored. `remove_dots` ignores dots in the local part, `subaddress_separator` ignores everything from that character to the `@`, and `domain` counts the address as belonging to another domain. Setting it replaces the built-in Gmail rules, so copy them if you want to keep them.
 - `magic_link.ttl` is how long a link works. `magic_link.signup_ttl` is how long a new user has to enter their date of birth after opening their link.
 - `password.min_length` and `password.max_length` bound a password. 256 characters is the hard cap. Composition rules are off unless you turn them on. `password.breach_check` asks Have I Been Pwned whether the password has appeared in a breach (only the first 5 hex characters of a SHA-1 hash leave the server); if HIBP is unreachable the check is skipped. `password.argon2` is Argon2id; stored hashes are rehashed on login when these change. `password.reset_ttl` and `password.verification_ttl` are how long reset and email-confirmation links work. `password.failure_delay` slows repeated failures per account and per IP. There is no lockout.
+- `captcha.provider` is `altcha` (self-hosted proof-of-work, the default), `turnstile`, `hcaptcha`, `friendly_captcha` or `none`. `captcha.after` is how many failed password attempts, or signup or magic-link starts, from one IP it takes before a CAPTCHA is required. Attempts older than `captcha.window` do not count. `none` turns CAPTCHA off. Vendor providers need `site_key` and `secret_key`. Altcha can generate an HMAC key at startup; set `captcha.altcha.hmac_key` when running more than one identity replica.
 - `sessions.max_per_user` is how many sessions a user can have. Signing in again ends the oldest.
 - `cookies.session_ttl` is the longest a session lasts, and `cookies.idle_timeout` ends it sooner if it isn't used.
 - `age.bands` is the age in whole years each band starts at. Anyone younger than `13_to_15` is `under_13`.
@@ -58,7 +64,7 @@ retention:
 - `retention.sessions` is how long ended sessions are kept, and `retention.tokens` how long used or expired emailed tokens are kept after they expire.
 - `features.auth.magic_link.enabled: false` turns magic links off. `features.auth.password.enabled: false` turns passwords off.
 
-Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale` and `features`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one.
+Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha` and `features`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one.
 
 ## Accounts
 
@@ -125,6 +131,12 @@ Passwords equal to or containing the email local part (3 or more characters) are
 | `GET`/`POST /auth/reset-password`      | Scanner-safe confirm, then the reset form                   |
 | `GET`/`POST /auth/verify-email`        | Scanner-safe confirm                                        |
 
+## CAPTCHA
+
+Signup, password login and magic-link start show a CAPTCHA only after `captcha.after` attempts from the same IP inside `captcha.window`. Until then the request is processed as usual. After the threshold the request is refused with `403 CAPTCHA_REQUIRED` until a valid solution is sent in `captcha`. A bad solution is `400 CAPTCHA_INVALID`. `GET /api/v1/captcha?action=password_login|password_signup|magic_link` says whether this IP currently needs one, and returns an Altcha challenge or the vendor site key.
+
+The interim login, register and magic-link start pages redisplay the form with the widget when a CAPTCHA is required.
+
 ## Sessions
 
 A session is a server-side record. The browser holds a random token in the session cookie, and identity stores only its SHA-256 hash, in a binding tied to the cookie's scope (`cookies.domain`, or the host). Signing in, signing out and ending sessions answer through the gateway, which sets or clears the cookie and drops the session from its cache before responding, so an ended session stops working on the very next request.
@@ -151,9 +163,11 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `EMAIL_VERIFICATION_INVALID`   | 400    | The confirmation link is unknown, has expired or has already been used |
 | `CURRENT_PASSWORD_REQUIRED`    | 400    | Changing a password without the current one                            |
 | `CURRENT_PASSWORD_INCORRECT`   | 400    | The current password does not match                                    |
+| `CAPTCHA_INVALID`              | 400    | A CAPTCHA was required and the solution was wrong                      |
 | `CREDENTIALS_INCORRECT`        | 401    | Email or password incorrect                                            |
 | `AUTH_METHOD_DISABLED`         | 403    | `features.auth.magic_link` or `features.auth.password` is off          |
 | `STEP_UP_REQUIRED`             | 403    | Adding a password without a recent magic-link sign-in                  |
+| `CAPTCHA_REQUIRED`             | 403    | This IP is over the CAPTCHA threshold and no valid solution was sent   |
 | `PARENTAL_CONSENT_UNAVAILABLE` | 403    | The user is younger than `parental.consent_age`                        |
 | `ACCOUNT_NOT_FOUND`            | 404    | The signed-in account no longer exists                                 |
 | `SESSION_NOT_FOUND`            | 404    | No active session with that ID belongs to the user                     |
@@ -171,7 +185,7 @@ The gateway clears cached sessions when it sees `session.revoked`. Schemas are i
 
 ## Retention and data rights
 
-`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens `retention.tokens` after they expired, and password-failure counters `retention.tokens` after they were last updated.
+`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens `retention.tokens` after they expired, and auth-failure counters `retention.tokens` after they were last updated.
 
 A user's export has their account, sign-in methods, sessions and any tokens still kept for their address. Password hashes are not exported. Erasure deletes the account, its sign-in methods and sessions, and the tokens and password-failure counters too unless another account uses the same address.
 
@@ -184,13 +198,14 @@ A user's export has their account, sign-in methods, sessions and any tokens stil
 | `qtiauth_auth_signups_total`             | `method`, `age_band` |
 | `qtiauth_auth_password_failures_total`   |                      |
 | `qtiauth_auth_breach_checks_total`       | `result`             |
+| `qtiauth_auth_captcha_total`             | `result`             |
 | `qtiauth_sessions_created_total`         | `method`             |
 | `qtiauth_session_bindings_created_total` |                      |
 | `qtiauth_sessions_revoked_total`         | `reason`             |
 | `qtiauth_sessions_active`                |                      |
 | `qtiauth_accounts`                       | `state`              |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 

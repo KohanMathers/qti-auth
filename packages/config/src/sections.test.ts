@@ -4,6 +4,7 @@ import {
   accounts,
   age,
   bus,
+  captcha,
   cors,
   emailSection,
   features,
@@ -330,6 +331,34 @@ describe('password', () => {
     expect(messages(password.safeParse({ failure_delay: { step: '3s', max: '1s' } }))).toEqual([
       'failure_delay.step: Must be less than or equal to max',
     ]);
+  });
+});
+
+describe('captcha', () => {
+  it('defaults to Altcha after three attempts', () => {
+    expect(captcha.parse({})).toMatchObject({
+      provider: 'altcha',
+      after: 3,
+      window: 900_000,
+      altcha: { hmac_key: '', max_number: 100_000, expires: 120_000 },
+    });
+  });
+
+  it('needs vendor keys only for that provider', () => {
+    expect(messages(captcha.safeParse({ provider: 'none' }))).toEqual([]);
+    expect(messages(captcha.safeParse({ provider: 'altcha' }))).toEqual([]);
+    expect(messages(captcha.safeParse({ provider: 'turnstile' }))).toEqual([
+      'turnstile.site_key: Required when this provider is selected',
+      'turnstile.secret_key: Required when this provider is selected',
+    ]);
+    expect(
+      messages(
+        captcha.safeParse({
+          provider: 'hcaptcha',
+          hcaptcha: { site_key: 'site', secret_key: 'secret' },
+        }),
+      ),
+    ).toEqual([]);
   });
 });
 

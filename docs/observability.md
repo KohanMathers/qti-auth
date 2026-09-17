@@ -37,7 +37,7 @@ Services write one JSON object per line to standard output:
 Levels are `trace`, `debug`, `info`, `warn`, `error` and `fatal`. Records below `logs.level` are skipped.
 
 - **User IDs are hashed** with `logs.user_id_hash_key`. Use the same key on every service, so you can follow one user's activity across services without their ID appearing in logs. Changing the key breaks that link for older logs.
-- **Secrets are never written.** Any field whose name ends in `password`, `passphrase`, `secret`, `token`, `tokens`, `authorization`, `cookie`, `apikey`, `privatekey`, `credentials`, `otp`, `totpcode`, `recoverycode`, `recoverycodes`, `steamticket`, `reportcontent`, `emailbody`, `filterinput` or `signature` is written as `[REDACTED]`, however deeply it's nested. Names are compared without case, `_` or `-`, so `refresh_token`, `refreshToken` and `Set-Cookie` all match. Add your own names with `logs.redact_keys`.
+- **Secrets are never written.** Any field whose name ends in `password`, `passphrase`, `secret`, `token`, `tokens`, `authorization`, `cookie`, `apikey`, `privatekey`, `credentials`, `otp`, `totpcode`, `recoverycode`, `recoverycodes`, `steamticket`, `reportcontent`, `emailbody`, `filterinput`, `signature` or `captcha` is written as `[REDACTED]`, however deeply it's nested. Names are compared without case, `_` or `-`, so `refresh_token`, `refreshToken` and `Set-Cookie` all match. Add your own names with `logs.redact_keys`.
 
 ## Traces
 

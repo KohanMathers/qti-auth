@@ -1,5 +1,6 @@
 import { randomUUIDv7 } from 'node:crypto';
 
+import { solveAltcha } from '@qtiauth/captcha';
 import {
   type Bus,
   connectBus,
@@ -203,6 +204,7 @@ beforeAll(async () => {
         breach_check: false,
         failure_delay: { step: '1ms', max: '1ms' },
       },
+      captcha: { after: 1000, altcha: { hmac_key: 'integration-captcha-key', max_number: 400 } },
     }),
   });
 });
@@ -598,6 +600,113 @@ describe('passwords', () => {
     expect(keepReset.status).toBe(200);
     secrets.push(keepReset.headers.get(SESSION_TOKEN_HEADER) ?? '');
     expect(await resolve(kept.token)).not.toBeNull();
+  });
+});
+
+describe('captcha', () => {
+  const ip = '198.51.100.80';
+
+  function postFrom(path: string, body: unknown) {
+    return call(path, {
+      method: 'POST',
+      headers: { 'x-forwarded-for': ip, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function trip(scope: 'password' | 'magic_link' | 'signup') {
+    await identity.context.db
+      .insertInto('auth_failures')
+      .values({ kind: 'ip', key: ip, scope, failures: 1000, updated_at: new Date() })
+      .onConflict((conflict) =>
+        conflict.columns(['kind', 'key', 'scope']).doUpdateSet({
+          failures: 1000,
+          updated_at: new Date(),
+        }),
+      )
+      .execute();
+  }
+
+  it('does not ask for a CAPTCHA before the threshold', async () => {
+    await registerPassword('captcha-early@example.com');
+    const login = await postFrom('/api/v1/auth/password/login', {
+      email: 'captcha-early@example.com',
+      password: PASSWORD,
+    });
+    expect(login.status).toBe(200);
+    secrets.push(login.headers.get(SESSION_TOKEN_HEADER) ?? '');
+    const status = await call(`/api/v1/captcha?action=password_login`, {
+      headers: { 'x-forwarded-for': ip },
+    });
+    expect(await status.json()).toMatchObject({ required: false, provider: 'altcha' });
+  });
+
+  it('requires a solved Altcha challenge after the threshold and until it is solved', async () => {
+    await registerPassword('captcha-login@example.com');
+    await trip('password');
+    const missing = await postFrom('/api/v1/auth/password/login', {
+      email: 'captcha-login@example.com',
+      password: PASSWORD,
+    });
+    const required = (await missing.json()) as {
+      code: string;
+      provider: string;
+      challenge: {
+        algorithm: 'SHA-256';
+        challenge: string;
+        salt: string;
+        signature: string;
+        maxnumber: number;
+      };
+    };
+    expect(required).toMatchObject({ code: 'CAPTCHA_REQUIRED', provider: 'altcha' });
+
+    const invalid = await postFrom('/api/v1/auth/password/login', {
+      email: 'captcha-login@example.com',
+      password: PASSWORD,
+      captcha: 'nope',
+    });
+    expect(await invalid.json()).toMatchObject({ code: 'CAPTCHA_INVALID' });
+
+    const solved = await postFrom('/api/v1/auth/password/login', {
+      email: 'captcha-login@example.com',
+      password: PASSWORD,
+      captcha: solveAltcha(required.challenge),
+    });
+    expect(solved.status).toBe(200);
+    secrets.push(solved.headers.get(SESSION_TOKEN_HEADER) ?? '');
+  });
+
+  it('protects magic-link start and password signup the same way', async () => {
+    await trip('magic_link');
+    const start = await postFrom('/api/v1/auth/magic-link/start', {
+      email: 'captcha-ml@example.com',
+    });
+    const required = (await start.json()) as {
+      code: string;
+      challenge: {
+        algorithm: 'SHA-256';
+        challenge: string;
+        salt: string;
+        signature: string;
+        maxnumber: number;
+      };
+    };
+    expect(required.code).toBe('CAPTCHA_REQUIRED');
+    const sent = await postFrom('/api/v1/auth/magic-link/start', {
+      email: 'captcha-ml@example.com',
+      captcha: solveAltcha(required.challenge),
+    });
+    expect(sent.status).toBe(202);
+    secrets.push((await emails.nextLink('captcha-ml@example.com')).searchParams.get('token') ?? '');
+
+    await trip('signup');
+    const signup = await postFrom('/api/v1/auth/password/signup', {
+      email: 'captcha-signup@example.com',
+      password: PASSWORD,
+      date_of_birth: '1990-01-01',
+    });
+    expect(await signup.json()).toMatchObject({ code: 'CAPTCHA_REQUIRED' });
   });
 });
 

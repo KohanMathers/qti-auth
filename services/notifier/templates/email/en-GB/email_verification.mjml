@@ -16,8 +16,8 @@
           Confirm your email for {{ brand.product_name }}
         </mj-text>
         <mj-text>
-          Use the button below to confirm your email address. The link works once
-          and expires in {{ expires_in_minutes }} minutes.
+          Use the button below to confirm your email address. The link works once and expires in
+          {{ expires_in_minutes }} minutes.
         </mj-text>
         <mj-button
           href="{{ link }}"

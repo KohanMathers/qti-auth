@@ -1,7 +1,15 @@
+import type { CaptchaWidget } from '@qtiauth/captcha';
 import type { Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { isValidDateOfBirth } from './age.ts';
+import {
+  type CaptchaCheck,
+  captchaFromForm,
+  captchaMarkup,
+  checkCaptcha,
+  noteCaptchaAttempt,
+} from './captcha.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
@@ -134,10 +142,21 @@ function passwordMessage(ctx: Context, reason: PasswordPolicyReason): string {
   }
 }
 
+function captchaBlock(widget: CaptchaWidget | undefined): string {
+  if (widget === undefined) return '';
+  return captchaMarkup(widget);
+}
+
+function captchaAlert(result: CaptchaCheck): string {
+  if (result.status === 'invalid') return 'That CAPTCHA was not completed correctly. Try again.';
+  return 'Complete the CAPTCHA to continue.';
+}
+
 function registerForm(
   ctx: Context,
   values: { email?: string; dateOfBirth?: string },
   error?: string,
+  widget?: CaptchaWidget,
 ): Response {
   return page(ctx, {
     status: error === undefined ? 200 : 400,
@@ -150,15 +169,22 @@ function registerForm(
 <input id="password" name="password" type="password" autocomplete="new-password" maxlength="256" required></p>
 <p><label for="date_of_birth">Date of birth</label><br>
 <input id="date_of_birth" name="date_of_birth" type="date" required value="${escapeHtml(values.dateOfBirth ?? '')}"></p>
+${captchaBlock(widget)}
 <p><button type="submit">Create account</button></p>
 </form>
 <p><a href="signup">Other ways to sign up</a></p>`,
   });
 }
 
-function loginForm(ctx: Context, email: string, error?: string): Response {
+function loginForm(
+  ctx: Context,
+  email: string,
+  error?: string,
+  widget?: CaptchaWidget,
+  status?: number,
+): Response {
   return page(ctx, {
-    status: error === undefined ? 200 : 401,
+    status: status ?? (error === undefined ? 200 : 401),
     title: `Sign in to ${ctx.config.branding.product_name}`,
     body: `${error === undefined ? '' : alert(error)}
 <form method="post" action="login">
@@ -166,6 +192,7 @@ function loginForm(ctx: Context, email: string, error?: string): Response {
 <input id="email" name="email" type="email" autocomplete="username" required value="${escapeHtml(email)}"></p>
 <p><label for="password">Password</label><br>
 <input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required></p>
+${captchaBlock(widget)}
 <p><button type="submit">Sign in</button></p>
 </form>
 <p><a href="forgot-password">Forgot password</a></p>`,
@@ -189,6 +216,25 @@ ${userId === undefined ? '' : `${hiddenInput('user_id', userId)}\n`}
 <input id="password" name="password" type="password" autocomplete="new-password" maxlength="256" required></p>
 <p><label><input type="checkbox" name="keep_other_sessions" value="1"> Don’t log me out of other sessions</label></p>
 <p><button type="submit">Save password</button></p>
+</form>`,
+  });
+}
+
+function magicLinkStartForm(
+  ctx: Context,
+  email: string,
+  error?: string,
+  widget?: CaptchaWidget,
+): Response {
+  return page(ctx, {
+    status: error === undefined ? 200 : 400,
+    title: `Sign in to ${ctx.config.branding.product_name}`,
+    body: `${error === undefined ? '' : alert(error)}
+<form method="post" action="start">
+<p><label for="email">Email</label><br>
+<input id="email" name="email" type="email" autocomplete="username" required value="${escapeHtml(email)}"></p>
+${captchaBlock(widget)}
+<p><button type="submit">Email me a link</button></p>
 </form>`,
   });
 }
@@ -355,16 +401,7 @@ ${magic ? `<p><a href="magic-link/start">Sign up with a magic link</a></p>` : ''
     responses: htmlResponses,
     handler: ({ ctx }) => {
       if (!magicLinkEnabled(ctx)) return Promise.resolve(disabled(ctx));
-      return Promise.resolve(
-        page(ctx, {
-          title: `Sign in to ${ctx.config.branding.product_name}`,
-          body: `<form method="post" action="start">
-<p><label for="email">Email</label><br>
-<input id="email" name="email" type="email" autocomplete="username" required></p>
-<p><button type="submit">Email me a link</button></p>
-</form>`,
-        }),
-      );
+      return Promise.resolve(magicLinkStartForm(ctx, ''));
     },
   });
 
@@ -379,23 +416,20 @@ ${magic ? `<p><a href="magic-link/start">Sign up with a magic link</a></p>` : ''
     responses: htmlResponses,
     handler: async ({ ctx, request, log }) => {
       if (!magicLinkEnabled(ctx)) return disabled(ctx);
-      const email = (await readForm(request))['email'] ?? '';
+      const form = await readForm(request);
+      const email = form['email'] ?? '';
       if (!z.email().safeParse(email).success) {
-        return page(ctx, {
-          status: 400,
-          title: `Sign in to ${ctx.config.branding.product_name}`,
-          body: `${alert('Enter a valid email address.')}
-<form method="post" action="start">
-<p><label for="email">Email</label><br>
-<input id="email" name="email" type="email" autocomplete="username" required value="${escapeHtml(email)}"></p>
-<p><button type="submit">Email me a link</button></p>
-</form>`,
-        });
+        return magicLinkStartForm(ctx, email, 'Enter a valid email address.');
+      }
+      const captcha = await checkCaptcha(ctx, request, 'magic_link', captchaFromForm(form));
+      if (captcha.status !== 'ok') {
+        return magicLinkStartForm(ctx, email, captchaAlert(captcha), captcha.widget);
       }
       await sendMagicLink(
         { ctx, request, log },
         { email, locale: localeOf(ctx, request), returnTo: null },
       );
+      await noteCaptchaAttempt(ctx, request, 'magic_link');
       return page(ctx, {
         title: 'Check your email',
         body: paragraph('If an account can use this address, we’ve sent a link.'),
@@ -439,13 +473,25 @@ ${magic ? `<p><a href="magic-link/start">Sign up with a magic link</a></p>` : ''
       if (!isValidDateOfBirth(dateOfBirth, new Date())) {
         return registerForm(ctx, { email, dateOfBirth }, 'Enter your real date of birth.');
       }
+      const captcha = await checkCaptcha(ctx, request, 'password_signup', captchaFromForm(form));
+      if (captcha.status !== 'ok') {
+        return registerForm(ctx, { email, dateOfBirth }, captchaAlert(captcha), captcha.widget);
+      }
       const result = await registerWithPassword(
         { ctx, request, log },
         { email, password, dateOfBirth, locale: localeOf(ctx, request) },
       );
+      await noteCaptchaAttempt(ctx, request, 'password_signup');
       switch (result.status) {
-        case 'rejected':
-          return registerForm(ctx, { email, dateOfBirth }, passwordMessage(ctx, result.reason));
+        case 'rejected': {
+          const next = await checkCaptcha(ctx, request, 'password_signup', undefined);
+          return registerForm(
+            ctx,
+            { email, dateOfBirth },
+            passwordMessage(ctx, result.reason),
+            next.status === 'ok' ? undefined : next.widget,
+          );
+        }
         case 'account_limit':
           return page(ctx, {
             status: 409,
@@ -498,9 +544,19 @@ ${magic ? `<p><a href="magic-link/start">Sign up with a magic link</a></p>` : ''
       const form = await readForm(request);
       const email = form['email'] ?? '';
       const password = form['password'] ?? '';
+      const captcha = await checkCaptcha(ctx, request, 'password_login', captchaFromForm(form));
+      if (captcha.status !== 'ok') {
+        return loginForm(ctx, email, captchaAlert(captcha), captcha.widget, 403);
+      }
       const result = await loginPassword({ ctx, request, log }, { email, password });
       if (result.status === 'invalid') {
-        return loginForm(ctx, email, 'Email or password incorrect');
+        const next = await checkCaptcha(ctx, request, 'password_login', undefined);
+        return loginForm(
+          ctx,
+          email,
+          'Email or password incorrect',
+          next.status === 'ok' ? undefined : next.widget,
+        );
       }
       return signedIn(ctx, result.session, null);
     },
