@@ -39,6 +39,8 @@ describe('service CLI', () => {
     expect(Object.keys(serviceCommands(definition, router)).sort()).toEqual([
       'config check',
       'db provision',
+      'lists audit',
+      'lists update',
       'migrate status',
       'migrate up',
       'routes manifest',

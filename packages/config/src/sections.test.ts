@@ -339,6 +339,7 @@ describe('security', () => {
       'webhooks.manage',
       'audit.read',
       'roles.manage',
+      'filter.*',
     ]);
   });
 
@@ -428,6 +429,7 @@ describe('retention', () => {
       sessions: 2_592_000_000,
       tokens: 86_400_000,
       session_security_events: 7_776_000_000,
+      filter_decisions: 2_592_000_000,
     });
   });
 });

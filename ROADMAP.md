@@ -406,14 +406,14 @@ Can run alongside Phase 2 after Phase 1.
 ### P2b.1 Text filter — L
 Spec: §4.11
 
-- [ ] **Licence check first:** confirm redistribution terms for LDNOOBW, SCOWL, the name lists, the
+- [x] **Licence check first:** confirm redistribution terms for LDNOOBW, SCOWL, the name lists, the
       surname list and GeoNames. Record them in `THIRD_PARTY_NOTICES.md`.
-- [ ] `qtiauth lists update` (pinned LDNOOBW commit, space stripping, B_exact/B_loose derivation).
-- [ ] `qtiauth lists audit` (words in D containing a B substring).
-- [ ] Normalization, tokenizer, singleton collapsing, padding detection, pipeline exactly per spec.
-- [ ] `filter_decisions` logging and admin endpoints for recent blocks, unknowns, allowlist and extra
+- [x] `qtiauth lists update` (pinned LDNOOBW commit, space stripping, B_exact/B_loose derivation).
+- [x] `qtiauth lists audit` (words in D containing a B substring).
+- [x] Normalization, tokenizer, singleton collapsing, padding detection, pipeline exactly per spec.
+- [x] `filter_decisions` logging and admin endpoints for recent blocks, unknowns, allowlist and extra
       blocklist.
-- [ ] **Regression corpus:** Scunthorpe-class place names, common names and surnames, `classic`,
+- [x] **Regression corpus:** Scunthorpe-class place names, common names and surnames, `classic`,
       `assassin`, `user1`, `c_u_n_t`, `xxx<slur>xxx`, leet variants. Runs in CI.
 
 **Done when:** the regression corpus passes, and `lists audit` output is reviewed with missing words
@@ -976,7 +976,7 @@ These don't block the roadmap, but must be resolved at the milestone listed.
 
 | Item | Resolve at |
 |---|---|
-| LDNOOBW, SCOWL, name/surname lists and GeoNames licences allow redistribution | P2b.1 |
+| LDNOOBW, SCOWL, name/surname lists and GeoNames licences allow redistribution | P2b.1 (see THIRD_PARTY_NOTICES.md) |
 | SI 2026/268 report fields, timeframes and retention | P5.3 |
 | NCA CSEA-IRP registration for each deployment operator | P5.3 |
 | Steamworks partner access and publisher key | P7.8 |

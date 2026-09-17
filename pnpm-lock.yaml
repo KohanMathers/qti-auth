@@ -254,6 +254,9 @@ importers:
       '@qtiauth/db':
         specifier: workspace:*
         version: link:../db
+      '@qtiauth/text-filter':
+        specifier: workspace:*
+        version: link:../text-filter
     devDependencies:
       '@qtiauth/testing':
         specifier: workspace:*
@@ -409,6 +412,8 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
 
+  packages/text-filter: {}
+
   packages/valkey:
     dependencies:
       '@qtiauth/config':
@@ -497,6 +502,9 @@ importers:
       '@qtiauth/service-kit':
         specifier: workspace:*
         version: link:../../packages/service-kit
+      '@qtiauth/text-filter':
+        specifier: workspace:*
+        version: link:../../packages/text-filter
       '@qtiauth/valkey':
         specifier: workspace:*
         version: link:../../packages/valkey

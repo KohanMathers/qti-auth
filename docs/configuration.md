@@ -2,7 +2,7 @@
 
 QTIAuth reads one YAML file, `qtiauth.yaml`, plus secrets from the environment. This page covers how that file is found, written and checked. For what each setting does, see the JSON Schema at [`config/qtiauth.schema.json`](../config/qtiauth.schema.json), which has a description and default for every setting.
 
-The `database` section and the Postgres roles it references are covered in [database.md](database.md), the `bus` section in [bus.md](bus.md), the `observability` section in [observability.md](observability.md), the `service` section in [services.md](services.md), the `scheduler` section in [scheduler.md](scheduler.md), the `email` and `retention` sections in [notifier.md](notifier.md), the `accounts`, `magic_link`, `password`, `captcha`, `sessions`, `session_security`, `geoip`, `age`, `parental`, `security` and `features.auth.social` sections and the session settings in `cookies` and `retention` in [identity.md](identity.md), and the `gateway`, `valkey`, `rate_limits` and `security` sections, surface origins and the session cookie in [gateway.md](gateway.md). Running the stack is covered in [deployment.md](deployment.md).
+The `database` section and the Postgres roles it references are covered in [database.md](database.md), the `bus` section in [bus.md](bus.md), the `observability` section in [observability.md](observability.md), the `service` section in [services.md](services.md), the `scheduler` section in [scheduler.md](scheduler.md), the `email` and `retention` sections in [notifier.md](notifier.md), the `accounts`, `magic_link`, `password`, `captcha`, `sessions`, `session_security`, `geoip`, `text_filter`, `age`, `parental`, `security` and `features.auth.social` sections and the session settings in `cookies` and `retention` in [identity.md](identity.md), and the `gateway`, `valkey`, `rate_limits` and `security` sections, surface origins and the session cookie in [gateway.md](gateway.md). Running the stack is covered in [deployment.md](deployment.md).
 
 ## Where config lives
 
@@ -11,6 +11,7 @@ config/
   qtiauth.yaml           # every non-secret setting
   qtiauth.dev.yaml       # development config, used by deploy/compose.dev.yaml
   qtiauth.schema.json    # JSON Schema, generated
+  lists/username/        # text-filter word lists (see identity.md)
 .env                     # secrets only
 ```
 
@@ -63,6 +64,13 @@ qtiauth config check [--config <path>] [--env-file <path>]
 ```
 
 Validates the whole file, including every reference, and exits 0 if it's valid or 1 if it isn't. `--env-file` reads variables from a `.env` file. Variables already set in the environment take precedence. In this repository, run it with `pnpm qtiauth config check --env-file .env`.
+
+```sh
+qtiauth lists update [--ldnoobw <commit>] [--config <path>] [--env-file <path>]
+qtiauth lists audit [--config <path>] [--env-file <path>]
+```
+
+`lists update` writes the pinned word lists into `text_filter.lists_dir`. `lists audit` prints dictionary words that contain a blocked substring. See [identity.md](identity.md#text-filter).
 
 ## Editor support
 

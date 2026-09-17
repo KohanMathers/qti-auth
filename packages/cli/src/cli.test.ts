@@ -46,6 +46,7 @@ describe('qtiauth', () => {
     expect(await run([], io)).toBe(2);
     expect(out.stderr).toContain('config check');
     expect(out.stderr).toContain('db provision');
+    expect(out.stderr).toContain('lists update');
   });
 
   it('runs commands a service adds', async () => {

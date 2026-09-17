@@ -405,6 +405,20 @@
       },
       "additionalProperties": false
     },
+    "text_filter": {
+      "description": "Public-text filter.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "lists_dir": {
+          "default": "lists/username",
+          "description": "Word-list directory, relative to the config file. Holds LDNOOBW, the dictionary, names, surnames, places, allow.txt and extra-block.txt.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
     "database": {
       "description": "PostgreSQL connection.",
       "default": {},
@@ -1902,7 +1916,8 @@
             "oidc.clients.*",
             "webhooks.manage",
             "audit.read",
-            "roles.manage"
+            "roles.manage",
+            "filter.*"
           ],
           "description": "Staff whose permissions match any of these must enrol a passkey or TOTP before using the rest of the product. Prefixes end in .* .",
           "type": "array",
@@ -2413,6 +2428,12 @@
         "session_security_events": {
           "default": "90d",
           "description": "Keep session security event log rows for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "filter_decisions": {
+          "default": "30d",
+          "description": "Keep text-filter decisions, including the raw input, for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }

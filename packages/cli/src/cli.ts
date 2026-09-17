@@ -1,10 +1,14 @@
 import { configCheck } from './commands/config-check.ts';
 import { dbProvision } from './commands/db-provision.ts';
+import { listsAudit } from './commands/lists-audit.ts';
+import { listsUpdate } from './commands/lists-update.ts';
 import { type CliIo, type Command, CommandExit, EXIT_OK, EXIT_USAGE } from './io.ts';
 
 export const commands: Record<string, Command> = {
   'config check': configCheck,
   'db provision': dbProvision,
+  'lists update': listsUpdate,
+  'lists audit': listsAudit,
 };
 
 function usage(available: Record<string, Command>): string {

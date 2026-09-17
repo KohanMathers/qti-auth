@@ -10,6 +10,7 @@ import {
   type Stoppable,
   unwind,
 } from '@qtiauth/service-kit';
+import { openTextFilter, resolveListsDir } from '@qtiauth/text-filter';
 import { closeValkey, connectValkey } from '@qtiauth/valkey';
 
 import { countAccountsByState } from './accounts.ts';
@@ -19,6 +20,8 @@ import type { Database } from './database.ts';
 import { eraseUser, exportUser } from './data-rights.ts';
 import { sweepTokens } from './email-tokens.ts';
 import { sweepAuthFailures } from './failures.ts';
+import { loadFilterOverlay, sweepFilterDecisions } from './filter.ts';
+import { attachTextFilter } from './filter-state.ts';
 import { attachGeoIp } from './geoip-state.ts';
 import { identityMetrics } from './metrics.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
@@ -82,6 +85,17 @@ export function identityService(options: IdentityOptions = {}) {
           geoip.close();
           return Promise.resolve();
         },
+      });
+      const textFilter = await openTextFilter(
+        resolveListsDir(ctx.config_path, config.text_filter.lists_dir),
+      );
+      await loadFilterOverlay(db, textFilter);
+      attachTextFilter(ctx, textFilter);
+      log.info('text filter loaded', {
+        dictionary: textFilter.lists.dictionary.size,
+        blocked: textFilter.lists.blockExact.size + textFilter.lists.blockLoose.size,
+        extra_block: textFilter.lists.blockExtra.size,
+        allow: textFilter.lists.allow.size,
       });
       const valkey = connectValkey(config.valkey, 'identity', (error) => {
         log.warn('valkey client error', { error });
@@ -171,6 +185,10 @@ export function identityService(options: IdentityOptions = {}) {
                 retention: config.retention.session_security_events,
                 now,
               });
+              const filterDecisions = await sweepFilterDecisions(db, {
+                retention: config.retention.filter_decisions,
+                now,
+              });
               const pruned = await pruneBusTables(db, config.bus);
               log.info('retention sweep finished', {
                 sessions,
@@ -178,6 +196,7 @@ export function identityService(options: IdentityOptions = {}) {
                 auth_challenges: challenges,
                 auth_failures: failures,
                 session_security_events: securityEvents,
+                filter_decisions: filterDecisions,
                 outbox: pruned.outbox,
                 processed_events: pruned.processedEvents,
               });

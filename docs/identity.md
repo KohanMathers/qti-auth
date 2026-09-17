@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), and offers TOTP, recovery codes, step-up, email changes and session security. Usernames, roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, and filters public text. Usernames, roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -50,6 +50,9 @@ geoip:
   header: null
   database_path: /var/lib/qtiauth/geoip/dbip-country-lite.csv.gz
 
+text_filter:
+  lists_dir: lists/username
+
 cookies:
   session_ttl: 7d
   idle_timeout: 30d
@@ -72,11 +75,13 @@ security:
     - webhooks.manage
     - audit.read
     - roles.manage
+    - filter.*
 
 retention:
   sessions: 30d
   tokens: 24h
   session_security_events: 90d
+  filter_decisions: 30d
 ```
 
 - `accounts.max_per_email` is how many accounts can share one email address, after normalization.
@@ -88,13 +93,14 @@ retention:
 - `sessions.max_per_user` is how many sessions a user can have. Signing in again ends the oldest.
 - `session_security.on_country_change` is `challenge` (drop the session to `aal0` until the user signs in again), `block`, `notify` or `ignore`. `session_security.new_device_email` sends mail on a first sign-in from a browser or OS this account has not used. `session_security.tls_fingerprint.header` is an optional request header such as JA4; `null` turns that signal off. `session_security.alert_min_interval` is the minimum gap between security-alert emails to the same user.
 - `geoip.source` is `dbip_lite` (default), `maxmind`, `header` or `none`. `geoip.header` is required when source is `header`. `geoip.database_path` is a DB-IP Lite CSV (or gzipped CSV), or a MaxMind MMDB when source is `maxmind`.
+- `text_filter.lists_dir` is the word-list directory, relative to the config file. Run `qtiauth lists update` to fill it.
 - `cookies.session_ttl` is the longest a session lasts, and `cookies.idle_timeout` ends it sooner if it isn't used.
 - `age.bands` is the age in whole years each band starts at. Anyone younger than `13_to_15` is `under_13`.
 - `parental.consent_age` is the age below which an account needs a parent or guardian's approval.
 - `security.encryption_key` is a base64 32-byte key (`openssl rand -base64 32`) that encrypts TOTP secrets at rest. Identity will not start without it. Set `APP_ENCRYPTION_KEY` in `.env`.
 - `security.step_up_window` is how recently a session must have reached `aal2` for a route that needs step-up, and for adding a password after a magic-link sign-in.
 - `security.require_2fa_for_permissions` is the staff permissions that require a passkey or TOTP. Matching accounts can sign in but only reach enrolment until they set one up. Permissions themselves arrive in a later release; until then this is tested with a stub grant.
-- `retention.sessions` is how long ended sessions are kept, `retention.tokens` how long used or expired emailed tokens are kept after they expire, and `retention.session_security_events` how long session security log rows are kept.
+- `retention.sessions` is how long ended sessions are kept, `retention.tokens` how long used or expired emailed tokens are kept after they expire, `retention.session_security_events` how long session security log rows are kept, and `retention.filter_decisions` how long text-filter decisions (including the raw input) are kept.
 - `features.auth.magic_link.enabled: false` turns magic links off. `features.auth.password.enabled: false` turns passwords off. `features.auth.passkeys.enabled: false` turns passkeys off. `features.auth.totp.enabled: false` turns authenticator-app sign-in off.
 - `features.session_security.enabled: false` turns session security checks off.
 - Each social provider is off until you enable it. Enabling Google, GitHub or Discord without `client_id` and `client_secret` fails config validation. Steam has no credentials. Generic OIDC providers are listed under `features.auth.social.generic_oidc`; their `id` must not collide with a built-in method.
@@ -272,6 +278,25 @@ A first sign-in from a browser or OS that this account has not used sends a `new
 
 GeoIP defaults to DB-IP Lite (CC-BY 4.0) at `geoip.database_path`. Set `geoip.source` to `maxmind`, `header` (with `geoip.header`) or `none`. Country checks switch off when no country can be resolved. Attribution is on `GET /about` and `GET /api/v1/meta/about`.
 
+### Text filter
+
+Identity loads the word lists in `text_filter.lists_dir` and filters public text with the pipeline in [SPEC §4.11](../SPEC.md#411-text-filter-core-library): allowlist, exact block, dictionary (this is what saves Scunthorpe), then tokens and padded B_loose matches. It never find-and-replaces, never substring-matches B_exact, and never maps `1` to `i`. Every decision is stored in `filter_decisions`.
+
+`qtiauth lists update [--ldnoobw <commit>]` vendors every LDNOOBW language file at a pinned commit (spaces stripped; `tlh` omitted), SCOWL size 70, ONS and US SSA given names, US Census surnames, and GeoNames places. `qtiauth lists audit` prints dictionary words that contain a blocked substring.
+
+| Method                                        | What it does                     |
+| --------------------------------------------- | -------------------------------- |
+| `GET /api/v1/admin/filter/blocks`             | Recent blocks, newest first      |
+| `GET /api/v1/admin/filter/unknowns`           | Recent unknowns, newest first    |
+| `GET /api/v1/admin/filter/allowlist`          | File and admin allowlist entries |
+| `POST /api/v1/admin/filter/allowlist`         | Add an admin allowlist word      |
+| `DELETE /api/v1/admin/filter/allowlist/:word` | Remove an admin allowlist word   |
+| `GET /api/v1/admin/filter/blocklist`          | Extra blocklist (file and admin) |
+| `POST /api/v1/admin/filter/blocklist`         | Add an extra-block word          |
+| `DELETE /api/v1/admin/filter/blocklist/:word` | Remove an admin extra-block word |
+
+`filter.read` is needed to view those lists; `filter.manage` to change them. File entries in `allow.txt` and `extra-block.txt` cannot be deleted through the API.
+
 Errors, on top of the [codes every service can return](services.md#errors):
 
 | Code                           | Status | When                                                                                   |
@@ -302,6 +327,7 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `SESSION_NOT_FOUND`            | 404    | No active session with that ID belongs to the user                                     |
 | `PASSKEY_NOT_FOUND`            | 404    | No passkey with that ID belongs to the user                                            |
 | `IDENTITY_NOT_FOUND`           | 404    | No connected social identity with that ID belongs to the user                          |
+| `FILTER_ENTRY_NOT_FOUND`       | 404    | No admin-added allowlist or extra-block word with that value                           |
 | `ACCOUNT_LIMIT_REACHED`        | 409    | The address already has `accounts.max_per_email` accounts                              |
 | `TOTP_ALREADY_ENABLED`         | 409    | Authenticator-app sign-in is already set up                                            |
 | `IDENTITY_IN_USE`              | 409    | That provider identity is already connected to another account                         |
@@ -321,7 +347,7 @@ The gateway clears cached sessions when it sees `session.revoked` or `session.fl
 
 ## Retention and data rights
 
-`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, and session security events `retention.session_security_events` after they were recorded.
+`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, and text-filter decisions `retention.filter_decisions` after they were recorded.
 
 A user's export has their account, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address.
 
@@ -343,8 +369,9 @@ A user's export has their account, sign-in methods (without password hashes or T
 | `qtiauth_sessions_revoked_total`           | `reason`             |
 | `qtiauth_sessions_active`                  |                      |
 | `qtiauth_accounts`                         | `state`              |
+| `qtiauth_filter_decisions_total`           | `rule`               |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 

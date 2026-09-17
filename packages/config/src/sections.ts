@@ -210,6 +210,19 @@ export const geoip = z
   .prefault({})
   .describe('IP geolocation.');
 
+export const textFilter = z
+  .strictObject({
+    lists_dir: z
+      .string()
+      .min(1)
+      .default('lists/username')
+      .describe(
+        'Word-list directory, relative to the config file. Holds LDNOOBW, the dictionary, names, surnames, places, allow.txt and extra-block.txt.',
+      ),
+  })
+  .prefault({})
+  .describe('Public-text filter.');
+
 export const DB_SCHEMAS = ['identity', 'notify', 'oidc', 'safety', 'support', 'games'] as const;
 export type DbSchema = (typeof DB_SCHEMAS)[number];
 
@@ -708,6 +721,7 @@ export const DEFAULT_REQUIRE_2FA_PERMISSIONS = [
   'webhooks.manage',
   'audit.read',
   'roles.manage',
+  'filter.*',
 ] as const;
 
 export const security = z
@@ -1355,6 +1369,10 @@ export const retention = z
       'Keep magic-link and other emailed tokens for this long after they expire.',
     ),
     session_security_events: duration('90d', 'Keep session security event log rows for this long.'),
+    filter_decisions: duration(
+      '30d',
+      'Keep text-filter decisions, including the raw input, for this long.',
+    ),
   })
   .prefault({})
   .describe('How long data is kept. retention.sweep deletes anything older.');
@@ -1366,6 +1384,7 @@ export const sections = {
   cors,
   network,
   geoip,
+  text_filter: textFilter,
   database,
   migrations,
   bus,

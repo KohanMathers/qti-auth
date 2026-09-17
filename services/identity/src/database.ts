@@ -153,6 +153,30 @@ export interface SessionSecurityEventsTable {
   created_at: Generated<Date>;
 }
 
+export const FILTER_DECISIONS = ['allow', 'block'] as const;
+export type FilterDecision = (typeof FILTER_DECISIONS)[number];
+
+export const FILTER_LISTS = ['allow', 'extra_block'] as const;
+export type FilterList = (typeof FILTER_LISTS)[number];
+
+export interface FilterDecisionsTable {
+  id: string;
+  input_hash: string;
+  raw_input: string | null;
+  normalized: string;
+  decision: FilterDecision;
+  rule: string;
+  matched_entry: string | null;
+  context: string;
+  created_at: Generated<Date>;
+}
+
+export interface FilterListEntriesTable {
+  list: FilterList;
+  word: string;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   users: UsersTable;
   identities: IdentitiesTable;
@@ -164,4 +188,6 @@ export interface Database {
   recovery_codes: RecoveryCodesTable;
   user_permissions: UserPermissionsTable;
   session_security_events: SessionSecurityEventsTable;
+  filter_decisions: FilterDecisionsTable;
+  filter_list_entries: FilterListEntriesTable;
 }

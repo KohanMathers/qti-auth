@@ -31,6 +31,9 @@ geoip:
   header: null
   database_path: /var/lib/qtiauth/geoip/dbip-country-lite.csv.gz
 
+text_filter:
+  lists_dir: lists/username
+
 database:
   host: postgres
   port: 5432
@@ -170,6 +173,7 @@ security:
     - webhooks.manage
     - audit.read
     - roles.manage
+    - filter.*
 
 accounts:
   max_per_email: 2
@@ -246,3 +250,4 @@ retention:
   sessions: 30d
   tokens: 24h
   session_security_events: 90d
+  filter_decisions: 30d

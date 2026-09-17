@@ -19,6 +19,7 @@ describe('identity service', () => {
       '0008_social',
       '0009_bindings',
       '0010_session_security',
+      '0011_text_filter',
     ]);
   });
 
@@ -26,9 +27,15 @@ describe('identity service', () => {
     const policies = Object.keys(sections.rate_limits.parse({}));
     const { routes } = router.manifest();
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
+      'DELETE /api/v1/admin/filter/allowlist/:word',
+      'DELETE /api/v1/admin/filter/blocklist/:word',
       'DELETE /api/v1/me/identities/:identity_id',
       'DELETE /api/v1/me/passkeys/:passkey_id',
       'DELETE /api/v1/sessions/:session_id',
+      'GET /api/v1/admin/filter/allowlist',
+      'GET /api/v1/admin/filter/blocklist',
+      'GET /api/v1/admin/filter/blocks',
+      'GET /api/v1/admin/filter/unknowns',
       'GET /api/v1/captcha',
       'GET /api/v1/me',
       'GET /api/v1/me/factors',
@@ -56,6 +63,8 @@ describe('identity service', () => {
       'GET /auth/totp',
       'GET /auth/two-factor',
       'GET /auth/verify-email',
+      'POST /api/v1/admin/filter/allowlist',
+      'POST /api/v1/admin/filter/blocklist',
       'POST /api/v1/auth/2fa',
       'POST /api/v1/auth/email/change',
       'POST /api/v1/auth/email/revert',

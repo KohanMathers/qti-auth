@@ -478,7 +478,7 @@ config/
     email/<locale>/        # overridable MJML + text email templates
   lists/
     username/
-      ldnoobw-en.txt       # vendored at a pinned commit (§4.11)
+      ldnoobw.txt           # vendored at a pinned commit (§4.11)
       dictionary.txt
       names.txt
       surnames.txt
@@ -905,14 +905,15 @@ need it on every deployment.
 
 **LDNOOBW handling**
 
-- Source: `LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words`, file `en`.
+- Source: `LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words`. Usernames are not
+  locale-specific, so every language file at the pinned commit is merged (`tlh` omitted).
 - **Vendored at a pinned commit** and never fetched at runtime. Update with
   `qtiauth lists update --ldnoobw <commit>`.
 - Spaces are removed from multi-word entries (`two girls one cup` → `twogirlsonecup`).
 - `qtiauth lists audit` prints **every word in D that contains a B substring**, so missing places and
   surnames can be added to D before they cause false positives. Run it whenever LDNOOBW is updated.
-- Non-English LDNOOBW files are not applied to Latin-script input unless a dictionary for that
-  language is configured.
+- Short words and English dictionary entries stay in **B_exact** (whole-token only), so merging
+  other languages does not turn `con` into a substring match.
 
 #### Normalization
 

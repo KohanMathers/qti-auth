@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@qtiauth/config": "workspace:*",
-    "@qtiauth/db": "workspace:*"
+    "@qtiauth/db": "workspace:*",
+    "@qtiauth/text-filter": "workspace:*"
   },
   "devDependencies": {
     "@qtiauth/testing": "workspace:*",

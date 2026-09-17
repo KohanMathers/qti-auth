@@ -24,6 +24,7 @@ export interface IdentityMetrics {
   sessionCreated: (method: string, evicted: number) => void;
   bindingCreated: () => void;
   sessionsRevoked: (reason: RevocationReason, count: number) => void;
+  filterDecision: (rule: string) => void;
   accounts: (counts: Partial<Record<AccountState, number>>) => void;
   activeSessions: (count: number) => void;
 }
@@ -97,6 +98,11 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     help: 'Sessions ended before they expired, by reason: logout, revoked, evicted or blocked.',
     labelNames: ['reason'],
   });
+  const filterDecisions = metrics.counter({
+    name: 'qtiauth_filter_decisions_total',
+    help: 'Text-filter decisions, by rule.',
+    labelNames: ['rule'],
+  });
   const accounts = metrics.gauge({
     name: 'qtiauth_accounts',
     help: 'Accounts by state, refreshed every minute.',
@@ -145,6 +151,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     sessionsRevoked: (reason, count) => {
       if (count > 0) revoked.inc({ reason }, count);
+    },
+    filterDecision: (rule) => {
+      filterDecisions.inc({ rule });
     },
     accounts: (counts) => {
       for (const state of ACCOUNT_STATES) accounts.set({ state }, counts[state] ?? 0);

@@ -59,6 +59,7 @@ export const IDENTITY_ERRORS = defineErrors({
     status: 502,
     title: 'This sign-in provider is temporarily unavailable',
   },
+  FILTER_ENTRY_NOT_FOUND: { status: 404, title: 'No such list entry' },
   CAPTCHA_REQUIRED: { status: 403, title: 'Complete the CAPTCHA to continue' },
   CAPTCHA_INVALID: { status: 400, title: 'The CAPTCHA was not completed correctly' },
   ACCOUNT_LIMIT_REACHED: {
