@@ -19,6 +19,10 @@ export {
   serviceConfigSchema,
 } from './schema.ts';
 export {
+  AGE_ASSURANCE_PROVIDERS,
+  type AgeAssuranceProviderId,
+  AGE_ASSURANCE_TRIGGERS,
+  type AgeAssuranceTrigger,
   BUILTIN_SOCIAL_IDS,
   type BuiltinSocialId,
   CAPTCHA_PROVIDERS,

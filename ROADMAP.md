@@ -429,14 +429,14 @@ Spec: §4.10
 
 **Done when:** a renamed user can reclaim their old name during the hold and another user can't.
 
-### P2b.3 Age bands and assurance interface — M
+### P2b.3 Age bands and assurance interface — M ✅
 Spec: §4.6
 
-- [ ] Configurable bands, daily recompute job, `age_band_changed` events.
-- [ ] `AgeAssuranceProvider` interface and the `self_declared` provider.
-- [ ] Assurance result records, and `required_for` triggers.
-- [ ] Staff-only DOB edits with a reason and audit.
-- [ ] Under-18 default settings.
+- [x] Configurable bands, daily recompute job, `age_band_changed` events.
+- [x] `AgeAssuranceProvider` interface and the `self_declared` provider.
+- [x] Assurance result records, and `required_for` triggers.
+- [x] Staff-only DOB edits with a reason and audit.
+- [x] Under-18 default settings.
 
 **Done when:** a user crossing 18 overnight emits the event and changes band without logging in.
 

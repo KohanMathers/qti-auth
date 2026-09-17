@@ -40,6 +40,11 @@ export const IDENTITY_ERRORS = defineErrors({
     status: 409,
     title: 'This is your last available sign-in method',
   },
+  DATE_OF_BIRTH_INVALID: { status: 400, title: 'This date of birth is not valid' },
+  DATE_OF_BIRTH_UNCHANGED: {
+    status: 400,
+    title: 'That is already this account’s date of birth',
+  },
   OAUTH_FAILED: { status: 400, title: 'Sign-in with this provider could not be completed' },
   IDENTITY_IN_USE: {
     status: 409,

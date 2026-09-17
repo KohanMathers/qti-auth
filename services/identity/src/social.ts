@@ -11,7 +11,15 @@ import {
   initialAccountState,
   lockEmail,
 } from './accounts.ts';
-import { type AgeBands, ageBand, ageOn, isValidDateOfBirth } from './age.ts';
+import {
+  type AgeBands,
+  ageBand,
+  ageOn,
+  agePrivacyDefaults,
+  isValidDateOfBirth,
+  under18,
+} from './age.ts';
+import { recordSignupAgeAssurance } from './age-assurance.ts';
 import { challengePayload, insertChallenge, takeChallenge, useChallenge } from './challenges.ts';
 import type { Database } from './database.ts';
 import { type UserCreatedData, userCreatedEvent } from './events.ts';
@@ -54,6 +62,8 @@ export interface SocialSettings {
   maxPerEmail: number;
   consentAge: number;
   bands: AgeBands;
+  defaultProvider: string;
+  requiredFor: readonly string[];
   normalizeEmail: (address: string) => string;
   sessions: SessionSettings;
 }
@@ -492,6 +502,7 @@ async function createSocialAccount(
     await lockEmail(trx, emailNormalized);
     const existing = await accountsWithEmail(trx, emailNormalized);
     if (existing.length >= settings.maxPerEmail) return { status: 'account_limit' as const };
+    const privacy = agePrivacyDefaults(under18(age, settings.bands));
     const userId = await createUser(trx, {
       state,
       email: options.email.trim(),
@@ -499,6 +510,7 @@ async function createSocialAccount(
       emailVerifiedAt: options.emailVerified ? now : null,
       dateOfBirth: options.dateOfBirth,
       locale: options.locale,
+      ...privacy,
     });
     await insertSocialIdentity(trx, {
       userId,
@@ -507,6 +519,13 @@ async function createSocialAccount(
       now,
     });
     const band = ageBand(age, settings.bands);
+    await recordSignupAgeAssurance(trx, {
+      userId,
+      adult: band === 'adult',
+      defaultProvider: settings.defaultProvider,
+      requiredFor: settings.requiredFor,
+      now,
+    });
     await writeEvent<Database, UserCreatedData>(
       trx,
       userCreatedEvent(userId, {

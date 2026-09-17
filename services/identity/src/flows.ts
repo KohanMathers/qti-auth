@@ -2,6 +2,8 @@ import { queueEmail } from '@qtiauth/email';
 import type { Logger } from '@qtiauth/observability';
 import { FLOW_BINDING_HEADER } from '@qtiauth/service-kit';
 
+import { dateOfBirthColumn } from './accounts.ts';
+import { ageOn, under18 } from './age.ts';
 import { confirmEmailChange, revertEmailChange, startEmailChange } from './email-change.ts';
 import {
   completeSignup,
@@ -72,7 +74,17 @@ function expiresInMinutes(ms: number): number {
 
 export async function notifyNewDevice(ctx: Context, session: CreatedSession): Promise<void> {
   const notice = session.newDevice;
-  if (notice === null || !ctx.config.session_security.new_device_email) return;
+  if (notice === null) return;
+  if (!ctx.config.session_security.new_device_email) {
+    const row = await ctx.db
+      .selectFrom('sessions')
+      .innerJoin('users', 'users.id', 'sessions.user_id')
+      .select(dateOfBirthColumn.as('date_of_birth'))
+      .where('sessions.id', '=', session.id)
+      .executeTakeFirst();
+    if (!row) return;
+    if (!under18(ageOn(row.date_of_birth, new Date()), ctx.config.age.bands)) return;
+  }
   await queueEmail(ctx.bus, {
     template: 'new_device',
     to: { address: notice.email },

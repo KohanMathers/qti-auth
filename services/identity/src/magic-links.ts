@@ -11,7 +11,8 @@ import {
   markEmailVerified,
   recordIdentityUse,
 } from './accounts.ts';
-import { type AgeBands, ageBand, ageOn } from './age.ts';
+import { type AgeBands, ageBand, ageOn, agePrivacyDefaults, under18 } from './age.ts';
+import { recordSignupAgeAssurance } from './age-assurance.ts';
 import type { Database } from './database.ts';
 import {
   insertEmailToken,
@@ -37,6 +38,8 @@ export interface MagicLinkSettings {
   maxPerEmail: number;
   consentAge: number;
   bands: AgeBands;
+  defaultProvider: string;
+  requiredFor: readonly string[];
   normalizeEmail: (address: string) => string;
   sessions: SessionSettings;
 }
@@ -171,6 +174,7 @@ export function completeSignup(
     if (existing.length >= settings.maxPerEmail) return { status: 'account_limit' };
 
     await useEmailToken(trx, row.id, now);
+    const privacy = agePrivacyDefaults(under18(age, settings.bands));
     const userId = await createUser(trx, {
       state,
       email: row.email,
@@ -178,9 +182,17 @@ export function completeSignup(
       emailVerifiedAt: now,
       dateOfBirth: options.dateOfBirth,
       locale: row.locale,
+      ...privacy,
     });
     await recordIdentityUse(trx, userId, MAGIC_LINK_METHOD, now);
     const band = ageBand(age, settings.bands);
+    await recordSignupAgeAssurance(trx, {
+      userId,
+      adult: band === 'adult',
+      defaultProvider: settings.defaultProvider,
+      requiredFor: settings.requiredFor,
+      now,
+    });
     await writeEvent<Database, UserCreatedData>(
       trx,
       userCreatedEvent(userId, {

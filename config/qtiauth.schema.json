@@ -2221,7 +2221,7 @@
       "additionalProperties": false
     },
     "age": {
-      "description": "Age bands, computed from the date of birth.",
+      "description": "Age bands, computed from the date of birth, and age assurance.",
       "default": {},
       "type": "object",
       "properties": {
@@ -2250,6 +2250,33 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 150
+            }
+          },
+          "additionalProperties": false
+        },
+        "assurance": {
+          "description": "Pluggable age assurance.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "default_provider": {
+              "default": "self_declared",
+              "description": "Provider used when a trigger in required_for applies. Only self_declared ships.",
+              "type": "string",
+              "enum": [
+                "self_declared"
+              ]
+            },
+            "required_for": {
+              "default": [],
+              "description": "Triggers that need the default provider, such as claiming the adult band. Empty means a self-declared date of birth is enough.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "claim_adult_band"
+                ]
+              }
             }
           },
           "additionalProperties": false

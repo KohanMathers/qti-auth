@@ -56,6 +56,9 @@ export interface Account extends AccountSummary {
   locale: string | null;
   username: string | null;
   username_updated_at: Date | null;
+  public_profile: boolean;
+  leaderboard_visible: boolean;
+  security_notifications: boolean;
 }
 
 export interface NewUser {
@@ -65,6 +68,9 @@ export interface NewUser {
   emailVerifiedAt: Date | null;
   dateOfBirth: string;
   locale: string | null;
+  publicProfile: boolean;
+  leaderboardVisible: boolean;
+  securityNotifications: boolean;
 }
 
 export const dateOfBirthColumn = sql<string>`to_char(users.date_of_birth, 'YYYY-MM-DD')`;
@@ -101,6 +107,9 @@ export async function createUser(db: Kysely<Database>, user: NewUser): Promise<s
       email_verified_at: user.emailVerifiedAt,
       date_of_birth: user.dateOfBirth,
       locale: user.locale,
+      public_profile: user.publicProfile,
+      leaderboard_visible: user.leaderboardVisible,
+      security_notifications: user.securityNotifications,
     })
     .execute();
   return id;
@@ -118,6 +127,9 @@ export function findAccount(db: Kysely<Database>, id: string): Promise<Account |
       'locale',
       'username',
       'username_updated_at',
+      'public_profile',
+      'leaderboard_visible',
+      'security_notifications',
       'created_at',
     ])
     .where('id', '=', id)

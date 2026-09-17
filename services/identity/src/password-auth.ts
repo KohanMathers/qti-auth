@@ -13,7 +13,8 @@ import {
   recordIdentityUse,
   upsertPassword,
 } from './accounts.ts';
-import { type AgeBands, ageBand, ageOn } from './age.ts';
+import { type AgeBands, ageBand, ageOn, agePrivacyDefaults, under18 } from './age.ts';
+import { recordSignupAgeAssurance } from './age-assurance.ts';
 import { insertChallenge } from './challenges.ts';
 import type { Database } from './database.ts';
 import {
@@ -66,6 +67,8 @@ export interface PasswordSettings {
   maxPerEmail: number;
   consentAge: number;
   bands: AgeBands;
+  defaultProvider: string;
+  requiredFor: readonly string[];
   stepUpWindow: number;
   normalizeEmail: (address: string) => string;
   sessions: SessionSettings;
@@ -196,6 +199,7 @@ export async function completePasswordSignup(
     const existing = await accountsWithEmail(trx, emailNormalized);
     if (existing.length >= settings.maxPerEmail) return { status: 'account_limit' };
 
+    const privacy = agePrivacyDefaults(under18(age, settings.bands));
     const userId = await createUser(trx, {
       state,
       email,
@@ -203,9 +207,17 @@ export async function completePasswordSignup(
       emailVerifiedAt: null,
       dateOfBirth: options.dateOfBirth,
       locale: options.locale,
+      ...privacy,
     });
     await upsertPassword(trx, userId, hash, now);
     const band = ageBand(age, settings.bands);
+    await recordSignupAgeAssurance(trx, {
+      userId,
+      adult: band === 'adult',
+      defaultProvider: settings.defaultProvider,
+      requiredFor: settings.requiredFor,
+      now,
+    });
     await writeEvent<Database, UserCreatedData>(
       trx,
       userCreatedEvent(userId, {

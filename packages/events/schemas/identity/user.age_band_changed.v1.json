@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.user.age_band_changed.v1",
+  "title": "User age band changed",
+  "description": "The user's computed age band changed, usually because they had a birthday. The subject is the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["previous_age_band", "age_band"],
+  "properties": {
+    "previous_age_band": {
+      "description": "The age band before this change.",
+      "enum": ["under_13", "13_to_15", "16_to_17", "adult"]
+    },
+    "age_band": {
+      "description": "The age band after this change.",
+      "enum": ["under_13", "13_to_15", "16_to_17", "adult"]
+    }
+  }
+}

@@ -1,7 +1,17 @@
 import { sections } from '@qtiauth/config';
 import { describe, expect, it } from 'vitest';
 
-import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
+import {
+  ageBand,
+  ageOn,
+  agePrivacyDefaults,
+  bandOn,
+  isLeapYear,
+  isValidDateOfBirth,
+  previousUtcDay,
+  under18,
+  utcDay,
+} from './age.ts';
 
 const bands = sections.age.parse({}).bands;
 
@@ -44,5 +54,58 @@ describe('ageBand', () => {
       'adult',
     ]);
     expect(ageBand(16, { '13_to_15': 14, '16_to_17': 17, adult: 19 })).toBe('13_to_15');
+  });
+});
+
+describe('under-18 defaults', () => {
+  it('turns public profile and leaderboards off under 18, and leaves security notifications on', () => {
+    expect(agePrivacyDefaults(true)).toEqual({
+      publicProfile: false,
+      leaderboardVisible: false,
+      securityNotifications: true,
+    });
+    expect(agePrivacyDefaults(false)).toEqual({
+      publicProfile: true,
+      leaderboardVisible: true,
+      securityNotifications: true,
+    });
+    expect(under18(17, bands)).toBe(true);
+    expect(under18(18, bands)).toBe(false);
+  });
+});
+
+describe('birthday band changes', () => {
+  it('moves 16_to_17 to adult overnight on the 18th birthday', () => {
+    const today = new Date('2026-09-17T00:05:00Z');
+    const yesterday = previousUtcDay(today);
+    expect(bandOn('2008-09-17', yesterday, bands)).toBe('16_to_17');
+    expect(bandOn('2008-09-17', today, bands)).toBe('adult');
+    expect(bandOn('2009-09-17', yesterday, bands)).toBe('16_to_17');
+    expect(bandOn('2009-09-17', today, bands)).toBe('16_to_17');
+  });
+
+  it('turns a 29 February 18th birthday over on 1 March in other years', () => {
+    const today = new Date('2026-03-01T00:05:00Z');
+    expect(bandOn('2008-02-29', previousUtcDay(today), bands)).toBe('16_to_17');
+    expect(bandOn('2008-02-29', today, bands)).toBe('adult');
+  });
+});
+
+describe('calendar helpers', () => {
+  it('steps back one UTC day, including across months', () => {
+    expect(utcDay(new Date('2026-09-17T00:05:00Z'))).toBe('2026-09-17');
+    expect(previousUtcDay(new Date('2026-09-17T12:00:00Z')).toISOString()).toBe(
+      '2026-09-16T00:00:00.000Z',
+    );
+    expect(previousUtcDay(new Date('2026-03-01T00:00:00Z')).toISOString()).toBe(
+      '2026-02-28T00:00:00.000Z',
+    );
+  });
+
+  it('treats 2000 and 2024 as leap years, and 1900 and 2026 as not', () => {
+    expect(isLeapYear(2000)).toBe(true);
+    expect(isLeapYear(2024)).toBe(true);
+    expect(isLeapYear(1900)).toBe(false);
+    expect(isLeapYear(2026)).toBe(false);
   });
 });

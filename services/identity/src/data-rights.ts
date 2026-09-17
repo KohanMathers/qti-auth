@@ -1,4 +1,4 @@
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 
 import { dateOfBirthColumn } from './accounts.ts';
 import type { Database } from './database.ts';
@@ -23,6 +23,9 @@ export async function exportUser(
       'locale',
       'username',
       'username_updated_at',
+      'public_profile',
+      'leaderboard_visible',
+      'security_notifications',
       'created_at',
       'updated_at',
     ])
@@ -30,67 +33,92 @@ export async function exportUser(
     .executeTakeFirst();
   if (!user) return {};
 
-  const [identities, sessions, tokens, unusedRecovery, securityEvents, usernameHistory] =
-    await Promise.all([
-      db
-        .selectFrom('identities')
-        .select(['type', 'subject', 'created_at', 'last_used_at'])
-        .where('user_id', '=', userId)
-        .orderBy('created_at')
-        .execute(),
-      db
-        .selectFrom('sessions')
-        .select([
-          'id',
-          'auth_method',
-          'acr',
-          'user_agent',
-          'ip',
-          'country',
-          'last_country',
-          'trust_level',
-          'created_at',
-          'last_active_at',
-          'expires_at',
-          'revoked_at',
-          'revoked_reason',
-        ])
-        .where('user_id', '=', userId)
-        .orderBy('created_at')
-        .execute(),
-      db
-        .selectFrom('email_tokens')
-        .select(['purpose', 'email', 'locale', 'created_at', 'expires_at', 'used_at'])
-        .where('email_normalized', '=', user.email_normalized)
-        .orderBy('created_at')
-        .execute(),
-      db
-        .selectFrom('recovery_codes')
-        .select((eb) => eb.fn.countAll<string>().as('count'))
-        .where('user_id', '=', userId)
-        .where('used_at', 'is', null)
-        .executeTakeFirst(),
-      db
-        .selectFrom('session_security_events')
-        .select([
-          'kind',
-          'trust_from',
-          'trust_to',
-          'country_from',
-          'country_to',
-          'notified',
-          'created_at',
-        ])
-        .where('user_id', '=', userId)
-        .orderBy('created_at')
-        .execute(),
-      db
-        .selectFrom('username_history')
-        .select(['username', 'claimed_at', 'released_at'])
-        .where('user_id', '=', userId)
-        .orderBy('claimed_at')
-        .execute(),
-    ]);
+  const [
+    identities,
+    sessions,
+    tokens,
+    unusedRecovery,
+    securityEvents,
+    usernameHistory,
+    ageAssurance,
+    dateOfBirthChanges,
+  ] = await Promise.all([
+    db
+      .selectFrom('identities')
+      .select(['type', 'subject', 'created_at', 'last_used_at'])
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
+    db
+      .selectFrom('sessions')
+      .select([
+        'id',
+        'auth_method',
+        'acr',
+        'user_agent',
+        'ip',
+        'country',
+        'last_country',
+        'trust_level',
+        'created_at',
+        'last_active_at',
+        'expires_at',
+        'revoked_at',
+        'revoked_reason',
+      ])
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
+    db
+      .selectFrom('email_tokens')
+      .select(['purpose', 'email', 'locale', 'created_at', 'expires_at', 'used_at'])
+      .where('email_normalized', '=', user.email_normalized)
+      .orderBy('created_at')
+      .execute(),
+    db
+      .selectFrom('recovery_codes')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('user_id', '=', userId)
+      .where('used_at', 'is', null)
+      .executeTakeFirst(),
+    db
+      .selectFrom('session_security_events')
+      .select([
+        'kind',
+        'trust_from',
+        'trust_to',
+        'country_from',
+        'country_to',
+        'notified',
+        'created_at',
+      ])
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
+    db
+      .selectFrom('username_history')
+      .select(['username', 'claimed_at', 'released_at'])
+      .where('user_id', '=', userId)
+      .orderBy('claimed_at')
+      .execute(),
+    db
+      .selectFrom('age_assurance_results')
+      .select(['provider', 'strength', 'trigger', 'vendor_reference', 'created_at'])
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
+    db
+      .selectFrom('date_of_birth_changes')
+      .select([
+        'reason',
+        sql<string>`to_char(previous_date_of_birth, 'YYYY-MM-DD')`.as('previous_date_of_birth'),
+        sql<string>`to_char(date_of_birth, 'YYYY-MM-DD')`.as('date_of_birth'),
+        'created_at',
+      ])
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
+  ]);
 
   return {
     account: {
@@ -102,6 +130,9 @@ export async function exportUser(
       locale: user.locale,
       username: user.username,
       username_updated_at: iso(user.username_updated_at),
+      public_profile: user.public_profile,
+      leaderboard_visible: user.leaderboard_visible,
+      security_notifications: user.security_notifications,
       created_at: iso(user.created_at),
       updated_at: iso(user.updated_at),
     },
@@ -133,6 +164,19 @@ export async function exportUser(
       username: row.username,
       claimed_at: iso(row.claimed_at),
       released_at: iso(row.released_at),
+    })),
+    age_assurance: ageAssurance.map((row) => ({
+      provider: row.provider,
+      strength: row.strength,
+      trigger: row.trigger,
+      vendor_reference: row.vendor_reference,
+      created_at: iso(row.created_at),
+    })),
+    date_of_birth_changes: dateOfBirthChanges.map((row) => ({
+      reason: row.reason,
+      previous_date_of_birth: row.previous_date_of_birth,
+      date_of_birth: row.date_of_birth,
+      created_at: iso(row.created_at),
     })),
   };
 }

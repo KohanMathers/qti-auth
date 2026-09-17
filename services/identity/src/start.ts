@@ -14,6 +14,7 @@ import { openTextFilter, resolveListsDir } from '@qtiauth/text-filter';
 import { closeValkey, connectValkey } from '@qtiauth/valkey';
 
 import { countAccountsByState } from './accounts.ts';
+import { AGE_RECOMPUTE_JOB, recomputeAgeBands } from './age-bands.ts';
 import { attachBindStore, valkeyBindStore } from './bind-state.ts';
 import { sweepChallenges } from './challenges.ts';
 import type { Database } from './database.ts';
@@ -203,6 +204,25 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('retention sweep failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: AGE_RECOMPUTE_JOB,
+            metrics: ctx.busMetrics,
+            handler: async (tick) => {
+              const now = new Date(tick.data.scheduled_at);
+              const changed = await recomputeAgeBands(db, { bands: config.age.bands, now });
+              if (changed > 0) {
+                identityMetrics(ctx.metrics).ageBandChanged(changed);
+                ctx.outbox.wake();
+              }
+              log.info('age band recompute finished', { changed });
+            },
+            onError: (error) => {
+              log.error('age band recompute failed', { error });
             },
           }),
         );

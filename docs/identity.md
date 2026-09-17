@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, and lets people claim and change usernames. Roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, and computes age bands with self-declared age assurance. Roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -59,6 +59,7 @@ cookies:
 
 age:
   bands: { 13_to_15: 13, 16_to_17: 16, adult: 18 }
+  assurance: { default_provider: self_declared, required_for: [] }
 
 parental:
   consent_age: 13
@@ -102,11 +103,12 @@ retention:
 - `password.min_length` and `password.max_length` bound a password. 256 characters is the hard cap. Composition rules are off unless you turn them on. `password.breach_check` asks Have I Been Pwned whether the password has appeared in a breach (only the first 5 hex characters of a SHA-1 hash leave the server); if HIBP is unreachable the check is skipped. `password.argon2` is Argon2id; stored hashes are rehashed on login when these change. `password.reset_ttl` and `password.verification_ttl` are how long reset and email-confirmation links work. `password.failure_delay` slows repeated failures per account and per IP. There is no lockout.
 - `captcha.provider` is `altcha` (self-hosted proof-of-work, the default), `turnstile`, `hcaptcha`, `friendly_captcha` or `none`. `captcha.after` is how many failed password attempts, or signup or magic-link starts, from one IP it takes before a CAPTCHA is required. Attempts older than `captcha.window` do not count. `none` turns CAPTCHA off. Vendor providers need `site_key` and `secret_key`. Altcha can generate an HMAC key at startup; set `captcha.altcha.hmac_key` when running more than one identity replica.
 - `sessions.max_per_user` is how many sessions a user can have. Signing in again ends the oldest.
-- `session_security.on_country_change` is `challenge` (drop the session to `aal0` until the user signs in again), `block`, `notify` or `ignore`. `session_security.new_device_email` sends mail on a first sign-in from a browser or OS this account has not used. `session_security.tls_fingerprint.header` is an optional request header such as JA4; `null` turns that signal off. `session_security.alert_min_interval` is the minimum gap between security-alert emails to the same user.
+- `session_security.on_country_change` is `challenge` (drop the session to `aal0` until the user signs in again), `block`, `notify` or `ignore`. `session_security.new_device_email` sends mail on a first sign-in from a browser or OS this account has not used. Accounts under 18 always get that email. `session_security.tls_fingerprint.header` is an optional request header such as JA4; `null` turns that signal off. `session_security.alert_min_interval` is the minimum gap between security-alert emails to the same user.
 - `geoip.source` is `dbip_lite` (default), `maxmind`, `header` or `none`. `geoip.header` is required when source is `header`. `geoip.database_path` is a DB-IP Lite CSV (or gzipped CSV), or a MaxMind MMDB when source is `maxmind`.
 - `text_filter.lists_dir` is the word-list directory, relative to the config file. Run `qtiauth lists update` to fill it.
 - `cookies.session_ttl` is the longest a session lasts, and `cookies.idle_timeout` ends it sooner if it isn't used.
 - `age.bands` is the age in whole years each band starts at. Anyone younger than `13_to_15` is `under_13`.
+- `age.assurance.default_provider` is the provider used when a trigger in `age.assurance.required_for` applies. Only `self_declared` ships. `required_for` is empty by default; `claim_adult_band` records a second result when someone signs up in the adult band.
 - `parental.consent_age` is the age below which an account needs a parent or guardian's approval.
 - `usernames.min_length` and `usernames.max_length` bound a username. `usernames.charset` is the regex character class of allowed characters. Uniqueness is case-insensitive. `usernames.reserved` and `usernames.reserved_prefixes` are names and prefixes nobody can claim; both are empty by default and compared without regard to case. `usernames.change_cooldown` is how long after a claim or change the user must wait before changing again. `usernames.changes_per_year` is how many changes are allowed inside `usernames.change_window` after the first claim. `usernames.release_hold` is how long a released name is held for the previous owner.
 - `security.encryption_key` is a base64 32-byte key (`openssl rand -base64 32`) that encrypts TOTP secrets at rest. Identity will not start without it. Set `APP_ENCRYPTION_KEY` in `.env`.
@@ -139,7 +141,7 @@ Changing email is `POST /api/v1/me/email` with `{ email }` and needs a recent `a
 
 A user can’t remove their last sign-in method. Magic link (when enabled), password, passkeys and connected social identities all count. Trying to remove the last one answers `409 LAST_SIGN_IN_METHOD` with the spec’s warning and `delete_account_path: "/account/delete"`.
 
-The date of birth is stored, and the age band is worked out from it whenever it's needed. Users younger than `parental.consent_age` can't sign up yet: signup answers `403 PARENTAL_CONSENT_UNAVAILABLE` and nothing is kept, until the guardian approval flow is available.
+The date of birth is stored, and the age band is worked out from it whenever it's needed. Users cannot edit their own date of birth after signup. Staff with `users.edit_dob` can change it, with a reason that is stored. Users younger than `parental.consent_age` can't sign up yet: signup answers `403 PARENTAL_CONSENT_UNAVAILABLE` and nothing is kept, until the guardian approval flow is available.
 
 ## Magic links
 
@@ -286,7 +288,7 @@ A session ends when it's `cookies.session_ttl` old, when it hasn't been used for
 
 Re-authentication after `aal0` uses a magic link, a passkey, or password plus 2FA, and restores the **same** session rather than minting a new cookie. Social sign-in always starts a new session. Routes that need a session refuse `aal0` with `403 REAUTHENTICATION_REQUIRED`, except `POST /api/v1/auth/logout` (`allow_aal0: true`). A top-level navigation in that state is sent to `/auth/login`.
 
-A first sign-in from a browser or OS that this account has not used sends a `new_device` email, unless `session_security.new_device_email` is false. Security-alert emails are at most one per user per `session_security.alert_min_interval`.
+A first sign-in from a browser or OS that this account has not used sends a `new_device` email, unless `session_security.new_device_email` is false. Accounts under 18 always get that email. Security-alert emails are at most one per user per `session_security.alert_min_interval`.
 
 GeoIP defaults to DB-IP Lite (CC-BY 4.0) at `geoip.database_path`. Set `geoip.source` to `maxmind`, `header` (with `geoip.header`) or `none`. Country checks switch off when no country can be resolved. Attribution is on `GET /about` and `GET /api/v1/meta/about`.
 
@@ -315,12 +317,26 @@ Accounts can exist without a username. `POST /api/v1/me/username` with `{ userna
 
 Every candidate goes through the text filter. Taken names, reserved names, reserved prefixes and filter blocks all answer `409 USERNAME_UNAVAILABLE` ("Username not available"). Length and charset failures are `400 USERNAME_INVALID`.
 
-`GET /api/v1/me` includes `username` and `username_updated_at`, both null until a name is claimed. `GET`/`POST /auth/username` is the interim page.
+`GET /api/v1/me` includes `username` and `username_updated_at`, both null until a name is claimed, plus `public_profile` and `leaderboard_visible`. `GET`/`POST /auth/username` is the interim page.
 
 | Endpoint                    | Does                                      |
 | --------------------------- | ----------------------------------------- |
 | `POST /api/v1/me/username`  | Claim or change the signed-in user’s name |
 | `GET`/`POST /auth/username` | Interim claim/change form                 |
+
+## Age
+
+Age band is computed from the stored date of birth, never stored as a flag: `under_13`, `13_to_15`, `16_to_17`, `adult`. Login and `GET /api/v1/me` derive it on the spot. `age.recompute_bands` (daily 00:05) finds users whose birthday means they crossed a band boundary and publishes `identity.user.age_band_changed`, so other services see the change without the user signing in.
+
+Signup records a `self_declared` age-assurance result. Identity ships no other provider. `age.assurance.required_for: [claim_adult_band]` records a second result when the claimed band is `adult`. Results store provider, strength, trigger, timestamp and an optional vendor reference, never identity documents.
+
+Accounts under 18 start with public profile and leaderboard visibility off, and always receive new-device emails even if `session_security.new_device_email` is false. Crossing 18 leaves those settings as they are.
+
+Staff change a date of birth at `POST /api/v1/admin/users/:user_id/date-of-birth` with `{ date_of_birth, reason }`. That needs `users.edit_dob` and a recent step-up. Making someone under 18 turns public profile and leaderboards off.
+
+| Endpoint                                          | Does                                           |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `POST /api/v1/admin/users/:user_id/date-of-birth` | Staff-only date-of-birth change, with a reason |
 
 Errors, on top of the [codes every service can return](services.md#errors):
 
@@ -345,6 +361,8 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `CAPTCHA_INVALID`              | 400    | A CAPTCHA was required and the solution was wrong                                      |
 | `USERNAME_INVALID`             | 400    | The username fails length or character-set rules                                       |
 | `USERNAME_UNCHANGED`           | 400    | The username is already this account’s                                                 |
+| `DATE_OF_BIRTH_INVALID`        | 400    | The date of birth is not a real past date                                              |
+| `DATE_OF_BIRTH_UNCHANGED`      | 400    | The date of birth is already this account’s                                            |
 | `CREDENTIALS_INCORRECT`        | 401    | Email or password incorrect                                                            |
 | `AUTH_METHOD_DISABLED`         | 403    | `features.auth.magic_link`, `password`, `passkeys`, `totp` or a social provider is off |
 | `STEP_UP_REQUIRED`             | 403    | A route that needs a recent `aal2` session, or adding a password without one           |
@@ -366,21 +384,22 @@ Errors, on top of the [codes every service can return](services.md#errors):
 
 ## Events
 
-| Event                                 | When                                                                                                                                      |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `qtiauth.identity.user.created.v1`    | An account was created                                                                                                                    |
-| `qtiauth.identity.user.updated.v1`    | The username (or later, another account field) changed. `fields` names what changed.                                                      |
-| `qtiauth.identity.session.created.v1` | Someone signed in                                                                                                                         |
-| `qtiauth.identity.session.revoked.v1` | A session was ended by signing out (`logout`), by the user (`revoked`), by a newer sign-in (`evicted`) or by session security (`blocked`) |
-| `qtiauth.identity.session.flagged.v1` | Session security challenged or blocked a session                                                                                          |
+| Event                                       | When                                                                                                                                      |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `qtiauth.identity.user.created.v1`          | An account was created                                                                                                                    |
+| `qtiauth.identity.user.updated.v1`          | An account field changed. `fields` names what changed (`username`, `date_of_birth`)                                                       |
+| `qtiauth.identity.user.age_band_changed.v1` | The computed age band changed, usually because they had a birthday                                                                        |
+| `qtiauth.identity.session.created.v1`       | Someone signed in                                                                                                                         |
+| `qtiauth.identity.session.revoked.v1`       | A session was ended by signing out (`logout`), by the user (`revoked`), by a newer sign-in (`evicted`) or by session security (`blocked`) |
+| `qtiauth.identity.session.flagged.v1`       | Session security challenged or blocked a session                                                                                          |
 
-The gateway clears cached sessions when it sees `session.revoked`, `session.flagged` or `user.updated`. Schemas are in `packages/events/schemas/identity/`.
+The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated` or `user.age_band_changed`. Schemas are in `packages/events/schemas/identity/`.
 
 ## Retention and data rights
 
 `retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, and text-filter decisions `retention.filter_decisions` after they were recorded.
 
-A user's export has their account (including username), username history, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address.
+A user's export has their account (including username, public profile, leaderboard visibility and security-notification flag), username history, age-assurance results, staff date-of-birth changes, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address.
 
 ## Metrics
 
@@ -402,8 +421,9 @@ A user's export has their account (including username), username history, sign-i
 | `qtiauth_accounts`                         | `state`              |
 | `qtiauth_filter_decisions_total`           | `rule`               |
 | `qtiauth_usernames_claimed_total`          | `action`             |
+| `qtiauth_age_band_changes_total`           |                      |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 
@@ -427,4 +447,4 @@ The gateway sends the flow cookie's value back to identity, and only to identity
 
 ### Tests
 
-`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session. `bind.integration.test.ts` does the same across three hostnames on two registrable domains.
+`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults.

@@ -49,8 +49,34 @@ export interface UsersTable {
   username: string | null;
   username_canonical: string | null;
   username_updated_at: Date | null;
+  public_profile: Generated<boolean>;
+  leaderboard_visible: Generated<boolean>;
+  security_notifications: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+}
+
+export const AGE_ASSURANCE_STRENGTHS = ['self_declared', 'estimated', 'verified'] as const;
+export type AgeAssuranceStrength = (typeof AGE_ASSURANCE_STRENGTHS)[number];
+
+export interface AgeAssuranceResultsTable {
+  id: string;
+  user_id: string;
+  provider: string;
+  strength: AgeAssuranceStrength;
+  trigger: string;
+  vendor_reference: string | null;
+  created_at: Generated<Date>;
+}
+
+export interface DateOfBirthChangesTable {
+  id: string;
+  user_id: string;
+  actor_id: string;
+  reason: string;
+  previous_date_of_birth: ColumnType<never, string, string>;
+  date_of_birth: ColumnType<never, string, string>;
+  created_at: Generated<Date>;
 }
 
 export interface IdentitiesTable {
@@ -203,4 +229,6 @@ export interface Database {
   filter_decisions: FilterDecisionsTable;
   filter_list_entries: FilterListEntriesTable;
   username_history: UsernameHistoryTable;
+  age_assurance_results: AgeAssuranceResultsTable;
+  date_of_birth_changes: DateOfBirthChangesTable;
 }

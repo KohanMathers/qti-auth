@@ -1,5 +1,5 @@
 import type { NewEvent } from '@qtiauth/bus';
-import { IDENTITY_EVENTS } from '@qtiauth/events';
+import { IDENTITY_EVENTS, type EventActor } from '@qtiauth/events';
 import type { AccountState, AgeBand } from '@qtiauth/service-kit';
 
 import type { RevocationReason } from './database.ts';
@@ -33,6 +33,11 @@ export interface SessionFlaggedData {
 
 export interface UserUpdatedData {
   fields: string[];
+}
+
+export interface UserAgeBandChangedData {
+  previous_age_band: AgeBand;
+  age_band: AgeBand;
 }
 
 export function userCreatedEvent(userId: string, data: UserCreatedData): NewEvent<UserCreatedData> {
@@ -74,10 +79,27 @@ export function sessionFlaggedEvent(data: SessionFlaggedData): NewEvent<SessionF
   };
 }
 
-export function userUpdatedEvent(userId: string, data: UserUpdatedData): NewEvent<UserUpdatedData> {
+export function userUpdatedEvent(
+  userId: string,
+  data: UserUpdatedData,
+  actor: EventActor = { type: 'user', id: userId },
+): NewEvent<UserUpdatedData> {
   return {
     type: IDENTITY_EVENTS.userUpdated,
-    actor: { type: 'user', id: userId },
+    actor,
+    subject: { type: 'user', id: userId },
+    data,
+  };
+}
+
+export function userAgeBandChangedEvent(
+  userId: string,
+  data: UserAgeBandChangedData,
+  actor: EventActor = { type: 'system', id: 'identity' },
+): NewEvent<UserAgeBandChangedData> {
+  return {
+    type: IDENTITY_EVENTS.userAgeBandChanged,
+    actor,
     subject: { type: 'user', id: userId },
     data,
   };

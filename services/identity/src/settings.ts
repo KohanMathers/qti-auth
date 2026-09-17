@@ -74,6 +74,8 @@ export function magicLinkSettings(config: IdentityConfig): MagicLinkSettings {
     maxPerEmail: config.accounts.max_per_email,
     consentAge: config.parental.consent_age,
     bands: config.age.bands,
+    defaultProvider: config.age.assurance.default_provider,
+    requiredFor: config.age.assurance.required_for,
     normalizeEmail,
     sessions: sessionSettings(config),
   };
@@ -225,6 +227,8 @@ export function passwordSettings(config: IdentityConfig): PasswordSettings {
     maxPerEmail: config.accounts.max_per_email,
     consentAge: config.parental.consent_age,
     bands: config.age.bands,
+    defaultProvider: config.age.assurance.default_provider,
+    requiredFor: config.age.assurance.required_for,
     stepUpWindow: config.security.step_up_window,
     normalizeEmail,
     sessions: sessionSettings(config),
@@ -278,6 +282,8 @@ export function socialSettings(config: IdentityConfig): SocialSettings {
     maxPerEmail: magic.maxPerEmail,
     consentAge: magic.consentAge,
     bands: magic.bands,
+    defaultProvider: magic.defaultProvider,
+    requiredFor: magic.requiredFor,
     normalizeEmail: magic.normalizeEmail,
     sessions: magic.sessions,
   };

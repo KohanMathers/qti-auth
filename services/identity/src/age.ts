@@ -37,3 +37,39 @@ export function ageBand(age: number, bands: AgeBands): AgeBand {
   if (age >= bands['13_to_15']) return '13_to_15';
   return 'under_13';
 }
+
+export function bandOn(dateOfBirth: string, today: Date, bands: AgeBands): AgeBand {
+  return ageBand(ageOn(dateOfBirth, today), bands);
+}
+
+export function under18(age: number, bands: AgeBands): boolean {
+  return age < bands.adult;
+}
+
+export function utcDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+export function previousUtcDay(date: Date): Date {
+  const day = utcDay(date);
+  const [year = 0, month = 1, dayOfMonth = 1] = day.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, dayOfMonth - 1));
+}
+
+export function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+export interface AgePrivacyDefaults {
+  publicProfile: boolean;
+  leaderboardVisible: boolean;
+  securityNotifications: boolean;
+}
+
+export function agePrivacyDefaults(isUnder18: boolean): AgePrivacyDefaults {
+  return {
+    publicProfile: !isUnder18,
+    leaderboardVisible: !isUnder18,
+    securityNotifications: true,
+  };
+}

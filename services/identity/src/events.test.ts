@@ -6,6 +6,7 @@ import {
   sessionCreatedEvent,
   sessionFlaggedEvent,
   sessionRevokedEvent,
+  userAgeBandChangedEvent,
   userCreatedEvent,
   userUpdatedEvent,
 } from './events.ts';
@@ -45,6 +46,12 @@ describe('identity events', () => {
         }),
       ),
       createEvent(userUpdatedEvent(USER_ID, { fields: ['username'] })),
+      createEvent(
+        userAgeBandChangedEvent(USER_ID, {
+          previous_age_band: '16_to_17',
+          age_band: 'adult',
+        }),
+      ),
     ];
     for (const event of events) {
       expect(catalog.validate(event), event.type).toEqual({ valid: true, event });

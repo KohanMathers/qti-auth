@@ -27,6 +27,7 @@ export interface IdentityMetrics {
   sessionsRevoked: (reason: RevocationReason, count: number) => void;
   filterDecision: (rule: string) => void;
   username: (action: UsernameAction) => void;
+  ageBandChanged: (count: number) => void;
   accounts: (counts: Partial<Record<AccountState, number>>) => void;
   activeSessions: (count: number) => void;
 }
@@ -110,6 +111,10 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     help: 'Username claims, by action: claim, change or reclaim.',
     labelNames: ['action'],
   });
+  const ageBandChanges = metrics.counter({
+    name: 'qtiauth_age_band_changes_total',
+    help: 'Age-band changes from the daily recompute or a staff date-of-birth edit.',
+  });
   const accounts = metrics.gauge({
     name: 'qtiauth_accounts',
     help: 'Accounts by state, refreshed every minute.',
@@ -164,6 +169,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     username: (action) => {
       usernames.inc({ action });
+    },
+    ageBandChanged: (count) => {
+      if (count > 0) ageBandChanges.inc(count);
     },
     accounts: (counts) => {
       for (const state of ACCOUNT_STATES) accounts.set({ state }, counts[state] ?? 0);

@@ -9,6 +9,7 @@ import {
 } from '@qtiauth/service-kit';
 
 import packageJson from '../package.json' with { type: 'json' };
+import { ageRoutes } from './age-routes.ts';
 import { authRoutes } from './auth-routes.ts';
 import type { Database } from './database.ts';
 import { IDENTITY_ERRORS } from './errors.ts';
@@ -52,6 +53,7 @@ export const definition = defineService({
       description: 'View text-filter decisions, the allowlist and the extra blocklist',
     },
     'filter.manage': { description: 'Change the text-filter allowlist and extra blocklist' },
+    'users.edit_dob': { description: 'Change a user’s date of birth' },
   }),
   errors: IDENTITY_ERRORS,
 });
@@ -67,4 +69,5 @@ socialRoutes(router);
 sessionRoutes(router);
 filterRoutes(router);
 usernameRoutes(router);
+ageRoutes(router);
 pageRoutes(router);

@@ -948,6 +948,12 @@ export const sessionSecurity = z
 const bandStart = (band: string, value: number) =>
   z.int().min(1).max(150).default(value).describe(`Age the ${band} band starts at.`);
 
+export const AGE_ASSURANCE_PROVIDERS = ['self_declared'] as const;
+export type AgeAssuranceProviderId = (typeof AGE_ASSURANCE_PROVIDERS)[number];
+
+export const AGE_ASSURANCE_TRIGGERS = ['claim_adult_band'] as const;
+export type AgeAssuranceTrigger = (typeof AGE_ASSURANCE_TRIGGERS)[number];
+
 export const age = z
   .strictObject({
     bands: z
@@ -961,9 +967,29 @@ export const age = z
       })
       .prefault({})
       .describe('Age in whole years at which each band starts. Anyone younger is under_13.'),
+    assurance: z
+      .strictObject({
+        default_provider: z
+          .enum(AGE_ASSURANCE_PROVIDERS)
+          .default('self_declared')
+          .describe(
+            'Provider used when a trigger in required_for applies. Only self_declared ships.',
+          ),
+        required_for: z
+          .array(z.enum(AGE_ASSURANCE_TRIGGERS))
+          .refine((triggers) => new Set(triggers).size === triggers.length, {
+            message: 'Triggers must be unique',
+          })
+          .default([])
+          .describe(
+            'Triggers that need the default provider, such as claiming the adult band. Empty means a self-declared date of birth is enough.',
+          ),
+      })
+      .prefault({})
+      .describe('Pluggable age assurance.'),
   })
   .prefault({})
-  .describe('Age bands, computed from the date of birth.');
+  .describe('Age bands, computed from the date of birth, and age assurance.');
 
 export const parental = z
   .strictObject({

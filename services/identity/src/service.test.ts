@@ -21,6 +21,7 @@ describe('identity service', () => {
       '0010_session_security',
       '0011_text_filter',
       '0012_usernames',
+      '0013_age',
     ]);
   });
 
@@ -67,6 +68,7 @@ describe('identity service', () => {
       'GET /auth/verify-email',
       'POST /api/v1/admin/filter/allowlist',
       'POST /api/v1/admin/filter/blocklist',
+      'POST /api/v1/admin/users/:user_id/date-of-birth',
       'POST /api/v1/auth/2fa',
       'POST /api/v1/auth/email/change',
       'POST /api/v1/auth/email/revert',
@@ -164,6 +166,11 @@ describe('identity service', () => {
       auth: 'session',
       step_up: true,
     });
+    expect(route('POST', '/api/v1/admin/users/:user_id/date-of-birth')).toMatchObject({
+      auth: 'session',
+      permissions: ['users.edit_dob'],
+      step_up: true,
+    });
     expect(route('POST', '/api/v1/auth/social/:provider/start')).toMatchObject({
       auth: 'none',
       rate_limit: 'auth_password',
@@ -212,6 +219,7 @@ describe('identity service', () => {
         'EMAIL_CHANGE_INVALID',
         'EMAIL_REVERT_INVALID',
         'USERNAME_UNAVAILABLE',
+        'DATE_OF_BIRTH_UNCHANGED',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

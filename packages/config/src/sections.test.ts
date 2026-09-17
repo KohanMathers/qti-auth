@@ -421,6 +421,25 @@ describe('age', () => {
       'bands: Each band must start at a greater age than the one before',
     ]);
   });
+
+  it('ships self_declared assurance with no required triggers', () => {
+    expect(age.parse({}).assurance).toEqual({
+      default_provider: 'self_declared',
+      required_for: [],
+    });
+    expect(age.parse({ assurance: { required_for: ['claim_adult_band'] } }).assurance).toEqual({
+      default_provider: 'self_declared',
+      required_for: ['claim_adult_band'],
+    });
+    expect(
+      messages(
+        age.safeParse({ assurance: { required_for: ['claim_adult_band', 'claim_adult_band'] } }),
+      ),
+    ).toEqual(['assurance.required_for: Triggers must be unique']);
+    expect(messages(age.safeParse({ assurance: { default_provider: 'yoti' } }))).toEqual([
+      'assurance.default_provider: Invalid input: expected "self_declared"',
+    ]);
+  });
 });
 
 describe('usernames', () => {
