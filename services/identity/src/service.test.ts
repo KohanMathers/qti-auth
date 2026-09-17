@@ -20,6 +20,7 @@ describe('identity service', () => {
       '0009_bindings',
       '0010_session_security',
       '0011_text_filter',
+      '0012_usernames',
     ]);
   });
 
@@ -62,6 +63,7 @@ describe('identity service', () => {
       'GET /auth/social/signup',
       'GET /auth/totp',
       'GET /auth/two-factor',
+      'GET /auth/username',
       'GET /auth/verify-email',
       'POST /api/v1/admin/filter/allowlist',
       'POST /api/v1/admin/filter/blocklist',
@@ -96,6 +98,7 @@ describe('identity service', () => {
       'POST /api/v1/me/totp',
       'POST /api/v1/me/totp/disable',
       'POST /api/v1/me/totp/start',
+      'POST /api/v1/me/username',
       'POST /api/v1/sessions/revoke-all',
       'POST /api/v1/sessions/revoke-others',
       'POST /auth/change-email',
@@ -110,6 +113,7 @@ describe('identity service', () => {
       'POST /auth/social/signup',
       'POST /auth/totp',
       'POST /auth/two-factor',
+      'POST /auth/username',
       'POST /auth/verify-email',
     ]);
     for (const route of routes) {
@@ -207,6 +211,7 @@ describe('identity service', () => {
         'OAUTH_FAILED',
         'EMAIL_CHANGE_INVALID',
         'EMAIL_REVERT_INVALID',
+        'USERNAME_UNAVAILABLE',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

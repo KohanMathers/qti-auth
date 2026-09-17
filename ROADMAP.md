@@ -419,13 +419,13 @@ Spec: §4.11
 **Done when:** the regression corpus passes, and `lists audit` output is reviewed with missing words
 added to D.
 
-### P2b.2 Usernames — M
+### P2b.2 Usernames — M ✅
 Spec: §4.10
 
-- [ ] Claim once, changes with cooldown and yearly limit, history.
-- [ ] Rules, reserved names and reserved prefixes from config (empty by default).
-- [ ] Release hold where **only the previous owner** can reclaim during the hold.
-- [ ] Filter integration with the generic "Username not available" response.
+- [x] Claim once, changes with cooldown and yearly limit, history.
+- [x] Rules, reserved names and reserved prefixes from config (empty by default).
+- [x] Release hold where **only the previous owner** can reclaim during the hold.
+- [x] Filter integration with the generic "Username not available" response.
 
 **Done when:** a renamed user can reclaim their old name during the hold and another user can't.
 

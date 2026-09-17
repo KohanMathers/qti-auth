@@ -54,6 +54,8 @@ export interface Account extends AccountSummary {
   email_verified_at: Date | null;
   date_of_birth: string;
   locale: string | null;
+  username: string | null;
+  username_updated_at: Date | null;
 }
 
 export interface NewUser {
@@ -114,6 +116,8 @@ export function findAccount(db: Kysely<Database>, id: string): Promise<Account |
       'email_verified_at',
       dateOfBirthColumn.as('date_of_birth'),
       'locale',
+      'username',
+      'username_updated_at',
       'created_at',
     ])
     .where('id', '=', id)

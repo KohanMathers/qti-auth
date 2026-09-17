@@ -76,10 +76,12 @@ import {
   surfacePath,
   TOTP_PAGE,
   TWO_FACTOR_PAGE,
+  USERNAME_PAGE,
   VERIFY_EMAIL_PAGE,
 } from './settings.ts';
 import { listSocialIdentities } from './social.ts';
 import { beginTotpEnrol, confirmTotpEnrol, disableTotp } from './two-factor.ts';
+import { claimUsername } from './usernames.ts';
 
 const htmlResponses = { 200: { description: 'An HTML page' } };
 
@@ -172,12 +174,52 @@ function signedIn(ctx: Context, session: CreatedSession, returnTo: string | null
     headers,
     body: `<ul>
 <li><a href="../api/v1/me">Your account</a></li>
+<li><a href="username">Username</a></li>
 <li><a href="../api/v1/sessions">Your sessions</a></li>
 ${passkeysEnabled(ctx) ? '<li><a href="passkeys">Passkeys</a></li>' : ''}
 ${totpEnabled(ctx) ? '<li><a href="totp">Authenticator app</a></li>' : ''}
 ${socialEnabled(ctx) ? '<li><a href="identities">Connected sign-in methods</a></li>' : ''}
 </ul>
 <form method="post" action="../api/v1/auth/logout"><button type="submit">Sign out</button></form>`,
+  });
+}
+
+function usernameMessage(
+  ctx: Context,
+  status: 'invalid' | 'unavailable' | 'unchanged' | 'cooldown' | 'limit' | 'not_found',
+): string {
+  switch (status) {
+    case 'invalid':
+      return `Use ${String(ctx.config.usernames.min_length)}–${String(ctx.config.usernames.max_length)} characters matching ${ctx.config.usernames.charset}.`;
+    case 'unavailable':
+      return 'Username not available.';
+    case 'unchanged':
+      return 'That’s already your username.';
+    case 'cooldown':
+      return 'You can’t change your username yet.';
+    case 'limit':
+      return 'You can’t change your username again yet.';
+    case 'not_found':
+      return 'Sign in again.';
+  }
+}
+
+function usernameForm(
+  ctx: Context,
+  current: string | null,
+  values: { username?: string } = {},
+  error?: string,
+): Response {
+  const title = current === null ? 'Choose a username' : 'Change username';
+  return page(ctx, {
+    title,
+    body: `${error === undefined ? '' : alert(error)}
+${current === null ? '' : paragraph(`Current username: ${current}`)}
+<form method="post" action="username">
+<p><label for="username">Username</label><br>
+<input id="username" name="username" required minlength="${String(ctx.config.usernames.min_length)}" maxlength="${String(ctx.config.usernames.max_length)}" value="${escapeHtml(values.username ?? current ?? '')}"></p>
+<p><button type="submit">Save</button></p>
+</form>`,
   });
 }
 
@@ -1253,6 +1295,76 @@ ${passkeysEnabled(ctx) ? '<p><a href="passkeys">Passkeys</a></p>' : ''}`,
 ${paragraph('Register a passkey with POST /api/v1/me/passkeys/register/start, then POST the attestation to /api/v1/me/passkeys/register.')}
 ${totpEnabled(ctx) ? '<p><a href="totp">Authenticator app</a></p>' : ''}
 ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p>' : ''}`,
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: USERNAME_PAGE,
+    operation_id: 'usernamePage',
+    summary: 'Claim or change this account’s username',
+    tags: ['pages'],
+    auth: 'session',
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity }) => {
+      const { userId } = sessionUser(identity);
+      const account = await findAccount(ctx.db, userId);
+      if (!account) {
+        return page(ctx, {
+          status: 404,
+          title: 'Account not found',
+          body: paragraph('Sign in again.'),
+        });
+      }
+      return usernameForm(ctx, account.username);
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: USERNAME_PAGE,
+    operation_id: 'usernamePageSubmit',
+    summary: 'Save a username from the username page',
+    tags: ['pages'],
+    auth: 'session',
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity, request, log }) => {
+      const { userId } = sessionUser(identity);
+      const account = await findAccount(ctx.db, userId);
+      if (!account) {
+        return page(ctx, {
+          status: 404,
+          title: 'Account not found',
+          body: paragraph('Sign in again.'),
+        });
+      }
+      const form = await readForm(request);
+      const username = form['username'] ?? '';
+      const result = await claimUsername(ctx, { userId, username, now: new Date() });
+      if (
+        result.status === 'invalid' ||
+        result.status === 'unavailable' ||
+        result.status === 'unchanged' ||
+        result.status === 'cooldown' ||
+        result.status === 'limit' ||
+        result.status === 'not_found'
+      ) {
+        return usernameForm(
+          ctx,
+          account.username,
+          { username },
+          usernameMessage(ctx, result.status),
+        );
+      }
+      ctx.outbox.wake();
+      log.info('username set', { user_id: userId });
+      return page(ctx, {
+        title: 'Username saved',
+        body: `${paragraph(`Your username is ${result.username}.`)}
+<p><a href="../api/v1/me">Your account</a></p>`,
       });
     },
   });

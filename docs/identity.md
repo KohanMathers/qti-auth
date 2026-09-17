@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, and filters public text. Usernames, roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, and lets people claim and change usernames. Roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -63,6 +63,17 @@ age:
 parental:
   consent_age: 13
 
+usernames:
+  min_length: 8
+  max_length: 18
+  charset: '[A-Za-z0-9_]'
+  reserved: []
+  reserved_prefixes: []
+  change_cooldown: 30d
+  changes_per_year: 3
+  change_window: 365d
+  release_hold: 90d
+
 security:
   step_up_window: 10m
   encryption_key: '${env:APP_ENCRYPTION_KEY}'
@@ -97,6 +108,7 @@ retention:
 - `cookies.session_ttl` is the longest a session lasts, and `cookies.idle_timeout` ends it sooner if it isn't used.
 - `age.bands` is the age in whole years each band starts at. Anyone younger than `13_to_15` is `under_13`.
 - `parental.consent_age` is the age below which an account needs a parent or guardian's approval.
+- `usernames.min_length` and `usernames.max_length` bound a username. `usernames.charset` is the regex character class of allowed characters. Uniqueness is case-insensitive. `usernames.reserved` and `usernames.reserved_prefixes` are names and prefixes nobody can claim; both are empty by default and compared without regard to case. `usernames.change_cooldown` is how long after a claim or change the user must wait before changing again. `usernames.changes_per_year` is how many changes are allowed inside `usernames.change_window` after the first claim. `usernames.release_hold` is how long a released name is held for the previous owner.
 - `security.encryption_key` is a base64 32-byte key (`openssl rand -base64 32`) that encrypts TOTP secrets at rest. Identity will not start without it. Set `APP_ENCRYPTION_KEY` in `.env`.
 - `security.step_up_window` is how recently a session must have reached `aal2` for a route that needs step-up, and for adding a password after a magic-link sign-in.
 - `security.require_2fa_for_permissions` is the staff permissions that require a passkey or TOTP. Matching accounts can sign in but only reach enrolment until they set one up. Permissions themselves arrive in a later release; until then this is tested with a stub grant.
@@ -297,6 +309,19 @@ Identity loads the word lists in `text_filter.lists_dir` and filters public text
 
 `filter.read` is needed to view those lists; `filter.manage` to change them. File entries in `allow.txt` and `extra-block.txt` cannot be deleted through the API.
 
+## Usernames
+
+Accounts can exist without a username. `POST /api/v1/me/username` with `{ username }` claims one, or changes it later. The first claim is free of the cooldown and yearly limit. Changing is limited by `usernames.change_cooldown` and `usernames.changes_per_year`. History is kept. Changing a name holds the old one for `usernames.release_hold`; during the hold **only the previous owner** can reclaim it.
+
+Every candidate goes through the text filter. Taken names, reserved names, reserved prefixes and filter blocks all answer `409 USERNAME_UNAVAILABLE` ("Username not available"). Length and charset failures are `400 USERNAME_INVALID`.
+
+`GET /api/v1/me` includes `username` and `username_updated_at`, both null until a name is claimed. `GET`/`POST /auth/username` is the interim page.
+
+| Endpoint                    | Does                                      |
+| --------------------------- | ----------------------------------------- |
+| `POST /api/v1/me/username`  | Claim or change the signed-in user’s name |
+| `GET`/`POST /auth/username` | Interim claim/change form                 |
+
 Errors, on top of the [codes every service can return](services.md#errors):
 
 | Code                           | Status | When                                                                                   |
@@ -318,6 +343,8 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `EMAIL_CHANGE_INVALID`         | 400    | The email change link is unknown, has expired or has already been used                 |
 | `EMAIL_REVERT_INVALID`         | 400    | The email revert link is unknown, has expired or has already been used                 |
 | `CAPTCHA_INVALID`              | 400    | A CAPTCHA was required and the solution was wrong                                      |
+| `USERNAME_INVALID`             | 400    | The username fails length or character-set rules                                       |
+| `USERNAME_UNCHANGED`           | 400    | The username is already this account’s                                                 |
 | `CREDENTIALS_INCORRECT`        | 401    | Email or password incorrect                                                            |
 | `AUTH_METHOD_DISABLED`         | 403    | `features.auth.magic_link`, `password`, `passkeys`, `totp` or a social provider is off |
 | `STEP_UP_REQUIRED`             | 403    | A route that needs a recent `aal2` session, or adding a password without one           |
@@ -328,6 +355,9 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `PASSKEY_NOT_FOUND`            | 404    | No passkey with that ID belongs to the user                                            |
 | `IDENTITY_NOT_FOUND`           | 404    | No connected social identity with that ID belongs to the user                          |
 | `FILTER_ENTRY_NOT_FOUND`       | 404    | No admin-added allowlist or extra-block word with that value                           |
+| `USERNAME_UNAVAILABLE`         | 409    | The username is taken, reserved, held or blocked by the text filter                    |
+| `USERNAME_COOLDOWN`            | 409    | `usernames.change_cooldown` has not elapsed since the last claim or change             |
+| `USERNAME_CHANGE_LIMIT`        | 409    | `usernames.changes_per_year` changes have already been used in `change_window`         |
 | `ACCOUNT_LIMIT_REACHED`        | 409    | The address already has `accounts.max_per_email` accounts                              |
 | `TOTP_ALREADY_ENABLED`         | 409    | Authenticator-app sign-in is already set up                                            |
 | `IDENTITY_IN_USE`              | 409    | That provider identity is already connected to another account                         |
@@ -339,17 +369,18 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | Event                                 | When                                                                                                                                      |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `qtiauth.identity.user.created.v1`    | An account was created                                                                                                                    |
+| `qtiauth.identity.user.updated.v1`    | The username (or later, another account field) changed. `fields` names what changed.                                                      |
 | `qtiauth.identity.session.created.v1` | Someone signed in                                                                                                                         |
 | `qtiauth.identity.session.revoked.v1` | A session was ended by signing out (`logout`), by the user (`revoked`), by a newer sign-in (`evicted`) or by session security (`blocked`) |
 | `qtiauth.identity.session.flagged.v1` | Session security challenged or blocked a session                                                                                          |
 
-The gateway clears cached sessions when it sees `session.revoked` or `session.flagged`. Schemas are in `packages/events/schemas/identity/`.
+The gateway clears cached sessions when it sees `session.revoked`, `session.flagged` or `user.updated`. Schemas are in `packages/events/schemas/identity/`.
 
 ## Retention and data rights
 
 `retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, and text-filter decisions `retention.filter_decisions` after they were recorded.
 
-A user's export has their account, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address.
+A user's export has their account (including username), username history, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address.
 
 ## Metrics
 
@@ -370,8 +401,9 @@ A user's export has their account, sign-in methods (without password hashes or T
 | `qtiauth_sessions_active`                  |                      |
 | `qtiauth_accounts`                         | `state`              |
 | `qtiauth_filter_decisions_total`           | `rule`               |
+| `qtiauth_usernames_claimed_total`          | `action`             |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 

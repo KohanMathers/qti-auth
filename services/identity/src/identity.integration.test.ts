@@ -276,6 +276,7 @@ describe('signing up and signing in', () => {
       id: signedUp.userId,
       email: 'new@example.com',
       email_verified: true,
+      username: null,
       account_state: 'active',
       age_band: '13_to_15',
     });

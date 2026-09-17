@@ -10,6 +10,7 @@ export type CaptchaResult = 'shown' | 'solved' | 'failed';
 export type TwoFactorFactor = 'totp' | 'passkey' | 'recovery';
 export type TwoFactorResult = 'success' | 'failure';
 export type StepUpResult = 'prompt' | 'success' | 'failure';
+export type UsernameAction = 'claim' | 'change' | 'reclaim';
 
 export interface IdentityMetrics {
   magicLink: (event: MagicLinkEvent) => void;
@@ -25,6 +26,7 @@ export interface IdentityMetrics {
   bindingCreated: () => void;
   sessionsRevoked: (reason: RevocationReason, count: number) => void;
   filterDecision: (rule: string) => void;
+  username: (action: UsernameAction) => void;
   accounts: (counts: Partial<Record<AccountState, number>>) => void;
   activeSessions: (count: number) => void;
 }
@@ -103,6 +105,11 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     help: 'Text-filter decisions, by rule.',
     labelNames: ['rule'],
   });
+  const usernames = metrics.counter({
+    name: 'qtiauth_usernames_claimed_total',
+    help: 'Username claims, by action: claim, change or reclaim.',
+    labelNames: ['action'],
+  });
   const accounts = metrics.gauge({
     name: 'qtiauth_accounts',
     help: 'Accounts by state, refreshed every minute.',
@@ -154,6 +161,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     filterDecision: (rule) => {
       filterDecisions.inc({ rule });
+    },
+    username: (action) => {
+      usernames.inc({ action });
     },
     accounts: (counts) => {
       for (const state of ACCOUNT_STATES) accounts.set({ state }, counts[state] ?? 0);

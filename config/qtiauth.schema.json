@@ -2272,6 +2272,78 @@
       },
       "additionalProperties": false
     },
+    "usernames": {
+      "description": "Usernames.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "min_length": {
+          "default": 8,
+          "description": "Shortest a username can be.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "max_length": {
+          "default": 18,
+          "description": "Longest a username can be.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "charset": {
+          "default": "[A-Za-z0-9_]",
+          "description": "Allowed characters as a regex character class, e.g. [A-Za-z0-9_].",
+          "type": "string"
+        },
+        "reserved": {
+          "default": [],
+          "description": "Usernames nobody can claim. Compared without regard to case. Empty by default.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "reserved_prefixes": {
+          "default": [],
+          "description": "Username prefixes nobody can claim, such as a brand prefix. Compared without regard to case. Empty by default.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "change_cooldown": {
+          "default": "30d",
+          "description": "How long a user must wait after claiming or changing a username before changing it again. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "changes_per_year": {
+          "default": 3,
+          "description": "How many times a user can change their username inside change_window, after the first claim.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "change_window": {
+          "default": "365d",
+          "description": "Window used to count username changes against changes_per_year. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "release_hold": {
+          "default": "90d",
+          "description": "How long a released username is held for the previous owner before anyone else can claim it. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        }
+      },
+      "additionalProperties": false
+    },
     "rate_limits": {
       "description": "Named rate-limit policies, referenced by routes. Policies you set replace the built-in policy of the same name.",
       "type": "object",

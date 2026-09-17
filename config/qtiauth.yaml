@@ -216,6 +216,17 @@ age:
 parental:
   consent_age: 13
 
+usernames:
+  min_length: 8
+  max_length: 18
+  charset: '[A-Za-z0-9_]'
+  reserved: []
+  reserved_prefixes: []
+  change_cooldown: 30d
+  changes_per_year: 3
+  change_window: 365d
+  release_hold: 90d
+
 rate_limits: # per: ip | user | client | email | account, or a list counted as one combination
   global: { per: ip, limit: 300, window: 1m }
   auth_password: { per: [ip, account], limit: 10, window: 15m, on_store_failure: closed }

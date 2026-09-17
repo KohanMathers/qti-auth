@@ -21,6 +21,8 @@ export async function exportUser(
       'email_verified_at',
       dateOfBirthColumn.as('date_of_birth'),
       'locale',
+      'username',
+      'username_updated_at',
       'created_at',
       'updated_at',
     ])
@@ -28,60 +30,67 @@ export async function exportUser(
     .executeTakeFirst();
   if (!user) return {};
 
-  const [identities, sessions, tokens, unusedRecovery, securityEvents] = await Promise.all([
-    db
-      .selectFrom('identities')
-      .select(['type', 'subject', 'created_at', 'last_used_at'])
-      .where('user_id', '=', userId)
-      .orderBy('created_at')
-      .execute(),
-    db
-      .selectFrom('sessions')
-      .select([
-        'id',
-        'auth_method',
-        'acr',
-        'user_agent',
-        'ip',
-        'country',
-        'last_country',
-        'trust_level',
-        'created_at',
-        'last_active_at',
-        'expires_at',
-        'revoked_at',
-        'revoked_reason',
-      ])
-      .where('user_id', '=', userId)
-      .orderBy('created_at')
-      .execute(),
-    db
-      .selectFrom('email_tokens')
-      .select(['purpose', 'email', 'locale', 'created_at', 'expires_at', 'used_at'])
-      .where('email_normalized', '=', user.email_normalized)
-      .orderBy('created_at')
-      .execute(),
-    db
-      .selectFrom('recovery_codes')
-      .select((eb) => eb.fn.countAll<string>().as('count'))
-      .where('user_id', '=', userId)
-      .where('used_at', 'is', null)
-      .executeTakeFirst(),
-    db
-      .selectFrom('session_security_events')
-      .select([
-        'kind',
-        'trust_from',
-        'trust_to',
-        'country_from',
-        'country_to',
-        'notified',
-        'created_at',
-      ])
-      .where('user_id', '=', userId)
-      .orderBy('created_at')
-      .execute(),
-  ]);
+  const [identities, sessions, tokens, unusedRecovery, securityEvents, usernameHistory] =
+    await Promise.all([
+      db
+        .selectFrom('identities')
+        .select(['type', 'subject', 'created_at', 'last_used_at'])
+        .where('user_id', '=', userId)
+        .orderBy('created_at')
+        .execute(),
+      db
+        .selectFrom('sessions')
+        .select([
+          'id',
+          'auth_method',
+          'acr',
+          'user_agent',
+          'ip',
+          'country',
+          'last_country',
+          'trust_level',
+          'created_at',
+          'last_active_at',
+          'expires_at',
+          'revoked_at',
+          'revoked_reason',
+        ])
+        .where('user_id', '=', userId)
+        .orderBy('created_at')
+        .execute(),
+      db
+        .selectFrom('email_tokens')
+        .select(['purpose', 'email', 'locale', 'created_at', 'expires_at', 'used_at'])
+        .where('email_normalized', '=', user.email_normalized)
+        .orderBy('created_at')
+        .execute(),
+      db
+        .selectFrom('recovery_codes')
+        .select((eb) => eb.fn.countAll<string>().as('count'))
+        .where('user_id', '=', userId)
+        .where('used_at', 'is', null)
+        .executeTakeFirst(),
+      db
+        .selectFrom('session_security_events')
+        .select([
+          'kind',
+          'trust_from',
+          'trust_to',
+          'country_from',
+          'country_to',
+          'notified',
+          'created_at',
+        ])
+        .where('user_id', '=', userId)
+        .orderBy('created_at')
+        .execute(),
+      db
+        .selectFrom('username_history')
+        .select(['username', 'claimed_at', 'released_at'])
+        .where('user_id', '=', userId)
+        .orderBy('claimed_at')
+        .execute(),
+    ]);
 
   return {
     account: {
@@ -91,6 +100,8 @@ export async function exportUser(
       email_verified_at: iso(user.email_verified_at),
       date_of_birth: user.date_of_birth,
       locale: user.locale,
+      username: user.username,
+      username_updated_at: iso(user.username_updated_at),
       created_at: iso(user.created_at),
       updated_at: iso(user.updated_at),
     },
@@ -117,6 +128,11 @@ export async function exportUser(
     session_security_events: securityEvents.map((event) => ({
       ...event,
       created_at: iso(event.created_at),
+    })),
+    username_history: usernameHistory.map((row) => ({
+      username: row.username,
+      claimed_at: iso(row.claimed_at),
+      released_at: iso(row.released_at),
     })),
   };
 }

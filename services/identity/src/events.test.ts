@@ -7,6 +7,7 @@ import {
   sessionFlaggedEvent,
   sessionRevokedEvent,
   userCreatedEvent,
+  userUpdatedEvent,
 } from './events.ts';
 
 const USER_ID = '0199a0e0-0000-7000-8000-000000000001';
@@ -43,6 +44,7 @@ describe('identity events', () => {
           acr: 'aal0',
         }),
       ),
+      createEvent(userUpdatedEvent(USER_ID, { fields: ['username'] })),
     ];
     for (const event of events) {
       expect(catalog.validate(event), event.type).toEqual({ valid: true, event });

@@ -46,6 +46,9 @@ export interface UsersTable {
   email_verified_at: Date | null;
   date_of_birth: ColumnType<never, string, string>;
   locale: string | null;
+  username: string | null;
+  username_canonical: string | null;
+  username_updated_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -177,6 +180,15 @@ export interface FilterListEntriesTable {
   created_at: Generated<Date>;
 }
 
+export interface UsernameHistoryTable {
+  id: string;
+  user_id: string;
+  username: string;
+  canonical: string;
+  claimed_at: Date;
+  released_at: Date | null;
+}
+
 export interface Database {
   users: UsersTable;
   identities: IdentitiesTable;
@@ -190,4 +202,5 @@ export interface Database {
   session_security_events: SessionSecurityEventsTable;
   filter_decisions: FilterDecisionsTable;
   filter_list_entries: FilterListEntriesTable;
+  username_history: UsernameHistoryTable;
 }

@@ -31,6 +31,10 @@ export interface SessionFlaggedData {
   acr: string;
 }
 
+export interface UserUpdatedData {
+  fields: string[];
+}
+
 export function userCreatedEvent(userId: string, data: UserCreatedData): NewEvent<UserCreatedData> {
   return {
     type: IDENTITY_EVENTS.userCreated,
@@ -66,6 +70,15 @@ export function sessionFlaggedEvent(data: SessionFlaggedData): NewEvent<SessionF
     type: IDENTITY_EVENTS.sessionFlagged,
     actor: { type: 'user', id: data.user_id },
     subject: { type: 'session', id: data.session_id },
+    data,
+  };
+}
+
+export function userUpdatedEvent(userId: string, data: UserUpdatedData): NewEvent<UserUpdatedData> {
+  return {
+    type: IDENTITY_EVENTS.userUpdated,
+    actor: { type: 'user', id: userId },
+    subject: { type: 'user', id: userId },
     data,
   };
 }

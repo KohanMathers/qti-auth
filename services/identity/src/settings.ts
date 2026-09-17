@@ -41,6 +41,7 @@ export const CHANGE_EMAIL_PAGE = '/auth/change-email';
 export const REVERT_EMAIL_PAGE = '/auth/revert-email';
 export const BIND_PAGE = '/auth/bind';
 export const BIND_CALLBACK_PAGE = '/auth/bind/callback';
+export const USERNAME_PAGE = '/auth/username';
 
 export class IdentityConfigError extends Error {
   constructor(message: string) {

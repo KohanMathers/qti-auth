@@ -102,7 +102,7 @@ export interface PasswordResetStartResult {
 export type ConsumeResetResult =
   | { status: 'invalid'; reason: TokenFailure }
   | { status: 'choose_account'; accounts: { id: string; created_at: Date }[] }
-  | { status: 'ready'; email: string; token: string };
+  | { status: 'ready'; email: string; token: string; userId: string };
 
 export type PasswordResetResult =
   | { status: 'invalid'; reason: TokenFailure }
@@ -136,8 +136,12 @@ async function rejectIfUnusable(
   password: string,
   email: string,
   settings: PasswordSettings,
+  extraIdentifiers: readonly (string | null | undefined)[] = [],
 ): Promise<PasswordPolicyReason | undefined> {
-  const reason = passwordPolicyReason(password, settings.policy, identifiers(email));
+  const reason = passwordPolicyReason(password, settings.policy, [
+    ...identifiers(email),
+    ...extraIdentifiers,
+  ]);
   if (reason !== undefined) return reason;
   if (!settings.breachCheck) return undefined;
   const breached = await checkBreachedPassword(password);
@@ -356,7 +360,7 @@ export function consumePasswordReset(
         ? accounts[0]
         : accounts.find((candidate) => candidate.id === options.userId);
     if (!account) return { status: 'choose_account', accounts };
-    return { status: 'ready', email: taken.row.email, token: options.token };
+    return { status: 'ready', email: taken.row.email, token: options.token, userId: account.id };
   });
 }
 
@@ -380,7 +384,10 @@ export async function resetPassword(
     now,
   });
   if (peeked.status !== 'ready') return peeked;
-  const rejected = await rejectIfUnusable(options.password, peeked.email, settings);
+  const resetAccount = await findAccount(db, peeked.userId);
+  const rejected = await rejectIfUnusable(options.password, peeked.email, settings, [
+    resetAccount?.username,
+  ]);
   if (rejected !== undefined) return { status: 'rejected', reason: rejected };
   const hash = await hashPassword(options.password, settings.argon2);
 
@@ -523,7 +530,9 @@ export async function setAccountPassword(
     }
   }
 
-  const rejected = await rejectIfUnusable(options.password, account.email, settings);
+  const rejected = await rejectIfUnusable(options.password, account.email, settings, [
+    account.username,
+  ]);
   if (rejected !== undefined) return { status: 'rejected', reason: rejected };
   if (hasPassword && options.currentPassword === options.password) {
     return { status: 'updated', added: false };

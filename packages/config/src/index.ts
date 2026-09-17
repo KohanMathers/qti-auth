@@ -41,4 +41,5 @@ export {
   type SectionName,
   sections,
   SURFACES,
+  USERNAME_MAX_LENGTH,
 } from './sections.ts';

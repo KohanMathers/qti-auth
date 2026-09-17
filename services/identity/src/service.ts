@@ -17,6 +17,7 @@ import { filterRoutes } from './filter-routes.ts';
 import { pageRoutes } from './pages.ts';
 import { sessionRoutes } from './session-routes.ts';
 import { socialRoutes } from './social-routes.ts';
+import { usernameRoutes } from './username-routes.ts';
 
 export const MIGRATIONS_DIR = join(import.meta.dirname, 'migrations');
 
@@ -40,6 +41,7 @@ export const definition = defineService({
     'text_filter',
     'age',
     'parental',
+    'usernames',
     'security',
     'retention',
     'valkey',
@@ -64,4 +66,5 @@ factorRoutes(router);
 socialRoutes(router);
 sessionRoutes(router);
 filterRoutes(router);
+usernameRoutes(router);
 pageRoutes(router);

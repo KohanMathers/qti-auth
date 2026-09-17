@@ -19,6 +19,7 @@ import {
   security,
   sessionSecurity,
   surfaces,
+  usernames,
 } from './sections.ts';
 
 function messages(result: { error?: { issues: { path: PropertyKey[]; message: string }[] } }) {
@@ -418,6 +419,31 @@ describe('age', () => {
     expect(age.parse({}).bands).toEqual({ '13_to_15': 13, '16_to_17': 16, adult: 18 });
     expect(messages(age.safeParse({ bands: { '16_to_17': 19 } }))).toEqual([
       'bands: Each band must start at a greater age than the one before',
+    ]);
+  });
+});
+
+describe('usernames', () => {
+  it('uses 8–18 letters, digits and underscores, with empty reserved lists', () => {
+    expect(usernames.parse({})).toEqual({
+      min_length: 8,
+      max_length: 18,
+      charset: '[A-Za-z0-9_]',
+      reserved: [],
+      reserved_prefixes: [],
+      change_cooldown: 2_592_000_000,
+      changes_per_year: 3,
+      change_window: 31_536_000_000,
+      release_hold: 7_776_000_000,
+    });
+  });
+
+  it('rejects a max shorter than min, and a charset that is not a character class', () => {
+    expect(messages(usernames.safeParse({ min_length: 10, max_length: 8 }))).toEqual([
+      'max_length: Must be at least min_length',
+    ]);
+    expect(messages(usernames.safeParse({ charset: 'A-Za-z0-9_' }))).toEqual([
+      'charset: Must be a character class like [A-Za-z0-9_]',
     ]);
   });
 });

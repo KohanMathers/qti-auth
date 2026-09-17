@@ -60,6 +60,14 @@ export const IDENTITY_ERRORS = defineErrors({
     title: 'This sign-in provider is temporarily unavailable',
   },
   FILTER_ENTRY_NOT_FOUND: { status: 404, title: 'No such list entry' },
+  USERNAME_INVALID: { status: 400, title: 'This username does not meet the requirements' },
+  USERNAME_UNAVAILABLE: { status: 409, title: 'Username not available' },
+  USERNAME_UNCHANGED: { status: 400, title: 'That is already this account’s username' },
+  USERNAME_COOLDOWN: { status: 409, title: 'This username cannot be changed yet' },
+  USERNAME_CHANGE_LIMIT: {
+    status: 409,
+    title: 'The username change limit has been reached',
+  },
   CAPTCHA_REQUIRED: { status: 403, title: 'Complete the CAPTCHA to continue' },
   CAPTCHA_INVALID: { status: 400, title: 'The CAPTCHA was not completed correctly' },
   ACCOUNT_LIMIT_REACHED: {

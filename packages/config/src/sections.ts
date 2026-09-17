@@ -977,6 +977,75 @@ export const parental = z
   .prefault({})
   .describe('Parental consent.');
 
+export const USERNAME_MAX_LENGTH = 64;
+const USERNAME_CHARSET = /^\[[^[\]]+\]$/;
+
+function isUsernameCharset(value: string): boolean {
+  if (!USERNAME_CHARSET.test(value)) return false;
+  try {
+    new RegExp(`^(?:${value})+$`, 'u');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const usernames = z
+  .strictObject({
+    min_length: z
+      .int()
+      .min(1)
+      .max(USERNAME_MAX_LENGTH)
+      .default(8)
+      .describe('Shortest a username can be.'),
+    max_length: z
+      .int()
+      .min(1)
+      .max(USERNAME_MAX_LENGTH)
+      .default(18)
+      .describe('Longest a username can be.'),
+    charset: z
+      .string()
+      .refine(isUsernameCharset, 'Must be a character class like [A-Za-z0-9_]')
+      .default('[A-Za-z0-9_]')
+      .describe('Allowed characters as a regex character class, e.g. [A-Za-z0-9_].'),
+    reserved: z
+      .array(z.string().min(1).max(USERNAME_MAX_LENGTH))
+      .default([])
+      .describe('Usernames nobody can claim. Compared without regard to case. Empty by default.'),
+    reserved_prefixes: z
+      .array(z.string().min(1).max(USERNAME_MAX_LENGTH))
+      .default([])
+      .describe(
+        'Username prefixes nobody can claim, such as a brand prefix. Compared without regard to case. Empty by default.',
+      ),
+    change_cooldown: duration(
+      '30d',
+      'How long a user must wait after claiming or changing a username before changing it again.',
+    ),
+    changes_per_year: z
+      .int()
+      .min(0)
+      .default(3)
+      .describe(
+        'How many times a user can change their username inside change_window, after the first claim.',
+      ),
+    change_window: duration(
+      '365d',
+      'Window used to count username changes against changes_per_year.',
+    ),
+    release_hold: duration(
+      '90d',
+      'How long a released username is held for the previous owner before anyone else can claim it.',
+    ),
+  })
+  .refine((value) => value.max_length >= value.min_length, {
+    message: 'Must be at least min_length',
+    path: ['max_length'],
+  })
+  .prefault({})
+  .describe('Usernames.');
+
 const CRON_JOB_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
 
 function isCronPattern(value: string): boolean {
@@ -1403,6 +1472,7 @@ export const sections = {
   session_security: sessionSecurity,
   age,
   parental,
+  usernames,
   rate_limits: rateLimits,
   scheduler,
   retention,
