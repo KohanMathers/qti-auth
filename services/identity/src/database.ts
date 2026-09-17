@@ -4,8 +4,16 @@ import type { ColumnType, Generated } from 'kysely';
 export const REVOCATION_REASONS = ['logout', 'revoked', 'evicted'] as const;
 export type RevocationReason = (typeof REVOCATION_REASONS)[number];
 
-export const EMAIL_TOKEN_PURPOSES = ['magic_link', 'signup'] as const;
+export const EMAIL_TOKEN_PURPOSES = [
+  'magic_link',
+  'signup',
+  'email_verify',
+  'password_reset',
+] as const;
 export type EmailTokenPurpose = (typeof EMAIL_TOKEN_PURPOSES)[number];
+
+export const AUTH_FAILURE_KINDS = ['ip', 'account'] as const;
+export type AuthFailureKind = (typeof AUTH_FAILURE_KINDS)[number];
 
 export interface UsersTable {
   id: string;
@@ -24,6 +32,7 @@ export interface IdentitiesTable {
   user_id: string;
   type: string;
   subject: string | null;
+  secret: string | null;
   created_at: Generated<Date>;
   last_used_at: Date | null;
 }
@@ -59,9 +68,17 @@ export interface EmailTokensTable {
   email_normalized: string;
   locale: string | null;
   return_to: string | null;
+  user_id: string | null;
   created_at: Generated<Date>;
   expires_at: Date;
   used_at: Date | null;
+}
+
+export interface AuthFailuresTable {
+  kind: AuthFailureKind;
+  key: string;
+  failures: number;
+  updated_at: Date;
 }
 
 export interface Database {
@@ -70,4 +87,5 @@ export interface Database {
   sessions: SessionsTable;
   session_bindings: SessionBindingsTable;
   email_tokens: EmailTokensTable;
+  auth_failures: AuthFailuresTable;
 }

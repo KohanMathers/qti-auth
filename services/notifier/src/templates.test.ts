@@ -217,10 +217,18 @@ describe('built-in templates', () => {
     );
 
     const link = 'https://me.example.com/magic-link?token=abc&state=xyz';
-    const email = templates.render('magic_link', 'en-GB', { link, expires_in_minutes: 15 });
+    const variables = { link, expires_in_minutes: 15 };
+    const email = templates.render('magic_link', 'en-GB', variables);
     expect(email.subject).toBe('Your sign-in link for Example & Co Account');
     expect(email.text).toContain(link);
     expect(email.text).toContain('expires in 15 minutes');
     expect(email.html).toContain(`href="${escapeHtml(link)}"`);
+
+    const verify = templates.render('email_verification', 'en-GB', variables);
+    expect(verify.subject).toContain('Confirm your email');
+    expect(verify.html).toContain(`href="${escapeHtml(link)}"`);
+    const reset = templates.render('password_reset', 'en-GB', variables);
+    expect(reset.subject).toContain('Reset your');
+    expect(reset.html).toContain(`href="${escapeHtml(link)}"`);
   });
 });

@@ -135,6 +135,11 @@ beforeAll(async () => {
       },
       observability,
       surfaces,
+      password: {
+        argon2: { memory_kib: 8, iterations: 1 },
+        breach_check: false,
+        failure_delay: { step: '1ms', max: '1ms' },
+      },
     }),
   });
 
@@ -244,6 +249,54 @@ describe('identity through the gateway', () => {
     const after = await phone.request('/api/v1/me');
     expect(after.status).toBe(401);
     expect((await laptop.request('/api/v1/me')).status).toBe(200);
+  });
+
+  it('signs up with a password, confirms the email, and resets it', async () => {
+    const client = browser();
+    const email = 'password-walker@example.com';
+    const register = await client.request(
+      '/auth/register',
+      form({ email, password: 'long-enough-secret', date_of_birth: '1990-02-03' }),
+    );
+    expect(register.status).toBe(200);
+    expect(await register.text()).toContain('Check your email');
+    expect(client.cookie()).toBeNull();
+
+    const verifyLink = await emails.nextLink(email);
+    const confirmPage = await client.request(`${verifyLink.pathname}${verifyLink.search}`);
+    expect(await confirmPage.text()).toContain('action="verify-email"');
+    const verifyToken = verifyLink.searchParams.get('token') ?? '';
+    secrets.push(verifyToken);
+    const confirmed = await client.request('/auth/verify-email', form({ token: verifyToken }));
+    expect(confirmed.status).toBe(200);
+    expect(await confirmed.text()).toContain('You’re signed in');
+    expect(client.cookie()).not.toBeNull();
+    await client.request('/api/v1/auth/logout', { method: 'POST' });
+
+    const login = await client.request(
+      '/auth/login',
+      form({ email, password: 'long-enough-secret' }),
+    );
+    expect(login.status).toBe(200);
+    expect(client.cookie()).not.toBeNull();
+
+    const forgot = await client.request('/auth/forgot-password', form({ email }));
+    expect(await forgot.text()).toContain('Check your email');
+    const resetLink = await emails.nextLink(email);
+    const resetConfirm = await client.request(`${resetLink.pathname}${resetLink.search}`);
+    expect(await resetConfirm.text()).toContain('Continue');
+    const token = resetLink.searchParams.get('token') ?? '';
+    secrets.push(token);
+    const continued = await client.request('/auth/reset-password', form({ token }));
+    const resetForm = await continued.text();
+    expect(resetForm).toContain('Don’t log me out of other sessions');
+    expect(resetForm).not.toContain('checked');
+    const saved = await client.request(
+      '/auth/reset-password',
+      form({ token, password: 'brand-new-secret1' }),
+    );
+    expect(saved.status).toBe(200);
+    expect(await saved.text()).toContain('You’re signed in');
   });
 
   it('keeps session tokens and links out of every log', () => {

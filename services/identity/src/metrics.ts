@@ -5,11 +5,14 @@ import type { RevocationReason } from './database.ts';
 
 export type MagicLinkEvent = 'sent' | 'used' | 'expired' | 'invalid';
 export type SignInResult = 'success' | 'failure';
+export type BreachCheckResult = 'rejected' | 'passed' | 'unavailable';
 
 export interface IdentityMetrics {
   magicLink: (event: MagicLinkEvent) => void;
   signIn: (method: string, result: SignInResult) => void;
   signup: (method: string, band: AgeBand) => void;
+  passwordFailure: () => void;
+  breachCheck: (result: BreachCheckResult) => void;
   sessionCreated: (method: string, evicted: number) => void;
   sessionsRevoked: (reason: RevocationReason, count: number) => void;
   accounts: (counts: Partial<Record<AccountState, number>>) => void;
@@ -42,6 +45,15 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     name: 'qtiauth_auth_signups_total',
     help: 'Accounts created, by signup method and age band.',
     labelNames: ['method', 'age_band'],
+  });
+  const passwordFailures = metrics.counter({
+    name: 'qtiauth_auth_password_failures_total',
+    help: 'Failed password checks during sign-in.',
+  });
+  const breachChecks = metrics.counter({
+    name: 'qtiauth_auth_breach_checks_total',
+    help: 'Have I Been Pwned password checks, by result: rejected, passed or unavailable.',
+    labelNames: ['result'],
   });
   const sessionsCreated = metrics.counter({
     name: 'qtiauth_sessions_created_total',
@@ -76,6 +88,12 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     signup: (method, band) => {
       signups.inc({ method, age_band: band });
+    },
+    passwordFailure: () => {
+      passwordFailures.inc();
+    },
+    breachCheck: (result) => {
+      breachChecks.inc({ result });
     },
     sessionCreated: (method, evicted) => {
       sessionsCreated.inc({ method });

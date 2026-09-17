@@ -12,7 +12,8 @@ import {
 import { countAccountsByState } from './accounts.ts';
 import type { Database } from './database.ts';
 import { eraseUser, exportUser } from './data-rights.ts';
-import { sweepTokens } from './magic-links.ts';
+import { sweepTokens } from './email-tokens.ts';
+import { sweepAuthFailures } from './failures.ts';
 import { identityMetrics } from './metrics.ts';
 import { type Context, type definition, router } from './service.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
@@ -100,10 +101,15 @@ export function identityService(options: IdentityOptions = {}) {
                 now,
               });
               const tokens = await sweepTokens(db, { retention: config.retention.tokens, now });
+              const failures = await sweepAuthFailures(db, {
+                retention: config.retention.tokens,
+                now,
+              });
               const pruned = await pruneBusTables(db, config.bus);
               log.info('retention sweep finished', {
                 sessions,
                 email_tokens: tokens,
+                auth_failures: failures,
                 outbox: pruned.outbox,
                 processed_events: pruned.processedEvents,
               });

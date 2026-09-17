@@ -62,7 +62,11 @@ describe('qtiauth templates check', () => {
     expect(status).toBe(0);
     expect(JSON.parse(out.stdout)).toEqual({
       default_locale: 'en-GB',
-      templates: [{ name: 'magic_link', locales: ['en-GB', 'fr'] }],
+      templates: [
+        { name: 'magic_link', locales: ['en-GB', 'fr'] },
+        { name: 'email_verification', locales: ['en-GB'] },
+        { name: 'password_reset', locales: ['en-GB'] },
+      ],
     });
   });
 

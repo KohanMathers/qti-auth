@@ -3,9 +3,23 @@ import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
-import { magicLinkEnabled, sendMagicLink, signup, verify } from './flows.ts';
+import {
+  completeEmailVerification,
+  completePasswordReset,
+  loginPassword,
+  magicLinkEnabled,
+  passwordEnabled,
+  registerWithPassword,
+  sendEmailVerification,
+  sendMagicLink,
+  sendPasswordReset,
+  signup,
+  updatePassword,
+  verify,
+} from './flows.ts';
 import { NO_STORE, sessionHeaders, signedOutHeaders } from './headers.ts';
 import { isCanonicalLocale, preferredLocale } from './locale.ts';
+import type { PasswordPolicyReason } from './passwords.ts';
 import type { Context } from './service.ts';
 import { revoke, signedIn } from './session-routes.ts';
 
@@ -55,6 +69,24 @@ function requireMagicLink(ctx: Context): void {
   if (!magicLinkEnabled(ctx)) throw new ProblemError('AUTH_METHOD_DISABLED');
 }
 
+function requirePassword(ctx: Context): void {
+  if (!passwordEnabled(ctx)) throw new ProblemError('AUTH_METHOD_DISABLED');
+}
+
+function localeOf(ctx: Context, request: Request, locale: string | undefined): string {
+  return (
+    locale ??
+    preferredLocale(request.headers.get('accept-language')) ??
+    ctx.config.email.default_locale
+  );
+}
+
+function rejectedPassword(reason: PasswordPolicyReason): never {
+  throw new ProblemError('PASSWORD_REJECTED', { extensions: { reason } });
+}
+
+const passwordSchema = z.string().min(1).max(256).describe('The password.');
+
 export function authRoutes(router: Router<Context>): void {
   router.route({
     method: 'POST',
@@ -98,6 +130,352 @@ export function authRoutes(router: Router<Context>): void {
         },
       );
       return { status: 202, body: { status: 'sent' as const }, headers: NO_STORE };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/password/signup',
+    operation_id: 'signupWithPassword',
+    summary: 'Create an account with an email and password',
+    description:
+      'The account stays pending_email_verification until the emailed confirmation link is used.',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'auth_password',
+    request: {
+      body: z.object({
+        email: z.email().max(254),
+        password: passwordSchema,
+        date_of_birth: z.iso
+          .date()
+          .refine((value) => isValidDateOfBirth(value, new Date()), 'Must be a real date of birth')
+          .describe('YYYY-MM-DD.'),
+        locale: z
+          .string()
+          .refine(isCanonicalLocale, 'Must be a canonical locale like en-GB')
+          .optional()
+          .describe('Language for the verification email. Defaults to Accept-Language.'),
+      }),
+    },
+    responses: {
+      201: {
+        description: 'Account created. A verification email is on its way.',
+        schema: z.object({
+          status: z.literal('verification_sent'),
+          user_id: z.uuid(),
+        }),
+      },
+    },
+    errors: [
+      'AUTH_METHOD_DISABLED',
+      'PASSWORD_REJECTED',
+      'ACCOUNT_LIMIT_REACHED',
+      'PARENTAL_CONSENT_UNAVAILABLE',
+    ],
+    handler: async ({ ctx, body, request, log }) => {
+      requirePassword(ctx);
+      const result = await registerWithPassword(
+        { ctx, request, log },
+        {
+          email: body.email,
+          password: body.password,
+          dateOfBirth: body.date_of_birth,
+          locale: localeOf(ctx, request, body.locale),
+        },
+      );
+      switch (result.status) {
+        case 'rejected':
+          return rejectedPassword(result.reason);
+        case 'account_limit':
+          throw new ProblemError('ACCOUNT_LIMIT_REACHED');
+        case 'parental_consent_required':
+          throw new ProblemError('PARENTAL_CONSENT_UNAVAILABLE');
+        case 'created':
+          return {
+            status: 201,
+            headers: NO_STORE,
+            body: { status: 'verification_sent' as const, user_id: result.userId },
+          };
+      }
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/password/login',
+    operation_id: 'loginWithPassword',
+    summary: 'Sign in with an email and password',
+    description: 'The response is the same whether or not an account uses the address.',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'auth_password',
+    request: {
+      body: z.object({
+        email: z.email().max(254),
+        password: passwordSchema,
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Signed in. Sets the session cookie.',
+        schema: z.object({ status: z.literal('signed_in'), user_id: z.uuid() }),
+      },
+    },
+    errors: ['AUTH_METHOD_DISABLED', 'CREDENTIALS_INCORRECT'],
+    handler: async ({ ctx, body, request, log }) => {
+      requirePassword(ctx);
+      const result = await loginPassword(
+        { ctx, request, log },
+        { email: body.email, password: body.password },
+      );
+      if (result.status === 'invalid') throw new ProblemError('CREDENTIALS_INCORRECT');
+      return {
+        status: 200,
+        headers: sessionHeaders(result.session),
+        body: { status: 'signed_in' as const, user_id: result.userId },
+      };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/password/forgot',
+    operation_id: 'forgotPassword',
+    summary: 'Email a password reset link',
+    description: 'The response is the same whether or not an account uses the address.',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'magic_link',
+    request: {
+      body: z.object({
+        email: z.email().max(254),
+        locale: z
+          .string()
+          .refine(isCanonicalLocale, 'Must be a canonical locale like en-GB')
+          .optional()
+          .describe('Language for the email. Defaults to Accept-Language.'),
+      }),
+    },
+    responses: {
+      202: {
+        description: 'The link is on its way, if the address can use it',
+        schema: z.object({ status: z.literal('sent') }),
+      },
+    },
+    errors: ['AUTH_METHOD_DISABLED'],
+    handler: async ({ ctx, body, request, log }) => {
+      requirePassword(ctx);
+      await sendPasswordReset(
+        { ctx, request, log },
+        { email: body.email, locale: localeOf(ctx, request, body.locale) },
+      );
+      return { status: 202, body: { status: 'sent' as const }, headers: NO_STORE };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/password/reset',
+    operation_id: 'resetPassword',
+    summary: 'Choose a new password from a reset link',
+    description:
+      'Resets the password and signs in. Other sessions end unless keep_other_sessions is true.',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    request: {
+      body: z.object({
+        token: z.string().min(1).max(256).describe('The token from the reset link.'),
+        password: passwordSchema,
+        keep_other_sessions: z
+          .boolean()
+          .default(false)
+          .describe(
+            'When true, other sessions stay signed in. Unticked by default on the reset form.',
+          ),
+        user_id: z.uuid().optional().describe('The account to reset, from choose_account.'),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Password set and signed in, or the next step.',
+        schema: z.discriminatedUnion('status', [
+          z.object({ status: z.literal('signed_in'), user_id: z.uuid() }),
+          z.object({
+            status: z.literal('choose_account'),
+            accounts: z
+              .array(z.object({ user_id: z.uuid(), created_at: z.iso.datetime() }))
+              .describe(
+                'Accounts using this email address. Reset again with one of their user_id.',
+              ),
+          }),
+        ]),
+      },
+    },
+    errors: ['AUTH_METHOD_DISABLED', 'RESET_TOKEN_INVALID', 'PASSWORD_REJECTED'],
+    handler: async ({ ctx, body, request, log }) => {
+      requirePassword(ctx);
+      const result = await completePasswordReset(
+        { ctx, request, log },
+        {
+          token: body.token,
+          password: body.password,
+          keepOtherSessions: body.keep_other_sessions,
+          userId: body.user_id,
+        },
+      );
+      switch (result.status) {
+        case 'invalid':
+          throw new ProblemError('RESET_TOKEN_INVALID');
+        case 'rejected':
+          return rejectedPassword(result.reason);
+        case 'choose_account':
+          return {
+            status: 200,
+            headers: NO_STORE,
+            body: {
+              status: 'choose_account' as const,
+              accounts: result.accounts.map((account) => ({
+                user_id: account.id,
+                created_at: account.created_at.toISOString(),
+              })),
+            },
+          };
+        case 'signed_in':
+          return {
+            status: 200,
+            headers: sessionHeaders({
+              ...result.session,
+              evicted: [...result.session.evicted, ...result.revoked],
+            }),
+            body: { status: 'signed_in' as const, user_id: result.userId },
+          };
+      }
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/email/verify/start',
+    operation_id: 'startEmailVerification',
+    summary: 'Email a confirmation link for an unverified address',
+    description: 'The response is the same whether or not a pending account uses the address.',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'magic_link',
+    request: {
+      body: z.object({
+        email: z.email().max(254),
+        locale: z
+          .string()
+          .refine(isCanonicalLocale, 'Must be a canonical locale like en-GB')
+          .optional(),
+      }),
+    },
+    responses: {
+      202: {
+        description: 'The link is on its way, if the address can use it',
+        schema: z.object({ status: z.literal('sent') }),
+      },
+    },
+    errors: ['AUTH_METHOD_DISABLED'],
+    handler: async ({ ctx, body, request, log }) => {
+      requirePassword(ctx);
+      await sendEmailVerification(
+        { ctx, request, log },
+        { email: body.email, locale: localeOf(ctx, request, body.locale) },
+      );
+      return { status: 202, body: { status: 'sent' as const }, headers: NO_STORE };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/email/verify',
+    operation_id: 'verifyEmail',
+    summary: 'Confirm an email address from a verification link',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    request: {
+      body: z.object({ token: z.string().min(1).max(256) }),
+    },
+    responses: {
+      200: {
+        description: 'Email confirmed and signed in',
+        schema: z.object({ status: z.literal('signed_in'), user_id: z.uuid() }),
+      },
+    },
+    errors: ['AUTH_METHOD_DISABLED', 'EMAIL_VERIFICATION_INVALID'],
+    handler: async ({ ctx, body, request, log }) => {
+      requirePassword(ctx);
+      const result = await completeEmailVerification({ ctx, request, log }, { token: body.token });
+      if (result.status === 'invalid') throw new ProblemError('EMAIL_VERIFICATION_INVALID');
+      return {
+        status: 200,
+        headers: sessionHeaders(result.session),
+        body: { status: 'signed_in' as const, user_id: result.userId },
+      };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/me/password',
+    operation_id: 'setPassword',
+    summary: 'Add a password, or change it',
+    description:
+      'Adding a password needs a recent magic-link sign-in. Changing one needs the current password.',
+    tags: ['account'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    allow_pending_legal: true,
+    allow_pending_parental_consent: true,
+    rate_limit: 'global',
+    request: {
+      body: z.object({
+        password: passwordSchema,
+        current_password: z.string().min(1).max(256).optional(),
+      }),
+    },
+    responses: {
+      204: { description: 'The password has been set' },
+    },
+    errors: [
+      'AUTH_METHOD_DISABLED',
+      'PASSWORD_REJECTED',
+      'CURRENT_PASSWORD_REQUIRED',
+      'CURRENT_PASSWORD_INCORRECT',
+      'STEP_UP_REQUIRED',
+      'ACCOUNT_NOT_FOUND',
+    ],
+    handler: async ({ ctx, body, identity, request, log }) => {
+      requirePassword(ctx);
+      const { userId, sessionId } = signedIn(identity);
+      const result = await updatePassword(
+        { ctx, request, log },
+        {
+          userId,
+          sessionId,
+          password: body.password,
+          currentPassword: body.current_password,
+        },
+      );
+      switch (result.status) {
+        case 'rejected':
+          return rejectedPassword(result.reason);
+        case 'current_required':
+          throw new ProblemError('CURRENT_PASSWORD_REQUIRED');
+        case 'current_incorrect':
+          throw new ProblemError('CURRENT_PASSWORD_INCORRECT');
+        case 'step_up_required':
+          throw new ProblemError('STEP_UP_REQUIRED');
+        case 'not_found':
+          throw new ProblemError('ACCOUNT_NOT_FOUND');
+        case 'updated':
+          return { status: 204, headers: NO_STORE };
+      }
     },
   });
 

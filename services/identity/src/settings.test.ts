@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   accountOrigin,
   accountPath,
+  emailLinkUrl,
   IdentityConfigError,
   magicLinkUrl,
+  RESET_PASSWORD_PAGE,
   sessionClient,
 } from './settings.ts';
 
@@ -27,6 +29,9 @@ describe('magic link URLs', () => {
       ),
     ).toBe('http://10.0.0.5:8080/account/auth/magic-link?token=abc');
     expect(accountPath(surfaces({ hosts: ['me.example.com'] }), '/settings')).toBe('/settings');
+    expect(emailLinkUrl(surfaces({ hosts: ['me.example.com'] }), RESET_PASSWORD_PAGE, 'abc')).toBe(
+      'https://me.example.com/auth/reset-password?token=abc',
+    );
   });
 
   it('need an origin for an account surface bound only to ports', () => {

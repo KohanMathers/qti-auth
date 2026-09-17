@@ -1,0 +1,11 @@
+Confirm your email for {{ brand.product_name }}
+
+Open this link to confirm your email address. It works once and expires in {{ expires_in_minutes }} minutes.
+
+{{ link }}
+
+If you didn't create an account, you can safely ignore this email.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

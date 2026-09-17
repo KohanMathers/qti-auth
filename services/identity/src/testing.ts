@@ -3,6 +3,7 @@ import { type EmailJob, emailQueue } from '@qtiauth/email';
 
 export interface CapturedEmails {
   jobs: EmailJob[];
+  nextJob: (address: string, template?: string, timeout?: number) => Promise<EmailJob>;
   nextLink: (address: string, timeout?: number) => Promise<URL>;
   stop: () => Promise<void>;
 }
@@ -22,19 +23,32 @@ export async function captureEmails(bus: Bus): Promise<CapturedEmails> {
     onError: () => undefined,
   });
 
+  const nextJob = async (address: string, template?: string, timeout = 10_000) => {
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      const job = jobs.find(
+        (candidate) =>
+          candidate.to.address === address &&
+          !taken.has(candidate.delivery_id) &&
+          (template === undefined || candidate.template === template),
+      );
+      if (job) {
+        taken.add(job.delivery_id);
+        return job;
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`No ${template ?? 'email'} was queued for ${address}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  };
+
   return {
     jobs,
+    nextJob,
     nextLink: async (address, timeout = 10_000) => {
-      const deadline = Date.now() + timeout;
-      for (;;) {
-        const job = jobs.find((j) => j.to.address === address && !taken.has(j.delivery_id));
-        if (job) {
-          taken.add(job.delivery_id);
-          return new URL(String(job.variables['link']));
-        }
-        if (Date.now() > deadline) throw new Error(`No magic link was queued for ${address}`);
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
+      const job = await nextJob(address, undefined, timeout);
+      return new URL(String(job.variables['link']));
     },
     stop: () => consumer.stop(),
   };

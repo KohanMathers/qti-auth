@@ -10,6 +10,7 @@ import {
   gateway,
   magicLink,
   network,
+  password,
   rateLimits,
   retention,
   scheduler,
@@ -294,6 +295,41 @@ describe('accounts', () => {
 describe('magic_link', () => {
   it('expires links after 15 minutes and signups after 30', () => {
     expect(magicLink.parse({})).toEqual({ ttl: 900_000, signup_ttl: 1_800_000 });
+  });
+});
+
+describe('password', () => {
+  it('uses OWASP Argon2id defaults and optional composition rules', () => {
+    expect(password.parse({})).toEqual({
+      min_length: 10,
+      max_length: 256,
+      composition: {
+        require_lower: false,
+        require_upper: false,
+        require_digit: false,
+        require_symbol: false,
+      },
+      breach_check: true,
+      argon2: { memory_kib: 19_456, iterations: 2, parallelism: 1 },
+      reset_ttl: 900_000,
+      verification_ttl: 900_000,
+      failure_delay: { step: 250, max: 2_000 },
+    });
+  });
+
+  it('caps length at 256 and keeps min_length and Argon2 memory in range', () => {
+    expect(messages(password.safeParse({ min_length: 20, max_length: 12 }))).toEqual([
+      'min_length: Must be less than or equal to max_length',
+    ]);
+    expect(messages(password.safeParse({ max_length: 257 }))).toEqual([
+      'max_length: Too big: expected number to be <=256',
+    ]);
+    expect(messages(password.safeParse({ argon2: { memory_kib: 8, parallelism: 2 } }))).toEqual([
+      'argon2.memory_kib: Must be at least 8 KiB per parallel lane',
+    ]);
+    expect(messages(password.safeParse({ failure_delay: { step: '3s', max: '1s' } }))).toEqual([
+      'failure_delay.step: Must be less than or equal to max',
+    ]);
   });
 });
 

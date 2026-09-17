@@ -137,7 +137,14 @@ export async function recordIdentityUse(
 ): Promise<void> {
   await db
     .insertInto('identities')
-    .values({ id: randomUUIDv7(), user_id: userId, type, subject: null, last_used_at: at })
+    .values({
+      id: randomUUIDv7(),
+      user_id: userId,
+      type,
+      subject: null,
+      secret: null,
+      last_used_at: at,
+    })
     .onConflict((conflict) =>
       conflict
         .columns(['user_id', 'type'])
@@ -156,4 +163,63 @@ export async function countAccountsByState(
     .groupBy('state')
     .execute();
   return Object.fromEntries(rows.map((row) => [row.state, Number(row.count)]));
+}
+
+export function findPasswordIdentity(
+  db: Kysely<Database>,
+  userId: string,
+): Promise<{ secret: string | null; last_used_at: Date | null } | undefined> {
+  return db
+    .selectFrom('identities')
+    .select(['secret', 'last_used_at'])
+    .where('user_id', '=', userId)
+    .where('type', '=', 'password')
+    .where('subject', 'is', null)
+    .executeTakeFirst();
+}
+
+export async function upsertPassword(
+  db: Kysely<Database>,
+  userId: string,
+  hash: string,
+  at: Date,
+): Promise<void> {
+  await db
+    .insertInto('identities')
+    .values({
+      id: randomUUIDv7(),
+      user_id: userId,
+      type: 'password',
+      subject: null,
+      secret: hash,
+      last_used_at: at,
+    })
+    .onConflict((conflict) =>
+      conflict
+        .columns(['user_id', 'type'])
+        .where('subject', 'is', null)
+        .doUpdateSet({ secret: hash, last_used_at: at }),
+    )
+    .execute();
+}
+
+export async function activateVerifiedEmail(
+  db: Kysely<Database>,
+  id: string,
+  at: Date,
+): Promise<Account | undefined> {
+  await markEmailVerified(db, id, at);
+  const account = await findAccount(db, id);
+  if (!account) return undefined;
+  if (account.state === 'pending_email_verification') {
+    assertTransition(account.state, 'active');
+    await db
+      .updateTable('users')
+      .set({ state: 'active', updated_at: at })
+      .where('id', '=', id)
+      .where('state', '=', 'pending_email_verification')
+      .execute();
+    return { ...account, state: 'active', email_verified_at: account.email_verified_at ?? at };
+  }
+  return account;
 }

@@ -10,8 +10,34 @@ import {
   type VerifyResult,
 } from './magic-links.ts';
 import { identityMetrics } from './metrics.ts';
+import {
+  completePasswordSignup,
+  consumePasswordReset,
+  type ConsumeResetResult,
+  type EmailVerifyResult,
+  issueEmailVerification,
+  issuePasswordReset,
+  loginWithPassword,
+  type PasswordLoginResult,
+  type PasswordResetResult,
+  type PasswordSignupResult,
+  resetPassword,
+  setAccountPassword,
+  type SetPasswordResult,
+  verifyEmailAddress,
+} from './password-auth.ts';
+import { PASSWORD_METHOD } from './passwords.ts';
 import type { Context } from './service.ts';
-import { magicLinkSettings, magicLinkUrl, sessionClient } from './settings.ts';
+import {
+  clientIp,
+  emailLinkUrl,
+  magicLinkSettings,
+  magicLinkUrl,
+  passwordSettings,
+  RESET_PASSWORD_PAGE,
+  sessionClient,
+  VERIFY_EMAIL_PAGE,
+} from './settings.ts';
 
 export interface FlowInput {
   ctx: Context;
@@ -19,8 +45,16 @@ export interface FlowInput {
   log: Logger;
 }
 
+function expiresInMinutes(ms: number): number {
+  return Math.max(1, Math.ceil(ms / 60_000));
+}
+
 export function magicLinkEnabled(ctx: Context): boolean {
   return ctx.config.features.auth.magic_link.enabled;
+}
+
+export function passwordEnabled(ctx: Context): boolean {
+  return ctx.config.features.auth.password.enabled;
 }
 
 export async function sendMagicLink(
@@ -40,7 +74,7 @@ export async function sendMagicLink(
     locale: input.locale,
     variables: {
       link: magicLinkUrl(ctx.config, token),
-      expires_in_minutes: Math.ceil(ctx.config.magic_link.ttl / 60_000),
+      expires_in_minutes: expiresInMinutes(ctx.config.magic_link.ttl),
     },
   });
   identityMetrics(ctx.metrics).magicLink('sent');
@@ -123,6 +157,260 @@ export async function signup(
         session_id: result.session.id,
         age_band: result.ageBand,
       });
+      break;
+  }
+  return result;
+}
+
+export async function registerWithPassword(
+  { ctx, log }: FlowInput,
+  input: { email: string; password: string; dateOfBirth: string; locale: string },
+): Promise<PasswordSignupResult> {
+  const metrics = identityMetrics(ctx.metrics);
+  const result = await completePasswordSignup(ctx.db, {
+    email: input.email,
+    password: input.password,
+    dateOfBirth: input.dateOfBirth,
+    locale: input.locale,
+    settings: passwordSettings(ctx.config),
+    now: new Date(),
+  });
+  switch (result.status) {
+    case 'rejected':
+      if (result.reason === 'breached') metrics.breachCheck('rejected');
+      log.info('password rejected', { reason: result.reason });
+      break;
+    case 'account_limit':
+      log.info('signup refused: too many accounts with this email address');
+      break;
+    case 'parental_consent_required':
+      log.info('signup refused: parental consent is not available');
+      break;
+    case 'created': {
+      ctx.outbox.wake();
+      metrics.signup(PASSWORD_METHOD, result.ageBand);
+      const job = await queueEmail(ctx.bus, {
+        template: 'email_verification',
+        to: { address: input.email.trim() },
+        locale: input.locale,
+        userId: result.userId,
+        variables: {
+          link: emailLinkUrl(ctx.config, VERIFY_EMAIL_PAGE, result.verifyToken),
+          expires_in_minutes: expiresInMinutes(ctx.config.password.verification_ttl),
+        },
+      });
+      log.info('account created', {
+        method: PASSWORD_METHOD,
+        user_id: result.userId,
+        age_band: result.ageBand,
+        delivery_id: job.delivery_id,
+        expires_at: result.expiresAt.toISOString(),
+      });
+      break;
+    }
+  }
+  return result;
+}
+
+export async function loginPassword(
+  { ctx, request, log }: FlowInput,
+  input: { email: string; password: string },
+): Promise<PasswordLoginResult> {
+  const metrics = identityMetrics(ctx.metrics);
+  const result = await loginWithPassword(ctx.db, {
+    email: input.email,
+    password: input.password,
+    ip: clientIp(request),
+    client: sessionClient(ctx.config, request),
+    settings: passwordSettings(ctx.config),
+    now: new Date(),
+  });
+  switch (result.status) {
+    case 'invalid':
+      metrics.signIn(PASSWORD_METHOD, 'failure');
+      metrics.passwordFailure();
+      log.info('password sign-in failed', { method: PASSWORD_METHOD });
+      break;
+    case 'signed_in':
+      ctx.outbox.wake();
+      metrics.signIn(PASSWORD_METHOD, 'success');
+      metrics.sessionCreated(PASSWORD_METHOD, result.session.evicted.length);
+      log.info('signed in', {
+        method: PASSWORD_METHOD,
+        user_id: result.userId,
+        session_id: result.session.id,
+        evicted_sessions: result.session.evicted.length,
+      });
+      break;
+  }
+  return result;
+}
+
+export async function sendPasswordReset(
+  { ctx, log }: FlowInput,
+  input: { email: string; locale: string },
+): Promise<void> {
+  const { token, expiresAt } = await issuePasswordReset(ctx.db, {
+    email: input.email,
+    locale: input.locale,
+    settings: passwordSettings(ctx.config),
+    now: new Date(),
+  });
+  const job = await queueEmail(ctx.bus, {
+    template: 'password_reset',
+    to: { address: input.email.trim() },
+    locale: input.locale,
+    variables: {
+      link: emailLinkUrl(ctx.config, RESET_PASSWORD_PAGE, token),
+      expires_in_minutes: expiresInMinutes(ctx.config.password.reset_ttl),
+    },
+  });
+  log.info('password reset sent', {
+    delivery_id: job.delivery_id,
+    expires_at: expiresAt.toISOString(),
+  });
+}
+
+export async function inspectPasswordReset(
+  { ctx }: FlowInput,
+  input: { token: string; userId: string | undefined },
+): Promise<ConsumeResetResult> {
+  return consumePasswordReset(ctx.db, {
+    token: input.token,
+    userId: input.userId,
+    settings: passwordSettings(ctx.config),
+    now: new Date(),
+  });
+}
+
+export async function completePasswordReset(
+  { ctx, request, log }: FlowInput,
+  input: {
+    token: string;
+    password: string;
+    keepOtherSessions: boolean;
+    userId: string | undefined;
+  },
+): Promise<PasswordResetResult> {
+  const metrics = identityMetrics(ctx.metrics);
+  const result = await resetPassword(ctx.db, {
+    token: input.token,
+    password: input.password,
+    keepOtherSessions: input.keepOtherSessions,
+    userId: input.userId,
+    client: sessionClient(ctx.config, request),
+    settings: passwordSettings(ctx.config),
+    now: new Date(),
+  });
+  switch (result.status) {
+    case 'invalid':
+      log.info('password reset rejected', { reason: result.reason });
+      break;
+    case 'choose_account':
+      log.info('password reset matches several accounts', { accounts: result.accounts.length });
+      break;
+    case 'rejected':
+      if (result.reason === 'breached') metrics.breachCheck('rejected');
+      log.info('password rejected', { reason: result.reason });
+      break;
+    case 'signed_in':
+      ctx.outbox.wake();
+      metrics.signIn(PASSWORD_METHOD, 'success');
+      metrics.sessionCreated(PASSWORD_METHOD, result.session.evicted.length);
+      if (result.revoked.length > 0) metrics.sessionsRevoked('revoked', result.revoked.length);
+      log.info('password reset', {
+        user_id: result.userId,
+        session_id: result.session.id,
+        revoked_sessions: result.revoked.length,
+      });
+      break;
+  }
+  return result;
+}
+
+export async function sendEmailVerification(
+  { ctx, log }: FlowInput,
+  input: { email: string; locale: string },
+): Promise<void> {
+  const issued = await issueEmailVerification(ctx.db, {
+    email: input.email,
+    locale: input.locale,
+    settings: passwordSettings(ctx.config),
+    now: new Date(),
+  });
+  if (!issued.sent || issued.token === undefined || issued.expiresAt === undefined) {
+    log.info('email verification not sent');
+    return;
+  }
+  const job = await queueEmail(ctx.bus, {
+    template: 'email_verification',
+    to: { address: input.email.trim() },
+    locale: input.locale,
+    variables: {
+      link: emailLinkUrl(ctx.config, VERIFY_EMAIL_PAGE, issued.token),
+      expires_in_minutes: expiresInMinutes(ctx.config.password.verification_ttl),
+    },
+  });
+  log.info('email verification sent', {
+    delivery_id: job.delivery_id,
+    expires_at: issued.expiresAt.toISOString(),
+  });
+}
+
+export async function completeEmailVerification(
+  { ctx, request, log }: FlowInput,
+  input: { token: string },
+): Promise<EmailVerifyResult> {
+  const result = await verifyEmailAddress(ctx.db, {
+    token: input.token,
+    client: sessionClient(ctx.config, request),
+    settings: passwordSettings(ctx.config),
+    now: new Date(),
+  });
+  switch (result.status) {
+    case 'invalid':
+      log.info('email verification rejected', { reason: result.reason });
+      break;
+    case 'signed_in':
+      ctx.outbox.wake();
+      identityMetrics(ctx.metrics).sessionCreated(PASSWORD_METHOD, result.session.evicted.length);
+      log.info('email verified', { user_id: result.userId, session_id: result.session.id });
+      break;
+  }
+  return result;
+}
+
+export async function updatePassword(
+  { ctx, log }: FlowInput,
+  input: {
+    userId: string;
+    sessionId: string;
+    password: string;
+    currentPassword: string | undefined;
+  },
+): Promise<SetPasswordResult> {
+  const metrics = identityMetrics(ctx.metrics);
+  const result = await setAccountPassword(ctx.db, {
+    userId: input.userId,
+    sessionId: input.sessionId,
+    password: input.password,
+    currentPassword: input.currentPassword,
+    settings: passwordSettings(ctx.config),
+    now: new Date(),
+  });
+  switch (result.status) {
+    case 'rejected':
+      if (result.reason === 'breached') metrics.breachCheck('rejected');
+      log.info('password rejected', { reason: result.reason });
+      break;
+    case 'current_required':
+    case 'current_incorrect':
+    case 'step_up_required':
+    case 'not_found':
+      log.info('password change refused', { reason: result.status });
+      break;
+    case 'updated':
+      log.info(result.added ? 'password added' : 'password changed', { user_id: input.userId });
       break;
   }
   return result;

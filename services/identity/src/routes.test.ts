@@ -83,6 +83,14 @@ describe('magic link confirmation page', () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain('name="signup_token" value="tok&lt;en&gt;"');
   });
+
+  it('offers password and magic-link signup', async () => {
+    const response = await app().request('/auth/signup', { headers: anonymous });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('href="register"');
+    expect(html).toContain('href="magic-link/start"');
+  });
 });
 
 describe('when magic links are turned off', () => {
@@ -104,6 +112,44 @@ describe('when magic links are turned off', () => {
 
     const page = await disabled().request('/auth/magic-link?token=abc', { headers: anonymous });
     expect(page.status).toBe(403);
+  });
+});
+
+describe('when passwords are turned off', () => {
+  const disabled = () => app({ features: { auth: { password: { enabled: false } } } });
+
+  it('refuses password routes', async () => {
+    const login = await disabled().request(
+      '/api/v1/auth/password/login',
+      json({ email: 'sam@example.com', password: 'long-enough-secret' }),
+    );
+    expect(await login.json()).toMatchObject({ code: 'AUTH_METHOD_DISABLED' });
+    const page = await disabled().request('/auth/login', { headers: anonymous });
+    expect(page.status).toBe(403);
+  });
+});
+
+describe('password pages', () => {
+  it('asks for a click on a reset link, escaping what it echoes', async () => {
+    const response = await app().request(
+      `/auth/reset-password?token=${encodeURIComponent('"><script>x</script>')}`,
+      { headers: anonymous },
+    );
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('<form method="post" action="reset-password">');
+    expect(html).toContain('value="&quot;&gt;&lt;script&gt;x&lt;/script&gt;"');
+    expect(html).not.toContain('<script>');
+  });
+
+  it('links to forgot-password from the login page', async () => {
+    const response = await app().request('/auth/login', { headers: anonymous });
+    expect(await response.text()).toContain('href="forgot-password"');
+  });
+
+  it('asks for a click on a verification link', async () => {
+    const response = await app().request('/auth/verify-email?token=abc', { headers: anonymous });
+    expect(await response.text()).toContain('action="verify-email"');
   });
 });
 

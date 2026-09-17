@@ -111,6 +111,11 @@ export async function eraseUser(db: Kysely<Database>, userId: string): Promise<v
       .deleteFrom('email_tokens')
       .where('email_normalized', '=', user.email_normalized)
       .execute();
+    await db
+      .deleteFrom('auth_failures')
+      .where('kind', '=', 'account')
+      .where('key', '=', user.email_normalized)
+      .execute();
   }
   await db.deleteFrom('users').where('id', '=', userId).execute();
 }

@@ -63,5 +63,13 @@ describe('defineEmailTemplates', () => {
 
   it('sends sign-in emails first', () => {
     expect(EMAIL_TEMPLATES.magic_link).toMatchObject({ category: 'auth', priority: 'high' });
+    expect(EMAIL_TEMPLATES.email_verification).toMatchObject({
+      category: 'auth',
+      priority: 'high',
+    });
+    expect(EMAIL_TEMPLATES.password_reset).toMatchObject({
+      category: 'security',
+      priority: 'high',
+    });
   });
 });

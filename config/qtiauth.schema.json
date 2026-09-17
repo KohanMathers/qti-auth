@@ -1888,6 +1888,122 @@
       },
       "additionalProperties": false
     },
+    "password": {
+      "description": "Password sign-in.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "min_length": {
+          "default": 10,
+          "description": "Shortest a password can be.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "max_length": {
+          "default": 256,
+          "description": "Longest a password can be. 256 is the hard cap.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "composition": {
+          "description": "Optional composition rules. All off by default.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "require_lower": {
+              "default": false,
+              "description": "Require a lowercase letter.",
+              "type": "boolean"
+            },
+            "require_upper": {
+              "default": false,
+              "description": "Require an uppercase letter.",
+              "type": "boolean"
+            },
+            "require_digit": {
+              "default": false,
+              "description": "Require a digit.",
+              "type": "boolean"
+            },
+            "require_symbol": {
+              "default": false,
+              "description": "Require a character that is not a letter or digit.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "breach_check": {
+          "default": true,
+          "description": "Reject passwords that appear in the Have I Been Pwned range API. Only the first 5 hex characters of a SHA-1 hash leave the server. Unreachable checks are skipped.",
+          "type": "boolean"
+        },
+        "argon2": {
+          "description": "Argon2id parameters. Stored hashes are rehashed on login when these change.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "memory_kib": {
+              "default": 19456,
+              "description": "Argon2id memory in KiB. OWASP default is 19456 (19 MiB).",
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 1048576
+            },
+            "iterations": {
+              "default": 2,
+              "description": "Argon2id iterations (t).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
+            },
+            "parallelism": {
+              "default": 1,
+              "description": "Argon2id parallelism (p).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
+            }
+          },
+          "additionalProperties": false
+        },
+        "reset_ttl": {
+          "default": "15m",
+          "description": "A password reset link works for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "verification_ttl": {
+          "default": "15m",
+          "description": "An email verification link after password signup works for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "failure_delay": {
+          "description": "Progressive delay after failed password attempts, counted per account and per IP. There is no lockout.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "step": {
+              "default": "250ms",
+              "description": "Extra delay added for each previous failed password attempt on the account or IP. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "max": {
+              "default": "2s",
+              "description": "Longest progressive delay after failed password attempts. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "sessions": {
       "description": "Sessions.",
       "default": {},

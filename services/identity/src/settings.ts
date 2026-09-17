@@ -1,9 +1,17 @@
 import { emailNormalizer } from './email.ts';
 import type { MagicLinkSettings } from './magic-links.ts';
+import type { PasswordSettings } from './password-auth.ts';
 import type { IdentityConfig } from './service.ts';
 import type { SessionClient, SessionSettings } from './sessions.ts';
 
 export const MAGIC_LINK_PAGE = '/auth/magic-link';
+export const MAGIC_LINK_START_PAGE = '/auth/magic-link/start';
+export const SIGNUP_CHOICE_PAGE = '/auth/signup';
+export const REGISTER_PAGE = '/auth/register';
+export const LOGIN_PAGE = '/auth/login';
+export const FORGOT_PASSWORD_PAGE = '/auth/forgot-password';
+export const RESET_PASSWORD_PAGE = '/auth/reset-password';
+export const VERIFY_EMAIL_PAGE = '/auth/verify-email';
 
 export class IdentityConfigError extends Error {
   constructor(message: string) {
@@ -69,6 +77,58 @@ export function accountPath(config: Pick<IdentityConfig, 'surfaces'>, path: stri
 
 export function magicLinkUrl(config: Pick<IdentityConfig, 'surfaces'>, token: string): string {
   const url = new URL(accountPath(config, MAGIC_LINK_PAGE), accountOrigin(config));
+  url.searchParams.set('token', token);
+  return url.toString();
+}
+
+export function passwordSettings(config: IdentityConfig): PasswordSettings {
+  let normalizeEmail = normalizers.get(config.accounts);
+  if (!normalizeEmail) {
+    normalizeEmail = emailNormalizer(config.accounts.email_normalization);
+    normalizers.set(config.accounts, normalizeEmail);
+  }
+  return {
+    policy: {
+      minLength: config.password.min_length,
+      maxLength: config.password.max_length,
+      requireLower: config.password.composition.require_lower,
+      requireUpper: config.password.composition.require_upper,
+      requireDigit: config.password.composition.require_digit,
+      requireSymbol: config.password.composition.require_symbol,
+    },
+    argon2: {
+      memoryKib: config.password.argon2.memory_kib,
+      iterations: config.password.argon2.iterations,
+      parallelism: config.password.argon2.parallelism,
+    },
+    breachCheck: config.password.breach_check,
+    resetTtl: config.password.reset_ttl,
+    verificationTtl: config.password.verification_ttl,
+    failureDelay: {
+      step: config.password.failure_delay.step,
+      max: config.password.failure_delay.max,
+    },
+    maxPerEmail: config.accounts.max_per_email,
+    consentAge: config.parental.consent_age,
+    bands: config.age.bands,
+    stepUpWindow: config.security.step_up_window,
+    normalizeEmail,
+    sessions: sessionSettings(config),
+  };
+}
+
+export function clientIp(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded === null) return '';
+  return forwarded.split(',')[0]?.trim() ?? '';
+}
+
+export function emailLinkUrl(
+  config: Pick<IdentityConfig, 'surfaces'>,
+  path: string,
+  token: string,
+): string {
+  const url = new URL(accountPath(config, path), accountOrigin(config));
   url.searchParams.set('token', token);
   return url.toString();
 }

@@ -76,15 +76,29 @@ export function defineEmailTemplates<const T extends Record<string, EmailTemplat
   return templates;
 }
 
+const linkVariables = z.object({
+  link: z.url({ protocol: /^https?$/ }),
+  expires_in_minutes: z.int().min(1),
+});
+
 export const EMAIL_TEMPLATES = defineEmailTemplates({
   magic_link: {
     description: 'A magic link to sign in or finish signing up',
     category: 'auth',
     priority: 'high',
-    variables: z.object({
-      link: z.url({ protocol: /^https?$/ }),
-      expires_in_minutes: z.int().min(1),
-    }),
+    variables: linkVariables,
+  },
+  email_verification: {
+    description: 'Confirm an email address after signing up with a password',
+    category: 'auth',
+    priority: 'high',
+    variables: linkVariables,
+  },
+  password_reset: {
+    description: 'A link to choose a new password',
+    category: 'security',
+    priority: 'high',
+    variables: linkVariables,
   },
 });
 

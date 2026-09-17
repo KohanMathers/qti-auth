@@ -316,14 +316,14 @@ provider), sign in, list sessions, revoke, and see the trace in the logs.
 ### P2.1 Passwords — M
 Spec: §4.2
 
-- [ ] Signup choice (password or magic link), email verification before `active`.
-- [ ] Argon2id with config parameters and rehash on login.
-- [ ] Length limits (max 256), optional composition rules, HIBP k-anonymity check (fails open),
+- [x] Signup choice (password or magic link), email verification before `active`.
+- [x] Argon2id with config parameters and rehash on login.
+- [x] Length limits (max 256), optional composition rules, HIBP k-anonymity check (fails open),
       email/username containment check.
-- [ ] Add password to passwordless accounts (step-up), change password.
-- [ ] Forgot password with the **"Don't log me out of other sessions"** checkbox, unticked by default.
-- [ ] Progressive delay on failures per account and IP. No hard lockout.
-- [ ] Equal-timing login for unknown accounts (tested statistically).
+- [x] Add password to passwordless accounts (step-up), change password.
+- [x] Forgot password with the **"Don't log me out of other sessions"** checkbox, unticked by default.
+- [x] Progressive delay on failures per account and IP. No hard lockout.
+- [x] Equal-timing login for unknown accounts (tested statistically).
 
 **Done when:** timing and response for unknown vs known email are indistinguishable in tests, and
 reset revokes other sessions unless the box is ticked.

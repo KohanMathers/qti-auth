@@ -143,6 +143,35 @@ async function signIn(email: string): Promise<SignedIn> {
   return finish(verify);
 }
 
+const PASSWORD = 'long-enough-secret';
+
+async function registerPassword(
+  email: string,
+  password = PASSWORD,
+  dateOfBirth = '1990-05-01',
+): Promise<{ userId: string; verifyToken: string }> {
+  const signup = await post('/api/v1/auth/password/signup', {
+    email,
+    password,
+    date_of_birth: dateOfBirth,
+  });
+  expect(signup.status).toBe(201);
+  const body = (await signup.json()) as { user_id: string };
+  const verifyToken = (await emails.nextLink(email)).searchParams.get('token') ?? '';
+  secrets.push(verifyToken);
+  return { userId: body.user_id, verifyToken };
+}
+
+async function verifyPasswordEmail(token: string): Promise<SignedIn> {
+  const verify = await post('/api/v1/auth/email/verify', { token });
+  expect(verify.status).toBe(200);
+  return finish(verify);
+}
+
+async function loginPassword(email: string, password = PASSWORD): Promise<Response> {
+  return post('/api/v1/auth/password/login', { email, password });
+}
+
 beforeAll(async () => {
   [postgres, nats] = await Promise.all([startPostgres(), startNats()]);
   const bus = sections.bus.parse({ servers: [natsUrl(nats)] });
@@ -169,6 +198,11 @@ beforeAll(async () => {
       },
       surfaces: { account: { hosts: [HOST] } },
       sessions: { max_per_user: 3 },
+      password: {
+        argon2: { memory_kib: 8, iterations: 1 },
+        breach_check: false,
+        failure_delay: { step: '1ms', max: '1ms' },
+      },
     }),
   });
 });
@@ -403,6 +437,170 @@ describe('sessions', () => {
   });
 });
 
+describe('passwords', () => {
+  it('creates a pending account, verifies the email, then signs in', async () => {
+    const registered = await registerPassword('pwd-new@example.com');
+    const row = await identity.context.db
+      .selectFrom('users')
+      .select(['state', 'email_verified_at'])
+      .where('id', '=', registered.userId)
+      .executeTakeFirst();
+    expect(row).toMatchObject({ state: 'pending_email_verification', email_verified_at: null });
+
+    const beforeVerify = await loginPassword('pwd-new@example.com');
+    expect(beforeVerify.status).toBe(200);
+    const pending = await finish(beforeVerify);
+    const pendingMe = await call('/api/v1/me', {
+      as: signedInAs(pending.userId, pending.sessionId),
+    });
+    expect(await pendingMe.json()).toMatchObject({
+      account_state: 'pending_email_verification',
+      email_verified: false,
+    });
+
+    const verified = await verifyPasswordEmail(registered.verifyToken);
+    expect(verified.userId).toBe(registered.userId);
+    const me = await call('/api/v1/me', { as: signedInAs(verified.userId, verified.sessionId) });
+    expect(await me.json()).toMatchObject({
+      email: 'pwd-new@example.com',
+      email_verified: true,
+      account_state: 'active',
+      session: { amr: ['pwd'], acr: 'aal1' },
+    });
+  });
+
+  it('answers identically for an unknown address and a wrong password', async () => {
+    await registerPassword('pwd-known@example.com');
+    const unknown = await loginPassword('pwd-nobody@example.com', 'wrong-password-ok');
+    const wrong = await loginPassword('pwd-known@example.com', 'wrong-password-ok');
+    expect(unknown.status).toBe(wrong.status);
+    expect(unknown.headers.get('content-type')).toBe(wrong.headers.get('content-type'));
+    expect(await unknown.text()).toBe(await wrong.text());
+    expect(JSON.parse(await (await loginPassword('pwd-nobody@example.com')).text())).toMatchObject({
+      code: 'CREDENTIALS_INCORRECT',
+    });
+  });
+
+  it('takes indistinguishably long for an unknown address and a wrong password', async () => {
+    await registerPassword('pwd-timing@example.com');
+    const samples = 20;
+    const unknown: number[] = [];
+    const wrong: number[] = [];
+    for (let i = 0; i < samples; i++) {
+      let start = performance.now();
+      await (
+        await loginPassword(`pwd-missing-${String(i)}@example.com`, 'wrong-password-ok')
+      ).text();
+      unknown.push(performance.now() - start);
+      start = performance.now();
+      await (await loginPassword('pwd-timing@example.com', 'wrong-password-ok')).text();
+      wrong.push(performance.now() - start);
+    }
+    const mean = (values: number[]) =>
+      values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance = (values: number[]) => {
+      const avg = mean(values);
+      return values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / values.length;
+    };
+    const diff = Math.abs(mean(unknown) - mean(wrong));
+    const se = Math.sqrt(variance(unknown) / samples + variance(wrong) / samples);
+    expect(diff).toBeLessThan(3 * se + 25);
+  });
+
+  it('rejects passwords that contain the email local part', async () => {
+    const response = await post('/api/v1/auth/password/signup', {
+      email: 'samsmith@example.com',
+      password: 'xxsamsmithxx',
+      date_of_birth: '1990-01-01',
+    });
+    expect(await response.json()).toMatchObject({
+      code: 'PASSWORD_REJECTED',
+      reason: 'contains_identifier',
+    });
+  });
+
+  it('adds a password after a recent magic-link sign-in, and changes it with the current one', async () => {
+    const user = await signUp('pwd-add@example.com');
+    const added = await post(
+      '/api/v1/me/password',
+      { password: PASSWORD },
+      signedInAs(user.userId, user.sessionId),
+    );
+    expect(added.status).toBe(204);
+
+    const changed = await post(
+      '/api/v1/me/password',
+      { password: 'another-long-secret', current_password: PASSWORD },
+      signedInAs(user.userId, user.sessionId),
+    );
+    expect(changed.status).toBe(204);
+
+    const login = await loginPassword('pwd-add@example.com', 'another-long-secret');
+    expect(login.status).toBe(200);
+    secrets.push(login.headers.get(SESSION_TOKEN_HEADER) ?? '');
+  });
+
+  it('needs a recent magic-link sign-in to add a password', async () => {
+    const user = await signUp('pwd-stepup@example.com');
+    await identity.context.db
+      .updateTable('sessions')
+      .set({ created_at: new Date(Date.now() - 20 * 60_000) })
+      .where('id', '=', user.sessionId)
+      .execute();
+    const refused = await post(
+      '/api/v1/me/password',
+      { password: PASSWORD },
+      signedInAs(user.userId, user.sessionId),
+    );
+    expect(await refused.json()).toMatchObject({ code: 'STEP_UP_REQUIRED' });
+  });
+
+  it('resets a password and revokes other sessions unless keep_other_sessions is true', async () => {
+    const first = await registerPassword('pwd-reset@example.com');
+    const signedInUser = await verifyPasswordEmail(first.verifyToken);
+    const second = await finish(await loginPassword('pwd-reset@example.com'));
+
+    const forgot = await post('/api/v1/auth/password/forgot', { email: 'pwd-reset@example.com' });
+    expect(forgot.status).toBe(202);
+    const unknown = await post('/api/v1/auth/password/forgot', {
+      email: 'pwd-missing@example.com',
+    });
+    expect(await unknown.text()).toBe(await forgot.text());
+    secrets.push(
+      (await emails.nextLink('pwd-missing@example.com')).searchParams.get('token') ?? '',
+    );
+
+    const token = (await emails.nextLink('pwd-reset@example.com')).searchParams.get('token') ?? '';
+    secrets.push(token);
+    const reset = await post('/api/v1/auth/password/reset', {
+      token,
+      password: 'brand-new-secret1',
+    });
+    expect(reset.status).toBe(200);
+    const afterReset = await finish(reset);
+    expect(await resolve(signedInUser.token)).toBeNull();
+    expect(await resolve(second.token)).toBeNull();
+    expect(await resolve(afterReset.token)).not.toBeNull();
+
+    const keepForgot = await post('/api/v1/auth/password/forgot', {
+      email: 'pwd-reset@example.com',
+    });
+    expect(keepForgot.status).toBe(202);
+    const keepToken =
+      (await emails.nextLink('pwd-reset@example.com')).searchParams.get('token') ?? '';
+    secrets.push(keepToken);
+    const kept = await finish(await loginPassword('pwd-reset@example.com', 'brand-new-secret1'));
+    const keepReset = await post('/api/v1/auth/password/reset', {
+      token: keepToken,
+      password: 'kept-other-secret1',
+      keep_other_sessions: true,
+    });
+    expect(keepReset.status).toBe(200);
+    secrets.push(keepReset.headers.get(SESSION_TOKEN_HEADER) ?? '');
+    expect(await resolve(kept.token)).not.toBeNull();
+  });
+});
+
 describe('events, retention and data rights', () => {
   it('writes events that match their schemas', async () => {
     const events = await checkOutboxContract(identity.context.db, await loadEventCatalog());
@@ -496,6 +694,7 @@ describe('events, retention and data rights', () => {
       expect(metrics).toMatch(/qtiauth_accounts\{state="active",service="identity"\} [1-9]/);
       expect(metrics).toMatch(/qtiauth_sessions_active\{service="identity"\} [1-9]/);
       expect(metrics).toContain('qtiauth_auth_signups_total{method="magic_link",age_band="adult"');
+      expect(metrics).toContain('qtiauth_auth_signups_total{method="password",age_band="adult"');
     });
   });
 
@@ -505,7 +704,9 @@ describe('events, retention and data rights', () => {
       ...secrets,
       ...secrets.map((secret) => hashToken(secret)),
       'rights@example.com',
+      'pwd-new@example.com',
       '1985-07-04',
+      PASSWORD,
       postgres.getPassword(),
     ]);
   });

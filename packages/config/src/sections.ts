@@ -755,6 +755,90 @@ export const magicLink = z
   .prefault({})
   .describe('Magic-link sign-in.');
 
+export const password = z
+  .strictObject({
+    min_length: z.int().min(1).max(256).default(10).describe('Shortest a password can be.'),
+    max_length: z
+      .int()
+      .min(1)
+      .max(256)
+      .default(256)
+      .describe('Longest a password can be. 256 is the hard cap.'),
+    composition: z
+      .strictObject({
+        require_lower: z.boolean().default(false).describe('Require a lowercase letter.'),
+        require_upper: z.boolean().default(false).describe('Require an uppercase letter.'),
+        require_digit: z.boolean().default(false).describe('Require a digit.'),
+        require_symbol: z
+          .boolean()
+          .default(false)
+          .describe('Require a character that is not a letter or digit.'),
+      })
+      .prefault({})
+      .describe('Optional composition rules. All off by default.'),
+    breach_check: z
+      .boolean()
+      .default(true)
+      .describe(
+        'Reject passwords that appear in the Have I Been Pwned range API. Only the first 5 hex characters of a SHA-1 hash leave the server. Unreachable checks are skipped.',
+      ),
+    argon2: z
+      .strictObject({
+        memory_kib: z
+          .int()
+          .min(8)
+          .max(1_048_576)
+          .default(19_456)
+          .describe('Argon2id memory in KiB. OWASP default is 19456 (19 MiB).'),
+        iterations: z.int().min(1).max(16).default(2).describe('Argon2id iterations (t).'),
+        parallelism: z.int().min(1).max(16).default(1).describe('Argon2id parallelism (p).'),
+      })
+      .prefault({})
+      .describe('Argon2id parameters. Stored hashes are rehashed on login when these change.'),
+    reset_ttl: duration('15m', 'A password reset link works for this long.'),
+    verification_ttl: duration(
+      '15m',
+      'An email verification link after password signup works for this long.',
+    ),
+    failure_delay: z
+      .strictObject({
+        step: duration(
+          '250ms',
+          'Extra delay added for each previous failed password attempt on the account or IP.',
+        ),
+        max: duration('2s', 'Longest progressive delay after failed password attempts.'),
+      })
+      .prefault({})
+      .describe(
+        'Progressive delay after failed password attempts, counted per account and per IP. There is no lockout.',
+      ),
+  })
+  .superRefine((value, ctx) => {
+    if (value.min_length > value.max_length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Must be less than or equal to max_length',
+        path: ['min_length'],
+      });
+    }
+    if (value.argon2.memory_kib < 8 * value.argon2.parallelism) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Must be at least 8 KiB per parallel lane',
+        path: ['argon2', 'memory_kib'],
+      });
+    }
+    if (value.failure_delay.step > value.failure_delay.max) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Must be less than or equal to max',
+        path: ['failure_delay', 'step'],
+      });
+    }
+  })
+  .prefault({})
+  .describe('Password sign-in.');
+
 export const sessions = z
   .strictObject({
     max_per_user: z
@@ -1127,6 +1211,7 @@ export const sections = {
   security,
   accounts,
   magic_link: magicLink,
+  password,
   sessions,
   age,
   parental,

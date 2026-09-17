@@ -169,6 +169,20 @@ magic_link:
   ttl: 15m
   signup_ttl: 30m
 
+password:
+  min_length: 10
+  max_length: 256
+  composition:
+    require_lower: false
+    require_upper: false
+    require_digit: false
+    require_symbol: false
+  breach_check: true
+  argon2: { memory_kib: 19456, iterations: 2, parallelism: 1 }
+  reset_ttl: 15m
+  verification_ttl: 15m
+  failure_delay: { step: 250ms, max: 2s }
+
 sessions:
   max_per_user: 10
 
