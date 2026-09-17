@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.session.created.v1",
+  "title": "Session created",
+  "description": "A user signed in and a session started. The subject is the session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["user_id", "auth_method", "amr", "acr"],
+  "properties": {
+    "user_id": { "description": "The signed-in user.", "type": "string", "format": "uuid" },
+    "auth_method": {
+      "description": "The sign-in method, such as magic_link.",
+      "type": "string",
+      "minLength": 1
+    },
+    "amr": {
+      "description": "Authentication methods used, as in the internal identity token.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "acr": { "description": "Assurance level, aal1 or aal2.", "enum": ["aal1", "aal2"] }
+  }
+}

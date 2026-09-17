@@ -643,6 +643,7 @@ const DEFAULT_RATE_LIMITS = {
   magic_link_ip: { per: 'ip', limit: 10, window: '1h', on_store_failure: 'closed' },
   magic_link_ip_day: { per: 'ip', limit: 20, window: '1d', on_store_failure: 'closed' },
   magic_link: { policies: ['magic_link_email', 'magic_link_ip', 'magic_link_ip_day'] },
+  auth_verify: { per: 'ip', limit: 30, window: '15m', on_store_failure: 'closed' },
   ticket_create: { per: 'user', limit: 5, window: '1h' },
   guest_ticket: { per: 'ip', limit: 3, window: '1h' },
   key_redeem: { per: ['ip', 'user'], limit: 10, window: '1h' },
@@ -694,6 +695,104 @@ export const security = z
   })
   .prefault({})
   .describe('Account security.');
+
+const emailDomainRule = z
+  .strictObject({
+    remove_dots: z
+      .boolean()
+      .default(false)
+      .describe('Ignore dots in the local part, so j.doe@ and jdoe@ are the same address.'),
+    subaddress_separator: z
+      .string()
+      .length(1)
+      .nullable()
+      .default(null)
+      .describe(
+        'Ignore the local part from this character on, so with + jo+news@ and jo@ are the same address. null keeps the whole local part.',
+      ),
+    domain: z
+      .hostname('Must be a domain')
+      .nullable()
+      .default(null)
+      .describe('Count addresses as belonging to this domain instead. null keeps the domain.'),
+  })
+  .describe('How addresses at one domain are normalized.');
+
+const DEFAULT_EMAIL_NORMALIZATION = {
+  'gmail.com': { remove_dots: true, subaddress_separator: '+', domain: null },
+  'googlemail.com': { remove_dots: true, subaddress_separator: '+', domain: 'gmail.com' },
+};
+
+export const accounts = z
+  .strictObject({
+    max_per_email: z
+      .int()
+      .min(1)
+      .default(2)
+      .describe('Accounts allowed per normalized email address.'),
+    email_normalization: z
+      .record(z.hostname('Must be a domain like example.com'), emailDomainRule)
+      .default(DEFAULT_EMAIL_NORMALIZATION)
+      .describe(
+        'Rules per email domain for deciding when two addresses are the same, on top of ignoring case. Setting this replaces the built-in rules.',
+      ),
+  })
+  .prefault({})
+  .describe('Accounts.');
+
+export const magicLink = z
+  .strictObject({
+    ttl: duration('15m', 'A magic link works for this long.'),
+    signup_ttl: duration(
+      '30m',
+      'After a new user opens their magic link, they have this long to enter their date of birth.',
+    ),
+  })
+  .prefault({})
+  .describe('Magic-link sign-in.');
+
+export const sessions = z
+  .strictObject({
+    max_per_user: z
+      .int()
+      .min(1)
+      .default(10)
+      .describe('Sessions a user can have at once. Signing in again ends the oldest.'),
+  })
+  .prefault({})
+  .describe('Sessions.');
+
+const bandStart = (band: string, value: number) =>
+  z.int().min(1).max(150).default(value).describe(`Age the ${band} band starts at.`);
+
+export const age = z
+  .strictObject({
+    bands: z
+      .strictObject({
+        '13_to_15': bandStart('13_to_15', 13),
+        '16_to_17': bandStart('16_to_17', 16),
+        adult: bandStart('adult', 18),
+      })
+      .refine((b) => b['13_to_15'] < b['16_to_17'] && b['16_to_17'] < b.adult, {
+        message: 'Each band must start at a greater age than the one before',
+      })
+      .prefault({})
+      .describe('Age in whole years at which each band starts. Anyone younger is under_13.'),
+  })
+  .prefault({})
+  .describe('Age bands, computed from the date of birth.');
+
+export const parental = z
+  .strictObject({
+    consent_age: z
+      .int()
+      .min(1)
+      .max(18)
+      .default(13)
+      .describe('Users younger than this need a parent or guardian to approve their account.'),
+  })
+  .prefault({})
+  .describe('Parental consent.');
 
 const CRON_JOB_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
 
@@ -992,6 +1091,14 @@ export const emailSection = z
 export const retention = z
   .strictObject({
     delivery_logs: duration('30d', 'Keep email delivery log entries for this long.'),
+    sessions: duration(
+      '30d',
+      'Keep sessions and their bindings for this long after they expire or are revoked.',
+    ),
+    tokens: duration(
+      '24h',
+      'Keep magic-link and other emailed tokens for this long after they expire.',
+    ),
   })
   .prefault({})
   .describe('How long data is kept. retention.sweep deletes anything older.');
@@ -1014,6 +1121,11 @@ export const sections = {
   captcha,
   email: emailSection,
   security,
+  accounts,
+  magic_link: magicLink,
+  sessions,
+  age,
+  parental,
   rate_limits: rateLimits,
   scheduler,
   retention,

@@ -5,6 +5,9 @@
   "description": "Public entry point: surfaces, route table, sessions, route policy, rate limits, CORS and internal identity tokens",
   "license": "MIT",
   "type": "module",
+  "exports": {
+    "./testing": "./src/testing.ts"
+  },
   "bin": {
     "qtiauth": "./src/cli.ts"
   },

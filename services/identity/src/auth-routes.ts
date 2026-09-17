@@ -1,0 +1,289 @@
+import { ProblemError, type Router } from '@qtiauth/service-kit';
+import * as z from 'zod';
+
+import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
+import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
+import { magicLinkEnabled, sendMagicLink, signup, verify } from './flows.ts';
+import { NO_STORE, sessionHeaders, signedOutHeaders } from './headers.ts';
+import { isCanonicalLocale, preferredLocale } from './locale.ts';
+import { identityMetrics } from './metrics.ts';
+import type { Context } from './service.ts';
+import { revokeSessions } from './sessions.ts';
+
+export const RETURN_TO = /^\/(?![/\\])[^\s\\]*$/;
+
+export const returnToSchema = z
+  .string()
+  .max(2048)
+  .regex(RETURN_TO, 'Must be a path starting with a single /')
+  .describe('Path on the account surface to go to after signing in.');
+
+const signedInSchema = z.object({
+  status: z.literal('signed_in'),
+  user_id: z.uuid(),
+  return_to: z.string().nullable().describe('The return_to given when the link was requested.'),
+});
+
+const verifyResponseSchema = z.discriminatedUnion('status', [
+  signedInSchema,
+  z.object({
+    status: z.literal('choose_account'),
+    accounts: z
+      .array(z.object({ user_id: z.uuid(), created_at: z.iso.datetime() }))
+      .describe('Accounts using this email address. Verify again with one of their user_id.'),
+  }),
+  z.object({
+    status: z.literal('signup_required'),
+    signup_token: z
+      .string()
+      .describe('Pass to /api/v1/auth/magic-link/signup with the date of birth.'),
+    expires_at: z.iso.datetime(),
+  }),
+]);
+
+const meSchema = z.object({
+  id: z.uuid(),
+  email: z.string(),
+  email_verified: z.boolean(),
+  account_state: z.string(),
+  age_band: z.string(),
+  locale: z.string().nullable(),
+  created_at: z.iso.datetime(),
+  session: z.object({ id: z.uuid(), amr: z.array(z.string()), acr: z.string().nullable() }),
+});
+
+function requireMagicLink(ctx: Context): void {
+  if (!magicLinkEnabled(ctx)) throw new ProblemError('AUTH_METHOD_DISABLED');
+}
+
+export function authRoutes(router: Router<Context>): void {
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/magic-link/start',
+    operation_id: 'startMagicLink',
+    summary: 'Email a magic link for signing in or signing up',
+    description:
+      'The response is the same whether or not an account uses the address. Opening the link shows a confirmation page, and new users enter their date of birth after confirming.',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'magic_link',
+    request: {
+      body: z.object({
+        email: z.email().max(254),
+        locale: z
+          .string()
+          .refine(isCanonicalLocale, 'Must be a canonical locale like en-GB')
+          .optional()
+          .describe('Language for the email. Defaults to Accept-Language.'),
+        return_to: returnToSchema.optional(),
+      }),
+    },
+    responses: {
+      202: {
+        description: 'The link is on its way, if the address can use it',
+        schema: z.object({ status: z.literal('sent') }),
+      },
+    },
+    errors: ['AUTH_METHOD_DISABLED'],
+    handler: async ({ ctx, body, request, log }) => {
+      requireMagicLink(ctx);
+      await sendMagicLink(
+        { ctx, request, log },
+        {
+          email: body.email,
+          locale:
+            body.locale ??
+            preferredLocale(request.headers.get('accept-language')) ??
+            ctx.config.email.default_locale,
+          returnTo: body.return_to ?? null,
+        },
+      );
+      return { status: 202, body: { status: 'sent' as const }, headers: NO_STORE };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/magic-link/verify',
+    operation_id: 'verifyMagicLink',
+    summary: 'Use a magic link',
+    description:
+      'Signs in to the account using the link’s address. With several accounts, answers choose_account until a user_id is given. With none, answers signup_required and a token for finishing signup.',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    request: {
+      body: z.object({
+        token: z.string().min(1).max(256).describe('The token from the link.'),
+        user_id: z.uuid().optional().describe('The account to sign in to, from choose_account.'),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Signed in, or the next step. Signing in sets the session cookie.',
+        schema: verifyResponseSchema,
+      },
+    },
+    errors: ['AUTH_METHOD_DISABLED', 'MAGIC_LINK_INVALID'],
+    handler: async ({ ctx, body, request, log }) => {
+      requireMagicLink(ctx);
+      const result = await verify(
+        { ctx, request, log },
+        { token: body.token, userId: body.user_id },
+      );
+      switch (result.status) {
+        case 'invalid':
+          throw new ProblemError('MAGIC_LINK_INVALID');
+        case 'choose_account':
+          return {
+            status: 200,
+            headers: NO_STORE,
+            body: {
+              status: 'choose_account' as const,
+              accounts: result.accounts.map((account) => ({
+                user_id: account.id,
+                created_at: account.created_at.toISOString(),
+              })),
+            },
+          };
+        case 'signup_required':
+          return {
+            status: 200,
+            headers: NO_STORE,
+            body: {
+              status: 'signup_required' as const,
+              signup_token: result.signupToken,
+              expires_at: result.expiresAt.toISOString(),
+            },
+          };
+        case 'signed_in':
+          return {
+            status: 200,
+            headers: sessionHeaders(result.session),
+            body: {
+              status: 'signed_in' as const,
+              user_id: result.userId,
+              return_to: result.returnTo,
+            },
+          };
+      }
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/magic-link/signup',
+    operation_id: 'completeMagicLinkSignup',
+    summary: 'Create an account after opening a magic link',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    request: {
+      body: z.object({
+        signup_token: z.string().min(1).max(256),
+        date_of_birth: z.iso
+          .date()
+          .refine((value) => isValidDateOfBirth(value, new Date()), 'Must be a real date of birth')
+          .describe('YYYY-MM-DD.'),
+      }),
+    },
+    responses: {
+      201: { description: 'Account created and signed in', schema: signedInSchema },
+    },
+    errors: [
+      'AUTH_METHOD_DISABLED',
+      'SIGNUP_TOKEN_INVALID',
+      'ACCOUNT_LIMIT_REACHED',
+      'PARENTAL_CONSENT_UNAVAILABLE',
+    ],
+    handler: async ({ ctx, body, request, log }) => {
+      requireMagicLink(ctx);
+      const result = await signup(
+        { ctx, request, log },
+        { signupToken: body.signup_token, dateOfBirth: body.date_of_birth },
+      );
+      switch (result.status) {
+        case 'invalid':
+          throw new ProblemError('SIGNUP_TOKEN_INVALID');
+        case 'account_limit':
+          throw new ProblemError('ACCOUNT_LIMIT_REACHED');
+        case 'parental_consent_required':
+          throw new ProblemError('PARENTAL_CONSENT_UNAVAILABLE');
+        case 'signed_in':
+          return {
+            status: 201,
+            headers: sessionHeaders(result.session),
+            body: {
+              status: 'signed_in' as const,
+              user_id: result.userId,
+              return_to: result.returnTo,
+            },
+          };
+      }
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/logout',
+    operation_id: 'logout',
+    summary: 'Sign out, ending the session on every surface',
+    tags: ['auth'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    allow_pending_legal: true,
+    allow_pending_parental_consent: true,
+    rate_limit: 'global',
+    responses: { 204: { description: 'Signed out. The session cookie is cleared.' } },
+    handler: async ({ ctx, identity, log }) => {
+      const { sub: userId, sid: sessionId } = identity;
+      let revoked: string[] = [];
+      if (userId !== null && sessionId !== null) {
+        revoked = await ctx.db
+          .transaction()
+          .execute((trx) =>
+            revokeSessions(trx, { userId, reason: 'logout', now: new Date(), only: [sessionId] }),
+          );
+        ctx.outbox.wake();
+        identityMetrics(ctx.metrics).sessionsRevoked('logout', revoked.length);
+        log.info('signed out', { session_id: sessionId });
+      }
+      return { status: 204, headers: signedOutHeaders(revoked) };
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: '/api/v1/me',
+    operation_id: 'getMe',
+    summary: 'The signed-in account',
+    tags: ['account'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    allow_pending_legal: true,
+    allow_pending_parental_consent: true,
+    rate_limit: 'global',
+    responses: { 200: { description: 'The account and current session', schema: meSchema } },
+    errors: ['ACCOUNT_NOT_FOUND'],
+    handler: async ({ ctx, identity }) => {
+      const account = identity.sub === null ? undefined : await findAccount(ctx.db, identity.sub);
+      if (!account || account.state === 'deleted' || identity.sid === null) {
+        throw new ProblemError('ACCOUNT_NOT_FOUND');
+      }
+      return {
+        status: 200,
+        headers: NO_STORE,
+        body: {
+          id: account.id,
+          email: account.email,
+          email_verified: account.email_verified_at !== null,
+          account_state: account.state,
+          age_band: ageBand(ageOn(account.date_of_birth, new Date()), ctx.config.age.bands),
+          locale: account.locale,
+          created_at: account.created_at.toISOString(),
+          session: { id: identity.sid, amr: identity.amr, acr: identity.acr },
+        },
+      };
+    },
+  });
+}

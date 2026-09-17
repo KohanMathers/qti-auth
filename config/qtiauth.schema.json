@@ -1786,6 +1786,169 @@
       },
       "additionalProperties": false
     },
+    "accounts": {
+      "description": "Accounts.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "max_per_email": {
+          "default": 2,
+          "description": "Accounts allowed per normalized email address.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "email_normalization": {
+          "default": {
+            "gmail.com": {
+              "remove_dots": true,
+              "subaddress_separator": "+",
+              "domain": null
+            },
+            "googlemail.com": {
+              "remove_dots": true,
+              "subaddress_separator": "+",
+              "domain": "gmail.com"
+            }
+          },
+          "description": "Rules per email domain for deciding when two addresses are the same, on top of ignoring case. Setting this replaces the built-in rules.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "format": "hostname",
+            "pattern": "^(?=.{1,253}\\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\\.?$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "remove_dots": {
+                "default": false,
+                "description": "Ignore dots in the local part, so j.doe@ and jdoe@ are the same address.",
+                "type": "boolean"
+              },
+              "subaddress_separator": {
+                "default": null,
+                "description": "Ignore the local part from this character on, so with + jo+news@ and jo@ are the same address. null keeps the whole local part.",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "domain": {
+                "default": null,
+                "description": "Count addresses as belonging to this domain instead. null keeps the domain.",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "hostname",
+                    "pattern": "^(?=.{1,253}\\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\\.?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "description": "How addresses at one domain are normalized."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "magic_link": {
+      "description": "Magic-link sign-in.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "ttl": {
+          "description": "A magic link works for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "default": "15m",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "signup_ttl": {
+          "description": "After a new user opens their magic link, they have this long to enter their date of birth. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "default": "30m",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sessions": {
+      "description": "Sessions.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "max_per_user": {
+          "default": 10,
+          "description": "Sessions a user can have at once. Signing in again ends the oldest.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "age": {
+      "description": "Age bands, computed from the date of birth.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "bands": {
+          "description": "Age in whole years at which each band starts. Anyone younger is under_13.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "13_to_15": {
+              "default": 13,
+              "description": "Age the 13_to_15 band starts at.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 150
+            },
+            "16_to_17": {
+              "default": 16,
+              "description": "Age the 16_to_17 band starts at.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 150
+            },
+            "adult": {
+              "default": 18,
+              "description": "Age the adult band starts at.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 150
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "parental": {
+      "description": "Parental consent.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "consent_age": {
+          "default": 13,
+          "description": "Users younger than this need a parent or guardian to approve their account.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18
+        }
+      },
+      "additionalProperties": false
+    },
     "rate_limits": {
       "description": "Named rate-limit policies, referenced by routes. Policies you set replace the built-in policy of the same name.",
       "type": "object",
@@ -1924,6 +2087,18 @@
         "delivery_logs": {
           "description": "Keep email delivery log entries for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "30d",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "sessions": {
+          "description": "Keep sessions and their bindings for this long after they expire or are revoked. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "default": "30d",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "tokens": {
+          "description": "Keep magic-link and other emailed tokens for this long after they expire. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "default": "24h",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }

@@ -8,7 +8,11 @@ import {
   IDENTITY_HEADER,
   type ManifestRoute,
   openApiDocument,
+  REVOKED_SESSIONS_HEADER,
   type RouteManifest,
+  SESSION_CLEAR_HEADER,
+  SESSION_EXPIRES_HEADER,
+  SESSION_TOKEN_HEADER,
   staticIdentityKeys,
   verifyIdentityToken,
 } from '@qtiauth/service-kit';
@@ -143,6 +147,7 @@ async function setup(options: SetupOptions = {}) {
     keyLoaded: () => undefined,
   };
   const resolved = options.session === undefined ? session() : options.session;
+  const resolves: string[] = [];
   const handler = createGatewayHandler({
     config,
     log,
@@ -158,11 +163,13 @@ async function setup(options: SetupOptions = {}) {
       cacheTtl: 60_000,
       metrics: { lookup: () => undefined },
       onError: () => undefined,
-      resolve: (request) =>
-        Promise.resolve({
+      resolve: (request) => {
+        resolves.push(request.binding_token_hash);
+        return Promise.resolve({
           status: 'ok',
           data: { session: request.binding_token_hash === hashToken(TOKEN) ? resolved : null },
-        }),
+        });
+      },
     }),
     signingKey: () => keyring.signingKey(),
     local: router,
@@ -224,7 +231,7 @@ async function setup(options: SetupOptions = {}) {
         clockTolerance: 5_000,
       }),
     );
-  return { request, forwarded, verify, logs, table, recorded };
+  return { request, forwarded, verify, logs, table, recorded, resolves };
 }
 
 const signedIn = { cookie: `__Host-qtiauth_session=${TOKEN}` };
@@ -459,6 +466,85 @@ describe('gateway handler', () => {
       paths: { '/v1/meta/health': { get: { operationId: 'getHealth' } } },
     });
     expect((await request('/api/v1/meta/features')).status).toBe(429);
+  });
+
+  it('sets the session cookie identity asks for and hides the headers it used', async () => {
+    const issued = randomBytes(32).toString('base64url');
+    const { request } = await setup({
+      upstream: () => ({
+        status: 'ok',
+        response: new Response(null, {
+          status: 204,
+          headers: {
+            [SESSION_TOKEN_HEADER]: issued,
+            [SESSION_EXPIRES_HEADER]: new Date(Date.now() + 3_600_000).toISOString(),
+          },
+        }),
+      }),
+    });
+    const response = await request('/api/v1/slow');
+    expect(response.headers.get('set-cookie')).toMatch(
+      new RegExp(
+        `^__Host-qtiauth_session=${issued}; Path=/; Max-Age=(?:3599|3600); Secure; HttpOnly; SameSite=Lax$`,
+      ),
+    );
+    expect(response.headers.has(SESSION_TOKEN_HEADER)).toBe(false);
+    expect(response.headers.has(SESSION_EXPIRES_HEADER)).toBe(false);
+  });
+
+  it('clears the cookie and drops revoked sessions from the cache straight away', async () => {
+    let revoke = false;
+    const { request, resolves } = await setup({
+      upstream: () => ({
+        status: 'ok',
+        response: new Response(null, {
+          status: 204,
+          headers: revoke
+            ? { [SESSION_CLEAR_HEADER]: '1', [REVOKED_SESSIONS_HEADER]: 's1, s2' }
+            : {},
+        }),
+      }),
+    });
+    await request('/api/v1/me', { headers: signedIn });
+    await request('/api/v1/me', { headers: signedIn });
+    expect(resolves).toHaveLength(1);
+
+    revoke = true;
+    const logout = await request('/api/v1/me', { headers: signedIn });
+    expect(logout.headers.get('set-cookie')).toContain(
+      '__Host-qtiauth_session=; Path=/; Max-Age=0',
+    );
+    expect(logout.headers.has(REVOKED_SESSIONS_HEADER)).toBe(false);
+    revoke = false;
+    await request('/api/v1/me', { headers: signedIn });
+    expect(resolves).toHaveLength(2);
+  });
+
+  it('ignores session headers from services other than identity', async () => {
+    const manifests: RouteManifest[] = [
+      { service: 'notes', version: '1.0.0', permissions: [], routes: [route({ auth: 'none' })] },
+    ];
+    const { request, logs } = await setup({
+      manifests,
+      upstream: () => ({
+        status: 'ok',
+        response: new Response(null, {
+          status: 204,
+          headers: {
+            [SESSION_TOKEN_HEADER]: randomBytes(32).toString('base64url'),
+            [SESSION_EXPIRES_HEADER]: new Date(Date.now() + 3_600_000).toISOString(),
+          },
+        }),
+      }),
+    });
+    const response = await request('/api/v1/me');
+    expect(response.headers.has('set-cookie')).toBe(false);
+    expect(response.headers.has(SESSION_TOKEN_HEADER)).toBe(false);
+    expect(logs.records()).toContainEqual(
+      expect.objectContaining({
+        message: 'ignored session headers from a service other than identity',
+      }),
+    );
   });
 
   it('never logs session tokens, cookies or identity tokens', async () => {

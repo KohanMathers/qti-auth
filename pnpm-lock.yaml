@@ -444,6 +444,43 @@ importers:
         specifier: workspace:*
         version: link:../../packages/testing
 
+  services/identity:
+    dependencies:
+      '@qtiauth/bus':
+        specifier: workspace:*
+        version: link:../../packages/bus
+      '@qtiauth/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@qtiauth/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@qtiauth/email':
+        specifier: workspace:*
+        version: link:../../packages/email
+      '@qtiauth/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@qtiauth/service-kit':
+        specifier: workspace:*
+        version: link:../../packages/service-kit
+      kysely:
+        specifier: 0.29.6
+        version: 0.29.6
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@qtiauth/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@qtiauth/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@qtiauth/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
   services/notifier:
     dependencies:
       '@qtiauth/bus':

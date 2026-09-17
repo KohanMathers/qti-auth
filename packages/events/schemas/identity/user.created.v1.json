@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.user.created.v1",
+  "title": "User created",
+  "description": "A new account was created. The subject is the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["signup_method", "account_state", "age_band"],
+  "properties": {
+    "signup_method": {
+      "description": "How the account was created, such as magic_link.",
+      "type": "string",
+      "minLength": 1
+    },
+    "account_state": {
+      "description": "The state the account started in.",
+      "enum": [
+        "pending_email_verification",
+        "pending_parental_consent",
+        "active",
+        "locked",
+        "banned",
+        "pending_deletion",
+        "deleted"
+      ]
+    },
+    "age_band": {
+      "description": "The user's age band when the account was created.",
+      "enum": ["under_13", "13_to_15", "16_to_17", "adult"]
+    }
+  }
+}

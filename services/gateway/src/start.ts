@@ -180,17 +180,25 @@ export async function startGateway(
     });
     stack.push(() => rotation.stop());
 
-    const sessionCache = options.sessionCache ?? valkeySessionCache(valkey);
-    const cacheTtl = config.gateway.session_cache.ttl;
+    const sessions = createSessionResolver({
+      cache: options.sessionCache ?? valkeySessionCache(valkey),
+      cacheTtl: config.gateway.session_cache.ttl,
+      metrics: prometheusSessionMetrics(ctx.metrics),
+      resolve: (request) =>
+        rpcRequest(bus, RESOLVE_SESSION_SERVICE, RESOLVE_SESSION_METHOD, request, {
+          metrics: ctx.busMetrics,
+        }),
+      onError: (message, error) => {
+        log.warn(message, { error });
+      },
+    });
     const invalidation = await consumeIdempotentEvents(bus, {
       name: SESSION_CACHE_CONSUMER,
       types: SESSION_EVENTS,
       metrics: ctx.busMetrics,
       handler: async (event) => {
         await Promise.all(
-          invalidationTargets(event).map((target) =>
-            sessionCache.bump(target.kind, target.id, Date.now(), cacheTtl * 2),
-          ),
+          invalidationTargets(event).map((target) => sessions.invalidate(target.kind, target.id)),
         );
       },
       onError: (error, message) => {
@@ -313,18 +321,7 @@ export async function startGateway(
       hsts: hstsValue(config.gateway.hsts),
       routes: () => table,
       rateLimiter,
-      sessions: createSessionResolver({
-        cache: sessionCache,
-        cacheTtl,
-        metrics: prometheusSessionMetrics(ctx.metrics),
-        resolve: (request) =>
-          rpcRequest(bus, RESOLVE_SESSION_SERVICE, RESOLVE_SESSION_METHOD, request, {
-            metrics: ctx.busMetrics,
-          }),
-        onError: (message, error) => {
-          log.warn(message, { error });
-        },
-      }),
+      sessions,
       signingKey: () => keyring.signingKey(),
       local: router,
       localContext: (surface) => ({ ...local, surface }),

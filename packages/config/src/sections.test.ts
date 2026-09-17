@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  accounts,
+  age,
   bus,
   cors,
   emailSection,
   features,
   gateway,
+  magicLink,
   network,
   rateLimits,
   retention,
@@ -258,8 +261,57 @@ describe('email', () => {
   });
 });
 
+describe('accounts', () => {
+  it('allows two accounts per address and ignores Gmail dots and subaddresses by default', () => {
+    const parsed = accounts.parse({});
+    expect(parsed.max_per_email).toBe(2);
+    expect(parsed.email_normalization['googlemail.com']).toEqual({
+      remove_dots: true,
+      subaddress_separator: '+',
+      domain: 'gmail.com',
+    });
+  });
+
+  it('replaces the built-in rules and checks them', () => {
+    expect(
+      accounts.parse({ email_normalization: { 'example.com': { subaddress_separator: '-' } } })
+        .email_normalization,
+    ).toEqual({ 'example.com': { remove_dots: false, subaddress_separator: '-', domain: null } });
+    const result = accounts.safeParse({
+      max_per_email: 0,
+      email_normalization: {
+        'example.com': { subaddress_separator: '++', domain: 'not a domain' },
+      },
+    });
+    expect(messages(result)).toEqual([
+      'max_per_email: Too small: expected number to be >=1',
+      expect.stringMatching(/^email_normalization\.example\.com\.subaddress_separator: /),
+      'email_normalization.example.com.domain: Must be a domain',
+    ]);
+  });
+});
+
+describe('magic_link', () => {
+  it('expires links after 15 minutes and signups after 30', () => {
+    expect(magicLink.parse({})).toEqual({ ttl: 900_000, signup_ttl: 1_800_000 });
+  });
+});
+
+describe('age', () => {
+  it('starts the bands at 13, 16 and 18, and keeps them in order', () => {
+    expect(age.parse({}).bands).toEqual({ '13_to_15': 13, '16_to_17': 16, adult: 18 });
+    expect(messages(age.safeParse({ bands: { '16_to_17': 19 } }))).toEqual([
+      'bands: Each band must start at a greater age than the one before',
+    ]);
+  });
+});
+
 describe('retention', () => {
-  it('keeps delivery logs for 30 days by default', () => {
-    expect(retention.parse({})).toEqual({ delivery_logs: 2_592_000_000 });
+  it('keeps delivery logs and sessions for 30 days and tokens for a day by default', () => {
+    expect(retention.parse({})).toEqual({
+      delivery_logs: 2_592_000_000,
+      sessions: 2_592_000_000,
+      tokens: 86_400_000,
+    });
   });
 });

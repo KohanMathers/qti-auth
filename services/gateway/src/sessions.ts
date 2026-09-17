@@ -87,6 +87,7 @@ export interface SessionResolverOptions {
 
 export interface SessionResolver {
   resolve: (token: string, cookieScope: string) => Promise<SessionResolution>;
+  invalidate: (kind: EpochKind, id: string) => Promise<void>;
 }
 
 export function sessionCookieName(cookies: CookiesConfig): string {
@@ -103,16 +104,20 @@ export function readCookie(header: string | null, name: string): string | null {
   return null;
 }
 
-export function clearSessionCookie(cookies: CookiesConfig): string {
+export function sessionCookie(cookies: CookiesConfig, token: string, maxAge: number): string {
   return [
-    `${sessionCookieName(cookies)}=`,
+    `${sessionCookieName(cookies)}=${token}`,
     'Path=/',
-    'Max-Age=0',
+    `Max-Age=${String(maxAge)}`,
     ...(cookies.domain === null ? [] : [`Domain=${cookies.domain}`]),
     'Secure',
     'HttpOnly',
     'SameSite=Lax',
   ].join('; ');
+}
+
+export function clearSessionCookie(cookies: CookiesConfig): string {
+  return sessionCookie(cookies, '', 0);
 }
 
 export function hashToken(token: string): string {
@@ -248,6 +253,7 @@ export function createSessionResolver(options: SessionResolverOptions): SessionR
       }
       return { status: 'ok', session };
     },
+    invalidate: (kind, id) => cache.bump(kind, id, now(), options.cacheTtl * 2),
   };
 }
 

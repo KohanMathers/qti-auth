@@ -159,6 +159,25 @@ email:
 security:
   step_up_window: 10m
 
+accounts:
+  max_per_email: 2
+  email_normalization: # replaces the built-in rules; case is always ignored
+    gmail.com: { remove_dots: true, subaddress_separator: '+', domain: null }
+    googlemail.com: { remove_dots: true, subaddress_separator: '+', domain: gmail.com }
+
+magic_link:
+  ttl: 15m
+  signup_ttl: 30m
+
+sessions:
+  max_per_user: 10
+
+age:
+  bands: { 13_to_15: 13, 16_to_17: 16, adult: 18 } # age each band starts at; younger is under_13
+
+parental:
+  consent_age: 13
+
 rate_limits: # per: ip | user | client | email | account, or a list counted as one combination
   global: { per: ip, limit: 300, window: 1m }
   auth_password: { per: [ip, account], limit: 10, window: 15m, on_store_failure: closed }
@@ -166,6 +185,7 @@ rate_limits: # per: ip | user | client | email | account, or a list counted as o
   magic_link_ip: { per: ip, limit: 10, window: 1h, on_store_failure: closed }
   magic_link_ip_day: { per: ip, limit: 20, window: 1d, on_store_failure: closed }
   magic_link: { policies: [magic_link_email, magic_link_ip, magic_link_ip_day] }
+  auth_verify: { per: ip, limit: 30, window: 15m, on_store_failure: closed }
   ticket_create: { per: user, limit: 5, window: 1h }
   guest_ticket: { per: ip, limit: 3, window: 1h }
   key_redeem: { per: [ip, user], limit: 10, window: 1h }
@@ -189,3 +209,5 @@ scheduler:
 
 retention:
   delivery_logs: 30d
+  sessions: 30d
+  tokens: 24h

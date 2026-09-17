@@ -79,7 +79,9 @@ The session cookie is `__Host-<cookies.name>` (`__Host-qtiauth_session` by defau
 
 The gateway hashes the cookie's token and looks the session up in Valkey. On a miss, or when Valkey is down, it asks identity over `qtiauth.rpc.identity.resolve_session` and caches the answer for `session_cache.ttl` or until the session expires. If identity can't be reached, the request gets `503 SERVICE_UNAVAILABLE`. A cookie that doesn't resolve to a session is cleared in the response.
 
-Cached sessions are dropped straight away when identity publishes a session revocation or flag, a user update, ban, lock, restriction, deletion or age band change, a parental consent change, or a new legal document version. Replicas share one durable consumer, `gateway-session_cache`, for these events.
+Identity sets and clears the cookie when someone signs in or out, through headers on its responses (see [identity.md](identity.md#how-identity-sets-the-cookie)). The cookie lasts until the session's absolute expiry. When identity's response ends sessions, the gateway drops them from the cache before answering, so they stop working on the very next request from any replica.
+
+Cached sessions are also dropped when identity publishes a session revocation or flag, a user update, ban, lock, restriction, deletion or age band change, a parental consent change, or a new legal document version. Replicas share one durable consumer, `gateway-session_cache`, for these events.
 
 ## Route policy
 
@@ -114,6 +116,7 @@ rate_limits:
   magic_link_ip: { per: ip, limit: 10, window: 1h, on_store_failure: closed }
   magic_link_ip_day: { per: ip, limit: 20, window: 1d, on_store_failure: closed }
   magic_link: { policies: [magic_link_email, magic_link_ip, magic_link_ip_day] }
+  auth_verify: { per: ip, limit: 30, window: 15m, on_store_failure: closed }
 ```
 
 Routes name one policy in `rate_limit`. `global` applies to every request as well, so it must be a single policy.
@@ -150,7 +153,7 @@ Cookies, `Authorization` and anything else the client sent are not forwarded. A 
 
 ## Response headers
 
-Every response gets `Strict-Transport-Security` (from `hsts`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, a `Permissions-Policy` that turns off sensors, camera, microphone, geolocation, payment and USB, `X-Frame-Options: DENY` and `X-Request-Id`. Responses without a `Content-Security-Policy` get `default-src 'none'; frame-ancestors 'none'`. A service's own policy is kept, with `frame-ancestors 'none'` forced. `Server` and `X-Powered-By` are removed.
+The session headers identity uses to set cookies are removed from every response, and ignored from any other service. Every response gets `Strict-Transport-Security` (from `hsts`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, a `Permissions-Policy` that turns off sensors, camera, microphone, geolocation, payment and USB, `X-Frame-Options: DENY` and `X-Request-Id`. Responses without a `Content-Security-Policy` get `default-src 'none'; frame-ancestors 'none'`. A service's own policy is kept, with `frame-ancestors 'none'` forced. `Server` and `X-Powered-By` are removed.
 
 ## Meta endpoints
 

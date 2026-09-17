@@ -50,7 +50,16 @@ const PROFILES: Record<string, string[]> = {
   observability: ['prometheus', 'grafana', 'tempo', 'loki'],
 };
 
-const QTIAUTH_SERVICES = ['gateway', 'notifier', 'scheduler', 'oidc', 'safety', 'support', 'games'];
+const QTIAUTH_SERVICES = [
+  'gateway',
+  'identity',
+  'notifier',
+  'scheduler',
+  'oidc',
+  'safety',
+  'support',
+  'games',
+];
 
 const PUBLIC_SERVICES: Record<string, string[]> = { gateway: ['8000:8000'] };
 

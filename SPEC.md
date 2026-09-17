@@ -265,6 +265,12 @@ A purpose-built service, not just reverse-proxy config, because it enforces secu
    - Resolved sessions are cached in Valkey for `gateway.session_cache.ttl`. The cache is cleared
      for a session or user by `identity.session.revoked` / `flagged`, the `identity.user.*` state
      events, parental consent changes, and for everyone by `identity.legal.version_published`.
+   - Identity sets and clears the session cookie through response headers, since services never
+     touch cookies: `X-QTIAuth-Session-Token` with `X-QTIAuth-Session-Expires` sets it,
+     `X-QTIAuth-Session-Clear` clears it, and `X-QTIAuth-Revoked-Sessions` lists session IDs the
+     gateway drops from its cache before answering, so a revocation made through the gateway takes
+     effect on the next request. The gateway only honours these headers from identity and strips
+     them from every response.
 5. **Internal identity token.** For each proxied request the gateway mints a 60-second EdDSA JWT in
    `X-QTIAuth-Identity`. It holds user ID, session ID, permissions, account state, restrictions,
    age band, parental controls and auth context (`amr`, `acr`). Services verify it with the gateway's
@@ -617,17 +623,23 @@ email:
   smtp: { host: localhost, port: 587, security: starttls, user: null, password: "${env:SMTP_PASSWORD}" }
   queue: { max_attempts: 20, retry_delay: 10s, max_retry_delay: 30m }
 
-accounts:   { … }               # §4.1, §4.12
+accounts:                       # §4.1, §4.12
+  max_per_email: 2
+  email_normalization:          # per domain; case is always ignored
+    gmail.com:      { remove_dots: true, subaddress_separator: "+", domain: null }
+    googlemail.com: { remove_dots: true, subaddress_separator: "+", domain: gmail.com }
+magic_link: { ttl: 15m, signup_ttl: 30m }  # §4.3
+sessions:   { max_per_user: 10 }  # §4.8
 password:   { … }               # §4.2
 security:   { step_up_window: 10m, … }   # §4.5
-age:        { … }               # §4.6
-parental:   { … }               # §4.7
+age:        { bands: { 13_to_15: 13, 16_to_17: 16, adult: 18 }, … }   # §4.6
+parental:   { consent_age: 13, … }       # §4.7
 session_security: { … }         # §4.8
 legal:      { … }               # §4.9
 usernames:  { … }               # §4.10
 safety:     { … }               # §6.2
 rate_limits: { … }              # §8.1
-retention:  { delivery_logs: 30d, … }   # §8.4
+retention:  { delivery_logs: 30d, sessions: 30d, tokens: 24h, … }   # §8.4
 backups:    { … }               # §8.7
 ```
 
@@ -693,6 +705,16 @@ backups:    { … }               # §8.7
   DOB is never stored against an unverified email.
 - **Scanner-safe:** opening the link shows a "Confirm sign-in" page and needs a click (POST), so
   email security scanners that pre-fetch links don't use up the token.
+- The link points at `/auth/magic-link?token=…` on the account surface's first origin. Using it
+  (`verify`, `{ token, user_id? }`) looks up accounts by normalized email only then:
+  - one account: signs in and answers `signed_in`.
+  - several accounts: answers `choose_account` with their IDs and creation dates, without using the
+    token, until `user_id` names one of them.
+  - no account: uses the token and answers `signup_required` with a single-use `signup_token`
+    (`magic_link.signup_ttl`). `POST /api/v1/auth/magic-link/signup` with
+    `{ signup_token, date_of_birth }` creates the account, enforcing `accounts.max_per_email`, and
+    signs in.
+- Using a link or a signup token is rate-limited by `auth_verify` (§8.1).
 
 ### 4.4 Social and upstream sign-in
 
@@ -807,7 +829,9 @@ account, and legal document changes.
 
 - **Server-side sessions** with hashed opaque tokens and per-host bindings (§2.10).
 - **Session list:** device, approximate location, auth method, last active, current marker.
-- Revoke one, revoke all others, revoke all.
+- Revoke one, revoke all others, revoke all: `GET /api/v1/sessions`,
+  `DELETE /api/v1/sessions/:session_id`, `POST /api/v1/sessions/revoke-others`,
+  `POST /api/v1/sessions/revoke-all`.
 - `sessions.max_per_user` (default 10). The oldest session is evicted when the limit is exceeded.
 - **Idle timeout** (`cookies.idle_timeout`) plus absolute expiry (`cookies.session_ttl`).
 - **Security event log** with rate-limited security alert emails.
@@ -1495,6 +1519,7 @@ features:
     magic_link_email:  { per: email, limit: 3, window: 1h }
     magic_link_ip:     { per: ip, limit: 10, window: 1h }
     magic_link_ip_day: { per: ip, limit: 20, window: 1d }
+    auth_verify:       { per: ip, limit: 30, window: 15m }
     ticket_create:     { per: user, limit: 5, window: 1h }
     guest_ticket:      { per: ip, limit: 3, window: 1h }
     key_redeem:        { per: [ip, user], limit: 10, window: 1h }

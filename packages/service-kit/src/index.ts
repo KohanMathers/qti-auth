@@ -133,6 +133,13 @@ export {
   type RouterOptions,
 } from './routes.ts';
 export {
+  REVOKED_SESSIONS_HEADER,
+  SESSION_CLEAR_HEADER,
+  SESSION_EXPIRES_HEADER,
+  SESSION_RESPONSE_HEADERS,
+  SESSION_TOKEN_HEADER,
+} from './session-headers.ts';
+export {
   BASE_SECTIONS,
   type BaseSection,
   createServiceRouter,

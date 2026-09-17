@@ -10,7 +10,12 @@ import {
   problemResponse,
   REQUEST_ID_HEADER,
   type ResponseMap,
+  REVOKED_SESSIONS_HEADER,
   type Router,
+  SESSION_CLEAR_HEADER,
+  SESSION_EXPIRES_HEADER,
+  SESSION_RESPONSE_HEADERS,
+  SESSION_TOKEN_HEADER,
   signIdentityToken,
   type SigningKey,
 } from '@qtiauth/service-kit';
@@ -38,8 +43,11 @@ import type { RouteLookup, RouteTable } from './routes.ts';
 import type { LocalContext } from './service.ts';
 import {
   clearSessionCookie,
+  isSessionToken,
   readCookie,
+  RESOLVE_SESSION_SERVICE,
   type ResolvedSession,
+  sessionCookie,
   sessionCookieName,
   type SessionResolver,
 } from './sessions.ts';
@@ -124,6 +132,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
     let requestBytes = 0;
     let limits: RateLimitResult | undefined;
     let staleCookie = false;
+    let setCookie: string | undefined;
     let upstream: string | undefined;
 
     const problem = (code: string, init: ConstructorParameters<typeof ProblemError>[1] = {}) =>
@@ -140,7 +149,8 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         for (const [name, value] of Object.entries(rateLimitHeaders(limits)))
           headers.set(name, value);
       }
-      if (staleCookie) headers.append('Set-Cookie', clearCookie);
+      if (setCookie !== undefined) headers.append('Set-Cookie', setCookie);
+      else if (staleCookie) headers.append('Set-Cookie', clearCookie);
       headers.set(REQUEST_ID_HEADER, requestId);
 
       const length = headers.get('content-length');
@@ -196,6 +206,48 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
       if (limits.status === 'limited') return problem('RATE_LIMITED');
       if (limits.status === 'unavailable') return problem('RATE_LIMIT_UNAVAILABLE');
       return null;
+    };
+
+    const applySessionHeaders = async (service: string, response: Response): Promise<Response> => {
+      const { headers } = response;
+      const token = headers.get(SESSION_TOKEN_HEADER);
+      const expires = headers.get(SESSION_EXPIRES_HEADER);
+      const clear = headers.has(SESSION_CLEAR_HEADER);
+      const revoked = headers.get(REVOKED_SESSIONS_HEADER);
+      for (const name of SESSION_RESPONSE_HEADERS) headers.delete(name);
+      if (token === null && !clear && revoked === null) return response;
+      if (service !== RESOLVE_SESSION_SERVICE) {
+        requestLog.warn('ignored session headers from a service other than identity', {
+          upstream: service,
+        });
+        return response;
+      }
+
+      const ids = (revoked ?? '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id !== '');
+      await Promise.all(
+        ids.map((id) =>
+          sessions.invalidate('session', id).catch((error: unknown) => {
+            requestLog.error('session cache invalidation failed', { error });
+          }),
+        ),
+      );
+
+      const expiresAt = expires === null ? Number.NaN : Date.parse(expires);
+      if (token !== null && isSessionToken(token) && !Number.isNaN(expiresAt)) {
+        setCookie = sessionCookie(
+          config.cookies,
+          token,
+          Math.max(0, Math.floor((expiresAt - now()) / 1000)),
+        );
+      } else if (token !== null) {
+        requestLog.error('identity sent an invalid session token or expiry');
+      } else if (clear) {
+        setCookie = clearCookie;
+      }
+      return response;
     };
 
     const handle = async (): Promise<Response> => {
@@ -295,7 +347,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
           'x-forwarded-proto': matched.surface.origins[0]?.startsWith('http:') ? 'http' : 'https',
         }),
       });
-      if (result.status === 'ok') return result.response;
+      if (result.status === 'ok') return applySessionHeaders(entry.service, result.response);
       metrics.upstreamError(entry.service, result.status);
       if (result.status === 'timeout') return problem('UPSTREAM_TIMEOUT');
       requestLog.warn('service unreachable', { upstream: entry.service, error: result.error });

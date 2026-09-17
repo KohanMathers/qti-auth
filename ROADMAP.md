@@ -277,19 +277,29 @@ Spec: §5.1
 **Done when:** a missing template variable stops startup, and a dead SMTP server delays mail without
 failing the triggering request.
 
-### P1.4 Identity: accounts, magic link, sessions — L
+### P1.4 Identity: accounts, magic link, sessions — L ✅
 Spec: §4.1 (core), §4.3, §4.8 (core)
 
-- [ ] Account state machine, email normalization from config, `accounts.max_per_email`.
-- [ ] `identities` table and magic-link identity.
-- [ ] Magic link start/verify with identical responses, POST confirmation page, DOB collected after the
-      click.
-- [ ] Opaque sessions: hashed tokens, bindings table (single binding for now), idle and absolute
-      expiry, `max_per_user` eviction.
-- [ ] Session list and revoke one, others or all.
-- [ ] `GET /api/v1/me`, logout.
-- [ ] Minimal age band computation from DOB (full age work in Phase 2b).
-- [ ] Retention sweep for sessions and tokens.
+- [x] Account state machine, email normalization from config, `accounts.max_per_email`
+      (`services/identity`, `ACCOUNT_TRANSITIONS`, `emailNormalizer`, `accounts` config section,
+      `docs/identity.md`).
+- [x] `identities` table and magic-link identity (`recordIdentityUse`).
+- [x] Magic link start/verify with identical responses, POST confirmation page, DOB collected after the
+      click (`/api/v1/auth/magic-link/start|verify|signup`, interim pages at `/auth/magic-link` and
+      `/auth/signup`, `magic_link` config section, `auth_verify` rate-limit policy). Under
+      `parental.consent_age`, signup answers `PARENTAL_CONSENT_UNAVAILABLE` until P3.1.
+- [x] Opaque sessions: hashed tokens, bindings table (single binding for now), idle and absolute
+      expiry, `max_per_user` eviction (`sessions` and `session_bindings`, `resolve_session`, identity
+      sets the cookie through `X-QTIAuth-Session-*` headers the gateway honours, `sessions` config
+      section).
+- [x] Session list and revoke one, others or all (`/api/v1/sessions`, `identity.session.revoked`,
+      `X-QTIAuth-Revoked-Sessions` clears the gateway's cache before it answers).
+- [x] `GET /api/v1/me`, logout.
+- [x] Minimal age band computation from DOB (full age work in Phase 2b) (`ageBand`, `age` config
+      section).
+- [x] Retention sweep for sessions and tokens (`retention.sessions`, `retention.tokens`, covered by
+      `export_user` and erasure, `qtiauth_auth_*`, `qtiauth_sessions_*` and `qtiauth_accounts`
+      metrics).
 
 **Done when (end-to-end through compose):**
 - A new user signs up by magic link, lands signed in, sees their session, and logs out.
