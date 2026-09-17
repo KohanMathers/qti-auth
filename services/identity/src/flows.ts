@@ -1,6 +1,7 @@
 import { queueEmail } from '@qtiauth/email';
 import type { Logger } from '@qtiauth/observability';
 
+import { confirmEmailChange, revertEmailChange, startEmailChange } from './email-change.ts';
 import {
   completeSignup,
   issueMagicLink,
@@ -26,20 +27,34 @@ import {
   type SetPasswordResult,
   verifyEmailAddress,
 } from './password-auth.ts';
+import { oauthStoreOf, type SocialIntent } from './oauth-state.ts';
 import { PASSWORD_METHOD } from './passwords.ts';
+import { anySocialEnabled, findSocialProvider, metricMethod } from './providers.ts';
 import type { Context } from './service.ts';
 import {
+  accountOrigin,
+  CHANGE_EMAIL_PAGE,
   clientIp,
+  emailChangeSettings,
   emailLinkUrl,
   encryptionKey,
   magicLinkSettings,
   magicLinkUrl,
   passwordSettings,
   RESET_PASSWORD_PAGE,
+  REVERT_EMAIL_PAGE,
   sessionClient,
   sessionSettings,
+  socialCallbackUrl,
+  socialSettings,
   VERIFY_EMAIL_PAGE,
 } from './settings.ts';
+import {
+  beginSocial,
+  completeSocial,
+  type CompleteSocialResult,
+  finishSocialSignup,
+} from './social.ts';
 import { completeSecondFactor } from './two-factor.ts';
 
 export interface FlowInput {
@@ -459,6 +474,244 @@ export async function finishTwoFactor(
     user_id: result.userId,
     session_id: result.session.id,
     evicted_sessions: result.session.evicted.length,
+  });
+  return result;
+}
+
+export function socialEnabled(ctx: Context, providerId?: string): boolean {
+  if (providerId !== undefined) {
+    return findSocialProvider(ctx.config.features.auth.social, providerId) !== undefined;
+  }
+  return anySocialEnabled(ctx.config.features.auth.social);
+}
+
+export async function startSocial(
+  { ctx, log }: FlowInput,
+  input: {
+    providerId: string;
+    intent: SocialIntent;
+    userId: string | null;
+    returnTo: string | null;
+    locale: string | null;
+  },
+): Promise<Awaited<ReturnType<typeof beginSocial>>> {
+  const store = oauthStoreOf(ctx);
+  if (store === undefined) return { status: 'disabled' };
+  const result = await beginSocial(store, {
+    social: ctx.config.features.auth.social,
+    providerId: input.providerId,
+    intent: input.intent,
+    userId: input.userId,
+    returnTo: input.returnTo,
+    locale: input.locale,
+    redirectUri: socialCallbackUrl(ctx.config, input.providerId),
+    realm: accountOrigin(ctx.config),
+    now: new Date(),
+  });
+  if (result.status === 'ok') {
+    log.info('social sign-in started', { provider: input.providerId, intent: input.intent });
+  }
+  return result;
+}
+
+function noteSocialComplete(
+  { ctx, log }: FlowInput,
+  providerId: string,
+  result: CompleteSocialResult,
+): void {
+  const metrics = identityMetrics(ctx.metrics);
+  const method = metricMethod(
+    findSocialProvider(ctx.config.features.auth.social, providerId)?.type ?? providerId,
+  );
+  switch (result.status) {
+    case 'invalid':
+    case 'denied':
+      metrics.signIn(method, 'failure');
+      log.info('social sign-in rejected', { provider: providerId, reason: result.status });
+      break;
+    case 'provider_unavailable':
+      metrics.signIn(method, 'failure');
+      log.info('social provider unavailable', { provider: providerId });
+      break;
+    case 'identity_in_use':
+    case 'account_limit':
+    case 'parental_consent_required':
+      log.info('social sign-in refused', { provider: providerId, reason: result.status });
+      break;
+    case 'linked':
+      log.info('social identity linked', {
+        provider: providerId,
+        user_id: result.userId,
+        identity_id: result.identityId,
+      });
+      break;
+    case 'signup_required':
+      log.info('social signup required', { provider: providerId });
+      break;
+    case 'signed_in':
+      ctx.outbox.wake();
+      if (result.created && result.ageBand !== undefined) {
+        metrics.signup(method, result.ageBand);
+      }
+      metrics.signIn(method, 'success');
+      metrics.sessionCreated(method, result.session.evicted.length);
+      log.info('signed in', {
+        method,
+        user_id: result.userId,
+        session_id: result.session.id,
+        evicted_sessions: result.session.evicted.length,
+      });
+      break;
+  }
+}
+
+export async function finishSocial(
+  input: FlowInput,
+  args: {
+    providerId: string;
+    state: string;
+    code: string | undefined;
+    params: URLSearchParams;
+    error: string | undefined;
+  },
+): Promise<CompleteSocialResult> {
+  const { ctx, request } = input;
+  const store = oauthStoreOf(ctx);
+  if (store === undefined) return { status: 'invalid' };
+  const result = await completeSocial(ctx.db, store, {
+    social: ctx.config.features.auth.social,
+    providerId: args.providerId,
+    state: args.state,
+    code: args.code,
+    params: args.params,
+    error: args.error,
+    client: sessionClient(ctx.config, request),
+    settings: socialSettings(ctx.config),
+    now: new Date(),
+  });
+  noteSocialComplete(input, args.providerId, result);
+  return result;
+}
+
+export async function completeSocialSignup(
+  { ctx, request, log }: FlowInput,
+  input: { challenge: string; dateOfBirth: string | undefined; email: string | undefined },
+): Promise<Awaited<ReturnType<typeof finishSocialSignup>>> {
+  const metrics = identityMetrics(ctx.metrics);
+  const result = await finishSocialSignup(ctx.db, {
+    challenge: input.challenge,
+    dateOfBirth: input.dateOfBirth,
+    email: input.email,
+    client: sessionClient(ctx.config, request),
+    settings: socialSettings(ctx.config),
+    now: new Date(),
+  });
+  switch (result.status) {
+    case 'invalid':
+      log.info('social signup rejected');
+      break;
+    case 'account_limit':
+      log.info('signup refused: too many accounts with this email address');
+      break;
+    case 'parental_consent_required':
+      log.info('signup refused: parental consent is not available');
+      break;
+    case 'signed_in': {
+      ctx.outbox.wake();
+      const method = metricMethod(result.method);
+      metrics.signup(method, result.ageBand);
+      metrics.sessionCreated(method, result.session.evicted.length);
+      log.info('account created', {
+        method,
+        user_id: result.userId,
+        session_id: result.session.id,
+        age_band: result.ageBand,
+      });
+      if (result.verifyEmail !== null) {
+        await sendEmailVerification(
+          { ctx, request, log },
+          {
+            email: result.verifyEmail.address,
+            locale: result.verifyEmail.locale ?? ctx.config.email.default_locale,
+          },
+        );
+      }
+      break;
+    }
+  }
+  return result;
+}
+
+export async function requestEmailChange(
+  { ctx, log }: FlowInput,
+  input: { userId: string; email: string },
+): Promise<Awaited<ReturnType<typeof startEmailChange>>> {
+  const result = await startEmailChange(ctx.db, {
+    userId: input.userId,
+    email: input.email,
+    settings: emailChangeSettings(ctx.config),
+    now: new Date(),
+  });
+  if (result.status !== 'started') {
+    log.info('email change refused', { reason: result.status });
+    return result;
+  }
+  const locale = result.locale ?? ctx.config.email.default_locale;
+  const confirm = await queueEmail(ctx.bus, {
+    template: 'email_change',
+    to: { address: input.email.trim() },
+    locale,
+    userId: input.userId,
+    variables: {
+      link: emailLinkUrl(ctx.config, CHANGE_EMAIL_PAGE, result.confirmToken),
+      expires_in_minutes: Math.max(1, Math.ceil(ctx.config.accounts.email_change_ttl / 60_000)),
+    },
+  });
+  const notice = await queueEmail(ctx.bus, {
+    template: 'email_change_notice',
+    to: { address: result.previousEmail },
+    locale,
+    userId: input.userId,
+    variables: {
+      link: emailLinkUrl(ctx.config, REVERT_EMAIL_PAGE, result.revertToken),
+      expires_in_days: Math.max(1, Math.ceil(ctx.config.accounts.email_revert_ttl / 86_400_000)),
+    },
+  });
+  log.info('email change started', {
+    confirm_delivery_id: confirm.delivery_id,
+    notice_delivery_id: notice.delivery_id,
+    confirm_expires_at: result.confirmExpiresAt.toISOString(),
+    revert_expires_at: result.revertExpiresAt.toISOString(),
+  });
+  return result;
+}
+
+export async function finishEmailChange(
+  { ctx, log }: FlowInput,
+  input: { token: string },
+): Promise<Awaited<ReturnType<typeof confirmEmailChange>>> {
+  const result = await confirmEmailChange(ctx.db, {
+    token: input.token,
+    settings: emailChangeSettings(ctx.config),
+    now: new Date(),
+  });
+  log.info(result.status === 'confirmed' ? 'email changed' : 'email change rejected', {
+    reason: result.status,
+  });
+  return result;
+}
+
+export async function finishEmailRevert(
+  { ctx, log }: FlowInput,
+  input: { token: string },
+): Promise<Awaited<ReturnType<typeof revertEmailChange>>> {
+  const result = await revertEmailChange(ctx.db, {
+    token: input.token,
+    settings: emailChangeSettings(ctx.config),
+    now: new Date(),
+  });
+  log.info(result.status === 'reverted' ? 'email change reverted' : 'email revert rejected', {
+    reason: result.status,
   });
   return result;
 }

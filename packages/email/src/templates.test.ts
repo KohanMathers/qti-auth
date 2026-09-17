@@ -71,5 +71,10 @@ describe('defineEmailTemplates', () => {
       category: 'security',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.email_change).toMatchObject({ category: 'auth', priority: 'high' });
+    expect(EMAIL_TEMPLATES.email_change_notice).toMatchObject({
+      category: 'security',
+      priority: 'high',
+    });
   });
 });

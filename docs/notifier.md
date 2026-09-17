@@ -77,11 +77,13 @@ Templates insert values with `{{ name }}`. Each template has a fixed list of var
 
 Values are escaped in the HTML part, and line breaks are removed from values in the subject. There are no conditionals or loops.
 
-| Template             | Category   | Priority | Variables                    |
-| -------------------- | ---------- | -------- | ---------------------------- |
-| `magic_link`         | `auth`     | high     | `link`, `expires_in_minutes` |
-| `email_verification` | `auth`     | high     | `link`, `expires_in_minutes` |
-| `password_reset`     | `security` | high     | `link`, `expires_in_minutes` |
+| Template              | Category   | Priority | Variables                    |
+| --------------------- | ---------- | -------- | ---------------------------- |
+| `magic_link`          | `auth`     | high     | `link`, `expires_in_minutes` |
+| `email_verification`  | `auth`     | high     | `link`, `expires_in_minutes` |
+| `password_reset`      | `security` | high     | `link`, `expires_in_minutes` |
+| `email_change`        | `auth`     | high     | `link`, `expires_in_minutes` |
+| `email_change_notice` | `security` | high     | `link`, `expires_in_days`    |
 
 ### Checks
 

@@ -1,10 +1,12 @@
 import { emailNormalizer } from './email.ts';
 import { parseEncryptionKey } from './encrypt.ts';
+import type { EmailChangeSettings } from './email-change.ts';
 import type { MagicLinkSettings } from './magic-links.ts';
 import type { RelyingParty } from './passkeys.ts';
 import type { PasswordSettings } from './password-auth.ts';
 import type { IdentityConfig } from './service.ts';
 import type { SessionClient, SessionSettings } from './sessions.ts';
+import type { SocialSettings } from './social.ts';
 
 export const MAGIC_LINK_PAGE = '/auth/magic-link';
 export const MAGIC_LINK_START_PAGE = '/auth/magic-link/start';
@@ -18,6 +20,13 @@ export const PASSKEY_PAGE = '/auth/passkey';
 export const TWO_FACTOR_PAGE = '/auth/two-factor';
 export const TOTP_PAGE = '/auth/totp';
 export const PASSKEYS_PAGE = '/auth/passkeys';
+export const SOCIAL_START_PAGE = '/auth/social/:provider/start';
+export const SOCIAL_CALLBACK_PAGE = '/auth/social/:provider/callback';
+export const SOCIAL_SIGNUP_PAGE = '/auth/social/signup';
+export const IDENTITIES_PAGE = '/auth/identities';
+export const CONNECT_PAGE = '/auth/identities/:provider/connect';
+export const CHANGE_EMAIL_PAGE = '/auth/change-email';
+export const REVERT_EMAIL_PAGE = '/auth/revert-email';
 
 export class IdentityConfigError extends Error {
   constructor(message: string) {
@@ -153,4 +162,34 @@ export function emailLinkUrl(
   const url = new URL(accountPath(config, path), accountOrigin(config));
   url.searchParams.set('token', token);
   return url.toString();
+}
+
+export function emailChangeSettings(config: IdentityConfig): EmailChangeSettings {
+  return {
+    changeTtl: config.accounts.email_change_ttl,
+    revertTtl: config.accounts.email_revert_ttl,
+    maxPerEmail: config.accounts.max_per_email,
+    normalizeEmail: magicLinkSettings(config).normalizeEmail,
+  };
+}
+
+export function socialSettings(config: IdentityConfig): SocialSettings {
+  const magic = magicLinkSettings(config);
+  return {
+    maxPerEmail: magic.maxPerEmail,
+    consentAge: magic.consentAge,
+    bands: magic.bands,
+    normalizeEmail: magic.normalizeEmail,
+    sessions: magic.sessions,
+  };
+}
+
+export function socialCallbackUrl(
+  config: Pick<IdentityConfig, 'surfaces'>,
+  providerId: string,
+): string {
+  return new URL(
+    accountPath(config, `/auth/social/${encodeURIComponent(providerId)}/callback`),
+    accountOrigin(config),
+  ).toString();
 }

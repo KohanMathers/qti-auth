@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links and passkeys, and offers TOTP, recovery codes and step-up. The other sign-in methods, usernames, roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), and offers TOTP, recovery codes, step-up and email changes. Usernames, roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -10,6 +10,8 @@ accounts:
   email_normalization:
     gmail.com: { remove_dots: true, subaddress_separator: '+', domain: null }
     googlemail.com: { remove_dots: true, subaddress_separator: '+', domain: gmail.com }
+  email_change_ttl: 15m
+  email_revert_ttl: 7d
 
 magic_link:
   ttl: 15m
@@ -67,6 +69,7 @@ retention:
 
 - `accounts.max_per_email` is how many accounts can share one email address, after normalization.
 - `accounts.email_normalization` decides when two addresses count as the same, per domain. Case is always ignored. `remove_dots` ignores dots in the local part, `subaddress_separator` ignores everything from that character to the `@`, and `domain` counts the address as belonging to another domain. Setting it replaces the built-in Gmail rules, so copy them if you want to keep them.
+- `accounts.email_change_ttl` is how long the confirmation link sent to a new address works. `accounts.email_revert_ttl` is how long the “this wasn’t me” link sent to the previous address works.
 - `magic_link.ttl` is how long a link works. `magic_link.signup_ttl` is how long a new user has to enter their date of birth after opening their link.
 - `password.min_length` and `password.max_length` bound a password. 256 characters is the hard cap. Composition rules are off unless you turn them on. `password.breach_check` asks Have I Been Pwned whether the password has appeared in a breach (only the first 5 hex characters of a SHA-1 hash leave the server); if HIBP is unreachable the check is skipped. `password.argon2` is Argon2id; stored hashes are rehashed on login when these change. `password.reset_ttl` and `password.verification_ttl` are how long reset and email-confirmation links work. `password.failure_delay` slows repeated failures per account and per IP. There is no lockout.
 - `captcha.provider` is `altcha` (self-hosted proof-of-work, the default), `turnstile`, `hcaptcha`, `friendly_captcha` or `none`. `captcha.after` is how many failed password attempts, or signup or magic-link starts, from one IP it takes before a CAPTCHA is required. Attempts older than `captcha.window` do not count. `none` turns CAPTCHA off. Vendor providers need `site_key` and `secret_key`. Altcha can generate an HMAC key at startup; set `captcha.altcha.hmac_key` when running more than one identity replica.
@@ -79,8 +82,9 @@ retention:
 - `security.require_2fa_for_permissions` is the staff permissions that require a passkey or TOTP. Matching accounts can sign in but only reach enrolment until they set one up. Permissions themselves arrive in a later release; until then this is tested with a stub grant.
 - `retention.sessions` is how long ended sessions are kept, and `retention.tokens` how long used or expired emailed tokens are kept after they expire.
 - `features.auth.magic_link.enabled: false` turns magic links off. `features.auth.password.enabled: false` turns passwords off. `features.auth.passkeys.enabled: false` turns passkeys off. `features.auth.totp.enabled: false` turns authenticator-app sign-in off.
+- Each social provider is off until you enable it. Enabling Google, GitHub or Discord without `client_id` and `client_secret` fails config validation. Steam has no credentials. Generic OIDC providers are listed under `features.auth.social.generic_oidc`; their `id` must not collide with a built-in method.
 
-Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha`, `security` and `features`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one. Passkey origins are those same account origins.
+Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha`, `security`, `features` and, when a social provider is enabled, `valkey`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one. Passkey origins are those same account origins. OAuth `state`, PKCE verifiers and OIDC nonces live in Valkey for 10 minutes.
 
 ## Accounts
 
@@ -96,7 +100,11 @@ Each account has one state:
 | `pending_deletion`           | Will be deleted when its grace period ends              |
 | `deleted`                    | Gone. Can't be signed in to                             |
 
-Accounts only move between states along the allowed transitions in `ACCOUNT_TRANSITIONS`. Accounts created by magic link have a confirmed address, so they start `active`. Accounts created with a password start `pending_email_verification` until the confirmation link is used.
+Accounts only move between states along the allowed transitions in `ACCOUNT_TRANSITIONS`. Accounts created by magic link have a confirmed address, so they start `active`. Accounts created with a password start `pending_email_verification` until the confirmation link is used. Social sign-up uses the provider’s verified email as-is when the provider says it is verified; otherwise the account stays `pending_email_verification` until our own confirmation link is used.
+
+Changing email is `POST /api/v1/me/email` with `{ email }` and needs a recent `aal2` session. A confirmation link goes to the new address, and a notice goes to the current one with a 7-day revert link. `POST /api/v1/auth/email/change` applies the new address; `POST /api/v1/auth/email/revert` switches it back.
+
+A user can’t remove their last sign-in method. Magic link (when enabled), password, passkeys and connected social identities all count. Trying to remove the last one answers `409 LAST_SIGN_IN_METHOD` with the spec’s warning and `delete_account_path: "/account/delete"`.
 
 The date of birth is stored, and the age band is worked out from it whenever it's needed. Users younger than `parental.consent_age` can't sign up yet: signup answers `403 PARENTAL_CONSENT_UNAVAILABLE` and nothing is kept, until the guardian approval flow is available.
 
@@ -146,6 +154,31 @@ Passwords equal to or containing the email local part (3 or more characters) are
 | `GET`/`POST /auth/forgot-password`     | Request a reset                                             |
 | `GET`/`POST /auth/reset-password`      | Scanner-safe confirm, then the reset form                   |
 | `GET`/`POST /auth/verify-email`        | Scanner-safe confirm                                        |
+| `POST /api/v1/me/email`                | Start an email change. Needs `step_up: true`                |
+| `POST /api/v1/auth/email/change`       | Confirm the new address from the emailed link               |
+| `POST /api/v1/auth/email/revert`       | Undo a change from the notice sent to the previous address  |
+| `GET`/`POST /auth/change-email`        | Scanner-safe confirm                                        |
+| `GET`/`POST /auth/revert-email`        | Scanner-safe undo                                           |
+
+## Social and upstream sign-in
+
+Google, GitHub, Discord, Steam (OpenID 2.0) and generic OIDC issuers can be used to sign in or to connect to an existing account. Connecting only happens when the user is signed in and chooses **Connect …**. Matching emails never link accounts.
+
+`state`, PKCE (S256) and OIDC `nonce` are stored in Valkey for 10 minutes. Only verified provider emails are trusted: Google and generic OIDC use `email_verified`, GitHub uses a verified primary address from `/user/emails`, Discord uses `verified` on the user, and Steam provides no email. An unverified or missing address is collected at signup and confirmed with our own email.
+
+| Endpoint                                       | Does                                                                                           |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `POST /api/v1/auth/social/:provider/start`     | Returns the provider URL. `provider` is `google`, `github`, `discord`, `steam` or a generic id |
+| `POST /api/v1/auth/social/complete`            | Finish after the provider redirects back. May answer `signup_required`                         |
+| `POST /api/v1/auth/social/signup`              | `{ challenge, date_of_birth?, email? }` when the provider did not supply both                  |
+| `POST /api/v1/me/identities/:provider/connect` | Start connecting while signed in                                                               |
+| `GET /api/v1/me/identities`                    | Connected providers and which ones can still be added                                          |
+| `DELETE /api/v1/me/identities/:identity_id`    | Remove a connected provider, unless it is the last sign-in method                              |
+| `GET /auth/social/:provider/start`             | Redirect to the provider                                                                       |
+| `GET /auth/social/:provider/callback`          | Finish after the redirect                                                                      |
+| `GET`/`POST /auth/social/signup`               | Date of birth / email after upstream sign-in                                                   |
+| `GET /auth/identities`                         | Connected methods and Connect links                                                            |
+| `GET /auth/identities/:provider/connect`       | Redirect to the provider while signed in                                                       |
 
 ## Passkeys and two-factor
 
@@ -201,32 +234,39 @@ A session ends when it's `cookies.session_ttl` old, when it hasn't been used for
 
 Errors, on top of the [codes every service can return](services.md#errors):
 
-| Code                           | Status | When                                                                         |
-| ------------------------------ | ------ | ---------------------------------------------------------------------------- |
-| `MAGIC_LINK_INVALID`           | 400    | The link is unknown, has expired or has already been used                    |
-| `SIGNUP_TOKEN_INVALID`         | 400    | The signup token is unknown, has expired or has already been used            |
-| `PASSWORD_REJECTED`            | 400    | The password fails length, composition, containment or HIBP                  |
-| `RESET_TOKEN_INVALID`          | 400    | The reset link is unknown, has expired or has already been used              |
-| `EMAIL_VERIFICATION_INVALID`   | 400    | The confirmation link is unknown, has expired or has already been used       |
-| `CURRENT_PASSWORD_REQUIRED`    | 400    | Changing a password without the current one                                  |
-| `CURRENT_PASSWORD_INCORRECT`   | 400    | The current password does not match                                          |
-| `CHALLENGE_INVALID`            | 400    | The challenge is unknown, has expired or has already been used               |
-| `PASSKEY_INVALID`              | 400    | The passkey could not be verified                                            |
-| `TOTP_INVALID`                 | 400    | The authenticator code is incorrect                                          |
-| `TOTP_NOT_ENABLED`             | 400    | Authenticator-app sign-in is not set up                                      |
-| `RECOVERY_CODE_INVALID`        | 400    | The recovery code is incorrect or has been used                              |
-| `CAPTCHA_INVALID`              | 400    | A CAPTCHA was required and the solution was wrong                            |
-| `CREDENTIALS_INCORRECT`        | 401    | Email or password incorrect                                                  |
-| `AUTH_METHOD_DISABLED`         | 403    | `features.auth.magic_link`, `password`, `passkeys` or `totp` is off          |
-| `STEP_UP_REQUIRED`             | 403    | A route that needs a recent `aal2` session, or adding a password without one |
-| `CAPTCHA_REQUIRED`             | 403    | This IP is over the CAPTCHA threshold and no valid solution was sent         |
-| `PARENTAL_CONSENT_UNAVAILABLE` | 403    | The user is younger than `parental.consent_age`                              |
-| `ACCOUNT_NOT_FOUND`            | 404    | The signed-in account no longer exists                                       |
-| `SESSION_NOT_FOUND`            | 404    | No active session with that ID belongs to the user                           |
-| `PASSKEY_NOT_FOUND`            | 404    | No passkey with that ID belongs to the user                                  |
-| `ACCOUNT_LIMIT_REACHED`        | 409    | The address already has `accounts.max_per_email` accounts                    |
-| `TOTP_ALREADY_ENABLED`         | 409    | Authenticator-app sign-in is already set up                                  |
-| `LAST_SIGN_IN_METHOD`          | 409    | Removing this passkey would leave the account with no sign-in method         |
+| Code                           | Status | When                                                                                   |
+| ------------------------------ | ------ | -------------------------------------------------------------------------------------- |
+| `MAGIC_LINK_INVALID`           | 400    | The link is unknown, has expired or has already been used                              |
+| `SIGNUP_TOKEN_INVALID`         | 400    | The signup token is unknown, has expired or has already been used                      |
+| `PASSWORD_REJECTED`            | 400    | The password fails length, composition, containment or HIBP                            |
+| `RESET_TOKEN_INVALID`          | 400    | The reset link is unknown, has expired or has already been used                        |
+| `EMAIL_VERIFICATION_INVALID`   | 400    | The confirmation link is unknown, has expired or has already been used                 |
+| `CURRENT_PASSWORD_REQUIRED`    | 400    | Changing a password without the current one                                            |
+| `CURRENT_PASSWORD_INCORRECT`   | 400    | The current password does not match                                                    |
+| `CHALLENGE_INVALID`            | 400    | The challenge is unknown, has expired or has already been used                         |
+| `PASSKEY_INVALID`              | 400    | The passkey could not be verified                                                      |
+| `TOTP_INVALID`                 | 400    | The authenticator code is incorrect                                                    |
+| `TOTP_NOT_ENABLED`             | 400    | Authenticator-app sign-in is not set up                                                |
+| `RECOVERY_CODE_INVALID`        | 400    | The recovery code is incorrect or has been used                                        |
+| `OAUTH_FAILED`                 | 400    | The upstream callback was missing, denied, expired or already used                     |
+| `EMAIL_UNCHANGED`              | 400    | The new address is already this account’s email                                        |
+| `EMAIL_CHANGE_INVALID`         | 400    | The email change link is unknown, has expired or has already been used                 |
+| `EMAIL_REVERT_INVALID`         | 400    | The email revert link is unknown, has expired or has already been used                 |
+| `CAPTCHA_INVALID`              | 400    | A CAPTCHA was required and the solution was wrong                                      |
+| `CREDENTIALS_INCORRECT`        | 401    | Email or password incorrect                                                            |
+| `AUTH_METHOD_DISABLED`         | 403    | `features.auth.magic_link`, `password`, `passkeys`, `totp` or a social provider is off |
+| `STEP_UP_REQUIRED`             | 403    | A route that needs a recent `aal2` session, or adding a password without one           |
+| `CAPTCHA_REQUIRED`             | 403    | This IP is over the CAPTCHA threshold and no valid solution was sent                   |
+| `PARENTAL_CONSENT_UNAVAILABLE` | 403    | The user is younger than `parental.consent_age`                                        |
+| `ACCOUNT_NOT_FOUND`            | 404    | The signed-in account no longer exists                                                 |
+| `SESSION_NOT_FOUND`            | 404    | No active session with that ID belongs to the user                                     |
+| `PASSKEY_NOT_FOUND`            | 404    | No passkey with that ID belongs to the user                                            |
+| `IDENTITY_NOT_FOUND`           | 404    | No connected social identity with that ID belongs to the user                          |
+| `ACCOUNT_LIMIT_REACHED`        | 409    | The address already has `accounts.max_per_email` accounts                              |
+| `TOTP_ALREADY_ENABLED`         | 409    | Authenticator-app sign-in is already set up                                            |
+| `IDENTITY_IN_USE`              | 409    | That provider identity is already connected to another account                         |
+| `LAST_SIGN_IN_METHOD`          | 409    | Removing this method would leave the account with no sign-in method                    |
+| `PROVIDER_UNAVAILABLE`         | 502    | The upstream provider did not complete token exchange or userinfo                      |
 
 ## Events
 

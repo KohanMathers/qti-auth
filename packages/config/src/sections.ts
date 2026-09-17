@@ -770,6 +770,14 @@ export const accounts = z
       .describe(
         'Rules per email domain for deciding when two addresses are the same, on top of ignoring case. Setting this replaces the built-in rules.',
       ),
+    email_change_ttl: duration(
+      '15m',
+      'The confirmation link sent to a new email address works for this long.',
+    ),
+    email_revert_ttl: duration(
+      '7d',
+      'The "this wasn\'t me" link sent to the previous email address works for this long.',
+    ),
   })
   .prefault({})
   .describe('Accounts.');
@@ -1019,11 +1027,27 @@ const oauthProvider = (name: string) =>
     .prefault({})
     .describe(`${name} sign-in.`);
 
+export const BUILTIN_SOCIAL_IDS = ['google', 'github', 'discord', 'steam'] as const;
+export type BuiltinSocialId = (typeof BUILTIN_SOCIAL_IDS)[number];
+
+const RESERVED_PROVIDER_IDS = new Set([
+  ...BUILTIN_SOCIAL_IDS,
+  'password',
+  'magic_link',
+  'passkey',
+  'totp',
+  'recovery',
+  'oidc',
+]);
+
 const genericOidcProvider = z
   .strictObject({
     id: z
       .string()
       .regex(/^[a-z0-9][a-z0-9_-]*$/, 'Must be lowercase letters, digits, - or _')
+      .refine((id) => !RESERVED_PROVIDER_IDS.has(id), {
+        message: 'Must not match a built-in provider or sign-in method',
+      })
       .describe('Stable identifier used in URLs and linked accounts.'),
     name: z.string().min(1).describe('Name shown on the sign-in button.'),
     issuer: z.url({ protocol: /^https?$/ }).describe('OIDC issuer URL.'),

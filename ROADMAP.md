@@ -354,15 +354,15 @@ session.
 ### P2.4 Social and upstream sign-in — L
 Spec: §4.4, §4.1 (linking rules)
 
-- [ ] Provider framework: state/PKCE/nonce in Valkey, callback handling, per-provider enable and
+- [x] Provider framework: state/PKCE/nonce in Valkey, callback handling, per-provider enable and
       config validation.
-- [ ] Google, GitHub, Discord, generic OIDC upstreams.
-- [ ] Steam OpenID 2.0 (sign-in and linking).
-- [ ] Verified-email rules per provider (§4.4 table). Unverified or missing emails go through our own
+- [x] Google, GitHub, Discord, generic OIDC upstreams.
+- [x] Steam OpenID 2.0 (sign-in and linking).
+- [x] Verified-email rules per provider (§4.4 table). Unverified or missing emails go through our own
       verification.
-- [ ] Explicit "Connect …" linking only while signed in. No automatic linking by email.
-- [ ] Last-sign-in-method protection with the exact warning text from §4.1.
-- [ ] Change email flow with the revert link to the old address.
+- [x] Explicit "Connect …" linking only while signed in. No automatic linking by email.
+- [x] Last-sign-in-method protection with the exact warning text from §4.1.
+- [x] Change email flow with the revert link to the old address.
 
 **Done when:** a provider email matching an existing account **does not** link or sign in to that
 account (tested), and removing the last method shows the warning.

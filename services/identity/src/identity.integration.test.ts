@@ -607,6 +607,50 @@ describe('passwords', () => {
   });
 });
 
+describe('email change', () => {
+  it('confirms the new address and lets the previous one undo it', async () => {
+    const user = await signUp('old-mail@example.com');
+    const asUser = signedInAs(user.userId, user.sessionId);
+    const unchanged = await post('/api/v1/me/email', { email: 'old-mail@example.com' }, asUser);
+    expect(await unchanged.json()).toMatchObject({ code: 'EMAIL_UNCHANGED' });
+
+    const start = await post('/api/v1/me/email', { email: 'new-mail@example.com' }, asUser);
+    expect(start.status).toBe(202);
+    const confirmLink = new URL(
+      String((await emails.nextJob('new-mail@example.com', 'email_change')).variables['link']),
+    );
+    const revertLink = new URL(
+      String(
+        (await emails.nextJob('old-mail@example.com', 'email_change_notice')).variables['link'],
+      ),
+    );
+    expect(confirmLink.pathname).toBe('/auth/change-email');
+    expect(revertLink.pathname).toBe('/auth/revert-email');
+    const confirmToken = confirmLink.searchParams.get('token') ?? '';
+    const revertToken = revertLink.searchParams.get('token') ?? '';
+    secrets.push(confirmToken, revertToken);
+
+    const confirmed = await post('/api/v1/auth/email/change', { token: confirmToken });
+    expect(await confirmed.json()).toMatchObject({
+      status: 'changed',
+      email: 'new-mail@example.com',
+    });
+    expect(await (await call('/api/v1/me', { as: asUser })).json()).toMatchObject({
+      email: 'new-mail@example.com',
+      email_verified: true,
+    });
+
+    const reverted = await post('/api/v1/auth/email/revert', { token: revertToken });
+    expect(await reverted.json()).toMatchObject({
+      status: 'reverted',
+      email: 'old-mail@example.com',
+    });
+    expect(await (await call('/api/v1/me', { as: asUser })).json()).toMatchObject({
+      email: 'old-mail@example.com',
+    });
+  });
+});
+
 describe('passkeys and two-factor', () => {
   const origin = `https://${HOST}`;
 

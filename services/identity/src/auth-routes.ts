@@ -8,10 +8,13 @@ import { SECOND_FACTOR_METHODS } from './factors.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
+  finishEmailChange,
+  finishEmailRevert,
   loginPassword,
   magicLinkEnabled,
   passwordEnabled,
   registerWithPassword,
+  requestEmailChange,
   sendEmailVerification,
   sendMagicLink,
   sendPasswordReset,
@@ -746,6 +749,108 @@ export function authRoutes(router: Router<Context>): void {
           session: { id: sessionId, amr: identity.amr, acr: identity.acr },
         },
       };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/me/email',
+    operation_id: 'changeEmail',
+    summary: 'Start changing the account email address',
+    description:
+      'Needs a recent aal2 session. A confirmation link goes to the new address, and a revert link goes to the current one.',
+    tags: ['account'],
+    auth: 'session',
+    step_up: true,
+    allow_account_states: SIGNED_IN_STATES,
+    rate_limit: 'magic_link',
+    request: { body: z.object({ email: z.email().max(254) }) },
+    responses: {
+      202: {
+        description: 'Confirmation and notice emails are on their way',
+        schema: z.object({ status: z.literal('sent') }),
+      },
+    },
+    errors: ['ACCOUNT_NOT_FOUND', 'EMAIL_UNCHANGED', 'ACCOUNT_LIMIT_REACHED', 'STEP_UP_REQUIRED'],
+    handler: async ({ ctx, identity, body, request, log }) => {
+      const { userId } = signedIn(identity);
+      const result = await requestEmailChange({ ctx, request, log }, { userId, email: body.email });
+      switch (result.status) {
+        case 'not_found':
+          throw new ProblemError('ACCOUNT_NOT_FOUND');
+        case 'unchanged':
+          throw new ProblemError('EMAIL_UNCHANGED');
+        case 'account_limit':
+          throw new ProblemError('ACCOUNT_LIMIT_REACHED');
+        case 'started':
+          return { status: 202, headers: NO_STORE, body: { status: 'sent' as const } };
+      }
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/email/change',
+    operation_id: 'confirmEmailChange',
+    summary: 'Confirm a new email address from the emailed link',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    request: { body: z.object({ token: z.string().min(1).max(256) }) },
+    responses: {
+      200: {
+        description: 'The email address was updated',
+        schema: z.object({ status: z.literal('changed'), email: z.string() }),
+      },
+    },
+    errors: ['EMAIL_CHANGE_INVALID', 'ACCOUNT_LIMIT_REACHED'],
+    handler: async ({ ctx, body, request, log }) => {
+      const result = await finishEmailChange({ ctx, request, log }, { token: body.token });
+      switch (result.status) {
+        case 'invalid':
+          throw new ProblemError('EMAIL_CHANGE_INVALID');
+        case 'account_limit':
+          throw new ProblemError('ACCOUNT_LIMIT_REACHED');
+        case 'confirmed':
+          return {
+            status: 200,
+            headers: NO_STORE,
+            body: { status: 'changed' as const, email: result.email },
+          };
+      }
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/auth/email/revert',
+    operation_id: 'revertEmailChange',
+    summary: 'Undo an email change from the notice sent to the previous address',
+    tags: ['auth'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    request: { body: z.object({ token: z.string().min(1).max(256) }) },
+    responses: {
+      200: {
+        description: 'The previous email address was restored',
+        schema: z.object({ status: z.literal('reverted'), email: z.string() }),
+      },
+    },
+    errors: ['EMAIL_REVERT_INVALID', 'ACCOUNT_LIMIT_REACHED'],
+    handler: async ({ ctx, body, request, log }) => {
+      const result = await finishEmailRevert({ ctx, request, log }, { token: body.token });
+      switch (result.status) {
+        case 'invalid':
+          throw new ProblemError('EMAIL_REVERT_INVALID');
+        case 'account_limit':
+          throw new ProblemError('ACCOUNT_LIMIT_REACHED');
+        case 'reverted':
+          return {
+            status: 200,
+            headers: NO_STORE,
+            body: { status: 'reverted' as const, email: result.email },
+          };
+      }
     },
   });
 }

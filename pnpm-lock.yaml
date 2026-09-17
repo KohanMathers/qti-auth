@@ -479,6 +479,9 @@ importers:
       '@qtiauth/service-kit':
         specifier: workspace:*
         version: link:../../packages/service-kit
+      '@qtiauth/valkey':
+        specifier: workspace:*
+        version: link:../../packages/valkey
       '@simplewebauthn/server':
         specifier: 13.3.2
         version: 13.3.2

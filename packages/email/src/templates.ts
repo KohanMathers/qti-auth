@@ -100,6 +100,21 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
     priority: 'high',
     variables: linkVariables,
   },
+  email_change: {
+    description: 'Confirm a new email address',
+    category: 'auth',
+    priority: 'high',
+    variables: linkVariables,
+  },
+  email_change_notice: {
+    description: 'A notice to the previous address after an email change, with a revert link',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      link: z.url({ protocol: /^https?$/ }),
+      expires_in_days: z.int().min(1),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

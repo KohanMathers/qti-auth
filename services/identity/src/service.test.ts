@@ -16,6 +16,7 @@ describe('identity service', () => {
       '0005_passwords',
       '0006_captcha',
       '0007_factors',
+      '0008_social',
     ]);
   });
 
@@ -23,14 +24,19 @@ describe('identity service', () => {
     const policies = Object.keys(sections.rate_limits.parse({}));
     const { routes } = router.manifest();
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
+      'DELETE /api/v1/me/identities/:identity_id',
       'DELETE /api/v1/me/passkeys/:passkey_id',
       'DELETE /api/v1/sessions/:session_id',
       'GET /api/v1/captcha',
       'GET /api/v1/me',
       'GET /api/v1/me/factors',
+      'GET /api/v1/me/identities',
       'GET /api/v1/me/passkeys',
       'GET /api/v1/sessions',
+      'GET /auth/change-email',
       'GET /auth/forgot-password',
+      'GET /auth/identities',
+      'GET /auth/identities/:provider/connect',
       'GET /auth/login',
       'GET /auth/magic-link',
       'GET /auth/magic-link/start',
@@ -38,11 +44,17 @@ describe('identity service', () => {
       'GET /auth/passkeys',
       'GET /auth/register',
       'GET /auth/reset-password',
+      'GET /auth/revert-email',
       'GET /auth/signup',
+      'GET /auth/social/:provider/callback',
+      'GET /auth/social/:provider/start',
+      'GET /auth/social/signup',
       'GET /auth/totp',
       'GET /auth/two-factor',
       'GET /auth/verify-email',
       'POST /api/v1/auth/2fa',
+      'POST /api/v1/auth/email/change',
+      'POST /api/v1/auth/email/revert',
       'POST /api/v1/auth/email/verify',
       'POST /api/v1/auth/email/verify/start',
       'POST /api/v1/auth/logout',
@@ -55,6 +67,11 @@ describe('identity service', () => {
       'POST /api/v1/auth/password/login',
       'POST /api/v1/auth/password/reset',
       'POST /api/v1/auth/password/signup',
+      'POST /api/v1/auth/social/:provider/start',
+      'POST /api/v1/auth/social/complete',
+      'POST /api/v1/auth/social/signup',
+      'POST /api/v1/me/email',
+      'POST /api/v1/me/identities/:provider/connect',
       'POST /api/v1/me/passkeys/:passkey_id',
       'POST /api/v1/me/passkeys/register',
       'POST /api/v1/me/passkeys/register/start',
@@ -68,13 +85,16 @@ describe('identity service', () => {
       'POST /api/v1/me/totp/start',
       'POST /api/v1/sessions/revoke-all',
       'POST /api/v1/sessions/revoke-others',
+      'POST /auth/change-email',
       'POST /auth/forgot-password',
       'POST /auth/login',
       'POST /auth/magic-link',
       'POST /auth/magic-link/start',
       'POST /auth/register',
       'POST /auth/reset-password',
+      'POST /auth/revert-email',
       'POST /auth/signup',
+      'POST /auth/social/signup',
       'POST /auth/totp',
       'POST /auth/two-factor',
       'POST /auth/verify-email',
@@ -122,6 +142,18 @@ describe('identity service', () => {
       auth: 'session',
       step_up: true,
     });
+    expect(route('POST', '/api/v1/me/email')).toMatchObject({
+      auth: 'session',
+      step_up: true,
+    });
+    expect(route('POST', '/api/v1/auth/social/:provider/start')).toMatchObject({
+      auth: 'none',
+      rate_limit: 'auth_password',
+    });
+    expect(route('POST', '/api/v1/me/identities/:provider/connect')).toMatchObject({
+      auth: 'session',
+      rate_limit: 'auth_password',
+    });
     expect(route('POST', '/api/v1/me/totp/start')).toMatchObject({
       auth: 'session',
       allow_pending_2fa_enrolment: true,
@@ -147,6 +179,10 @@ describe('identity service', () => {
         'CAPTCHA_REQUIRED',
         'PASSKEY_INVALID',
         'STEP_UP_REQUIRED',
+        'LAST_SIGN_IN_METHOD',
+        'OAUTH_FAILED',
+        'EMAIL_CHANGE_INVALID',
+        'EMAIL_REVERT_INVALID',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

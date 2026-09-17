@@ -1981,6 +1981,18 @@
             "additionalProperties": false,
             "description": "How addresses at one domain are normalized."
           }
+        },
+        "email_change_ttl": {
+          "default": "15m",
+          "description": "The confirmation link sent to a new email address works for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "email_revert_ttl": {
+          "default": "7d",
+          "description": "The \"this wasn't me\" link sent to the previous email address works for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }
       },
       "additionalProperties": false

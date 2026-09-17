@@ -117,6 +117,27 @@ describe('features', () => {
     });
     expect(messages(result)).toEqual(['auth.social.generic_oidc: Provider ids must be unique']);
   });
+
+  it('refuses generic OIDC ids that collide with built-in providers', () => {
+    const result = features.safeParse({
+      auth: {
+        social: {
+          generic_oidc: [
+            {
+              id: 'google',
+              name: 'Work Google',
+              issuer: 'https://id.example.com',
+              client_id: 'id',
+              client_secret: 'secret',
+            },
+          ],
+        },
+      },
+    });
+    expect(messages(result)).toEqual([
+      'auth.social.generic_oidc.0.id: Must not match a built-in provider or sign-in method',
+    ]);
+  });
 });
 
 describe('bus', () => {
@@ -268,6 +289,8 @@ describe('accounts', () => {
   it('allows two accounts per address and ignores Gmail dots and subaddresses by default', () => {
     const parsed = accounts.parse({});
     expect(parsed.max_per_email).toBe(2);
+    expect(parsed.email_change_ttl).toBe(900_000);
+    expect(parsed.email_revert_ttl).toBe(7 * 86_400_000);
     expect(parsed.email_normalization['googlemail.com']).toEqual({
       remove_dots: true,
       subaddress_separator: '+',

@@ -8,6 +8,7 @@ import {
   type Stoppable,
   unwind,
 } from '@qtiauth/service-kit';
+import { closeValkey, connectValkey } from '@qtiauth/valkey';
 
 import { countAccountsByState } from './accounts.ts';
 import { sweepChallenges } from './challenges.ts';
@@ -16,6 +17,8 @@ import { eraseUser, exportUser } from './data-rights.ts';
 import { sweepTokens } from './email-tokens.ts';
 import { sweepAuthFailures } from './failures.ts';
 import { identityMetrics } from './metrics.ts';
+import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
+import { anySocialEnabled } from './providers.ts';
 import { type Context, type definition, router } from './service.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
 import { accountOrigin, encryptionKey } from './settings.ts';
@@ -64,6 +67,13 @@ export function identityService(options: IdentityOptions = {}) {
       encryptionKey(config);
       const stack: Stoppable[] = [];
       try {
+        if (anySocialEnabled(config.features.auth.social)) {
+          const valkey = connectValkey(config.valkey, 'identity', (error) => {
+            log.warn('valkey client error', { error });
+          });
+          attachOauthStore(ctx, valkeyOauthStore(valkey));
+          stack.push({ stop: () => closeValkey(valkey) });
+        }
         stack.push(
           serveRpc<unknown, ResolveSessionResponse>(bus, {
             method: RESOLVE_SESSION_METHOD,

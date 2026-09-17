@@ -182,6 +182,15 @@ describe('password pages', () => {
   });
 });
 
+describe('when no social providers are enabled', () => {
+  it('refuses social start', async () => {
+    const start = await app().request('/api/v1/auth/social/google/start', json({}));
+    expect(await start.json()).toMatchObject({ code: 'AUTH_METHOD_DISABLED' });
+    const page = await app().request('/auth/social/google/start', { headers: anonymous });
+    expect(page.status).toBe(403);
+  });
+});
+
 describe('request validation', () => {
   it('checks addresses, locales and return paths before doing anything', async () => {
     const response = await app().request(

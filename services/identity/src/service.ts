@@ -10,6 +10,7 @@ import { IDENTITY_ERRORS } from './errors.ts';
 import { factorRoutes } from './factor-routes.ts';
 import { pageRoutes } from './pages.ts';
 import { sessionRoutes } from './session-routes.ts';
+import { socialRoutes } from './social-routes.ts';
 
 export const MIGRATIONS_DIR = join(import.meta.dirname, 'migrations');
 
@@ -32,6 +33,7 @@ export const definition = defineService({
     'parental',
     'security',
     'retention',
+    'valkey',
   ],
   database: { schema: 'identity', migrations: () => loadMigrations(MIGRATIONS_DIR) },
   errors: IDENTITY_ERRORS,
@@ -44,5 +46,6 @@ export const router = createServiceRouter<Context>(definition);
 
 authRoutes(router);
 factorRoutes(router);
+socialRoutes(router);
 sessionRoutes(router);
 pageRoutes(router);

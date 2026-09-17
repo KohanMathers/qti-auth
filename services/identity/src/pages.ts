@@ -15,6 +15,10 @@ import { type SecondFactorMethod, totpEnrolled } from './factors.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
+  completeSocialSignup,
+  finishEmailChange,
+  finishEmailRevert,
+  finishSocial,
   finishTwoFactor,
   inspectPasswordReset,
   loginPassword,
@@ -24,6 +28,8 @@ import {
   registerWithPassword,
   sendMagicLink,
   sendPasswordReset,
+  socialEnabled,
+  startSocial,
   signup,
   totpEnabled,
   verify,
@@ -33,13 +39,17 @@ import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts'
 import { preferredLocale } from './locale.ts';
 import { listPasskeys } from './passkeys.ts';
 import type { PasswordPolicyReason } from './passwords.ts';
+import { enabledSocialProviders } from './providers.ts';
 import type { Context } from './service.ts';
 import { signedIn as sessionUser } from './session-routes.ts';
 import type { CreatedSession } from './sessions.ts';
 import {
   accountPath,
+  CHANGE_EMAIL_PAGE,
+  CONNECT_PAGE,
   encryptionKey,
   FORGOT_PASSWORD_PAGE,
+  IDENTITIES_PAGE,
   LOGIN_PAGE,
   MAGIC_LINK_PAGE,
   MAGIC_LINK_START_PAGE,
@@ -47,11 +57,16 @@ import {
   PASSKEYS_PAGE,
   REGISTER_PAGE,
   RESET_PASSWORD_PAGE,
+  REVERT_EMAIL_PAGE,
   SIGNUP_CHOICE_PAGE,
+  SOCIAL_CALLBACK_PAGE,
+  SOCIAL_SIGNUP_PAGE,
+  SOCIAL_START_PAGE,
   TOTP_PAGE,
   TWO_FACTOR_PAGE,
   VERIFY_EMAIL_PAGE,
 } from './settings.ts';
+import { listSocialIdentities } from './social.ts';
 import { beginTotpEnrol, confirmTotpEnrol, disableTotp } from './two-factor.ts';
 
 const htmlResponses = { 200: { description: 'An HTML page' } };
@@ -147,6 +162,7 @@ function signedIn(ctx: Context, session: CreatedSession, returnTo: string | null
 <li><a href="../api/v1/sessions">Your sessions</a></li>
 ${passkeysEnabled(ctx) ? '<li><a href="passkeys">Passkeys</a></li>' : ''}
 ${totpEnabled(ctx) ? '<li><a href="totp">Authenticator app</a></li>' : ''}
+${socialEnabled(ctx) ? '<li><a href="identities">Connected sign-in methods</a></li>' : ''}
 </ul>
 <form method="post" action="../api/v1/auth/logout"><button type="submit">Sign out</button></form>`,
   });
@@ -178,9 +194,100 @@ function captchaBlock(widget: CaptchaWidget | undefined): string {
   return captchaMarkup(widget);
 }
 
+function socialButtons(ctx: Context, kind: 'signin' | 'signup'): string {
+  const providers = enabledSocialProviders(ctx.config.features.auth.social);
+  if (providers.length === 0) return '';
+  const verb = kind === 'signup' ? 'Sign up' : 'Sign in';
+  return providers
+    .map(
+      (provider) =>
+        `<p><a href="social/${encodeURIComponent(provider.id)}/start">${verb} with ${escapeHtml(provider.name)}</a></p>`,
+    )
+    .join('\n');
+}
+
 function captchaAlert(result: CaptchaCheck): string {
   if (result.status === 'invalid') return 'That CAPTCHA was not completed correctly. Try again.';
   return 'Complete the CAPTCHA to continue.';
+}
+
+function socialSignupForm(
+  ctx: Context,
+  challenge: string,
+  needsEmail: boolean,
+  error?: string,
+): Response {
+  return page(ctx, {
+    status: error === undefined ? 200 : 400,
+    title: 'Create your account',
+    body: `${error === undefined ? '' : alert(error)}
+<form method="post" action="signup">
+${hiddenInput('challenge', challenge)}
+${
+  needsEmail
+    ? `${hiddenInput('needs_email', '1')}<p><label for="email">Email</label><br>
+<input id="email" name="email" type="email" autocomplete="email" required></p>`
+    : ''
+}
+<p><label for="date_of_birth">Date of birth</label><br>
+<input id="date_of_birth" name="date_of_birth" type="date" required></p>
+<p><button type="submit">Create account</button></p>
+</form>`,
+  });
+}
+
+function socialResultPage(
+  ctx: Context,
+  result: Awaited<ReturnType<typeof finishSocial>>,
+): Response {
+  switch (result.status) {
+    case 'invalid':
+    case 'denied':
+      return page(ctx, {
+        status: 400,
+        title: 'Sign-in didn’t finish',
+        body: paragraph('Sign in with this provider again.'),
+      });
+    case 'provider_unavailable':
+      return page(ctx, {
+        status: 502,
+        title: 'This sign-in provider is unavailable',
+        body: paragraph('Try again in a moment.'),
+      });
+    case 'identity_in_use':
+      return page(ctx, {
+        status: 409,
+        title: 'Already connected',
+        body: paragraph('This sign-in method is already connected to another account.'),
+      });
+    case 'account_limit':
+      return page(ctx, {
+        status: 409,
+        title: 'You can’t create another account',
+        body: paragraph('This email address already has as many accounts as it can have.'),
+      });
+    case 'parental_consent_required':
+      return page(ctx, {
+        status: 403,
+        title: 'You can’t create an account yet',
+        body: paragraph(
+          `People under ${String(ctx.config.parental.consent_age)} need a parent or guardian to approve their account, and that isn’t available yet.`,
+        ),
+      });
+    case 'linked':
+      return new Response(null, {
+        status: 303,
+        headers: { location: accountPath(ctx.config, IDENTITIES_PAGE) },
+      });
+    case 'signup_required': {
+      const url = new URL(accountPath(ctx.config, SOCIAL_SIGNUP_PAGE), 'http://localhost');
+      url.searchParams.set('challenge', result.challenge);
+      if (result.needsEmail) url.searchParams.set('needs_email', '1');
+      return new Response(null, { status: 303, headers: { location: url.pathname + url.search } });
+    }
+    case 'signed_in':
+      return signedIn(ctx, result.session, result.returnTo);
+  }
 }
 
 function registerForm(
@@ -227,6 +334,7 @@ ${captchaBlock(widget)}
 <p><button type="submit">Sign in</button></p>
 </form>
 ${passkeysEnabled(ctx) ? '<p><a href="passkey">Sign in with a passkey</a></p>' : ''}
+${socialButtons(ctx, 'signin')}
 <p><a href="forgot-password">Forgot password</a></p>`,
   });
 }
@@ -440,7 +548,7 @@ ${result.accounts
     method: 'GET',
     path: SIGNUP_CHOICE_PAGE,
     operation_id: 'signupChoicePage',
-    summary: 'Choose password or magic-link signup',
+    summary: 'Choose a sign-up method',
     description: 'Interim page until the web app replaces it.',
     tags: ['pages'],
     auth: 'none',
@@ -449,7 +557,8 @@ ${result.accounts
     handler: ({ ctx }) => {
       const password = passwordEnabled(ctx);
       const magic = magicLinkEnabled(ctx);
-      if (!password && !magic) {
+      const social = enabledSocialProviders(ctx.config.features.auth.social).length > 0;
+      if (!password && !magic && !social) {
         return Promise.resolve(
           page(ctx, {
             status: 403,
@@ -463,6 +572,7 @@ ${result.accounts
           title: 'Create your account',
           body: `${password ? `<p><a href="register">Sign up with a password</a></p>` : ''}
 ${magic ? `<p><a href="magic-link/start">Sign up with a magic link</a></p>` : ''}
+${socialButtons(ctx, 'signup')}
 <p><a href="login">Already have an account? Sign in</a></p>`,
         }),
       );
@@ -1099,7 +1209,341 @@ ${passkeysEnabled(ctx) ? '<p><a href="passkeys">Passkeys</a></p>' : ''}`,
         title: 'Passkeys',
         body: `${items}
 ${paragraph('Register a passkey with POST /api/v1/me/passkeys/register/start, then POST the attestation to /api/v1/me/passkeys/register.')}
-${totpEnabled(ctx) ? '<p><a href="totp">Authenticator app</a></p>' : ''}`,
+${totpEnabled(ctx) ? '<p><a href="totp">Authenticator app</a></p>' : ''}
+${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p>' : ''}`,
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: SOCIAL_START_PAGE,
+    operation_id: 'socialStartPage',
+    summary: 'Redirect to an upstream sign-in provider',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'auth_password',
+    request: {
+      params: z.object({ provider: z.string().max(64) }),
+      query: z.object({ return_to: z.string().max(2048).optional() }),
+    },
+    responses: { 302: { description: 'Redirect to the provider' }, ...htmlResponses },
+    handler: async ({ ctx, params, query, request, log }) => {
+      if (!socialEnabled(ctx, params.provider)) {
+        return page(ctx, {
+          status: 403,
+          title: 'This sign-in method is turned off',
+          body: paragraph('Sign in another way.'),
+        });
+      }
+      const result = await startSocial(
+        { ctx, request, log },
+        {
+          providerId: params.provider,
+          intent: 'signin',
+          userId: null,
+          returnTo: query.return_to ?? null,
+          locale: preferredLocale(request.headers.get('accept-language')) ?? null,
+        },
+      );
+      if (result.status !== 'ok') {
+        return page(ctx, {
+          status: 403,
+          title: 'This sign-in method is turned off',
+          body: paragraph('Sign in another way.'),
+        });
+      }
+      return new Response(null, { status: 302, headers: { location: result.url } });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: CONNECT_PAGE,
+    operation_id: 'connectSocialPage',
+    summary: 'Connect an upstream provider while signed in',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    rate_limit: 'auth_password',
+    request: { params: z.object({ provider: z.string().max(64) }) },
+    responses: { 302: { description: 'Redirect to the provider' }, ...htmlResponses },
+    handler: async ({ ctx, params, identity, request, log }) => {
+      if (!socialEnabled(ctx, params.provider)) {
+        return page(ctx, {
+          status: 403,
+          title: 'This sign-in method is turned off',
+          body: paragraph('Sign in another way.'),
+        });
+      }
+      const { userId } = sessionUser(identity);
+      const result = await startSocial(
+        { ctx, request, log },
+        {
+          providerId: params.provider,
+          intent: 'link',
+          userId,
+          returnTo: IDENTITIES_PAGE,
+          locale: preferredLocale(request.headers.get('accept-language')) ?? null,
+        },
+      );
+      if (result.status !== 'ok') {
+        return page(ctx, {
+          status: 403,
+          title: 'This sign-in method is turned off',
+          body: paragraph('Sign in another way.'),
+        });
+      }
+      return new Response(null, { status: 302, headers: { location: result.url } });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: SOCIAL_CALLBACK_PAGE,
+    operation_id: 'socialCallbackPage',
+    summary: 'Finish upstream sign-in after the provider redirects back',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    request: { params: z.object({ provider: z.string().max(64) }) },
+    responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
+    handler: async ({ ctx, params, request, log }) => {
+      if (!socialEnabled(ctx, params.provider)) {
+        return page(ctx, {
+          status: 403,
+          title: 'This sign-in method is turned off',
+          body: paragraph('Sign in another way.'),
+        });
+      }
+      const url = new URL(request.url);
+      const result = await finishSocial(
+        { ctx, request, log },
+        {
+          providerId: params.provider,
+          state: url.searchParams.get('state') ?? '',
+          code: url.searchParams.get('code') ?? undefined,
+          params: url.searchParams,
+          error: url.searchParams.get('error') ?? undefined,
+        },
+      );
+      return socialResultPage(ctx, result);
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: SOCIAL_SIGNUP_PAGE,
+    operation_id: 'socialSignupPage',
+    summary: 'Enter a date of birth or email after upstream sign-in',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: {
+      query: z.object({
+        challenge: z.string().max(256).optional(),
+        needs_email: z.string().optional(),
+      }),
+    },
+    responses: htmlResponses,
+    handler: ({ ctx, query }) => {
+      if (query.challenge === undefined) {
+        return Promise.resolve(
+          page(ctx, {
+            status: 400,
+            title: 'Sign in again',
+            body: paragraph('This sign-in has expired. Start again from the sign-in page.'),
+          }),
+        );
+      }
+      return Promise.resolve(socialSignupForm(ctx, query.challenge, query.needs_email === '1'));
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: SOCIAL_SIGNUP_PAGE,
+    operation_id: 'socialSignupPageSubmit',
+    summary: 'Create an account after upstream sign-in',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
+    handler: async ({ ctx, request, log }) => {
+      const form = await readForm(request);
+      const challenge = form['challenge'] ?? '';
+      const needsEmail = form['needs_email'] === '1';
+      const dateOfBirth = form['date_of_birth'] ?? '';
+      if (!isValidDateOfBirth(dateOfBirth, new Date())) {
+        return socialSignupForm(ctx, challenge, needsEmail, 'Enter your real date of birth.');
+      }
+      const result = await completeSocialSignup(
+        { ctx, request, log },
+        { challenge, dateOfBirth, email: form['email'] },
+      );
+      switch (result.status) {
+        case 'invalid':
+          return page(ctx, {
+            status: 400,
+            title: 'Sign in again',
+            body: paragraph('This sign-in has expired. Start again from the sign-in page.'),
+          });
+        case 'account_limit':
+          return page(ctx, {
+            status: 409,
+            title: 'You can’t create another account',
+            body: paragraph('This email address already has as many accounts as it can have.'),
+          });
+        case 'parental_consent_required':
+          return page(ctx, {
+            status: 403,
+            title: 'You can’t create an account yet',
+            body: paragraph(
+              `People under ${String(ctx.config.parental.consent_age)} need a parent or guardian to approve their account, and that isn’t available yet.`,
+            ),
+          });
+        case 'signed_in':
+          return signedIn(ctx, result.session, result.returnTo);
+      }
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: IDENTITIES_PAGE,
+    operation_id: 'identitiesPage',
+    summary: 'Connected upstream sign-in methods',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity }) => {
+      const { userId } = sessionUser(identity);
+      const connected = await listSocialIdentities(ctx.db, userId);
+      const available = enabledSocialProviders(ctx.config.features.auth.social);
+      const items =
+        connected.length === 0
+          ? paragraph('No connected sign-in methods yet.')
+          : `<ul>${connected
+              .map((row) => {
+                const name =
+                  available.find((provider) => provider.type === row.type)?.name ?? row.type;
+                return `<li>${escapeHtml(name)}</li>`;
+              })
+              .join('')}</ul>`;
+      const connect = available
+        .filter((provider) => !connected.some((row) => row.type === provider.type))
+        .map(
+          (provider) =>
+            `<p><a href="identities/${encodeURIComponent(provider.id)}/connect">Connect ${escapeHtml(provider.name)}</a></p>`,
+        )
+        .join('\n');
+      return page(ctx, {
+        title: 'Connected sign-in methods',
+        body: `${items}${connect}`,
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: CHANGE_EMAIL_PAGE,
+    operation_id: 'changeEmailPage',
+    summary: 'Page asking to confirm a new email address',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { query: z.object({ token: z.string().max(256).optional() }) },
+    responses: htmlResponses,
+    handler: ({ ctx, query }) => {
+      if (query.token === undefined) return Promise.resolve(invalidLink(ctx));
+      return Promise.resolve(
+        page(ctx, {
+          title: 'Confirm your new email',
+          body: `<form method="post" action="change-email">
+${hiddenInput('token', query.token)}
+<p><button type="submit">Continue</button></p>
+</form>`,
+        }),
+      );
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: CHANGE_EMAIL_PAGE,
+    operation_id: 'changeEmailPageSubmit',
+    summary: 'Confirm a new email address from the confirmation page',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    responses: htmlResponses,
+    handler: async ({ ctx, request, log }) => {
+      const token = (await readForm(request))['token'] ?? '';
+      const result = await finishEmailChange({ ctx, request, log }, { token });
+      if (result.status === 'invalid') return invalidLink(ctx);
+      if (result.status === 'account_limit') {
+        return page(ctx, {
+          status: 409,
+          title: 'You can’t use this email address',
+          body: paragraph('This email address already has as many accounts as it can have.'),
+        });
+      }
+      return page(ctx, {
+        title: 'Email address updated',
+        body: paragraph(`This account now uses ${result.email}.`),
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: REVERT_EMAIL_PAGE,
+    operation_id: 'revertEmailPage',
+    summary: 'Page asking to undo an email change',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { query: z.object({ token: z.string().max(256).optional() }) },
+    responses: htmlResponses,
+    handler: ({ ctx, query }) => {
+      if (query.token === undefined) return Promise.resolve(invalidLink(ctx));
+      return Promise.resolve(
+        page(ctx, {
+          title: 'Undo this email change',
+          body: `<form method="post" action="revert-email">
+${hiddenInput('token', query.token)}
+<p><button type="submit">This wasn’t me</button></p>
+</form>`,
+        }),
+      );
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: REVERT_EMAIL_PAGE,
+    operation_id: 'revertEmailPageSubmit',
+    summary: 'Undo an email change from the notice page',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    responses: htmlResponses,
+    handler: async ({ ctx, request, log }) => {
+      const token = (await readForm(request))['token'] ?? '';
+      const result = await finishEmailRevert({ ctx, request, log }, { token });
+      if (result.status === 'invalid') return invalidLink(ctx);
+      if (result.status === 'account_limit') {
+        return page(ctx, {
+          status: 409,
+          title: 'You can’t use this email address',
+          body: paragraph('This email address already has as many accounts as it can have.'),
+        });
+      }
+      return page(ctx, {
+        title: 'Email address restored',
+        body: paragraph(`This account again uses ${result.email}.`),
       });
     },
   });

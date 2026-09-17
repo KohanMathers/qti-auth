@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.ts';
 import { softwarePasskey } from './passkey-testing.ts';
 import { definition } from './service.ts';
+import { startMockOidc } from './social-testing.ts';
 import { identityService } from './start.ts';
 import { type CapturedEmails, captureEmails } from './testing.ts';
 
@@ -28,6 +29,7 @@ const surfaces = {
 let postgres: Awaited<ReturnType<typeof startPostgres>>;
 let nats: Awaited<ReturnType<typeof startNats>>;
 let valkey: Awaited<ReturnType<typeof startValkey>>;
+let oidc: Awaited<ReturnType<typeof startMockOidc>>;
 let notifier: Bus;
 let emails: CapturedEmails;
 let identity: RunningService<typeof definition, Database>;
@@ -114,7 +116,16 @@ async function signUpInBrowser(client: Browser, email: string): Promise<void> {
 }
 
 beforeAll(async () => {
-  [postgres, nats, valkey] = await Promise.all([startPostgres(), startNats(), startValkey()]);
+  [postgres, nats, valkey, oidc] = await Promise.all([
+    startPostgres(),
+    startNats(),
+    startValkey(),
+    startMockOidc({
+      sub: 'corp-user-1',
+      email: 'sam@example.com',
+      email_verified: true,
+    }),
+  ]);
   const observability = {
     logs: { user_id_hash_key: 'integration' },
     metrics: { process_metrics: false },
@@ -129,6 +140,7 @@ beforeAll(async () => {
     logDestination: logs.destination,
     config: serviceSchema(definition).parse({
       bus: { servers: [natsUrl(nats)] },
+      valkey: { host: valkey.getHost(), port: valkey.getPort() },
       database: {
         host: postgres.getHost(),
         port: postgres.getPort(),
@@ -144,6 +156,21 @@ beforeAll(async () => {
       },
       captcha: { after: 1000, altcha: { hmac_key: 'integration-captcha-key', max_number: 400 } },
       security: { encryption_key: Buffer.alloc(32, 9).toString('base64') },
+      features: {
+        auth: {
+          social: {
+            generic_oidc: [
+              {
+                id: 'corp',
+                name: 'Corp',
+                issuer: oidc.issuer,
+                client_id: oidc.clientId,
+                client_secret: oidc.clientSecret,
+              },
+            ],
+          },
+        },
+      },
     }),
   });
 
@@ -179,7 +206,7 @@ afterAll(async () => {
   await identity.stop();
   await emails.stop();
   await notifier.close();
-  await Promise.all([postgres.stop(), nats.stop(), valkey.stop()]);
+  await Promise.all([postgres.stop(), nats.stop(), valkey.stop(), oidc.stop()]);
 });
 
 describe('identity through the gateway', () => {
@@ -418,6 +445,64 @@ describe('identity through the gateway', () => {
       code: 'TWO_FACTOR_ENROLMENT_REQUIRED',
     });
     expect((await client.request('/api/v1/me/totp/start', json({}))).status).toBe(200);
+  });
+
+  it('does not sign in or link to an existing account that happens to use the provider email', async () => {
+    async function completeSocial(client: Browser) {
+      const start = await client.request('/api/v1/auth/social/corp/start', json({}));
+      expect(start.status).toBe(200);
+      const { url } = (await start.json()) as { url: string };
+      const authorize = await fetch(url, { redirect: 'manual' });
+      const redirected = new URL(authorize.headers.get('location') ?? '');
+      secrets.push(redirected.searchParams.get('state') ?? '');
+      return client.request(
+        '/api/v1/auth/social/complete',
+        json({
+          provider: 'corp',
+          state: redirected.searchParams.get('state'),
+          code: redirected.searchParams.get('code'),
+        }),
+      );
+    }
+
+    async function finishSignup(client: Browser, dateOfBirth: string) {
+      const completed = await completeSocial(client);
+      const body = (await completed.json()) as { status: string; challenge: string };
+      expect(body.status).toBe('signup_required');
+      secrets.push(body.challenge);
+      const created = await client.request(
+        '/api/v1/auth/social/signup',
+        json({ challenge: body.challenge, date_of_birth: dateOfBirth }),
+      );
+      expect(created.status).toBe(201);
+      expect(client.cookie()).not.toBeNull();
+      return (await (await client.request('/api/v1/me')).json()) as { id: string };
+    }
+
+    oidc.setUser({
+      sub: 'gw-first',
+      email: 'shared-gw@example.com',
+      email_verified: true,
+    });
+    const first = await finishSignup(browser(), '1990-01-01');
+    oidc.setUser({
+      sub: 'gw-second',
+      email: 'shared-gw@example.com',
+      email_verified: true,
+    });
+    const second = await finishSignup(browser(), '1991-02-02');
+    expect(second.id).not.toBe(first.id);
+  });
+
+  it('needs a recent aal2 session to change email', async () => {
+    const client = browser();
+    await signUpInBrowser(client, 'change-email@example.com');
+    const refused = await client.request(
+      '/api/v1/me/email',
+      json({ email: 'changed-email@example.com' }),
+    );
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: 'STEP_UP_REQUIRED' });
   });
 
   it('keeps session tokens and links out of every log', () => {

@@ -66,6 +66,8 @@ describe('qtiauth templates check', () => {
         { name: 'magic_link', locales: ['en-GB', 'fr'] },
         { name: 'email_verification', locales: ['en-GB'] },
         { name: 'password_reset', locales: ['en-GB'] },
+        { name: 'email_change', locales: ['en-GB'] },
+        { name: 'email_change_notice', locales: ['en-GB'] },
       ],
     });
   });

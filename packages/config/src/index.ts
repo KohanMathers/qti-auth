@@ -20,6 +20,8 @@ export {
 } from './schema.ts';
 export {
   type CronJob,
+  BUILTIN_SOCIAL_IDS,
+  type BuiltinSocialId,
   DB_SCHEMAS,
   type DbSchema,
   DEFAULT_REQUIRE_2FA_PERMISSIONS,

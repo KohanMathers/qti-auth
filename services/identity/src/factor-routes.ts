@@ -3,7 +3,7 @@ import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
-import { canRemovePasskey, totpEnrolled } from './factors.ts';
+import { canRemovePasskey, lastSignInMethodError, totpEnrolled } from './factors.ts';
 import { finishTwoFactor, passkeysEnabled, totpEnabled } from './flows.ts';
 import { NO_STORE, revokedHeaders, sessionHeaders } from './headers.ts';
 import { identityMetrics } from './metrics.ts';
@@ -460,7 +460,7 @@ export function factorRoutes(router: Router<Context>): void {
           magicLinkEnabled: ctx.config.features.auth.magic_link.enabled,
         }))
       ) {
-        throw new ProblemError('LAST_SIGN_IN_METHOD');
+        throw lastSignInMethodError();
       }
       const deleted = await deletePasskey(ctx.db, { id: params.passkey_id, userId });
       if (!deleted) throw new ProblemError('PASSKEY_NOT_FOUND');

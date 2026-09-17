@@ -1,0 +1,1 @@
+Your {{ brand.product_name }} email address was changed

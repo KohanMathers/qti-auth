@@ -9,6 +9,8 @@ export const EMAIL_TOKEN_PURPOSES = [
   'signup',
   'email_verify',
   'password_reset',
+  'email_change',
+  'email_revert',
 ] as const;
 export type EmailTokenPurpose = (typeof EMAIL_TOKEN_PURPOSES)[number];
 
@@ -24,6 +26,7 @@ export const AUTH_CHALLENGE_KINDS = [
   'passkey_authenticate',
   'totp_enrol',
   'step_up',
+  'social_signup',
 ] as const;
 export type AuthChallengeKind = (typeof AUTH_CHALLENGE_KINDS)[number];
 

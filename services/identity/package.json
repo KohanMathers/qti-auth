@@ -21,6 +21,7 @@
     "@qtiauth/events": "workspace:*",
     "@qtiauth/observability": "workspace:*",
     "@qtiauth/service-kit": "workspace:*",
+    "@qtiauth/valkey": "workspace:*",
     "@simplewebauthn/server": "13.3.2",
     "kysely": "0.29.6",
     "zod": "4.6.5"

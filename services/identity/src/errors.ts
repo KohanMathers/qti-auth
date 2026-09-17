@@ -40,6 +40,25 @@ export const IDENTITY_ERRORS = defineErrors({
     status: 409,
     title: 'This is your last available sign-in method',
   },
+  OAUTH_FAILED: { status: 400, title: 'Sign-in with this provider could not be completed' },
+  IDENTITY_IN_USE: {
+    status: 409,
+    title: 'This sign-in method is already connected to another account',
+  },
+  IDENTITY_NOT_FOUND: { status: 404, title: 'No such connected sign-in method' },
+  EMAIL_UNCHANGED: { status: 400, title: 'That is already this account’s email address' },
+  EMAIL_CHANGE_INVALID: {
+    status: 400,
+    title: 'The email change link is unknown, has expired or has already been used',
+  },
+  EMAIL_REVERT_INVALID: {
+    status: 400,
+    title: 'The email revert link is unknown, has expired or has already been used',
+  },
+  PROVIDER_UNAVAILABLE: {
+    status: 502,
+    title: 'This sign-in provider is temporarily unavailable',
+  },
   CAPTCHA_REQUIRED: { status: 403, title: 'Complete the CAPTCHA to continue' },
   CAPTCHA_INVALID: { status: 400, title: 'The CAPTCHA was not completed correctly' },
   ACCOUNT_LIMIT_REACHED: {

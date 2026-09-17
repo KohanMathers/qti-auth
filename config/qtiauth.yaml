@@ -175,6 +175,8 @@ accounts:
   email_normalization: # replaces the built-in rules; case is always ignored
     gmail.com: { remove_dots: true, subaddress_separator: '+', domain: null }
     googlemail.com: { remove_dots: true, subaddress_separator: '+', domain: gmail.com }
+  email_change_ttl: 15m
+  email_revert_ttl: 7d
 
 magic_link:
   ttl: 15m

@@ -1,0 +1,9 @@
+Your {{ brand.product_name }} email address was changed
+
+If this was you, you can ignore this email. If it wasn't, open this link within {{ expires_in_days }} days to switch the account back to this address.
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

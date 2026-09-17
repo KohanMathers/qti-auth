@@ -1,5 +1,6 @@
 import { randomUUIDv7 } from 'node:crypto';
 
+import { ProblemError } from '@qtiauth/service-kit';
 import type { Kysely } from 'kysely';
 
 import type { Database } from './database.ts';
@@ -8,6 +9,7 @@ import { MAGIC_LINK_METHOD } from './magic-links.ts';
 import { PASSKEY_METHOD, passkeyCount } from './passkeys.ts';
 import { PASSWORD_METHOD } from './passwords.ts';
 import { unusedRecoveryCount } from './recovery.ts';
+import { socialIdentityCount } from './social.ts';
 import { TOTP_METHOD } from './totp.ts';
 
 export const SECOND_FACTOR_METHODS = ['totp', 'passkey', 'recovery'] as const;
@@ -132,9 +134,38 @@ export async function canRemovePasskey(
   db: Kysely<Database>,
   options: { userId: string; magicLinkEnabled: boolean },
 ): Promise<boolean> {
-  if (options.magicLinkEnabled) return true;
-  if ((await passwordCount(db, options.userId)) > 0) return true;
-  return (await passkeyCount(db, options.userId)) > 1;
+  return canRemovePrimaryMethod(db, options);
+}
+
+export async function primarySignInMethodCount(
+  db: Kysely<Database>,
+  options: { userId: string; magicLinkEnabled: boolean },
+): Promise<number> {
+  let count = 0;
+  if (options.magicLinkEnabled) count += 1;
+  count += await passwordCount(db, options.userId);
+  count += await passkeyCount(db, options.userId);
+  count += await socialIdentityCount(db, options.userId);
+  return count;
+}
+
+export async function canRemovePrimaryMethod(
+  db: Kysely<Database>,
+  options: { userId: string; magicLinkEnabled: boolean },
+): Promise<boolean> {
+  return (await primarySignInMethodCount(db, options)) > 1;
+}
+
+export const DELETE_ACCOUNT_PATH = '/account/delete';
+
+export const LAST_SIGN_IN_METHOD_DETAIL =
+  'This is your last available sign-in method. Either add another to remove this one or, if you are attempting to delete your account, go to Delete account.';
+
+export function lastSignInMethodError(): ProblemError {
+  return new ProblemError('LAST_SIGN_IN_METHOD', {
+    detail: LAST_SIGN_IN_METHOD_DETAIL,
+    extensions: { delete_account_path: DELETE_ACCOUNT_PATH },
+  });
 }
 
 export const PRIMARY_METHODS = [PASSWORD_METHOD, PASSKEY_METHOD, MAGIC_LINK_METHOD] as const;

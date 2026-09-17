@@ -230,5 +230,14 @@ describe('built-in templates', () => {
     const reset = templates.render('password_reset', 'en-GB', variables);
     expect(reset.subject).toContain('Reset your');
     expect(reset.html).toContain(`href="${escapeHtml(link)}"`);
+    const change = templates.render('email_change', 'en-GB', variables);
+    expect(change.subject).toContain('Confirm your new email');
+    expect(change.html).toContain(`href="${escapeHtml(link)}"`);
+    const notice = templates.render('email_change_notice', 'en-GB', {
+      link,
+      expires_in_days: 7,
+    });
+    expect(notice.subject).toContain('email address was changed');
+    expect(notice.html).toContain(`href="${escapeHtml(link)}"`);
   });
 });
