@@ -38,7 +38,8 @@ export type Health = z.output<typeof healthSchema>;
 export type HealthProblem =
   | RouteProblem
   | { code: 'SERVICE_NOT_RUNNING'; service: string }
-  | { code: 'FEATURE_SERVICE_NOT_RUNNING'; feature: string; service: string };
+  | { code: 'FEATURE_SERVICE_NOT_RUNNING'; feature: string; service: string }
+  | { code: 'CROSS_SITE_SURFACES'; surfaces: [string, string] };
 
 const toggles = z.record(z.string(), z.boolean());
 
@@ -86,6 +87,7 @@ export interface HealthInput {
   services: readonly RunningService[];
   routeProblems: readonly RouteProblem[];
   starting: boolean;
+  surfaces?: readonly Surface[];
 }
 
 export function healthReport(input: HealthInput): Health {
@@ -103,9 +105,16 @@ export function healthReport(input: HealthInput): Health {
         service,
       })),
     ...input.routeProblems,
+    ...surfacePairs(input.surfaces ?? [])
+      .filter((pair) => !pair.same_site)
+      .map((pair) => ({
+        code: 'CROSS_SITE_SURFACES' as const,
+        surfaces: pair.surfaces,
+      })),
   ];
+  const degrading = problems.filter((problem) => problem.code !== 'CROSS_SITE_SURFACES');
   let status: Health['status'] = 'ok';
-  if (problems.length > 0) status = input.starting ? 'starting' : 'degraded';
+  if (degrading.length > 0) status = input.starting ? 'starting' : 'degraded';
   return {
     status,
     services: input.services

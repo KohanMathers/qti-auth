@@ -2,6 +2,9 @@ import { MODULES, type QtiauthConfig, SURFACES } from '@qtiauth/config';
 import type { RouteModule } from '@qtiauth/service-kit';
 import { getDomain } from 'tldts';
 
+export const BIND_PATH = '/auth/bind';
+export const LOGIN_PATH = '/auth/login';
+
 export type SurfaceName = (typeof SURFACES)[number];
 export type Module = (typeof MODULES)[number];
 
@@ -93,6 +96,46 @@ function site(origin: string): string {
 
 export function isSameSite(a: string, b: string): boolean {
   return site(a) === site(b);
+}
+
+export function needsSessionBinding(
+  cookies: { domain: string | null },
+  host: string | null,
+  account: Surface,
+): boolean {
+  if (host === null || host === '') return false;
+  if (cookies.domain !== null) {
+    return host !== cookies.domain && !host.endsWith(`.${cookies.domain}`);
+  }
+  if (account.hosts.length === 0) return false;
+  return !account.hosts.includes(host);
+}
+
+export function surfacePublicUrl(surface: Surface, path: string): string | null {
+  const origin = surface.origins[0];
+  if (origin === undefined) return null;
+  const prefix = surface.basePath === '/' ? '' : surface.basePath;
+  return new URL(`${prefix}${path}`, origin).toString();
+}
+
+export function bindStartUrl(
+  account: Surface,
+  target: SurfaceName,
+  returnPath: string,
+): string | null {
+  const url = surfacePublicUrl(account, BIND_PATH);
+  if (url === null) return null;
+  const parsed = new URL(url);
+  parsed.searchParams.set('target', target);
+  parsed.searchParams.set('return', returnPath);
+  return parsed.toString();
+}
+
+export function isTopLevelNavigation(request: Request): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  const mode = request.headers.get('sec-fetch-mode');
+  if (mode !== null) return mode === 'navigate';
+  return /\btext\/html\b/.test(request.headers.get('accept') ?? '');
 }
 
 export function surfacePairs(surfaces: readonly Surface[]): SurfacePair[] {

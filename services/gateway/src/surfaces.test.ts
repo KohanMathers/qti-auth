@@ -2,9 +2,12 @@ import { sections } from '@qtiauth/config';
 import { describe, expect, it } from 'vitest';
 
 import {
+  bindStartUrl,
   isSameSite,
+  isTopLevelNavigation,
   listenPorts,
   matchSurface,
+  needsSessionBinding,
   requestHost,
   resolveSurfaces,
   surfacePairs,
@@ -23,6 +26,14 @@ const byPort = resolveSurfaces({
     account: { ports: [8080] },
     support: { ports: [8081] },
     api: { ports: [8082], origins: ['http://10.0.0.5:8082'] },
+  }),
+});
+
+const splitHosts = resolveSurfaces({
+  surfaces: sections.surfaces.parse({
+    account: { hosts: ['account.example.co.uk'] },
+    support: { hosts: ['support.example.com'] },
+    api: { hosts: ['auth.example.co.uk'] },
   }),
 });
 
@@ -86,18 +97,63 @@ describe('same-site pairs', () => {
   });
 
   it('reports every surface pair', () => {
-    const split = resolveSurfaces({
-      surfaces: sections.surfaces.parse({
-        account: { hosts: ['account.example.co.uk'] },
-        support: { hosts: ['support.example.com'] },
-        api: { hosts: ['auth.example.co.uk'] },
-      }),
-    });
-    expect(surfacePairs(split)).toEqual([
+    expect(surfacePairs(splitHosts)).toEqual([
       { surfaces: ['account', 'support'], same_site: false },
       { surfaces: ['account', 'api'], same_site: true },
       { surfaces: ['support', 'api'], same_site: false },
     ]);
     expect(surfacePairs(byPort)[0]?.same_site).toBe(false);
+  });
+});
+
+describe('session binding', () => {
+  it('is needed only when the cookie would not be sent to the account host', () => {
+    const [account] = splitHosts;
+    expect(account).toBeDefined();
+    if (account === undefined) return;
+    expect(needsSessionBinding({ domain: null }, 'support.example.com', account)).toBe(true);
+    expect(needsSessionBinding({ domain: null }, 'account.example.co.uk', account)).toBe(false);
+    expect(needsSessionBinding({ domain: 'example.com' }, 'support.example.com', account)).toBe(
+      false,
+    );
+    expect(needsSessionBinding({ domain: 'example.com' }, 'support.example.org', account)).toBe(
+      true,
+    );
+    expect(needsSessionBinding({ domain: null }, 'anything', byPort[0] ?? account)).toBe(false);
+  });
+
+  it('builds the account bind URL and recognises top-level navigations', () => {
+    const [account] = splitHosts;
+    expect(account).toBeDefined();
+    if (account === undefined) return;
+    expect(bindStartUrl(account, 'support', '/inbox')).toBe(
+      'https://account.example.co.uk/auth/bind?target=support&return=%2Finbox',
+    );
+    expect(
+      isTopLevelNavigation(
+        new Request('https://support.example.com/inbox', { headers: { accept: 'text/html' } }),
+      ),
+    ).toBe(true);
+    expect(
+      isTopLevelNavigation(
+        new Request('https://support.example.com/api/v1/me', {
+          headers: { accept: 'application/json' },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isTopLevelNavigation(
+        new Request('https://support.example.com/inbox', {
+          headers: { 'sec-fetch-mode': 'cors', accept: 'text/html' },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isTopLevelNavigation(
+        new Request('https://support.example.com/inbox', {
+          headers: { 'sec-fetch-mode': 'navigate' },
+        }),
+      ),
+    ).toBe(true);
   });
 });

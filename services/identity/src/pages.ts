@@ -4,6 +4,8 @@ import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { isValidDateOfBirth } from './age.ts';
+import { completeBind, issueBindCode } from './bind.ts';
+import { bindStoreOf } from './bind-state.ts';
 import {
   type CaptchaCheck,
   captchaFromForm,
@@ -37,6 +39,7 @@ import {
 import { revokedHeaders, sessionHeaders } from './headers.ts';
 import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts';
 import { preferredLocale } from './locale.ts';
+import { identityMetrics } from './metrics.ts';
 import { listPasskeys } from './passkeys.ts';
 import type { PasswordPolicyReason } from './passwords.ts';
 import { enabledSocialProviders } from './providers.ts';
@@ -45,6 +48,8 @@ import { signedIn as sessionUser } from './session-routes.ts';
 import type { CreatedSession } from './sessions.ts';
 import {
   accountPath,
+  BIND_CALLBACK_PAGE,
+  BIND_PAGE,
   CHANGE_EMAIL_PAGE,
   CONNECT_PAGE,
   encryptionKey,
@@ -53,15 +58,21 @@ import {
   LOGIN_PAGE,
   MAGIC_LINK_PAGE,
   MAGIC_LINK_START_PAGE,
+  parseBindTarget,
   PASSKEY_PAGE,
   PASSKEYS_PAGE,
   REGISTER_PAGE,
   RESET_PASSWORD_PAGE,
+  RETURN_TO,
   REVERT_EMAIL_PAGE,
+  sessionClient,
   SIGNUP_CHOICE_PAGE,
   SOCIAL_CALLBACK_PAGE,
   SOCIAL_SIGNUP_PAGE,
   SOCIAL_START_PAGE,
+  surfaceForHost,
+  surfaceOrigin,
+  surfacePath,
   TOTP_PAGE,
   TWO_FACTOR_PAGE,
   VERIFY_EMAIL_PAGE,
@@ -194,16 +205,34 @@ function captchaBlock(widget: CaptchaWidget | undefined): string {
   return captchaMarkup(widget);
 }
 
-function socialButtons(ctx: Context, kind: 'signin' | 'signup'): string {
+function socialButtons(ctx: Context, kind: 'signin' | 'signup', returnTo?: string | null): string {
   const providers = enabledSocialProviders(ctx.config.features.auth.social);
   if (providers.length === 0) return '';
   const verb = kind === 'signup' ? 'Sign up' : 'Sign in';
+  const query = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : '';
   return providers
     .map(
       (provider) =>
-        `<p><a href="social/${encodeURIComponent(provider.id)}/start">${verb} with ${escapeHtml(provider.name)}</a></p>`,
+        `<p><a href="social/${encodeURIComponent(provider.id)}/start${query}">${verb} with ${escapeHtml(provider.name)}</a></p>`,
     )
     .join('\n');
+}
+
+function safeReturnTo(value: string | undefined): string | null {
+  if (value === undefined || value.length > 2048 || !RETURN_TO.test(value)) return null;
+  return value;
+}
+
+function redirect(location: string, headers: Record<string, string> = {}): Response {
+  return new Response(null, { status: 302, headers: { ...headers, location } });
+}
+
+function bindFailed(ctx: Context): Response {
+  return page(ctx, {
+    status: 400,
+    title: 'This sign-in couldn’t be continued',
+    body: paragraph('Open the page you wanted again, or sign in on the account site first.'),
+  });
 }
 
 function captchaAlert(result: CaptchaCheck): string {
@@ -320,13 +349,15 @@ function loginForm(
   error?: string,
   widget?: CaptchaWidget,
   status?: number,
+  returnTo?: string | null,
 ): Response {
+  const bounce = returnTo ? `${hiddenInput('return_to', returnTo)}\n` : '';
   return page(ctx, {
     status: status ?? (error === undefined ? 200 : 401),
     title: `Sign in to ${ctx.config.branding.product_name}`,
     body: `${error === undefined ? '' : alert(error)}
 <form method="post" action="login">
-<p><label for="email">Email</label><br>
+${bounce}<p><label for="email">Email</label><br>
 <input id="email" name="email" type="email" autocomplete="username" required value="${escapeHtml(email)}"></p>
 <p><label for="password">Password</label><br>
 <input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required></p>
@@ -334,7 +365,7 @@ ${captchaBlock(widget)}
 <p><button type="submit">Sign in</button></p>
 </form>
 ${passkeysEnabled(ctx) ? '<p><a href="passkey">Sign in with a passkey</a></p>' : ''}
-${socialButtons(ctx, 'signin')}
+${socialButtons(ctx, 'signin', returnTo)}
 <p><a href="forgot-password">Forgot password</a></p>`,
   });
 }
@@ -754,10 +785,13 @@ ${socialButtons(ctx, 'signup')}
     tags: ['pages'],
     auth: 'none',
     rate_limit: 'global',
+    request: { query: z.object({ return_to: z.string().max(2048).optional() }) },
     responses: htmlResponses,
-    handler: ({ ctx }) => {
+    handler: ({ ctx, query }) => {
       if (!passwordEnabled(ctx)) return Promise.resolve(passwordDisabled(ctx));
-      return Promise.resolve(loginForm(ctx, ''));
+      return Promise.resolve(
+        loginForm(ctx, '', undefined, undefined, undefined, safeReturnTo(query.return_to)),
+      );
     },
   });
 
@@ -775,9 +809,10 @@ ${socialButtons(ctx, 'signup')}
       const form = await readForm(request);
       const email = form['email'] ?? '';
       const password = form['password'] ?? '';
+      const returnTo = safeReturnTo(form['return_to']);
       const captcha = await checkCaptcha(ctx, request, 'password_login', captchaFromForm(form));
       if (captcha.status !== 'ok') {
-        return loginForm(ctx, email, captchaAlert(captcha), captcha.widget, 403);
+        return loginForm(ctx, email, captchaAlert(captcha), captcha.widget, 403, returnTo);
       }
       const result = await loginPassword({ ctx, request, log }, { email, password });
       if (result.status === 'invalid') {
@@ -787,12 +822,14 @@ ${socialButtons(ctx, 'signup')}
           email,
           'Email or password incorrect',
           next.status === 'ok' ? undefined : next.widget,
+          undefined,
+          returnTo,
         );
       }
       if (result.status === 'second_factor_required') {
         return twoFactorForm(ctx, result.challenge, result.methods);
       }
-      return signedIn(ctx, result.session, null);
+      return signedIn(ctx, result.session, returnTo);
     },
   });
 
@@ -1545,6 +1582,95 @@ ${hiddenInput('token', query.token)}
         title: 'Email address restored',
         body: paragraph(`This account again uses ${result.email}.`),
       });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: BIND_PAGE,
+    operation_id: 'bindSession',
+    summary: 'Issue a one-time code that binds this session to another surface',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    allow_pending_legal: true,
+    allow_pending_parental_consent: true,
+    allow_pending_2fa_enrolment: true,
+    rate_limit: 'global',
+    request: {
+      query: z.object({
+        target: z.string().max(32).optional(),
+        return: z.string().max(2048).optional(),
+      }),
+    },
+    responses: {
+      302: { description: 'Redirect to the target surface’s bind callback' },
+      ...htmlResponses,
+    },
+    errors: ['ACCOUNT_NOT_FOUND'],
+    handler: async ({ ctx, identity, query, log }) => {
+      const { sessionId } = sessionUser(identity);
+      const target = parseBindTarget(ctx.config, query.target ?? '', query.return ?? '');
+      const store = bindStoreOf(ctx);
+      if (target === undefined || store === undefined) return bindFailed(ctx);
+      const issued = await issueBindCode(store, {
+        sessionId,
+        target: target.target,
+        origin: target.origin,
+        returnPath: target.returnPath,
+      });
+      const callback = new URL(
+        surfacePath(ctx.config, target.target, BIND_CALLBACK_PAGE),
+        target.origin,
+      );
+      callback.searchParams.set('code', issued.code);
+      log.info('session bind started', { target: target.target, session_id: sessionId });
+      return redirect(callback.toString());
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: BIND_CALLBACK_PAGE,
+    operation_id: 'bindSessionCallback',
+    summary: 'Exchange a bind code for a session cookie on this surface',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    request: { query: z.object({ code: z.string().max(256).optional() }) },
+    responses: {
+      302: { description: 'Signed in on this surface, going to the return path' },
+      ...htmlResponses,
+    },
+    handler: async ({ ctx, query, request, log }) => {
+      const store = bindStoreOf(ctx);
+      const host = request.headers.get('x-forwarded-host') ?? '';
+      const target = surfaceForHost(ctx.config, host);
+      const origin = target === undefined ? undefined : surfaceOrigin(ctx.config, target);
+      if (
+        store === undefined ||
+        query.code === undefined ||
+        target === undefined ||
+        origin === undefined
+      ) {
+        return bindFailed(ctx);
+      }
+      const cookieScope = sessionClient(ctx.config, request).cookieScope;
+      const result = await completeBind(ctx.db, store, {
+        code: query.code,
+        target,
+        origin,
+        cookieScope,
+        idleTimeout: ctx.config.cookies.idle_timeout,
+        now: new Date(),
+      });
+      if (result.status !== 'ok') return bindFailed(ctx);
+      identityMetrics(ctx.metrics).bindingCreated();
+      log.info('session bound', { target, cookie_scope: cookieScope });
+      return redirect(
+        result.returnPath,
+        sessionHeaders({ token: result.token, expiresAt: result.expiresAt, evicted: [] }),
+      );
     },
   });
 }

@@ -16,6 +16,7 @@ import type { Database } from './database.ts';
 import { eraseUser, exportUser } from './data-rights.ts';
 import { sweepTokens } from './email-tokens.ts';
 import { sweepAuthFailures } from './failures.ts';
+import { attachBindStore, valkeyBindStore } from './bind-state.ts';
 import { identityMetrics } from './metrics.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
 import { anySocialEnabled } from './providers.ts';
@@ -66,14 +67,15 @@ export function identityService(options: IdentityOptions = {}) {
       accountOrigin(config);
       encryptionKey(config);
       const stack: Stoppable[] = [];
+      const valkey = connectValkey(config.valkey, 'identity', (error) => {
+        log.warn('valkey client error', { error });
+      });
+      attachBindStore(ctx, valkeyBindStore(valkey));
+      if (anySocialEnabled(config.features.auth.social)) {
+        attachOauthStore(ctx, valkeyOauthStore(valkey));
+      }
+      stack.push({ stop: () => closeValkey(valkey) });
       try {
-        if (anySocialEnabled(config.features.auth.social)) {
-          const valkey = connectValkey(config.valkey, 'identity', (error) => {
-            log.warn('valkey client error', { error });
-          });
-          attachOauthStore(ctx, valkeyOauthStore(valkey));
-          stack.push({ stop: () => closeValkey(valkey) });
-        }
         stack.push(
           serveRpc<unknown, ResolveSessionResponse>(bus, {
             method: RESOLVE_SESSION_METHOD,

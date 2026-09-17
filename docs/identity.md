@@ -84,7 +84,7 @@ retention:
 - `features.auth.magic_link.enabled: false` turns magic links off. `features.auth.password.enabled: false` turns passwords off. `features.auth.passkeys.enabled: false` turns passkeys off. `features.auth.totp.enabled: false` turns authenticator-app sign-in off.
 - Each social provider is off until you enable it. Enabling Google, GitHub or Discord without `client_id` and `client_secret` fails config validation. Steam has no credentials. Generic OIDC providers are listed under `features.auth.social.generic_oidc`; their `id` must not collide with a built-in method.
 
-Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha`, `security`, `features` and, when a social provider is enabled, `valkey`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one. Passkey origins are those same account origins. OAuth `state`, PKCE verifiers and OIDC nonces live in Valkey for 10 minutes.
+Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha`, `security`, `features` and `valkey`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one. Passkey origins are those same account origins. Session-binding codes live in Valkey for 60 seconds. When a social provider is enabled, OAuth `state`, PKCE verifiers and OIDC nonces live in Valkey for 10 minutes.
 
 ## Accounts
 
@@ -210,6 +210,8 @@ Staff whose permissions match `security.require_2fa_for_permissions` can sign in
 | `GET`/`POST /auth/totp`                        | Interim authenticator enrolment                                                            |
 | `GET /auth/passkey`                            | Interim passkey sign-in page                                                               |
 | `GET /auth/passkeys`                           | Interim passkey list                                                                       |
+| `GET /auth/bind`                               | Issue a one-time code that binds this session to another surface                           |
+| `GET /auth/bind/callback`                      | Exchange the code and set this host’s session cookie                                       |
 
 ## CAPTCHA
 
@@ -219,7 +221,9 @@ The interim login, register and magic-link start pages redisplay the form with t
 
 ## Sessions
 
-A session is a server-side record. The browser holds a random token in the session cookie, and identity stores only its SHA-256 hash, in a binding tied to the cookie's scope (`cookies.domain`, or the host). Signing in, signing out and ending sessions answer through the gateway, which sets or clears the cookie and drops the session from its cache before responding, so an ended session stops working on the very next request.
+A session is a server-side record. The browser holds a random token in the session cookie, and identity stores only its SHA-256 hash, in a binding tied to the cookie's scope (`cookies.domain`, or the host). Each host that cannot share that cookie gets its own binding for the **same** session. Signing in, signing out and ending sessions answer through the gateway, which sets or clears the cookie and drops the session from its cache before responding, so an ended session stops working on the very next request.
+
+When a browser navigation needs a session on a host that has no binding, the gateway redirects to `/auth/bind` on the account surface. If the user is signed in there, identity issues a single-use code (60 seconds, bound to the target origin and return path) and redirects to `/auth/bind/callback` on the target surface, which sets that host's cookie for the same session. If they are not signed in, `/auth/bind` lands on `/auth/login` and continues after sign-in. A short-lived `qtiauth_session_bound` cookie stops a failed bind from redirecting forever. Logging out or revoking a session invalidates every binding.
 
 | Endpoint                              | Does                                                   |
 | ------------------------------------- | ------------------------------------------------------ |
@@ -326,4 +330,4 @@ The names are exported from `@qtiauth/service-kit`, and `sessionHeaders`, `revok
 
 ### Tests
 
-`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`.
+`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`. `bind.integration.test.ts` does the same across three hostnames on two registrable domains.

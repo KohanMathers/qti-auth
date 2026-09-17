@@ -4,12 +4,15 @@ import { describe, expect, it } from 'vitest';
 import {
   accountOrigin,
   accountPath,
+  BIND_CALLBACK_PAGE,
   emailLinkUrl,
   IdentityConfigError,
   magicLinkUrl,
+  parseBindTarget,
   relyingParty,
   RESET_PASSWORD_PAGE,
   sessionClient,
+  surfaceForHost,
 } from './settings.ts';
 
 function surfaces(account: Record<string, unknown>) {
@@ -68,5 +71,19 @@ describe('sessionClient', () => {
       sessionClient({ cookies: sections.cookies.parse({ domain: 'example.com' }) }, request)
         .cookieScope,
     ).toBe('example.com');
+  });
+});
+
+describe('bind targets', () => {
+  it('resolve a surface by host and refuse open redirects', () => {
+    const config = surfaces({ hosts: ['account.example.co.uk'] });
+    expect(surfaceForHost(config, 'help.example.com')).toBe('support');
+    expect(parseBindTarget(config, 'support', '/tickets')).toEqual({
+      target: 'support',
+      origin: 'https://help.example.com',
+      returnPath: '/tickets',
+    });
+    expect(parseBindTarget(config, 'support', 'https://evil.example')).toBeUndefined();
+    expect(BIND_CALLBACK_PAGE).toBe('/auth/bind/callback');
   });
 });

@@ -17,6 +17,7 @@ describe('identity service', () => {
       '0006_captcha',
       '0007_factors',
       '0008_social',
+      '0009_bindings',
     ]);
   });
 
@@ -33,6 +34,8 @@ describe('identity service', () => {
       'GET /api/v1/me/identities',
       'GET /api/v1/me/passkeys',
       'GET /api/v1/sessions',
+      'GET /auth/bind',
+      'GET /auth/bind/callback',
       'GET /auth/change-email',
       'GET /auth/forgot-password',
       'GET /auth/identities',
@@ -157,6 +160,16 @@ describe('identity service', () => {
     expect(route('POST', '/api/v1/me/totp/start')).toMatchObject({
       auth: 'session',
       allow_pending_2fa_enrolment: true,
+    });
+    expect(route('GET', '/auth/bind')).toMatchObject({
+      auth: 'session',
+      allow_pending_legal: true,
+      allow_pending_parental_consent: true,
+      allow_pending_2fa_enrolment: true,
+    });
+    expect(route('GET', '/auth/bind/callback')).toMatchObject({
+      auth: 'none',
+      rate_limit: 'auth_verify',
     });
     expect(route('GET', '/api/v1/sessions')).toMatchObject({
       auth: 'session',

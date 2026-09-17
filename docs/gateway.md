@@ -81,6 +81,8 @@ surfaces:
 
 The session cookie is `__Host-<cookies.name>` (`__Host-qtiauth_session` by default), or `<cookies.name>` when `cookies.domain` is set. Only `auth: session` routes read it. On other routes the caller is anonymous, even with a cookie.
 
+When a top-level navigation (`Sec-Fetch-Mode: navigate`, or `GET`/`HEAD` with `Accept: text/html`) needs a session on a host that does not share the account cookie, the gateway redirects to `/auth/bind` on the account surface and sets a one-minute `__Host-<cookies.name>_bound` cookie so a failed bind is not retried in a loop. `/auth/bind` itself, if the account host has no session, redirects to `/auth/login` with `return_to`. API clients still get `401 AUTHENTICATION_REQUIRED`.
+
 The gateway hashes the cookie's token and looks the session up in Valkey. On a miss, or when Valkey is down, it asks identity over `qtiauth.rpc.identity.resolve_session` and caches the answer for `session_cache.ttl` or until the session expires. If identity can't be reached, the request gets `503 SERVICE_UNAVAILABLE`. A cookie that doesn't resolve to a session is cleared in the response.
 
 Identity sets and clears the cookie when someone signs in or out, through headers on its responses (see [identity.md](identity.md#how-identity-sets-the-cookie)). The cookie lasts until the session's absolute expiry. When identity's response ends sessions, the gateway drops them from the cache before answering, so they stop working on the very next request from any replica.
@@ -167,19 +169,20 @@ These are served by the gateway on every surface, rate-limited by `global`:
 | Endpoint                    | Answers                                                                                                                                                       |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/meta/features` | Enabled modules and sub-features, auth methods and social providers, surfaces with their origins and modules, which surface pairs are same-site, and branding |
-| `GET /api/v1/meta/health`   | `ok`, `starting` or `degraded`, the running services, and any problems                                                                                        |
+| `GET /api/v1/meta/health`   | `ok`, `starting` or `degraded`, the running services, any problems, and cross-site surface pairs                                                              |
 | `GET /api/v1/openapi.json`  | OpenAPI 3.1 for every route on the surface it's requested from                                                                                                |
 
 A module or sub-feature counts as enabled only when it's switched on in config and its service is running. Same-site means the same scheme and registrable domain (using the public suffix list). Browsers only send cookies on cross-surface `fetch` calls between same-site surfaces.
 
 Health problems:
 
-| Code                          | Meaning                                                                                                         |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `SERVICE_NOT_RUNNING`         | A core service (`identity`, `notifier`, `scheduler`) isn't announcing itself                                    |
-| `FEATURE_SERVICE_NOT_RUNNING` | A sub-feature is enabled but its service isn't running, e.g. `features.games.licensing.enabled` without `games` |
-| `ROUTE_CONFLICT`              | Two services declare the same route on a surface. Neither is served                                             |
-| `UNKNOWN_RATE_LIMIT_POLICY`   | A route names a policy that isn't configured. The route isn't served                                            |
+| Code                          | Meaning                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `SERVICE_NOT_RUNNING`         | A core service (`identity`, `notifier`, `scheduler`) isn't announcing itself                                       |
+| `FEATURE_SERVICE_NOT_RUNNING` | A sub-feature is enabled but its service isn't running, e.g. `features.games.licensing.enabled` without `games`    |
+| `ROUTE_CONFLICT`              | Two services declare the same route on a surface. Neither is served                                                |
+| `UNKNOWN_RATE_LIMIT_POLICY`   | A route names a policy that isn't configured. The route isn't served                                               |
+| `CROSS_SITE_SURFACES`         | Two surfaces are not same-site, so browsers will not send cookies on `fetch` between them. Does not degrade health |
 
 For `discovery.startup_grace` after the gateway starts, problems are reported with the status `starting` instead of `degraded`, while services are still announcing themselves.
 

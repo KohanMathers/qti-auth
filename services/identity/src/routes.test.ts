@@ -217,4 +217,24 @@ describe('request validation', () => {
     const response = await app().request('/api/v1/sessions', { headers: anonymous });
     expect(await response.json()).toMatchObject({ code: 'AUTH_MODE_NOT_ALLOWED' });
   });
+
+  it('keeps return_to on the login form and refuses a bind without a store', async () => {
+    const login = await app().request(
+      `/auth/login?return_to=${encodeURIComponent('/auth/bind?target=support')}`,
+      { headers: anonymous },
+    );
+    expect(await login.text()).toContain('name="return_to"');
+    const signedIn = identityHeaders(key, 'identity', {
+      auth: 'session',
+      sub: '0199a0e0-0000-7000-8000-000000000001',
+      sid: '0199a0e0-0000-7000-8000-000000000002',
+      account_state: 'active',
+      age_band: 'adult',
+      amr: ['email'],
+      acr: 'aal1',
+    });
+    const bind = await app().request('/auth/bind?target=support&return=/', { headers: signedIn });
+    expect(bind.status).toBe(400);
+    expect(await bind.text()).toContain('This sign-in couldn’t be continued');
+  });
 });

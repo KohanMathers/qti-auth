@@ -34,7 +34,7 @@ import {
   identityHeaders,
   serveTestIdentityKeys,
 } from '@qtiauth/service-kit/testing';
-import { natsUrl, startNats, startPostgres } from '@qtiauth/testing';
+import { natsUrl, startNats, startPostgres, startValkey } from '@qtiauth/testing';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './database.ts';
@@ -46,10 +46,12 @@ import { hashToken } from './tokens.ts';
 import { decodeBase32, totpAt } from './totp.ts';
 
 const HOST = 'me.example.com';
+const SUPPORT = 'support.example.com';
 const key = generateIdentityKey();
 
 let postgres: Awaited<ReturnType<typeof startPostgres>>;
 let nats: Awaited<ReturnType<typeof startNats>>;
+let valkey: Awaited<ReturnType<typeof startValkey>>;
 let gateway: Bus;
 let notifier: Bus;
 let emails: CapturedEmails;
@@ -108,12 +110,12 @@ interface SignedIn {
   response: Response;
 }
 
-async function resolve(token: string) {
+async function resolve(token: string, cookieScope = HOST) {
   const result = await rpcRequest<{ session: { session_id: string } | null }>(
     gateway,
     RESOLVE_SESSION_SERVICE,
     RESOLVE_SESSION_METHOD,
-    { binding_token_hash: hashSessionToken(token), cookie_scope: HOST },
+    { binding_token_hash: hashSessionToken(token), cookie_scope: cookieScope },
   );
   if (result.status !== 'ok') throw new Error(`resolve_session failed: ${result.status}`);
   return result.data.session;
@@ -176,7 +178,7 @@ async function loginPassword(email: string, password = PASSWORD): Promise<Respon
 }
 
 beforeAll(async () => {
-  [postgres, nats] = await Promise.all([startPostgres(), startNats()]);
+  [postgres, nats, valkey] = await Promise.all([startPostgres(), startNats(), startValkey()]);
   const bus = sections.bus.parse({ servers: [natsUrl(nats)] });
   gateway = await connectBus(bus, 'gateway');
   notifier = await connectBus(bus, 'notifier');
@@ -199,7 +201,11 @@ beforeAll(async () => {
         logs: { user_id_hash_key: 'integration' },
         metrics: { process_metrics: false },
       },
-      surfaces: { account: { hosts: [HOST] } },
+      surfaces: {
+        account: { hosts: [HOST] },
+        support: { hosts: [SUPPORT], base_path: '/' },
+      },
+      valkey: { host: valkey.getHost(), port: valkey.getPort() },
       sessions: { max_per_user: 3 },
       password: {
         argon2: { memory_kib: 8, iterations: 1 },
@@ -216,7 +222,7 @@ afterAll(async () => {
   await identity.stop();
   await emails.stop();
   await Promise.all([gateway.close(), notifier.close()]);
-  await Promise.all([postgres.stop(), nats.stop()]);
+  await Promise.all([postgres.stop(), nats.stop(), valkey.stop()]);
 });
 
 describe('magic link start', () => {
@@ -430,6 +436,46 @@ describe('sessions', () => {
     expect(response.headers.get(SESSION_CLEAR_HEADER)).toBe('1');
     expect(response.headers.get(REVOKED_SESSIONS_HEADER)).toBe(user.sessionId);
     expect(await resolve(user.token)).toBeNull();
+  });
+
+  it('binds the same session to another cookie scope, and logout ends every binding', async () => {
+    const user = await signUp('bound@example.com');
+    const start = await call(`/auth/bind?target=support&return=${encodeURIComponent('/inbox')}`, {
+      as: signedInAs(user.userId, user.sessionId),
+    });
+    expect(start.status).toBe(302);
+    const location = new URL(start.headers.get('location') ?? '');
+    expect(location.origin).toBe(`https://${SUPPORT}`);
+    expect(location.pathname).toBe('/auth/bind/callback');
+    const code = location.searchParams.get('code') ?? '';
+    secrets.push(code);
+
+    const reused = await call(`${location.pathname}${location.search}`, {
+      headers: { 'x-forwarded-host': SUPPORT },
+    });
+    expect(reused.status).toBe(302);
+    expect(reused.headers.get('location')).toBe('/inbox');
+    const token = reused.headers.get(SESSION_TOKEN_HEADER) ?? '';
+    secrets.push(token);
+    expect((await resolve(token, SUPPORT))?.session_id).toBe(user.sessionId);
+    expect(await resolve(user.token)).not.toBeNull();
+
+    const sessions = await call('/api/v1/sessions', {
+      as: signedInAs(user.userId, user.sessionId),
+    });
+    expect(await sessions.json()).toMatchObject({
+      items: [{ id: user.sessionId, current: true }],
+      next_cursor: null,
+    });
+
+    await post('/api/v1/auth/logout', undefined, signedInAs(user.userId, user.sessionId));
+    expect(await resolve(user.token)).toBeNull();
+    expect(await resolve(token, SUPPORT)).toBeNull();
+
+    const replay = await call(`${location.pathname}${location.search}`, {
+      headers: { 'x-forwarded-host': SUPPORT },
+    });
+    expect(replay.status).toBe(400);
   });
 
   it('ends sessions that stay idle past cookies.idle_timeout', async () => {

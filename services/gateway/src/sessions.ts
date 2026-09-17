@@ -60,6 +60,11 @@ export function sessionCookieName(cookies: CookiesConfig): string {
   return cookies.domain === null ? `__Host-${cookies.name}` : cookies.name;
 }
 
+export function bindAttemptCookieName(cookies: CookiesConfig): string {
+  const name = `${cookies.name}_bound`;
+  return cookies.domain === null ? `__Host-${name}` : name;
+}
+
 export function readCookie(header: string | null, name: string): string | null {
   if (header === null) return null;
   for (const part of header.split(';')) {
@@ -84,6 +89,18 @@ export function sessionCookie(cookies: CookiesConfig, token: string, maxAge: num
 
 export function clearSessionCookie(cookies: CookiesConfig): string {
   return sessionCookie(cookies, '', 0);
+}
+
+export function bindAttemptCookie(cookies: CookiesConfig): string {
+  return [
+    `${bindAttemptCookieName(cookies)}=1`,
+    'Path=/',
+    'Max-Age=60',
+    ...(cookies.domain === null ? [] : [`Domain=${cookies.domain}`]),
+    'Secure',
+    'HttpOnly',
+    'SameSite=Lax',
+  ].join('; ');
 }
 
 export function isSessionToken(token: string): boolean {

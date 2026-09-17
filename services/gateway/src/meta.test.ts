@@ -169,4 +169,19 @@ describe('featuresReport', () => {
     });
     expect(report.auth.social).toEqual([]);
   });
+
+  it('lists cross-site pairs on health without marking the stack degraded', () => {
+    const report = healthReport({
+      config: config(minimal),
+      services: running('identity', 'notifier', 'scheduler'),
+      routeProblems: [],
+      starting: false,
+      surfaces,
+    });
+    expect(report.status).toBe('ok');
+    expect(report.problems).toEqual([
+      { code: 'CROSS_SITE_SURFACES', surfaces: ['account', 'api'] },
+      { code: 'CROSS_SITE_SURFACES', surfaces: ['support', 'api'] },
+    ]);
+  });
 });

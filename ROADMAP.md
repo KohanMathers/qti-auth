@@ -370,13 +370,13 @@ account (tested), and removing the last method shows the warning.
 ### P2.5 Multi-surface sessions — L
 Spec: §2.10
 
-- [ ] Surface config with hosts, ports, base paths and module ownership.
-- [ ] Core API mounted on every surface. Module APIs only on their owning surface.
-- [ ] Automatic credentialed CORS for surface origins.
-- [ ] **Session bindings:** bind redirect, single-use codes bound to target origin and return path,
+- [x] Surface config with hosts, ports, base paths and module ownership.
+- [x] Core API mounted on every surface. Module APIs only on their owning surface.
+- [x] Automatic credentialed CORS for surface origins.
+- [x] **Session bindings:** bind redirect, single-use codes bound to target origin and return path,
       callback exchange, per-host cookies, loop protection.
-- [ ] Logout and revocation invalidate every binding. Stale cookies cleared on next request.
-- [ ] Same-site detection per surface pair, reported in `meta/features` and the health page.
+- [x] Logout and revocation invalidate every binding. Stale cookies cleared on next request.
+- [x] Same-site detection per surface pair, reported in `meta/features` and the health page.
 
 **Done when (e2e with three hostnames on two different registrable domains):**
 - Signing in on `account` makes `support` signed in after one silent redirect.

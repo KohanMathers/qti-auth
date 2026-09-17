@@ -10,10 +10,10 @@ import { isCanonicalLocale, preferredLocale } from './locale.ts';
 import { enabledSocialProviders, findSocialProvider } from './providers.ts';
 import type { Context } from './service.ts';
 import { signedIn } from './session-routes.ts';
+import { RETURN_TO } from './settings.ts';
 import { deleteSocialIdentity, findSocialIdentity, listSocialIdentities } from './social.ts';
 
 const PROVIDER_ID = /^[a-z0-9][a-z0-9_-]*$/;
-const RETURN_TO = /^\/(?![/\\])[^\s\\]*$/;
 
 const providerParam = z.object({
   provider: z

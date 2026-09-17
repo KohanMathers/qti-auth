@@ -22,6 +22,7 @@ export interface IdentityMetrics {
   passkeyRegistration: () => void;
   stepUp: (result: StepUpResult) => void;
   sessionCreated: (method: string, evicted: number) => void;
+  bindingCreated: () => void;
   sessionsRevoked: (reason: RevocationReason, count: number) => void;
   accounts: (counts: Partial<Record<AccountState, number>>) => void;
   activeSessions: (count: number) => void;
@@ -133,6 +134,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     stepUp: (result) => {
       stepUp.inc({ result });
+    },
+    bindingCreated: () => {
+      bindings.inc();
     },
     sessionCreated: (method, evicted) => {
       sessionsCreated.inc({ method });

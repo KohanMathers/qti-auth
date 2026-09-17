@@ -1,3 +1,5 @@
+import { SURFACES } from '@qtiauth/config';
+
 import { emailNormalizer } from './email.ts';
 import { parseEncryptionKey } from './encrypt.ts';
 import type { EmailChangeSettings } from './email-change.ts';
@@ -8,6 +10,7 @@ import type { IdentityConfig } from './service.ts';
 import type { SessionClient, SessionSettings } from './sessions.ts';
 import type { SocialSettings } from './social.ts';
 
+export const RETURN_TO = /^\/(?![/\\])[^\s\\]*$/;
 export const MAGIC_LINK_PAGE = '/auth/magic-link';
 export const MAGIC_LINK_START_PAGE = '/auth/magic-link/start';
 export const SIGNUP_CHOICE_PAGE = '/auth/signup';
@@ -27,6 +30,8 @@ export const IDENTITIES_PAGE = '/auth/identities';
 export const CONNECT_PAGE = '/auth/identities/:provider/connect';
 export const CHANGE_EMAIL_PAGE = '/auth/change-email';
 export const REVERT_EMAIL_PAGE = '/auth/revert-email';
+export const BIND_PAGE = '/auth/bind';
+export const BIND_CALLBACK_PAGE = '/auth/bind/callback';
 
 export class IdentityConfigError extends Error {
   constructor(message: string) {
@@ -74,9 +79,58 @@ export function sessionClient(
   };
 }
 
+export type SurfaceName = (typeof SURFACES)[number];
+
+export function surfaceOrigin(
+  config: Pick<IdentityConfig, 'surfaces'>,
+  name: SurfaceName,
+): string | undefined {
+  const surface = config.surfaces[name];
+  return surface.origins?.[0] ?? (surface.hosts[0] && `https://${surface.hosts[0]}`);
+}
+
+export function surfacePath(
+  config: Pick<IdentityConfig, 'surfaces'>,
+  name: SurfaceName,
+  path: string,
+): string {
+  const base = config.surfaces[name].base_path;
+  return base === '/' ? path : `${base}${path}`;
+}
+
+export function surfaceUrl(
+  config: Pick<IdentityConfig, 'surfaces'>,
+  name: SurfaceName,
+  path: string,
+): string | undefined {
+  const origin = surfaceOrigin(config, name);
+  if (origin === undefined) return undefined;
+  return new URL(surfacePath(config, name, path), origin).toString();
+}
+
+export function surfaceForHost(
+  config: Pick<IdentityConfig, 'surfaces'>,
+  host: string,
+): SurfaceName | undefined {
+  const needle = host.toLowerCase();
+  return SURFACES.find((name) => config.surfaces[name].hosts.includes(needle));
+}
+
+export function parseBindTarget(
+  config: Pick<IdentityConfig, 'surfaces'>,
+  target: string,
+  returnPath: string,
+): { target: SurfaceName; origin: string; returnPath: string } | undefined {
+  if (!(SURFACES as readonly string[]).includes(target)) return undefined;
+  const name = target as SurfaceName;
+  const origin = surfaceOrigin(config, name);
+  if (origin === undefined) return undefined;
+  if (returnPath.length > 2048 || !RETURN_TO.test(returnPath)) return undefined;
+  return { target: name, origin, returnPath };
+}
+
 export function accountOrigin(config: Pick<IdentityConfig, 'surfaces'>): string {
-  const { account } = config.surfaces;
-  const origin = account.origins?.[0] ?? (account.hosts[0] && `https://${account.hosts[0]}`);
+  const origin = surfaceOrigin(config, 'account');
   if (!origin) {
     throw new IdentityConfigError(
       'surfaces.account needs origins when it has no hosts, so identity can link to it in emails',
@@ -86,8 +140,7 @@ export function accountOrigin(config: Pick<IdentityConfig, 'surfaces'>): string 
 }
 
 export function accountPath(config: Pick<IdentityConfig, 'surfaces'>, path: string): string {
-  const base = config.surfaces.account.base_path;
-  return base === '/' ? path : `${base}${path}`;
+  return surfacePath(config, 'account', path);
 }
 
 export function magicLinkUrl(config: Pick<IdentityConfig, 'surfaces'>, token: string): string {

@@ -9,7 +9,9 @@ import type { CreatedSession } from './sessions.ts';
 
 export const NO_STORE = { 'cache-control': 'no-store' };
 
-export function sessionHeaders(session: CreatedSession): Record<string, string> {
+export function sessionHeaders(
+  session: Pick<CreatedSession, 'token' | 'expiresAt' | 'evicted'>,
+): Record<string, string> {
   return {
     ...revokedHeaders(session.evicted),
     [SESSION_TOKEN_HEADER]: session.token,

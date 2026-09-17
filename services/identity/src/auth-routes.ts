@@ -5,6 +5,7 @@ import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
 import { CAPTCHA_ACTIONS, inspectCaptcha, noteCaptchaAttempt, requireCaptcha } from './captcha.ts';
 import { SECOND_FACTOR_METHODS } from './factors.ts';
+import { RETURN_TO } from './settings.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
@@ -27,8 +28,6 @@ import { isCanonicalLocale, preferredLocale } from './locale.ts';
 import type { PasswordPolicyReason } from './passwords.ts';
 import type { Context } from './service.ts';
 import { revoke, signedIn } from './session-routes.ts';
-
-export const RETURN_TO = /^\/(?![/\\])[^\s\\]*$/;
 
 export const returnToSchema = z
   .string()

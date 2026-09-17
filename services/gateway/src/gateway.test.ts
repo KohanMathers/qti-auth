@@ -74,6 +74,8 @@ const identityManifest: RouteManifest = {
     route({ method: 'DELETE', path: '/api/v1/sessions/:session_id' }),
     route({ path: '/api/v1/legal', allow_pending_legal: true }),
     route({ path: '/api/v1/slow', auth: 'none' }),
+    route({ path: '/auth/bind', auth: 'session', allow_account_states: ['active'] }),
+    route({ path: '/auth/login', auth: 'none' }),
   ],
 };
 
@@ -102,6 +104,7 @@ interface SetupOptions {
   manifests?: RouteManifest[];
   local?: typeof router;
   upstream?: (request: ForwardRequest) => ForwardResult;
+  surfaces?: ReturnType<typeof resolveSurfaces>;
 }
 
 async function setup(options: SetupOptions = {}) {
@@ -110,13 +113,15 @@ async function setup(options: SetupOptions = {}) {
     gateway: sections.gateway.parse({ http: { max_body_size: 1024 } }),
     security: sections.security.parse({}),
   };
-  const surfaces = resolveSurfaces({
-    surfaces: sections.surfaces.parse({
-      account: { hosts: [HOST], base_path: '/' },
-      support: { hosts: [HOST], base_path: '/support' },
-      api: { hosts: [HOST], base_path: '/api' },
-    }),
-  });
+  const surfaces =
+    options.surfaces ??
+    resolveSurfaces({
+      surfaces: sections.surfaces.parse({
+        account: { hosts: [HOST], base_path: '/' },
+        support: { hosts: [HOST], base_path: '/support' },
+        api: { hosts: [HOST], base_path: '/api' },
+      }),
+    });
   const logs = captureLogs();
   const log = createLogger({
     service: 'gateway',
@@ -216,10 +221,11 @@ async function setup(options: SetupOptions = {}) {
     },
   });
 
-  const request = (path: string, init: RequestInit & { peer?: string } = {}) => {
+  const request = (path: string, init: RequestInit & { peer?: string; host?: string } = {}) => {
     const headers = new Headers(init.headers);
-    if (!headers.has('host')) headers.set('host', HOST);
-    return handler(new Request(`http://${HOST}${path}`, { ...init, headers }), {
+    const host = init.host ?? HOST;
+    if (!headers.has('host')) headers.set('host', host);
+    return handler(new Request(`http://${host}${path}`, { ...init, headers }), {
       peer: init.peer ?? '203.0.113.9',
       localPort: 8000,
     });
@@ -329,6 +335,45 @@ describe('gateway handler', () => {
     expect(stale.status).toBe(401);
     expect(stale.headers.get('set-cookie')).toContain('__Host-qtiauth_session=; Path=/; Max-Age=0');
     expect(forwarded).toHaveLength(0);
+  });
+
+  it('silently binds a browser navigation on another host to the account session', async () => {
+    const split = resolveSurfaces({
+      surfaces: sections.surfaces.parse({
+        account: { hosts: ['account.example.co.uk'] },
+        support: { hosts: ['support.example.com'] },
+        api: { hosts: ['auth.example.co.uk'] },
+      }),
+    });
+    const { request, forwarded } = await setup({ session: null, surfaces: split });
+    const api = await request('/api/v1/me', { host: 'support.example.com' });
+    expect(api.status).toBe(401);
+    expect(forwarded).toHaveLength(0);
+
+    const browse = await request('/api/v1/me', {
+      host: 'support.example.com',
+      headers: { accept: 'text/html' },
+    });
+    expect(browse.status).toBe(302);
+    expect(browse.headers.get('location')).toBe(
+      'https://account.example.co.uk/auth/bind?target=support&return=%2Fapi%2Fv1%2Fme',
+    );
+    expect(browse.headers.get('set-cookie')).toContain('__Host-qtiauth_session_bound=1');
+
+    const loop = await request('/api/v1/me', {
+      host: 'support.example.com',
+      headers: { accept: 'text/html', cookie: '__Host-qtiauth_session_bound=1' },
+    });
+    expect(loop.status).toBe(401);
+
+    const login = await request('/auth/bind?target=support&return=%2F', {
+      host: 'account.example.co.uk',
+      headers: { accept: 'text/html' },
+    });
+    expect(login.status).toBe(302);
+    expect(login.headers.get('location')).toBe(
+      'https://account.example.co.uk/auth/login?return_to=%2Fauth%2Fbind%3Ftarget%3Dsupport%26return%3D%252F',
+    );
   });
 
   it('returns the gate codes for banned, legal and parental states', async () => {

@@ -267,6 +267,7 @@ export async function startGateway(
           services: registry.services(),
           routeProblems: table.problems,
           starting: Date.now() - startedAt < config.gateway.discovery.startup_grace,
+          surfaces,
         }),
       features: () =>
         featuresReport({ config, surfaces, isRunning: (service) => registry.isRunning(service) }),

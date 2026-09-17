@@ -44,6 +44,8 @@ import {
 import type { RouteLookup, RouteTable } from './routes.ts';
 import type { LocalContext } from './service.ts';
 import {
+  bindAttemptCookie,
+  bindAttemptCookieName,
   clearSessionCookie,
   isSessionToken,
   readCookie,
@@ -51,7 +53,17 @@ import {
   sessionCookieName,
   type SessionResolver,
 } from './sessions.ts';
-import { matchSurface, requestHost, type Surface } from './surfaces.ts';
+import {
+  BIND_PATH,
+  bindStartUrl,
+  isTopLevelNavigation,
+  LOGIN_PATH,
+  matchSurface,
+  needsSessionBinding,
+  requestHost,
+  surfacePublicUrl,
+  type Surface,
+} from './surfaces.ts';
 
 export type GatewayConfig = Pick<QtiauthConfig, 'cookies' | 'gateway' | 'security'>;
 
@@ -118,6 +130,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
     let limits: RateLimitResult | undefined;
     let staleCookie = false;
     let setCookie: string | undefined;
+    let bindCookie: string | undefined;
     let upstream: string | undefined;
 
     const problem = (code: string, init: ConstructorParameters<typeof ProblemError>[1] = {}) =>
@@ -136,6 +149,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
       }
       if (setCookie !== undefined) headers.append('Set-Cookie', setCookie);
       else if (staleCookie) headers.append('Set-Cookie', clearCookie);
+      if (bindCookie !== undefined) headers.append('Set-Cookie', bindCookie);
       headers.set(REQUEST_ID_HEADER, requestId);
 
       const length = headers.get('content-length');
@@ -284,6 +298,35 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         now: now(),
       });
       if (denial) {
+        if (denial.code === 'AUTHENTICATION_REQUIRED' && route.auth === 'session') {
+          const topLevel = isTopLevelNavigation(request);
+          const attempted =
+            readCookie(request.headers.get('cookie'), bindAttemptCookieName(config.cookies)) !==
+            null;
+          const account = options.surfaces.find((surface) => surface.name === 'account');
+          if (topLevel && account) {
+            if (matched.path === BIND_PATH && !needsSessionBinding(config.cookies, host, account)) {
+              const returnTo = `${matched.path}${url.search}`;
+              const login = surfacePublicUrl(
+                account,
+                `${LOGIN_PATH}?return_to=${encodeURIComponent(returnTo)}`,
+              );
+              if (login !== null)
+                return new Response(null, { status: 302, headers: { location: login } });
+            }
+            if (!attempted && needsSessionBinding(config.cookies, host, account)) {
+              const location = bindStartUrl(
+                account,
+                matched.surface.name,
+                `${url.pathname}${url.search}`,
+              );
+              if (location !== null) {
+                bindCookie = bindAttemptCookie(config.cookies);
+                return new Response(null, { status: 302, headers: { location } });
+              }
+            }
+          }
+        }
         return problem(denial.code, {
           ...(denial.extensions === undefined ? {} : { extensions: denial.extensions }),
           ...(denial.code === 'AUTHENTICATION_REQUIRED' && route.auth !== 'session'

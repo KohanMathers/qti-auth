@@ -127,15 +127,11 @@ export async function createSession(
       expires_at: expiresAt,
     })
     .execute();
-  await trx
-    .insertInto('session_bindings')
-    .values({
-      id: randomUUIDv7(),
-      session_id: id,
-      token_hash: hashSessionToken(token),
-      cookie_scope: session.client.cookieScope,
-    })
-    .execute();
+  await writeBinding(trx, {
+    sessionId: id,
+    tokenHash: hashSessionToken(token),
+    cookieScope: session.client.cookieScope,
+  });
   await writeEvent(
     trx,
     sessionCreatedEvent(id, {
@@ -160,6 +156,48 @@ export async function createSession(
     only: overLimit.map((row) => row.id),
   });
   return { id, token, expiresAt, evicted };
+}
+
+async function writeBinding(
+  trx: Kysely<Database>,
+  binding: { sessionId: string; tokenHash: string; cookieScope: string },
+): Promise<void> {
+  await trx
+    .insertInto('session_bindings')
+    .values({
+      id: randomUUIDv7(),
+      session_id: binding.sessionId,
+      token_hash: binding.tokenHash,
+      cookie_scope: binding.cookieScope,
+    })
+    .onConflict((conflict) =>
+      conflict.columns(['session_id', 'cookie_scope']).doUpdateSet({
+        token_hash: binding.tokenHash,
+      }),
+    )
+    .execute();
+}
+
+export async function bindCookieScope(
+  db: Kysely<Database>,
+  options: { sessionId: string; cookieScope: string; idleTimeout: number; now: Date },
+): Promise<{ token: string; expiresAt: Date } | null> {
+  const row = await db
+    .selectFrom('sessions')
+    .select(['expires_at', 'last_active_at'])
+    .where('id', '=', options.sessionId)
+    .where('revoked_at', 'is', null)
+    .where('expires_at', '>', options.now)
+    .where('last_active_at', '>', idleCutoff(options.now, options.idleTimeout))
+    .executeTakeFirst();
+  if (!row) return null;
+  const token = newToken();
+  await writeBinding(db, {
+    sessionId: options.sessionId,
+    tokenHash: hashSessionToken(token),
+    cookieScope: options.cookieScope,
+  });
+  return { token, expiresAt: sessionExpiry(row, options.idleTimeout) };
 }
 
 export async function resolveSession(
