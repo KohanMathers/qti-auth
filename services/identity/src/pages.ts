@@ -5,8 +5,8 @@ import { isValidDateOfBirth } from './age.ts';
 import { magicLinkEnabled, signup, verify } from './flows.ts';
 import { sessionHeaders } from './headers.ts';
 import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts';
-import type { CreatedSession } from './sessions.ts';
 import type { Context } from './service.ts';
+import type { CreatedSession } from './sessions.ts';
 import { accountPath, MAGIC_LINK_PAGE } from './settings.ts';
 
 export const SIGNUP_PAGE = '/auth/signup';

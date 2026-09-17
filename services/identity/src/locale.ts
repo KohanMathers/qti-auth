@@ -1,14 +1,6 @@
-export function canonicalLocale(value: string): string | undefined {
-  try {
-    return Intl.getCanonicalLocales(value)[0];
-  } catch {
-    return undefined;
-  }
-}
+import { canonicalLocale, isCanonicalLocale } from '@qtiauth/email';
 
-export function isCanonicalLocale(value: string): boolean {
-  return canonicalLocale(value) === value;
-}
+export { canonicalLocale, isCanonicalLocale };
 
 export function preferredLocale(acceptLanguage: string | null): string | undefined {
   if (acceptLanguage === null) return undefined;

@@ -28,9 +28,14 @@ export function valkeyOptions(config: ValkeyConfig, service: string): RedisOptio
   };
 }
 
-export function connectValkey(config: ValkeyConfig, service: string): Valkey {
+export function connectValkey(
+  config: ValkeyConfig,
+  service: string,
+  onError: (error: unknown) => void = () => undefined,
+): Valkey {
   const client = new Valkey(valkeyOptions(config, service));
-  client.on('error', () => undefined);
+  // Without a listener, a connection error can crash the process.
+  client.on('error', onError);
   return client;
 }
 

@@ -7,9 +7,14 @@ import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing'
 import {
   createServiceRouter,
   defineService,
+  hashSessionToken,
   IDENTITY_HEADER,
   IDENTITY_KEYS_METHOD,
   type JsonWebKeySet,
+  RESOLVE_SESSION_METHOD,
+  type ResolvedSession,
+  type ResolveSessionRequest,
+  type ResolveSessionResponse,
   type RunningService,
   type ServiceContext,
   serviceSchema,
@@ -21,7 +26,6 @@ import * as z from 'zod';
 
 import { KEYS_BUCKET, KEYS_ENTRY, keySetSchema } from './identity-keys.ts';
 import { definition } from './service.ts';
-import { hashToken, type ResolvedSession, type ResolveSessionRequest } from './sessions.ts';
 import { gatewayService, type RunningGateway } from './start.ts';
 
 const TOKEN = randomBytes(32).toString('base64url');
@@ -111,11 +115,11 @@ beforeAll(async () => {
 
   identityBus = await connectBus(busConfig(), 'identity');
   resolvedSession = session();
-  serveRpc<ResolveSessionRequest, { session: ResolvedSession | null }>(identityBus, {
-    method: 'resolve_session',
+  serveRpc<ResolveSessionRequest, ResolveSessionResponse>(identityBus, {
+    method: RESOLVE_SESSION_METHOD,
     handler: (request) =>
       Promise.resolve({
-        session: request.binding_token_hash === hashToken(TOKEN) ? resolvedSession : null,
+        session: request.binding_token_hash === hashSessionToken(TOKEN) ? resolvedSession : null,
       }),
     onError: () => undefined,
   });
@@ -285,6 +289,6 @@ describe('gateway end to end', () => {
   });
 
   it('keeps tokens and user IDs out of the logs', () => {
-    assertLogsScrubbed(logs.lines, [TOKEN, hashToken(TOKEN), USER_ID, ENCRYPTION_KEY]);
+    assertLogsScrubbed(logs.lines, [TOKEN, hashSessionToken(TOKEN), USER_ID, ENCRYPTION_KEY]);
   });
 });

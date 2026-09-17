@@ -1,55 +1,21 @@
-import { createHash } from 'node:crypto';
-
 import type { RpcResult } from '@qtiauth/bus';
 import type { QtiauthConfig } from '@qtiauth/config';
-import type { EventEnvelope } from '@qtiauth/events';
+import { type EventEnvelope, IDENTITY_EVENTS } from '@qtiauth/events';
 import type { Metrics } from '@qtiauth/observability';
-import { ACCOUNT_STATES, AGE_BANDS } from '@qtiauth/service-kit';
+import {
+  hashSessionToken,
+  type ResolvedSession,
+  resolvedSessionSchema,
+  type ResolveSessionRequest,
+  resolveSessionResponseSchema,
+} from '@qtiauth/service-kit';
 import { KEY_PREFIX, type Valkey } from '@qtiauth/valkey';
-import * as z from 'zod';
 
 export type CookiesConfig = QtiauthConfig['cookies'];
-
-export const RESOLVE_SESSION_SERVICE = 'identity';
-export const RESOLVE_SESSION_METHOD = 'resolve_session';
 
 const TOKEN = /^[A-Za-z0-9_-]{32,128}$/;
 const CACHE_PREFIX = `${KEY_PREFIX}gateway:session:`;
 const EPOCH_PREFIX = `${KEY_PREFIX}gateway:session_epoch:`;
-
-export const resolvedSessionSchema = z.strictObject({
-  session_id: z.string().min(1),
-  user_id: z.string().min(1),
-  account_state: z.enum(ACCOUNT_STATES),
-  permissions: z.array(z.string().min(1)),
-  restrictions: z.array(z.string().min(1)),
-  age_band: z.enum(AGE_BANDS).nullable(),
-  parental_controls: z
-    .strictObject({
-      online_play: z.boolean(),
-      in_game_chat: z.boolean(),
-      user_generated_content: z.boolean(),
-      purchases: z.boolean(),
-      daily_playtime_minutes: z.int().min(0).nullable(),
-    })
-    .nullable(),
-  amr: z.array(z.string().min(1)),
-  acr: z.string().min(1).nullable(),
-  step_up_at: z.iso.datetime().nullable(),
-  legal_acceptance_required: z.boolean(),
-  expires_at: z.iso.datetime(),
-});
-
-export const resolveSessionResponseSchema = z.strictObject({
-  session: resolvedSessionSchema.nullable(),
-});
-
-export type ResolvedSession = z.output<typeof resolvedSessionSchema>;
-
-export interface ResolveSessionRequest {
-  binding_token_hash: string;
-  cookie_scope: string;
-}
 
 export interface CachedSession {
   session: ResolvedSession;
@@ -118,10 +84,6 @@ export function sessionCookie(cookies: CookiesConfig, token: string, maxAge: num
 
 export function clearSessionCookie(cookies: CookiesConfig): string {
   return sessionCookie(cookies, '', 0);
-}
-
-export function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('base64url');
 }
 
 export function isSessionToken(token: string): boolean {
@@ -205,7 +167,7 @@ export function createSessionResolver(options: SessionResolverOptions): SessionR
         metrics.lookup('not_found');
         return { status: 'none', stale_cookie: true };
       }
-      const hash = hashToken(token);
+      const hash = hashSessionToken(token);
 
       let cacheUsable = true;
       try {
@@ -258,24 +220,23 @@ export function createSessionResolver(options: SessionResolverOptions): SessionR
 }
 
 export const SESSION_EVENTS = [
-  'qtiauth.identity.session.revoked.v1',
-  'qtiauth.identity.session.flagged.v1',
-  'qtiauth.identity.user.updated.v1',
-  'qtiauth.identity.user.deleted.v1',
-  'qtiauth.identity.user.banned.v1',
-  'qtiauth.identity.user.unbanned.v1',
-  'qtiauth.identity.user.locked.v1',
-  'qtiauth.identity.user.unlocked.v1',
-  'qtiauth.identity.user.restricted.v1',
-  'qtiauth.identity.user.age_band_changed.v1',
-  'qtiauth.identity.parental.consent_granted.v1',
-  'qtiauth.identity.parental.consent_revoked.v1',
-  'qtiauth.identity.legal.version_published.v1',
+  IDENTITY_EVENTS.sessionRevoked,
+  IDENTITY_EVENTS.sessionFlagged,
+  IDENTITY_EVENTS.userUpdated,
+  IDENTITY_EVENTS.userDeleted,
+  IDENTITY_EVENTS.userBanned,
+  IDENTITY_EVENTS.userUnbanned,
+  IDENTITY_EVENTS.userLocked,
+  IDENTITY_EVENTS.userUnlocked,
+  IDENTITY_EVENTS.userRestricted,
+  IDENTITY_EVENTS.userAgeBandChanged,
+  IDENTITY_EVENTS.parentalConsentGranted,
+  IDENTITY_EVENTS.parentalConsentRevoked,
+  IDENTITY_EVENTS.legalVersionPublished,
 ] as const;
 
 export function invalidationTargets(event: EventEnvelope): { kind: EpochKind; id: string }[] {
-  if (event.type === 'qtiauth.identity.legal.version_published.v1')
-    return [{ kind: 'all', id: '' }];
+  if (event.type === IDENTITY_EVENTS.legalVersionPublished) return [{ kind: 'all', id: '' }];
   const targets: { kind: EpochKind; id: string }[] = [];
   if (event.subject?.type === 'user') targets.push({ kind: 'user', id: event.subject.id });
   if (event.subject?.type === 'session') targets.push({ kind: 'session', id: event.subject.id });

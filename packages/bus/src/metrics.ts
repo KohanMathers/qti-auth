@@ -10,7 +10,7 @@ export interface BusMetrics {
   consumed: (consumer: string, subject: string, outcome: ConsumeOutcome) => void;
   redelivered: (consumer: string, subject: string) => void;
   consumerLag: (consumer: string, pending: number) => void;
-  outboxBacklog: (service: string, size: number, oldestAgeSeconds: number) => void;
+  outboxBacklog: (size: number, oldestAgeSeconds: number) => void;
   rpcRequest: (subject: string, outcome: RpcOutcome, seconds: number) => void;
   cronRun: (job: string, outcome: CronRunOutcome, seconds: number) => void;
 }
@@ -96,7 +96,7 @@ export function prometheusBusMetrics(metrics: Metrics): BusMetrics {
     consumerLag: (consumer, count) => {
       pending.set({ consumer }, count);
     },
-    outboxBacklog: (_service, size, oldestAgeSeconds) => {
+    outboxBacklog: (size, oldestAgeSeconds) => {
       backlog.set(size);
       oldestAge.set(oldestAgeSeconds);
     },

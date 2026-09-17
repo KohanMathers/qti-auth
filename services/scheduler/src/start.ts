@@ -15,6 +15,7 @@ export function schedulerService() {
         timezone: config.scheduler.timezone,
         publish: (job, scheduledAt) => publishCronTick(bus.js, job, scheduledAt),
         retryDelay: (attempt) => retryDelay(attempt, config.bus.consumers),
+        // Give up before JetStream's duplicate_window so a late retry isn't dropped as a dupe.
         retryWindow: config.bus.streams.duplicate_window,
         metrics: prometheusSchedulerMetrics(ctx.metrics),
         onPublishFailed: (error, tick) => {

@@ -1,11 +1,8 @@
 import type { NewEvent } from '@qtiauth/bus';
+import { IDENTITY_EVENTS } from '@qtiauth/events';
 import type { AccountState, AgeBand } from '@qtiauth/service-kit';
 
 import type { RevocationReason } from './database.ts';
-
-export const USER_CREATED_EVENT = 'qtiauth.identity.user.created.v1';
-export const SESSION_CREATED_EVENT = 'qtiauth.identity.session.created.v1';
-export const SESSION_REVOKED_EVENT = 'qtiauth.identity.session.revoked.v1';
 
 export interface UserCreatedData {
   signup_method: string;
@@ -28,7 +25,7 @@ export interface SessionRevokedData {
 
 export function userCreatedEvent(userId: string, data: UserCreatedData): NewEvent<UserCreatedData> {
   return {
-    type: USER_CREATED_EVENT,
+    type: IDENTITY_EVENTS.userCreated,
     actor: { type: 'user', id: userId },
     subject: { type: 'user', id: userId },
     data,
@@ -40,7 +37,7 @@ export function sessionCreatedEvent(
   data: SessionCreatedData,
 ): NewEvent<SessionCreatedData> {
   return {
-    type: SESSION_CREATED_EVENT,
+    type: IDENTITY_EVENTS.sessionCreated,
     actor: { type: 'user', id: data.user_id },
     subject: { type: 'session', id: sessionId },
     data,
@@ -49,7 +46,7 @@ export function sessionCreatedEvent(
 
 export function sessionRevokedEvent(data: SessionRevokedData): NewEvent<SessionRevokedData> {
   return {
-    type: SESSION_REVOKED_EVENT,
+    type: IDENTITY_EVENTS.sessionRevoked,
     actor: { type: 'user', id: data.user_id },
     subject: { type: 'session', id: data.session_id },
     data,

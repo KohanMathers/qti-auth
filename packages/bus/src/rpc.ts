@@ -169,7 +169,10 @@ export function serveRpc<Req, Res>(bus: Bus, options: RpcServerOptions<Req, Res>
   const sub = bus.nc.subscribe(subject, {
     queue: rpcQueueGroup(bus.service),
     callback: (error, msg) => {
-      if (error) return;
+      if (error) {
+        options.onError(error, { deadline: new Date(Number.NaN), subject });
+        return;
+      }
       const task = handle(msg).finally(() => inFlight.delete(task));
       inFlight.add(task);
     },

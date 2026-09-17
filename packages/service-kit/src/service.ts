@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
 
 import { serve } from '@hono/node-server';
 import {
@@ -18,6 +17,7 @@ import {
   ConfigError,
   type DbSchema,
   loadConfig,
+  resolveConfigPath,
   type SectionName,
   type ServiceConfig,
   serviceConfigSchema,
@@ -50,6 +50,7 @@ import { openApiDocument } from './openapi.ts';
 import type { PermissionRegistry } from './permissions.ts';
 import type { ErrorRegistry } from './problems.ts';
 import { createRouter, type RouteModule, type Router } from './routes.ts';
+import { closeServer, listen, unwind } from './server.ts';
 
 export const BASE_SECTIONS = ['service', 'observability', 'bus', 'database', 'migrations'] as const;
 export type BaseSection = (typeof BASE_SECTIONS)[number];
@@ -88,6 +89,7 @@ export interface ServiceContext<D extends ServiceDefinition, DB = unknown> {
   service: string;
   version: string;
   instance_id: string;
+  config_path: string;
   config: ServiceConfigOf<D>;
   log: Logger;
   metrics: Metrics;
@@ -159,48 +161,17 @@ export function createServiceRouter<Ctx>(definition: ServiceDefinition): Router<
   });
 }
 
-function listen(server: Server): Promise<number> {
-  return new Promise((resolve, reject) => {
-    if (server.listening) {
-      resolve((server.address() as AddressInfo).port);
-      return;
-    }
-    server.once('error', reject);
-    server.once('listening', () => {
-      server.off('error', reject);
-      resolve((server.address() as AddressInfo).port);
-    });
-  });
-}
-
-function closeServer(server: Server, timeout: number): Promise<void> {
-  return new Promise((resolve) => {
-    const force = setTimeout(() => {
-      server.closeAllConnections();
-    }, timeout);
-    server.close(() => {
-      clearTimeout(force);
-      resolve();
-    });
-    server.closeIdleConnections();
-  });
-}
-
 export async function startService<const D extends ServiceDefinition, DB = unknown>(
   definition: D,
   options: StartServiceOptions<D, DB>,
 ): Promise<RunningService<D, DB>> {
+  const env = options.env ?? process.env;
+  const configPath = options.configPath ?? resolveConfigPath(env);
   const config: ServiceConfigOf<D> =
-    options.config ??
-    (await loadConfig(serviceSchema(definition), {
-      ...(options.configPath === undefined ? {} : { path: options.configPath }),
-      ...(options.env === undefined ? {} : { env: options.env }),
-    }));
+    options.config ?? (await loadConfig(serviceSchema(definition), { path: configPath, env }));
   const { name, version } = definition;
   const stack: (() => Promise<void>)[] = [];
-  const unwind = async () => {
-    for (const stop of stack.splice(0).reverse()) await stop();
-  };
+  const unwindStack = () => unwind(stack.splice(0));
 
   if (options.tracing ?? true) {
     const tracing = startTracing(config.observability.tracing, name);
@@ -252,6 +223,7 @@ export async function startService<const D extends ServiceDefinition, DB = unkno
       service: name,
       version,
       instance_id: instanceId,
+      config_path: configPath,
       config,
       log,
       metrics,
@@ -322,13 +294,21 @@ export async function startService<const D extends ServiceDefinition, DB = unkno
     stack.push(() => closeServer(server, config.service.http.shutdown_timeout));
     const port = await listen(server);
 
-    const announcer: Announcer = startAnnouncer(bus, {
-      service: name,
-      instance_id: instanceId,
-      version,
-      started_at: new Date().toISOString(),
-      manifest: options.router.manifest(),
-    });
+    const announcer: Announcer = startAnnouncer(
+      bus,
+      {
+        service: name,
+        instance_id: instanceId,
+        version,
+        started_at: new Date().toISOString(),
+        manifest: options.router.manifest(),
+      },
+      {
+        onError: (error) => {
+          log.warn('announce subscription failed', { error });
+        },
+      },
+    );
     stack.push(() => announcer.stop());
 
     log.info('service started', { version, port });
@@ -342,7 +322,7 @@ export async function startService<const D extends ServiceDefinition, DB = unkno
         stopping ??= (async () => {
           draining = true;
           log.info('service stopping');
-          await unwind();
+          await unwindStack();
           log.info('service stopped');
         })();
         return stopping;
@@ -350,7 +330,7 @@ export async function startService<const D extends ServiceDefinition, DB = unkno
     };
   } catch (error) {
     log.fatal('service failed to start', { error });
-    await unwind().catch((cleanupError: unknown) => {
+    await unwindStack().catch((cleanupError: unknown) => {
       log.error('cleanup after failed start also failed', { error: cleanupError });
     });
     throw error;

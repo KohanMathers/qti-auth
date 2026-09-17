@@ -24,7 +24,7 @@ export type AccountState = (typeof ACCOUNT_STATES)[number];
 export const AGE_BANDS = ['under_13', '13_to_15', '16_to_17', 'adult'] as const;
 export type AgeBand = (typeof AGE_BANDS)[number];
 
-const parentalControlsSchema = z.strictObject({
+export const parentalControlsSchema = z.strictObject({
   online_play: z.boolean(),
   in_game_chat: z.boolean(),
   user_generated_content: z.boolean(),

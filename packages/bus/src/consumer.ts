@@ -119,7 +119,21 @@ export async function runPullConsumer(
   };
 
   const done = (async () => {
-    for await (const msg of messages) await handle(msg);
+    for await (const msg of messages) {
+      try {
+        await handle(msg);
+      } catch (error) {
+        try {
+          options.onError(error, {
+            consumer: options.name,
+            subject: msg.subject,
+            attempt: msg.info.deliveryCount,
+          });
+        } catch {
+          // Keep consuming even if onError throws.
+        }
+      }
+    }
   })();
 
   return {

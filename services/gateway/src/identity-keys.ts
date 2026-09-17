@@ -45,6 +45,7 @@ export interface KeyringOptions {
   rotateAfter: number;
   retainAfterRotation: number;
   now?: () => number;
+  onError?: (error: unknown) => void;
 }
 
 export interface Keyring {
@@ -214,7 +215,9 @@ export async function openKeyring(options: KeyringOptions): Promise<Keyring> {
     activeKeyCreatedAt: () => Date.parse(loaded().active.created_at),
     jwks: async () => {
       if (now() - loaded().loadedAt >= JWKS_MAX_AGE) {
-        await refresh().catch(() => undefined);
+        await refresh().catch((error: unknown) => {
+          options.onError?.(error);
+        });
       }
       return {
         keys: published(loaded().keys).map((key) => ({

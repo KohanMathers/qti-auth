@@ -20,6 +20,7 @@ export interface SchedulerOptions {
   metrics?: SchedulerMetrics;
   onPublishFailed: (error: unknown, tick: TickContext) => void;
   onDropped: (tick: TickContext) => void;
+  now?: () => number;
 }
 
 export interface ScheduledJob {
@@ -56,6 +57,7 @@ export function nextRuns(
 
 export function startScheduler(options: SchedulerOptions): RunningScheduler {
   const metrics = options.metrics ?? noopSchedulerMetrics;
+  const now = options.now ?? Date.now;
   const abort = new AbortController();
   const timers = new Set<NodeJS.Timeout>();
   const inFlight = new Set<Promise<void>>();
@@ -65,13 +67,13 @@ export function startScheduler(options: SchedulerOptions): RunningScheduler {
       () => {
         timers.delete(timer);
         if (abort.signal.aborted) return;
-        if (at - Date.now() > 0) {
+        if (at - now() > 0) {
           later(at, fn);
         } else {
           fn();
         }
       },
-      Math.min(Math.max(at - Date.now(), 0), MAX_TIMER_DELAY),
+      Math.min(Math.max(at - now(), 0), MAX_TIMER_DELAY),
     );
     timers.add(timer);
   };
@@ -103,7 +105,7 @@ export function startScheduler(options: SchedulerOptions): RunningScheduler {
         metrics.publishFailed(name);
         options.onPublishFailed(error, { job: name, scheduledAt, attempt });
         const delay = options.retryDelay(attempt);
-        if (Date.now() + delay >= giveUpAt) {
+        if (now() + delay >= giveUpAt) {
           metrics.tick(name, 'dropped');
           options.onDropped({ job: name, scheduledAt, attempt });
           return;
@@ -120,7 +122,7 @@ export function startScheduler(options: SchedulerOptions): RunningScheduler {
     later(next.getTime(), () => {
       const run = publish(name, cron, next).finally(() => {
         inFlight.delete(run);
-        if (!abort.signal.aborted) arm(name, cron, new Date(Math.max(next.getTime(), Date.now())));
+        if (!abort.signal.aborted) arm(name, cron, new Date(Math.max(next.getTime(), now())));
       });
       inFlight.add(run);
     });
@@ -133,9 +135,9 @@ export function startScheduler(options: SchedulerOptions): RunningScheduler {
     jobs.push({
       name,
       schedule: job.schedule,
-      nextRun: () => cron.nextRun(new Date()),
+      nextRun: () => cron.nextRun(new Date(now())),
     });
-    arm(name, cron, new Date());
+    arm(name, cron, new Date(now()));
   }
 
   return {

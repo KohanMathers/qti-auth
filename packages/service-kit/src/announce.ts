@@ -21,14 +21,26 @@ export interface Announcer {
   stop: () => Promise<void>;
 }
 
-export function startAnnouncer(bus: Bus, announcement: ServiceAnnouncement): Announcer {
+export interface AnnouncerOptions {
+  onError?: (error: unknown) => void;
+}
+
+export function startAnnouncer(
+  bus: Bus,
+  announcement: ServiceAnnouncement,
+  options: AnnouncerOptions = {},
+): Announcer {
   const payload = JSON.stringify(serviceAnnouncementSchema.parse(announcement));
   const announce = () => {
     if (!bus.nc.isClosed()) bus.nc.publish(ANNOUNCE_SUBJECT, payload);
   };
   const sub = bus.nc.subscribe(DISCOVER_SUBJECT, {
     callback: (error) => {
-      if (!error) announce();
+      if (error) {
+        options.onError?.(error);
+        return;
+      }
+      announce();
     },
   });
   announce();

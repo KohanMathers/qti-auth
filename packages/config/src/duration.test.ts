@@ -15,9 +15,12 @@ describe('parseDuration', () => {
     expect(parseDuration(input)).toBe(ms);
   });
 
-  it.each(['', '7', 'd', '7 d', '7days', '1.5h', '-1s', '0s'])('rejects %j', (input) => {
-    expect(parseDuration(input)).toBeUndefined();
-  });
+  it.each(['', '7', 'd', '7 d', '7days', '1.5h', '-1s', '0s', '9007199254740992ms'])(
+    'rejects %j',
+    (input) => {
+      expect(parseDuration(input)).toBeUndefined();
+    },
+  );
 });
 
 describe('duration', () => {
@@ -27,9 +30,12 @@ describe('duration', () => {
     expect(schema.parse({})).toEqual({ ttl: 604_800_000 });
   });
 
-  it('rejects zero', () => {
+  it('rejects zero and overflowing values with different messages', () => {
     expect(schema.safeParse({ ttl: '0s' }).error?.issues[0]?.message).toBe(
       'Duration must be positive',
+    );
+    expect(schema.safeParse({ ttl: '9007199254740992ms' }).error?.issues[0]?.message).toBe(
+      'Duration is too large',
     );
   });
 });

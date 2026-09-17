@@ -1,15 +1,16 @@
-import { randomUUID } from 'node:crypto';
-
 import type { QtiauthConfig } from '@qtiauth/config';
 import { type Logger, traceHttpRequest } from '@qtiauth/observability';
 import {
-  type HandlerResult,
   IDENTITY_HEADER,
+  isJsonRequest,
+  parseInput,
   problemDetails,
   ProblemError,
   problemResponse,
   REQUEST_ID_HEADER,
-  type ResponseMap,
+  requestIdOf,
+  RESOLVE_SESSION_SERVICE,
+  type ResolvedSession,
   REVOKED_SESSIONS_HEADER,
   type Router,
   SESSION_CLEAR_HEADER,
@@ -18,6 +19,7 @@ import {
   SESSION_TOKEN_HEADER,
   signIdentityToken,
   type SigningKey,
+  toResponse,
 } from '@qtiauth/service-kit';
 
 import { clientIp, type TrustedProxies } from './client-ip.ts';
@@ -45,8 +47,6 @@ import {
   clearSessionCookie,
   isSessionToken,
   readCookie,
-  RESOLVE_SESSION_SERVICE,
-  type ResolvedSession,
   sessionCookie,
   sessionCookieName,
   type SessionResolver,
@@ -56,9 +56,6 @@ import { matchSurface, requestHost, type Surface } from './surfaces.ts';
 export type GatewayConfig = Pick<QtiauthConfig, 'cookies' | 'gateway' | 'security'>;
 
 export const GATEWAY_SERVICE = 'gateway';
-
-const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
-const JSON_CONTENT_TYPE = /^application\/(?:[\w.+-]+\+)?json\s*(?:;|$)/i;
 
 export interface Connection {
   peer: string | undefined;
@@ -85,18 +82,6 @@ export interface GatewayHandlerOptions {
 }
 
 export type GatewayHandler = (request: Request, connection: Connection) => Promise<Response>;
-
-function requestIdOf(request: Request): string {
-  const header = request.headers.get(REQUEST_ID_HEADER);
-  return header !== null && REQUEST_ID.test(header) ? header : randomUUID();
-}
-
-function toResponse(result: HandlerResult<ResponseMap>): Response {
-  if (result instanceof Response) return result;
-  const headers = new Headers(result.headers);
-  if ('body' in result) return Response.json(result.body, { status: result.status, headers });
-  return new Response(null, { status: result.status, headers });
-}
 
 function lookupMethod(method: string): string {
   return method === 'HEAD' ? 'GET' : method;
@@ -188,12 +173,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         client: null,
         body: () => {
           parsed ??= Promise.resolve().then(() => {
-            if (
-              body === null ||
-              !JSON_CONTENT_TYPE.test(request.headers.get('content-type') ?? '')
-            ) {
-              return null;
-            }
+            if (body === null || !isJsonRequest(request)) return null;
             try {
               return JSON.parse(new TextDecoder().decode(body)) as unknown;
             } catch {
@@ -269,7 +249,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         return problem('NOT_FOUND');
       }
 
-      const { mount: found } = lookup.match;
+      const { mount: found, params } = lookup.match;
       const entry = found.route;
       const { route } = entry;
 
@@ -316,13 +296,12 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
       if (entry.service === GATEWAY_SERVICE) {
         const local = localRoutes.get(`${route.method} ${route.path}`);
         if (!local) return problem('NOT_FOUND');
+        const input = await parseInput(local, request, params, read.body);
         return toResponse(
           await local.handler({
             ctx: options.localContext(matched.surface),
             identity,
-            params: undefined,
-            query: undefined,
-            body: undefined,
+            ...input,
             request,
             request_id: requestId,
             log: requestLog,
@@ -358,6 +337,13 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
       try {
         return await handle();
       } catch (error) {
+        if (error instanceof ProblemError && error.code in ERRORS) {
+          return problem(error.code, {
+            ...(error.detail === undefined ? {} : { detail: error.detail }),
+            extensions: error.extensions,
+            headers: error.headers,
+          });
+        }
         requestLog.error('request failed', { error });
         return problem('INTERNAL_ERROR');
       }

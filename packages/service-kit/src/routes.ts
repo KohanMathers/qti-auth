@@ -9,7 +9,7 @@ import {
   type AuthMode,
   type Identity,
 } from './identity.ts';
-import { type PermissionRegistry } from './permissions.ts';
+import type { PermissionRegistry } from './permissions.ts';
 import { type ErrorRegistry, KIT_ERRORS, type KitErrorCode, mergeErrors } from './problems.ts';
 
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
@@ -189,7 +189,9 @@ export function impliedErrors(route: RouteInfo): KitErrorCode[] {
   if (route.permissions.length > 0) codes.push('PERMISSION_DENIED');
   if (route.scopes.length > 0) codes.push('INSUFFICIENT_SCOPE');
   const { params, query, body } = route.request;
-  if (params ?? query ?? body) codes.push('VALIDATION_FAILED');
+  if (params !== undefined || query !== undefined || body !== undefined) {
+    codes.push('VALIDATION_FAILED');
+  }
   if (body) codes.push('INVALID_JSON', 'UNSUPPORTED_MEDIA_TYPE');
   return codes;
 }

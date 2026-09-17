@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { type Bus, publishWork, workSubject } from '@qtiauth/bus';
 import * as z from 'zod';
 
+import { canonicalLocale } from './locale.ts';
 import {
   EMAIL_TEMPLATES,
   type EmailPriority,
@@ -46,14 +47,6 @@ export class EmailRequestError extends Error {
     super(`Invalid ${template} email: ${issues.join(', ')}`);
     this.name = 'EmailRequestError';
     this.issues = issues;
-  }
-}
-
-function canonicalLocale(locale: string): string | undefined {
-  try {
-    return Intl.getCanonicalLocales(locale)[0];
-  } catch {
-    return undefined;
   }
 }
 

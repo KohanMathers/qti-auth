@@ -1,6 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
+import { deletedRows } from '@qtiauth/db';
 import type { AgeBand } from '@qtiauth/service-kit';
 import type { Kysely, Selectable } from 'kysely';
 
@@ -262,5 +263,5 @@ export async function sweepTokens(
     .deleteFrom('email_tokens')
     .where('expires_at', '<', new Date(options.now.getTime() - options.retention))
     .execute();
-  return result.reduce((total, row) => total + Number(row.numDeletedRows), 0);
+  return deletedRows(result);
 }

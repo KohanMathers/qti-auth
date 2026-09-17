@@ -1,9 +1,8 @@
-import { definePermissions, type ManifestRoute } from '@qtiauth/service-kit';
+import { definePermissions, type ManifestRoute, type ResolvedSession } from '@qtiauth/service-kit';
 import { describe, expect, it } from 'vitest';
 
 import { checkPolicy, identityFor, impliedGatewayErrors } from './policy.ts';
 import type { TableRoute } from './routes.ts';
-import type { ResolvedSession } from './sessions.ts';
 
 const NOW = Date.parse('2026-09-17T12:00:00Z');
 const permissions = definePermissions({

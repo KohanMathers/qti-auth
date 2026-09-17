@@ -92,7 +92,10 @@ export function startDiscovery(
 ): Discovery {
   const sub = bus.nc.subscribe(ANNOUNCE_SUBJECT, {
     callback: (error, msg) => {
-      if (error) return;
+      if (error) {
+        options.onInvalid(error);
+        return;
+      }
       let parsed;
       try {
         parsed = serviceAnnouncementSchema.safeParse(msg.json());

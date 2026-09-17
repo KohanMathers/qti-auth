@@ -321,14 +321,14 @@
           ]
         },
         "session_ttl": {
-          "description": "Maximum session lifetime. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "7d",
+          "description": "Maximum session lifetime. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },
         "idle_timeout": {
-          "description": "Session ends after this long without activity. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "30d",
+          "description": "Session ends after this long without activity. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }
@@ -446,14 +446,14 @@
               "maximum": 9007199254740991
             },
             "idle_timeout": {
-              "description": "Close idle connections after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "30s",
+              "description": "Close idle connections after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "connect_timeout": {
-              "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "10s",
+              "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -659,14 +659,14 @@
           "additionalProperties": false
         },
         "connect_timeout": {
-          "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "10s",
+          "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },
         "request_timeout": {
-          "description": "Default deadline for request/reply calls between services. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "5s",
+          "description": "Default deadline for request/reply calls between services. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },
@@ -683,20 +683,20 @@
               "maximum": 5
             },
             "events_max_age": {
-              "description": "Keep domain events in the stream for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "7d",
+              "description": "Keep domain events in the stream for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "work_max_age": {
-              "description": "Drop cron ticks and work-queue jobs nobody took after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "7d",
+              "description": "Drop cron ticks and work-queue jobs nobody took after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "duplicate_window": {
-              "description": "JetStream drops a message whose ID it has already seen within this window. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "2m",
+              "description": "JetStream drops a message whose ID it has already seen within this window. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -709,8 +709,8 @@
           "type": "object",
           "properties": {
             "poll_interval": {
-              "description": "Check the outbox for unsent events this often. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "1s",
+              "description": "Check the outbox for unsent events this often. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
@@ -722,8 +722,8 @@
               "maximum": 1000
             },
             "sent_retention": {
-              "description": "Delete published events from the outbox after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "1d",
+              "description": "Delete published events from the outbox after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -736,8 +736,8 @@
           "type": "object",
           "properties": {
             "ack_wait": {
-              "description": "Redeliver a message if a consumer neither acks nor extends it. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "30s",
+              "description": "Redeliver a message if a consumer neither acks nor extends it. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
@@ -749,20 +749,20 @@
               "maximum": 9007199254740991
             },
             "retry_delay": {
-              "description": "Delay before the first retry. Doubles with each attempt. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "1s",
+              "description": "Delay before the first retry. Doubles with each attempt. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "max_retry_delay": {
-              "description": "Longest delay between retries. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "5m",
+              "description": "Longest delay between retries. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "dedupe_retention": {
-              "description": "Remember processed event IDs for this long. Must be at least streams.events_max_age. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "14d",
+              "description": "Remember processed event IDs for this long. Must be at least streams.events_max_age. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -857,8 +857,8 @@
           "type": "object",
           "properties": {
             "check_timeout": {
-              "description": "Count a /readyz dependency check as failed if it takes longer than this. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "2s",
+              "description": "Count a /readyz dependency check as failed if it takes longer than this. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -886,8 +886,8 @@
               "maximum": 65535
             },
             "shutdown_timeout": {
-              "description": "On SIGTERM or SIGINT, wait this long for in-flight requests and background work before exiting anyway. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "15s",
+              "description": "On SIGTERM or SIGINT, wait this long for in-flight requests and background work before exiting anyway. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -900,14 +900,14 @@
           "type": "object",
           "properties": {
             "clock_tolerance": {
-              "description": "Allowed clock difference between the gateway and a service when checking internal identity token times. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "5s",
+              "description": "Allowed clock difference between the gateway and a service when checking internal identity token times. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "keys_refresh": {
-              "description": "Fetch the gateway's identity token public keys this often. Keys the service hasn't seen are fetched straight away. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "5m",
+              "description": "Fetch the gateway's identity token public keys this often. Keys the service hasn't seen are fetched straight away. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -987,14 +987,14 @@
           "additionalProperties": false
         },
         "connect_timeout": {
-          "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "5s",
+          "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },
         "command_timeout": {
-          "description": "Treat Valkey as unavailable when a command takes longer than this. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "1s",
+          "description": "Treat Valkey as unavailable when a command takes longer than this. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }
@@ -1026,8 +1026,8 @@
               "maximum": 9007199254740991
             },
             "upstream_timeout": {
-              "description": "Give up on a service response after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "30s",
+              "description": "Give up on a service response after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -1053,20 +1053,20 @@
           "type": "object",
           "properties": {
             "interval": {
-              "description": "Ask every service to announce itself this often. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "30s",
+              "description": "Ask every service to announce itself this often. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "expiry": {
-              "description": "Forget a service instance that hasn't announced itself for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "90s",
+              "description": "Forget a service instance that hasn't announced itself for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "startup_grace": {
-              "description": "After starting, wait this long for announcements before reporting services that aren't running. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "5s",
+              "description": "After starting, wait this long for announcements before reporting services that aren't running. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -1079,8 +1079,8 @@
           "type": "object",
           "properties": {
             "ttl": {
-              "description": "Keep a resolved session in Valkey for this long. Revocations and account changes clear it sooner. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "1m",
+              "description": "Keep a resolved session in Valkey for this long. Revocations and account changes clear it sooner. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -1098,14 +1098,20 @@
               "type": "string"
             },
             "rotate_after": {
-              "description": "Replace the signing key once it is this old. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "30d",
+              "description": "Replace the signing key once it is this old. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "retain_after_rotation": {
-              "description": "Keep publishing a replaced key for this long, so tokens it signed can still be checked. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "1h",
+              "description": "Keep publishing a replaced key for this long, so tokens it signed can still be checked. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "refresh": {
+              "default": "30s",
+              "description": "Reload signing keys from the store this often, so other gateway replicas pick up a rotation. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -1118,8 +1124,8 @@
           "type": "object",
           "properties": {
             "max_age": {
-              "description": "How long browsers remember to use HTTPS only. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "365d",
+              "description": "How long browsers remember to use HTTPS only. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
@@ -1728,14 +1734,14 @@
               "type": "string"
             },
             "connect_timeout": {
-              "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "10s",
+              "description": "Give up connecting after this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "send_timeout": {
-              "description": "Give up on a send when the server goes quiet for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "30s",
+              "description": "Give up on a send when the server goes quiet for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -1755,14 +1761,14 @@
               "maximum": 9007199254740991
             },
             "retry_delay": {
-              "description": "Delay before the first retry. Doubles with each attempt. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "10s",
+              "description": "Delay before the first retry. Doubles with each attempt. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             },
             "max_retry_delay": {
-              "description": "Longest delay between retries. Written as <integer><unit> (ms, s, m, h, d, w).",
               "default": "30m",
+              "description": "Longest delay between retries. Written as <integer><unit> (ms, s, m, h, d, w).",
               "type": "string",
               "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
             }
@@ -1778,8 +1784,8 @@
       "type": "object",
       "properties": {
         "step_up_window": {
-          "description": "Routes that need step-up accept a session that reached aal2 within this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "10m",
+          "description": "Routes that need step-up accept a session that reached aal2 within this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }
@@ -1868,14 +1874,14 @@
       "type": "object",
       "properties": {
         "ttl": {
-          "description": "A magic link works for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "15m",
+          "description": "A magic link works for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },
         "signup_ttl": {
-          "description": "After a new user opens their magic link, they have this long to enter their date of birth. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "30m",
+          "description": "After a new user opens their magic link, they have this long to enter their date of birth. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }
@@ -2085,20 +2091,20 @@
       "type": "object",
       "properties": {
         "delivery_logs": {
-          "description": "Keep email delivery log entries for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "30d",
+          "description": "Keep email delivery log entries for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },
         "sessions": {
-          "description": "Keep sessions and their bindings for this long after they expire or are revoked. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "30d",
+          "description": "Keep sessions and their bindings for this long after they expire or are revoked. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },
         "tokens": {
-          "description": "Keep magic-link and other emailed tokens for this long after they expire. Written as <integer><unit> (ms, s, m, h, d, w).",
           "default": "24h",
+          "description": "Keep magic-link and other emailed tokens for this long after they expire. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }

@@ -1,17 +1,20 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
-import type { AccountState, AgeBand } from '@qtiauth/service-kit';
+import { deletedRows } from '@qtiauth/db';
+import { hashSessionToken, type ResolvedSession } from '@qtiauth/service-kit';
 import type { Kysely } from 'kysely';
 
-import { type AgeBands, ageBand, ageOn } from './age.ts';
 import { dateOfBirthColumn } from './accounts.ts';
+import { type AgeBands, ageBand, ageOn } from './age.ts';
 import type { Database, RevocationReason } from './database.ts';
 import { sessionCreatedEvent, sessionRevokedEvent } from './events.ts';
-import { hashToken, newToken } from './tokens.ts';
+import { newToken } from './tokens.ts';
 
 export const MAX_USER_AGENT_LENGTH = 512;
 export const LAST_ACTIVE_RESOLUTION = 60_000;
+// Bound the eviction query; leftover extras go on the next sign-in.
+const EVICTION_LIMIT = 1_000;
 
 export interface SessionSettings {
   sessionTtl: number;
@@ -39,21 +42,6 @@ export interface CreatedSession {
   token: string;
   expiresAt: Date;
   evicted: string[];
-}
-
-export interface ResolvedSession {
-  session_id: string;
-  user_id: string;
-  account_state: AccountState;
-  permissions: string[];
-  restrictions: string[];
-  age_band: AgeBand;
-  parental_controls: null;
-  amr: string[];
-  acr: string;
-  step_up_at: string | null;
-  legal_acceptance_required: boolean;
-  expires_at: string;
 }
 
 export interface SessionListItem {
@@ -143,7 +131,7 @@ export async function createSession(
     .values({
       id: randomUUIDv7(),
       session_id: id,
-      token_hash: hashToken(token),
+      token_hash: hashSessionToken(token),
       cookie_scope: session.client.cookieScope,
     })
     .execute();
@@ -162,7 +150,7 @@ export async function createSession(
     .orderBy('created_at', 'desc')
     .orderBy('id', 'desc')
     .offset(settings.maxPerUser)
-    .limit(1_000)
+    .limit(EVICTION_LIMIT)
     .execute();
   const evicted = await revokeSessions(trx, {
     userId: session.userId,
@@ -296,5 +284,5 @@ export async function sweepSessions(
       ]),
     )
     .execute();
-  return result.reduce((total, row) => total + Number(row.numDeletedRows), 0);
+  return deletedRows(result);
 }

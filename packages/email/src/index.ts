@@ -8,6 +8,8 @@ export {
   queueEmail,
   type QueueEmailRequest,
 } from './queue.ts';
+export { escapeHtml } from './html.ts';
+export { canonicalLocale, isCanonicalLocale } from './locale.ts';
 export {
   BRAND_VARIABLES,
   defineEmailTemplates,

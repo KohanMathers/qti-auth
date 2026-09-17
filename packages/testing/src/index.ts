@@ -26,7 +26,7 @@ export interface Infra {
   postgres: StartedPostgreSqlContainer;
   valkey: StartedValkeyContainer;
   nats: StartedNatsContainer;
-  stop(): Promise<void>;
+  stop: () => Promise<void>;
 }
 
 export async function startInfra(): Promise<Infra> {
@@ -35,7 +35,7 @@ export async function startInfra(): Promise<Infra> {
     postgres,
     valkey,
     nats,
-    async stop() {
+    stop: async () => {
       await Promise.all([postgres.stop(), valkey.stop(), nats.stop()]);
     },
   };

@@ -1,3 +1,5 @@
+import { parseArgs } from 'node:util';
+
 import {
   type CliIo,
   type Command,
@@ -24,12 +26,22 @@ Prints this service's OpenAPI 3.1 document, including every error code each rout
 
 function printCommand(usage: string, render: () => unknown): Command {
   return (args, io) => {
-    if (args.includes('--help') || args.includes('-h')) {
-      io.stdout(usage);
-      return Promise.resolve(EXIT_OK);
-    }
-    if (args.length > 0) {
-      io.stderr(`Unexpected argument: ${args[0] ?? ''}\n\n${usage}`);
+    try {
+      const parsed = parseArgs({
+        args: [...args],
+        options: { help: { type: 'boolean', short: 'h' } },
+        allowPositionals: true,
+      });
+      if (parsed.values.help) {
+        io.stdout(usage);
+        return Promise.resolve(EXIT_OK);
+      }
+      if (parsed.positionals.length > 0) {
+        io.stderr(`Unexpected argument: ${parsed.positionals[0] ?? ''}\n\n${usage}`);
+        return Promise.resolve(EXIT_USAGE);
+      }
+    } catch (error) {
+      io.stderr(`${(error as Error).message}\n\n${usage}`);
       return Promise.resolve(EXIT_USAGE);
     }
     io.stdout(`${JSON.stringify(render(), null, 2)}\n`);

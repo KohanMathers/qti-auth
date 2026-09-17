@@ -9,12 +9,12 @@ import {
   type RpcServer,
   serveRpc,
 } from '@qtiauth/bus';
-import type { EventEnvelope } from '@qtiauth/events';
+import { type EventEnvelope, IDENTITY_EVENTS } from '@qtiauth/events';
 import type { Kysely, Transaction } from 'kysely';
 import * as z from 'zod';
 
 export const EXPORT_USER_METHOD = 'export_user';
-export const USER_DELETED_EVENT = 'qtiauth.identity.user.deleted.v1';
+export const USER_DELETED_EVENT = IDENTITY_EVENTS.userDeleted;
 export const ERASURE_CONSUMER = 'user_erasure';
 
 export interface ExportUserRequest {

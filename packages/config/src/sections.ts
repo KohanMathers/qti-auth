@@ -581,6 +581,10 @@ export const gateway = z
           '1h',
           'Keep publishing a replaced key for this long, so tokens it signed can still be checked.',
         ),
+        refresh: duration(
+          '30s',
+          'Reload signing keys from the store this often, so other gateway replicas pick up a rotation.',
+        ),
       })
       .prefault({})
       .describe('Signing keys for internal identity tokens (X-QTIAuth-Identity).'),

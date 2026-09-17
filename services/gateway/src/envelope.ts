@@ -5,6 +5,7 @@ import * as z from 'zod';
 const ALGORITHM = 'aes-256-gcm';
 const KEY_LENGTH = 32;
 const IV_LENGTH = 12;
+const TAG_LENGTH = 16;
 
 export const sealedSecretSchema = z.strictObject({
   alg: z.literal('A256GCM'),
@@ -68,8 +69,8 @@ export function open(sealed: SealedSecret, kek: Buffer, aad: string): Buffer {
   const dek = decrypt(
     kek,
     wrapped.subarray(0, IV_LENGTH),
-    wrapped.subarray(IV_LENGTH, IV_LENGTH + 16),
-    wrapped.subarray(IV_LENGTH + 16),
+    wrapped.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH),
+    wrapped.subarray(IV_LENGTH + TAG_LENGTH),
     aad,
   );
   return decrypt(

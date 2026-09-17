@@ -26,17 +26,17 @@ const sessionSchema = z.object({
   expires_at: z.iso.datetime().describe('When the session ends if it stays idle.'),
 });
 
-function signedIn(identity: { sub: string | null; sid: string | null }): {
+export function signedIn(identity: { sub: string | null; sid: string | null }): {
   userId: string;
   sessionId: string;
 } {
   if (identity.sub === null || identity.sid === null) {
-    throw new Error('Session routes need a signed-in identity');
+    throw new ProblemError('ACCOUNT_NOT_FOUND');
   }
   return { userId: identity.sub, sessionId: identity.sid };
 }
 
-async function revoke(
+export async function revoke(
   ctx: Context,
   options: {
     userId: string;
@@ -65,6 +65,7 @@ export function sessionRoutes(router: Router<Context>): void {
     rate_limit: 'global',
     request: { query: paginationQuery({ defaultLimit: 20, maxLimit: 100 }) },
     responses: { 200: { description: 'Active sessions', schema: pageSchema(sessionSchema) } },
+    errors: ['ACCOUNT_NOT_FOUND'],
     handler: async ({ ctx, identity, query }) => {
       const { userId, sessionId } = signedIn(identity);
       const idleTimeout = ctx.config.cookies.idle_timeout;
@@ -110,7 +111,7 @@ export function sessionRoutes(router: Router<Context>): void {
     rate_limit: 'global',
     request: { params: z.object({ session_id: z.uuid() }) },
     responses: { 204: { description: 'The session has ended on every surface' } },
-    errors: ['SESSION_NOT_FOUND'],
+    errors: ['ACCOUNT_NOT_FOUND', 'SESSION_NOT_FOUND'],
     handler: async ({ ctx, identity, params, log }) => {
       const { userId, sessionId } = signedIn(identity);
       const revoked = await revoke(ctx, {
@@ -143,6 +144,7 @@ export function sessionRoutes(router: Router<Context>): void {
         schema: z.object({ revoked: z.int().describe('How many sessions ended.') }),
       },
     },
+    errors: ['ACCOUNT_NOT_FOUND'],
     handler: async ({ ctx, identity, log }) => {
       const { userId, sessionId } = signedIn(identity);
       const revoked = await revoke(ctx, { userId, reason: 'revoked', except: sessionId });
@@ -161,6 +163,7 @@ export function sessionRoutes(router: Router<Context>): void {
     allow_pending_legal: true,
     rate_limit: 'global',
     responses: { 204: { description: 'Every session has ended. The session cookie is cleared.' } },
+    errors: ['ACCOUNT_NOT_FOUND'],
     handler: async ({ ctx, identity, log }) => {
       const { userId } = signedIn(identity);
       const revoked = await revoke(ctx, { userId, reason: 'revoked' });

@@ -1,3 +1,4 @@
+import { deletedRows } from '@qtiauth/db';
 import type { EmailCategory, EmailPriority } from '@qtiauth/email';
 import { type Generated, type Kysely, sql } from 'kysely';
 
@@ -90,15 +91,21 @@ export async function exportDeliveries(db: Kysely<Database>, userId: string) {
 }
 
 export async function eraseDeliveries(db: Kysely<Database>, userId: string): Promise<number> {
-  const result = await db.deleteFrom('email_deliveries').where('user_id', '=', userId).execute();
-  return result.reduce((total, row) => total + Number(row.numDeletedRows), 0);
+  return deletedRows(
+    await db.deleteFrom('email_deliveries').where('user_id', '=', userId).execute(),
+  );
 }
 
-export async function sweepDeliveries(db: Kysely<Database>, retention: number): Promise<number> {
-  const result = await db
-    .deleteFrom('email_deliveries')
-    .where('created_at', '<', sql<Date>`now() - make_interval(secs => ${retention / 1000})`)
-    .where('status', '!=', 'retrying')
-    .execute();
-  return result.reduce((total, row) => total + Number(row.numDeletedRows), 0);
+export async function sweepDeliveries(
+  db: Kysely<Database>,
+  options: { retention: number; now: Date },
+): Promise<number> {
+  const cutoff = new Date(options.now.getTime() - options.retention);
+  return deletedRows(
+    await db
+      .deleteFrom('email_deliveries')
+      .where('created_at', '<', cutoff)
+      .where('status', '!=', 'retrying')
+      .execute(),
+  );
 }

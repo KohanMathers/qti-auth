@@ -17,13 +17,13 @@
     "@qtiauth/config": "workspace:*",
     "@qtiauth/db": "workspace:*",
     "@qtiauth/email": "workspace:*",
+    "@qtiauth/events": "workspace:*",
     "@qtiauth/observability": "workspace:*",
     "@qtiauth/service-kit": "workspace:*",
     "kysely": "0.29.6",
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@qtiauth/events": "workspace:*",
     "@qtiauth/gateway": "workspace:*",
     "@qtiauth/testing": "workspace:*"
   }

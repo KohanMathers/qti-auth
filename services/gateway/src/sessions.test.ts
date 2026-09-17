@@ -3,17 +3,19 @@ import { randomBytes } from 'node:crypto';
 import type { RpcResult } from '@qtiauth/bus';
 import { sections } from '@qtiauth/config';
 import { newEventId } from '@qtiauth/events';
+import {
+  hashSessionToken,
+  type ResolvedSession,
+  type ResolveSessionRequest,
+} from '@qtiauth/service-kit';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   clearSessionCookie,
   createSessionResolver,
-  hashToken,
   invalidationTargets,
   memorySessionCache,
   readCookie,
-  type ResolvedSession,
-  type ResolveSessionRequest,
   type SessionCache,
   sessionCookieName,
 } from './sessions.ts';
@@ -98,7 +100,7 @@ describe('createSessionResolver', () => {
       session: session(),
     });
     expect(rpc).toHaveBeenCalledExactlyOnceWith({
-      binding_token_hash: hashToken(token),
+      binding_token_hash: hashSessionToken(token),
       cookie_scope: 'me.example.com',
     });
     expect(JSON.stringify(rpc.mock.calls)).not.toContain(token);

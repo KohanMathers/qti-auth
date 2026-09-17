@@ -55,6 +55,8 @@ export async function relayOutbox<DB>(
     `.execute(trx);
     if (!lock[0]?.locked) return { published: 0, failure: undefined };
 
+    // Hold the lock across publish so two relays can't send the same row. JetStream
+    // dedupes on event_id if we crash after publish and send the row again.
     const { rows } = await sql<{ id: string; subject: string; envelope: EventEnvelope }>`
       select id, subject, envelope from outbox
       where sent_at is null
@@ -116,7 +118,7 @@ export function startOutboxRelay<DB>(
         published = await untraced(() => relayOutbox(db, bus.js, { batchSize, metrics }));
         if (published < batchSize) {
           const stats = await untraced(() => outboxStats(db));
-          metrics.outboxBacklog(bus.service, stats.backlog, stats.oldestAgeSeconds);
+          metrics.outboxBacklog(stats.backlog, stats.oldestAgeSeconds);
         }
       } catch (error) {
         options.onError(error);

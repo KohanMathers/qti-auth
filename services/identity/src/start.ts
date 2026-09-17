@@ -1,7 +1,13 @@
 import { consumeCron, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
 import { untraced } from '@qtiauth/observability';
-import type { StartServiceOptions, Stoppable } from '@qtiauth/service-kit';
-import * as z from 'zod';
+import {
+  RESOLVE_SESSION_METHOD,
+  resolveSessionRequestSchema,
+  type ResolveSessionResponse,
+  type StartServiceOptions,
+  type Stoppable,
+  unwind,
+} from '@qtiauth/service-kit';
 
 import { countAccountsByState } from './accounts.ts';
 import type { Database } from './database.ts';
@@ -9,17 +15,11 @@ import { eraseUser, exportUser } from './data-rights.ts';
 import { sweepTokens } from './magic-links.ts';
 import { identityMetrics } from './metrics.ts';
 import { type Context, type definition, router } from './service.ts';
-import { accountOrigin } from './settings.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
+import { accountOrigin } from './settings.ts';
 
 export const RETENTION_JOB = 'retention.sweep';
-export const RESOLVE_SESSION_METHOD = 'resolve_session';
 export const STATS_INTERVAL = 60_000;
-
-const resolveSessionRequest = z.object({
-  binding_token_hash: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-  cookie_scope: z.string().max(253),
-});
 
 export interface IdentityOptions {
   statsInterval?: number;
@@ -57,14 +57,15 @@ export function identityService(options: IdentityOptions = {}) {
     }),
     start: async (ctx: Context) => {
       const { config, log, bus, db } = ctx;
+      // Emails link to the account surface; fail now rather than on the first send.
       accountOrigin(config);
       const stack: Stoppable[] = [];
       try {
         stack.push(
-          serveRpc(bus, {
+          serveRpc<unknown, ResolveSessionResponse>(bus, {
             method: RESOLVE_SESSION_METHOD,
             handler: async (request) => {
-              const parsed = resolveSessionRequest.safeParse(request);
+              const parsed = resolveSessionRequestSchema.safeParse(request);
               if (!parsed.success) {
                 throw new RpcError(
                   'bad_request',
@@ -117,7 +118,11 @@ export function identityService(options: IdentityOptions = {}) {
         log.info('identity started');
         return stack;
       } catch (error) {
-        for (const task of stack.reverse()) await task.stop();
+        await unwind(stack.splice(0).map((task) => () => task.stop())).catch(
+          (cleanupError: unknown) => {
+            log.error('cleanup after failed start also failed', { error: cleanupError });
+          },
+        );
         throw error;
       }
     },

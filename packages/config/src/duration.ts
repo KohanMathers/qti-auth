@@ -11,6 +11,10 @@ const UNIT_MS = {
 
 const DURATION_PATTERN = /^(\d+)(ms|s|m|h|d|w)$/;
 
+function durationDescription(description: string): string {
+  return `${description} Written as <integer><unit> (ms, s, m, h, d, w).`;
+}
+
 export function parseDuration(value: string): number | undefined {
   const match = DURATION_PATTERN.exec(value);
   if (!match) return undefined;
@@ -24,18 +28,23 @@ export function requiredDuration(description: string) {
     .string()
     .regex(DURATION_PATTERN, 'Must be a duration like 30s, 15m, 12h or 7d')
     .transform((value, ctx) => {
-      const ms = parseDuration(value);
-      if (ms === undefined) {
+      const match = DURATION_PATTERN.exec(value);
+      if (!match) return z.NEVER;
+      const [, amount, unit] = match as unknown as [string, string, keyof typeof UNIT_MS];
+      const ms = Number(amount) * UNIT_MS[unit];
+      if (ms <= 0) {
         ctx.issues.push({ code: 'custom', message: 'Duration must be positive', input: value });
+        return z.NEVER;
+      }
+      if (!Number.isSafeInteger(ms)) {
+        ctx.issues.push({ code: 'custom', message: 'Duration is too large', input: value });
         return z.NEVER;
       }
       return ms;
     })
-    .describe(`${description} Written as <integer><unit> (ms, s, m, h, d, w).`);
+    .describe(durationDescription(description));
 }
 
 export function duration(defaultValue: string, description: string) {
-  return requiredDuration(description)
-    .prefault(defaultValue)
-    .describe(`${description} Written as <integer><unit> (ms, s, m, h, d, w).`);
+  return requiredDuration(description).prefault(defaultValue);
 }

@@ -10,11 +10,14 @@ import {
 } from '@qtiauth/bus';
 import { checkOutboxContract } from '@qtiauth/bus/testing';
 import { sections } from '@qtiauth/config';
-import { loadEventCatalog } from '@qtiauth/events';
+import { IDENTITY_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing';
 import {
   EXPORT_USER_METHOD,
+  hashSessionToken,
   type Identity,
+  RESOLVE_SESSION_METHOD,
+  RESOLVE_SESSION_SERVICE,
   REVOKED_SESSIONS_HEADER,
   type RunningService,
   SESSION_CLEAR_HEADER,
@@ -105,9 +108,9 @@ interface SignedIn {
 async function resolve(token: string) {
   const result = await rpcRequest<{ session: { session_id: string } | null }>(
     gateway,
-    'identity',
-    'resolve_session',
-    { binding_token_hash: hashToken(token), cookie_scope: HOST },
+    RESOLVE_SESSION_SERVICE,
+    RESOLVE_SESSION_METHOD,
+    { binding_token_hash: hashSessionToken(token), cookie_scope: HOST },
   );
   if (result.status !== 'ok') throw new Error(`resolve_session failed: ${result.status}`);
   return result.data.session;
@@ -199,8 +202,8 @@ describe('signing up and signing in', () => {
     const signedUp = await signUp('new@example.com', '2011-01-01');
     expect(signedUp.response.headers.get(SESSION_EXPIRES_HEADER)).toBeTruthy();
 
-    const session = await rpcRequest(gateway, 'identity', 'resolve_session', {
-      binding_token_hash: hashToken(signedUp.token),
+    const session = await rpcRequest(gateway, RESOLVE_SESSION_SERVICE, RESOLVE_SESSION_METHOD, {
+      binding_token_hash: hashSessionToken(signedUp.token),
       cookie_scope: HOST,
     });
     expect(session).toMatchObject({
@@ -216,8 +219,8 @@ describe('signing up and signing in', () => {
         },
       },
     });
-    const otherHost = await rpcRequest(gateway, 'identity', 'resolve_session', {
-      binding_token_hash: hashToken(signedUp.token),
+    const otherHost = await rpcRequest(gateway, RESOLVE_SESSION_SERVICE, RESOLVE_SESSION_METHOD, {
+      binding_token_hash: hashSessionToken(signedUp.token),
       cookie_scope: 'elsewhere.example.com',
     });
     expect(otherHost).toMatchObject({ status: 'ok', data: { session: null } });
@@ -405,9 +408,9 @@ describe('events, retention and data rights', () => {
     const events = await checkOutboxContract(identity.context.db, await loadEventCatalog());
     expect(new Set(events.map((event) => event.type))).toEqual(
       new Set([
-        'qtiauth.identity.user.created.v1',
-        'qtiauth.identity.session.created.v1',
-        'qtiauth.identity.session.revoked.v1',
+        IDENTITY_EVENTS.userCreated,
+        IDENTITY_EVENTS.sessionCreated,
+        IDENTITY_EVENTS.sessionRevoked,
       ]),
     );
   });

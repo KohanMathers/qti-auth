@@ -167,7 +167,7 @@ describe('transactional outbox', () => {
     );
     try {
       await vi.waitFor(() => {
-        expect(metrics.outboxBacklog).toHaveBeenCalledWith('identity', 0, 0);
+        expect(metrics.outboxBacklog).toHaveBeenCalledWith(0, 0);
       });
       const event = await db.transaction().execute((trx) => writeEvent(trx, banned('u7')));
       relay.wake();

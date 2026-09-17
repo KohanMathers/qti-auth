@@ -1,14 +1,6 @@
-const ESCAPES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
+import { escapeHtml } from '@qtiauth/email';
 
-export function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ESCAPES[char] ?? char);
-}
+export { escapeHtml };
 
 export interface HtmlPage {
   title: string;

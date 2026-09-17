@@ -1,6 +1,7 @@
 export {
   ANNOUNCE_SUBJECT,
   type Announcer,
+  type AnnouncerOptions,
   DISCOVER_SUBJECT,
   type ServiceAnnouncement,
   serviceAnnouncementSchema,
@@ -22,8 +23,12 @@ export {
   createHttpApp,
   type HttpAppOptions,
   type HttpMetrics,
+  isJsonRequest,
+  parseInput,
   prometheusHttpMetrics,
   REQUEST_ID_HEADER,
+  requestIdOf,
+  toResponse,
 } from './http.ts';
 export {
   ACCOUNT_STATES,
@@ -45,6 +50,7 @@ export {
   type IdentityTokenFailure,
   type JsonWebKeySet,
   type ParentalControls,
+  parentalControlsSchema,
   type PublicJwk,
   publicKeyFromJwk,
   signIdentityToken,
@@ -132,6 +138,19 @@ export {
   type Router,
   type RouterOptions,
 } from './routes.ts';
+export { closeServer, listen, unwind } from './server.ts';
+export {
+  hashSessionToken,
+  RESOLVE_SESSION_METHOD,
+  RESOLVE_SESSION_SERVICE,
+  type ResolvedSession,
+  resolvedSessionSchema,
+  type ResolveSessionRequest,
+  resolveSessionRequestSchema,
+  type ResolveSessionResponse,
+  resolveSessionResponseSchema,
+  SESSION_TOKEN_HASH,
+} from './session-resolution.ts';
 export {
   REVOKED_SESSIONS_HEADER,
   SESSION_CLEAR_HEADER,

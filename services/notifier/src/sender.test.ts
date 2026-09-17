@@ -176,6 +176,24 @@ describe('createEmailSender', () => {
     expect(provider.send).toHaveBeenCalledOnce();
   });
 
+  it('does not retry after a successful send if the delivery log write fails', async () => {
+    const { sender, provider, deliveries, logs } = setup(() =>
+      Promise.resolve({ provider_message_id: '<abc@example.com>' }),
+    );
+    deliveries.record = () => Promise.reject(new Error('db unavailable'));
+    const email = job();
+
+    await sender(message(email));
+
+    expect(provider.send).toHaveBeenCalledOnce();
+    expect(logs.records()).toContainEqual(
+      expect.objectContaining({
+        level: 'error',
+        message: 'email sent but delivery was not recorded',
+      }),
+    );
+  });
+
   it('rejects jobs it could never send', async () => {
     const { sender, provider } = setup(() =>
       Promise.resolve({ provider_message_id: '<abc@example.com>' }),

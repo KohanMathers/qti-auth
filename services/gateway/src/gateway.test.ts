@@ -5,9 +5,12 @@ import { createLogger } from '@qtiauth/observability';
 import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing';
 import {
   AUTH_MODES,
+  createServiceRouter,
+  hashSessionToken,
   IDENTITY_HEADER,
   type ManifestRoute,
   openApiDocument,
+  type ResolvedSession,
   REVOKED_SESSIONS_HEADER,
   type RouteManifest,
   SESSION_CLEAR_HEADER,
@@ -17,6 +20,7 @@ import {
   verifyIdentityToken,
 } from '@qtiauth/service-kit';
 import { describe, expect, it } from 'vitest';
+import * as z from 'zod';
 
 import { trustedProxies } from './client-ip.ts';
 import { allowedOrigins } from './cors.ts';
@@ -29,13 +33,8 @@ import { mergeOpenApi } from './openapi.ts';
 import type { ForwardRequest, ForwardResult } from './proxy.ts';
 import { createRateLimiter, memoryRateLimitStore } from './rate-limit.ts';
 import { buildRouteTable } from './routes.ts';
-import { router } from './service.ts';
-import {
-  createSessionResolver,
-  hashToken,
-  memorySessionCache,
-  type ResolvedSession,
-} from './sessions.ts';
+import { definition, type LocalContext, router } from './service.ts';
+import { createSessionResolver, memorySessionCache } from './sessions.ts';
 import { resolveSurfaces } from './surfaces.ts';
 
 const HOST = 'me.example.com';
@@ -99,6 +98,7 @@ interface SetupOptions {
   session?: ResolvedSession | null;
   rateLimits?: unknown;
   manifests?: RouteManifest[];
+  local?: typeof router;
   upstream?: (request: ForwardRequest) => ForwardResult;
 }
 
@@ -133,10 +133,11 @@ async function setup(options: SetupOptions = {}) {
     metrics: { checked: () => undefined },
     onStoreError: () => undefined,
   });
+  const local = options.local ?? router;
   const table = buildRouteTable({
     surfaces,
     rateLimits: rateLimiter.policies,
-    manifests: [router.manifest(), ...(options.manifests ?? [identityManifest])],
+    manifests: [local.manifest(), ...(options.manifests ?? [identityManifest])],
   });
   const forwarded: ForwardRequest[] = [];
   const recorded: { route: string; status: number }[] = [];
@@ -167,12 +168,14 @@ async function setup(options: SetupOptions = {}) {
         resolves.push(request.binding_token_hash);
         return Promise.resolve({
           status: 'ok',
-          data: { session: request.binding_token_hash === hashToken(TOKEN) ? resolved : null },
+          data: {
+            session: request.binding_token_hash === hashSessionToken(TOKEN) ? resolved : null,
+          },
         });
       },
     }),
     signingKey: () => keyring.signingKey(),
-    local: router,
+    local,
     localContext: (surface) => ({
       surface,
       health: () =>
@@ -468,6 +471,43 @@ describe('gateway handler', () => {
     expect((await request('/api/v1/meta/features')).status).toBe(429);
   });
 
+  it('parses params, query and body on local gateway routes', async () => {
+    const local = createServiceRouter<LocalContext>(definition);
+    local.route({
+      method: 'POST',
+      path: '/api/v1/echo/:name',
+      operation_id: 'echo',
+      summary: 'Echo',
+      tags: ['meta'],
+      auth: 'none',
+      rate_limit: 'global',
+      request: {
+        params: z.object({ name: z.string() }),
+        query: z.object({ n: z.coerce.number() }),
+        body: z.object({ extra: z.string() }),
+      },
+      responses: {
+        200: {
+          description: 'Echo',
+          schema: z.object({ name: z.string(), n: z.number(), extra: z.string() }),
+        },
+      },
+      handler: ({ params, query, body }) =>
+        Promise.resolve({
+          status: 200 as const,
+          body: { name: params.name, n: query.n, extra: body.extra },
+        }),
+    });
+    const { request } = await setup({ local, manifests: [] });
+    const response = await request('/api/v1/echo/sam?n=3', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ extra: 'x' }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ name: 'sam', n: 3, extra: 'x' });
+  });
+
   it('sets the session cookie identity asks for and hides the headers it used', async () => {
     const issued = randomBytes(32).toString('base64url');
     const { request } = await setup({
@@ -555,7 +595,7 @@ describe('gateway handler', () => {
     expect(logs.lines.length).toBeGreaterThan(0);
     assertLogsScrubbed(logs.lines, [
       TOKEN,
-      hashToken(TOKEN),
+      hashSessionToken(TOKEN),
       'sekrit-bearer',
       'secret-query',
       forwarded[0]?.headers.get(IDENTITY_HEADER) ?? 'missing',

@@ -2,7 +2,13 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { QtiauthConfig } from '@qtiauth/config';
-import { BRAND_VARIABLES, type EmailTemplateDefinition, templateVariables } from '@qtiauth/email';
+import {
+  BRAND_VARIABLES,
+  type EmailTemplateDefinition,
+  escapeHtml,
+  isCanonicalLocale,
+  templateVariables,
+} from '@qtiauth/email';
 import mjml2html from 'mjml';
 
 export const DEFAULT_TEMPLATES_DIR = join(import.meta.dirname, '../templates/email');
@@ -80,22 +86,7 @@ export function brandFromConfig(branding: QtiauthConfig['branding']): Brand {
   };
 }
 
-export function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function isLocale(value: string): boolean {
-  try {
-    return Intl.getCanonicalLocales(value)[0] === value;
-  } catch {
-    return false;
-  }
-}
+export { escapeHtml };
 
 function lineOf(source: string, index: number): number {
   return source.slice(0, index).split('\n').length;
@@ -145,14 +136,14 @@ async function readLocaleDirs(dir: string, issues: string[]): Promise<string[]> 
       .filter((entry) => !entry.name.startsWith('.'))
       .sort((a, b) => (a.name < b.name ? -1 : 1))
       .flatMap((entry) => {
-        if (entry.isDirectory() && isLocale(entry.name)) return [entry.name];
+        if (entry.isDirectory() && isCanonicalLocale(entry.name)) return [entry.name];
         issues.push(
           `${join(dir, entry.name)}: must be a directory named after a locale, like en-GB`,
         );
         return [];
       });
   } catch (error) {
-    if ((error as { code?: string }).code === 'ENOENT') return [];
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw error;
   }
 }

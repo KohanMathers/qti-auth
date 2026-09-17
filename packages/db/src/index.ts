@@ -18,6 +18,7 @@ export {
   planMigrations,
 } from './migrations.ts';
 export { ProvisionError, provisionRoles } from './provision.ts';
+export { deletedRows } from './result.ts';
 export {
   migrateUpCommand,
   PendingMigrationsError,

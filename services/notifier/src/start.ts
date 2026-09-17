@@ -1,9 +1,9 @@
 import { dirname, resolve } from 'node:path';
 
 import { consumeCron, consumeWork, InvalidMessageError, pruneBusTables } from '@qtiauth/bus';
-import { type QtiauthConfig, resolveConfigPath } from '@qtiauth/config';
+import type { QtiauthConfig } from '@qtiauth/config';
 import { EMAIL_PRIORITIES, EMAIL_TEMPLATES, emailQueue } from '@qtiauth/email';
-import type { StartServiceOptions, Stoppable } from '@qtiauth/service-kit';
+import { type StartServiceOptions, type Stoppable, unwind } from '@qtiauth/service-kit';
 
 import {
   type Database,
@@ -53,7 +53,6 @@ export function loadConfiguredTemplates(
 }
 
 export function notifierService(options: NotifierOptions = {}) {
-  const configDir = options.configDir ?? dirname(resolveConfigPath(process.env));
   return {
     router,
     dataRights: ({ db }) => ({
@@ -64,6 +63,7 @@ export function notifierService(options: NotifierOptions = {}) {
     }),
     start: async (ctx: Context) => {
       const { config, log, bus, db } = ctx;
+      const configDir = options.configDir ?? dirname(ctx.config_path);
       const templates = await loadConfiguredTemplates(
         config,
         configDir,
@@ -120,7 +120,10 @@ export function notifierService(options: NotifierOptions = {}) {
             job: RETENTION_JOB,
             metrics: ctx.busMetrics,
             handler: async () => {
-              const deliveries = await sweepDeliveries(db, config.retention.delivery_logs);
+              const deliveries = await sweepDeliveries(db, {
+                retention: config.retention.delivery_logs,
+                now: new Date(),
+              });
               const pruned = await pruneBusTables(db, config.bus);
               log.info('retention sweep finished', {
                 email_deliveries: deliveries,
@@ -141,7 +144,11 @@ export function notifierService(options: NotifierOptions = {}) {
         });
         return stack;
       } catch (error) {
-        for (const task of stack.reverse()) await task.stop();
+        await unwind(stack.splice(0).map((task) => () => task.stop())).catch(
+          (cleanupError: unknown) => {
+            log.error('cleanup after failed start also failed', { error: cleanupError });
+          },
+        );
         throw error;
       }
     },

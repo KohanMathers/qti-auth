@@ -399,6 +399,9 @@ importers:
       '@qtiauth/config':
         specifier: workspace:*
         version: link:../config
+      '@qtiauth/observability':
+        specifier: workspace:*
+        version: link:../observability
       iovalkey:
         specifier: 0.4.0
         version: 0.4.0
@@ -458,6 +461,9 @@ importers:
       '@qtiauth/email':
         specifier: workspace:*
         version: link:../../packages/email
+      '@qtiauth/events':
+        specifier: workspace:*
+        version: link:../../packages/events
       '@qtiauth/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -471,9 +477,6 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
-      '@qtiauth/events':
-        specifier: workspace:*
-        version: link:../../packages/events
       '@qtiauth/gateway':
         specifier: workspace:*
         version: link:../gateway

@@ -16,7 +16,7 @@ describe('prometheusBusMetrics', () => {
     bus.consumed('notifier-bans', subject, 'processed');
     bus.redelivered('notifier-bans', subject);
     bus.consumerLag('notifier-bans', 4);
-    bus.outboxBacklog('identity', 3, 12.5);
+    bus.outboxBacklog(3, 12.5);
     bus.rpcRequest('qtiauth.rpc.games.export_user', 'no_responders', 0.002);
     bus.cronRun('retention.sweep', 'failed', 1.5);
 

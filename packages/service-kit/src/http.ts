@@ -23,7 +23,13 @@ import {
 import type { OpenApiDocument } from './openapi.ts';
 import { missingPermissions } from './permissions.ts';
 import { type ErrorRegistry, problemDetails, ProblemError, problemResponse } from './problems.ts';
-import { impliedErrors, type RegisteredRoute, type Router } from './routes.ts';
+import {
+  type HandlerResult,
+  impliedErrors,
+  type RegisteredRoute,
+  type ResponseMap,
+  type Router,
+} from './routes.ts';
 
 export const REQUEST_ID_HEADER = 'X-Request-Id';
 
@@ -81,9 +87,13 @@ export function prometheusHttpMetrics(metrics: Metrics): HttpMetrics {
   };
 }
 
-function requestIdOf(request: Request): string {
+export function requestIdOf(request: Request): string {
   const header = request.headers.get(REQUEST_ID_HEADER);
   return header !== null && REQUEST_ID.test(header) ? header : randomUUID();
+}
+
+export function isJsonRequest(request: Request): boolean {
+  return JSON_CONTENT_TYPE.test(request.headers.get('content-type') ?? '');
 }
 
 function issuesOf(location: ValidationIssue['location'], error: z.ZodError): ValidationIssue[] {
@@ -104,11 +114,12 @@ function queryObject(url: URL): Record<string, string | string[]> {
   return query;
 }
 
-async function readBody(request: Request): Promise<unknown> {
-  if (!JSON_CONTENT_TYPE.test(request.headers.get('content-type') ?? '')) {
+async function jsonBody(request: Request, raw?: Uint8Array | null): Promise<unknown> {
+  if (!isJsonRequest(request)) {
     throw new ProblemError('UNSUPPORTED_MEDIA_TYPE');
   }
-  const text = await request.text();
+  const text =
+    raw === undefined ? await request.text() : raw === null ? '' : new TextDecoder().decode(raw);
   try {
     return JSON.parse(text);
   } catch {
@@ -157,10 +168,11 @@ function checkPolicy(
   }
 }
 
-async function parseInput(
-  route: RegisteredRoute<unknown>,
+export async function parseInput(
+  route: Pick<RegisteredRoute<unknown>, 'request'>,
   request: Request,
   params: Record<string, string>,
+  rawBody?: Uint8Array | null,
 ) {
   const issues: ValidationIssue[] = [];
   const parse = (
@@ -179,7 +191,7 @@ async function parseInput(
     params: parse('params', route.request.params, params),
     query: parse('query', route.request.query, queryObject(new URL(request.url))),
     body: route.request.body
-      ? parse('body', route.request.body, await readBody(request))
+      ? parse('body', route.request.body, await jsonBody(request, rawBody))
       : undefined,
   };
   if (issues.length > 0) {
@@ -188,7 +200,7 @@ async function parseInput(
   return input;
 }
 
-function toResponse(result: Awaited<ReturnType<RegisteredRoute<unknown>['handler']>>): Response {
+export function toResponse(result: HandlerResult<ResponseMap>): Response {
   if (result instanceof Response) return result;
   const headers = new Headers(result.headers);
   if ('body' in result) return Response.json(result.body, { status: result.status, headers });

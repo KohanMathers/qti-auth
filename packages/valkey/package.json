@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@qtiauth/config": "workspace:*",
+    "@qtiauth/observability": "workspace:*",
     "iovalkey": "0.4.0"
   },
   "devDependencies": {

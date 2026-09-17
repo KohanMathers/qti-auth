@@ -6,9 +6,8 @@ import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
 import { magicLinkEnabled, sendMagicLink, signup, verify } from './flows.ts';
 import { NO_STORE, sessionHeaders, signedOutHeaders } from './headers.ts';
 import { isCanonicalLocale, preferredLocale } from './locale.ts';
-import { identityMetrics } from './metrics.ts';
 import type { Context } from './service.ts';
-import { revokeSessions } from './sessions.ts';
+import { revoke, signedIn } from './session-routes.ts';
 
 export const RETURN_TO = /^\/(?![/\\])[^\s\\]*$/;
 
@@ -239,13 +238,7 @@ export function authRoutes(router: Router<Context>): void {
       const { sub: userId, sid: sessionId } = identity;
       let revoked: string[] = [];
       if (userId !== null && sessionId !== null) {
-        revoked = await ctx.db
-          .transaction()
-          .execute((trx) =>
-            revokeSessions(trx, { userId, reason: 'logout', now: new Date(), only: [sessionId] }),
-          );
-        ctx.outbox.wake();
-        identityMetrics(ctx.metrics).sessionsRevoked('logout', revoked.length);
+        revoked = await revoke(ctx, { userId, reason: 'logout', only: [sessionId] });
         log.info('signed out', { session_id: sessionId });
       }
       return { status: 204, headers: signedOutHeaders(revoked) };
@@ -266,8 +259,9 @@ export function authRoutes(router: Router<Context>): void {
     responses: { 200: { description: 'The account and current session', schema: meSchema } },
     errors: ['ACCOUNT_NOT_FOUND'],
     handler: async ({ ctx, identity }) => {
-      const account = identity.sub === null ? undefined : await findAccount(ctx.db, identity.sub);
-      if (!account || account.state === 'deleted' || identity.sid === null) {
+      const { userId, sessionId } = signedIn(identity);
+      const account = await findAccount(ctx.db, userId);
+      if (!account || account.state === 'deleted') {
         throw new ProblemError('ACCOUNT_NOT_FOUND');
       }
       return {
@@ -281,7 +275,7 @@ export function authRoutes(router: Router<Context>): void {
           age_band: ageBand(ageOn(account.date_of_birth, new Date()), ctx.config.age.bands),
           locale: account.locale,
           created_at: account.created_at.toISOString(),
-          session: { id: identity.sid, amr: identity.amr, acr: identity.acr },
+          session: { id: sessionId, amr: identity.amr, acr: identity.acr },
         },
       };
     },

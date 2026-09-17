@@ -1,15 +1,19 @@
 import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
 
 import { type Http2Bindings, type HttpBindings, serve } from '@hono/node-server';
 import { consumeCron, consumeIdempotentEvents, rpcRequest, serveRpc } from '@qtiauth/bus';
 import {
+  closeServer,
   IDENTITY_KEYS_METHOD,
+  listen,
   OPENAPI_METHOD,
   type OpenApiDocument,
   openApiDocument,
+  RESOLVE_SESSION_METHOD,
+  RESOLVE_SESSION_SERVICE,
   type StartServiceOptions,
   type Stoppable,
+  unwind,
 } from '@qtiauth/service-kit';
 import { closeValkey, connectValkey, type Valkey, valkeyHealthCheck } from '@qtiauth/valkey';
 
@@ -42,8 +46,6 @@ import {
   createSessionResolver,
   invalidationTargets,
   prometheusSessionMetrics,
-  RESOLVE_SESSION_METHOD,
-  RESOLVE_SESSION_SERVICE,
   SESSION_EVENTS,
   type SessionCache,
   valkeySessionCache,
@@ -76,43 +78,13 @@ export class GatewayConfigError extends Error {
   }
 }
 
-function listen(server: Server): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const done = () => {
-      server.off('error', reject);
-      resolve((server.address() as AddressInfo).port);
-    };
-    if (server.listening) {
-      done();
-      return;
-    }
-    server.once('error', reject);
-    server.once('listening', done);
-  });
-}
-
-function close(server: Server, timeout: number): Promise<void> {
-  return new Promise((resolve) => {
-    const force = setTimeout(() => {
-      server.closeAllConnections();
-    }, timeout);
-    server.close(() => {
-      clearTimeout(force);
-      resolve();
-    });
-    server.closeIdleConnections();
-  });
-}
-
 export async function startGateway(
   ctx: Context,
   options: GatewayOptions = {},
 ): Promise<RunningGateway> {
   const { config, log, bus } = ctx;
   const stack: (() => Promise<void>)[] = [];
-  const unwind = async () => {
-    for (const stop of stack.splice(0).reverse()) await stop();
-  };
+  const unwindStack = () => unwind(stack.splice(0));
 
   try {
     const encryptionKey = parseEncryptionKey(
@@ -129,7 +101,9 @@ export async function startGateway(
     }
 
     const metrics = prometheusGatewayMetrics(ctx.metrics);
-    const valkey = connectValkey(config.valkey, GATEWAY_SERVICE);
+    const valkey = connectValkey(config.valkey, GATEWAY_SERVICE, (error) => {
+      log.warn('valkey client error', { error });
+    });
     stack.push(() => closeValkey(valkey));
 
     const keyring = await openKeyring({
@@ -137,6 +111,9 @@ export async function startGateway(
       encryptionKey,
       rotateAfter: config.gateway.identity_keys.rotate_after,
       retainAfterRotation: config.gateway.identity_keys.retain_after_rotation,
+      onError: (error) => {
+        log.warn('identity keys refresh failed', { error });
+      },
     });
     metrics.keyLoaded(keyring.activeKeyCreatedAt());
 
@@ -158,7 +135,7 @@ export async function startGateway(
           log.warn('identity keys refresh failed', { error });
         },
       );
-    }, config.gateway.discovery.interval);
+    }, config.gateway.identity_keys.refresh);
     stack.push(() => {
       clearInterval(refreshKeys);
       return Promise.resolve();
@@ -338,7 +315,7 @@ export async function startGateway(
             localPort: env.incoming.socket.localPort ?? port,
           }),
       }) as Server;
-      stack.push(() => close(server, config.service.http.shutdown_timeout));
+      stack.push(() => closeServer(server, config.service.http.shutdown_timeout));
       listening.push(await listen(server));
     }
     log.info('gateway listening', { ports: listening });
@@ -350,10 +327,12 @@ export async function startGateway(
       registry,
       routes: () => table,
       valkey,
-      stop: unwind,
+      stop: unwindStack,
     };
   } catch (error) {
-    await unwind();
+    await unwindStack().catch((cleanupError: unknown) => {
+      log.error('cleanup after failed start also failed', { error: cleanupError });
+    });
     throw error;
   }
 }

@@ -132,13 +132,17 @@ export function createEmailSender(
 
     metrics.sendAttempt(provider.name, 'ok', seconds());
     const sentAt = now();
-    await deliveries.record({
-      ...record,
-      status: 'sent',
-      provider_message_id: providerMessageId,
-      last_error: null,
-      sent_at: new Date(sentAt),
-    });
+    try {
+      await deliveries.record({
+        ...record,
+        status: 'sent',
+        provider_message_id: providerMessageId,
+        last_error: null,
+        sent_at: new Date(sentAt),
+      });
+    } catch (error) {
+      log.error('email sent but delivery was not recorded', { error });
+    }
     metrics.delivery(provider.name, job.template, 'sent');
     metrics.deliveryDelay(
       definition.priority,

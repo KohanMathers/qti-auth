@@ -116,6 +116,7 @@ export async function pruneBusTables<DB>(
   db: Kysely<DB>,
   config: BusConfig,
 ): Promise<{ outbox: number; processedEvents: number }> {
+  // Cutoff is Postgres now(), not the process clock, so every replica agrees.
   const outbox = await sql`
     delete from outbox
     where sent_at < now() - make_interval(secs => ${config.outbox.sent_retention / 1000})

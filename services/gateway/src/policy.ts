@@ -1,8 +1,12 @@
-import { type Identity, type KitErrorCode, missingPermissions } from '@qtiauth/service-kit';
+import {
+  type Identity,
+  type KitErrorCode,
+  missingPermissions,
+  type ResolvedSession,
+} from '@qtiauth/service-kit';
 
 import type { GatewayErrorCode } from './errors.ts';
 import type { TableRoute } from './routes.ts';
-import type { ResolvedSession } from './sessions.ts';
 
 export interface PolicyDenial {
   code: GatewayErrorCode | KitErrorCode;
