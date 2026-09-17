@@ -1,5 +1,6 @@
 import { queueEmail } from '@qtiauth/email';
 import type { Logger } from '@qtiauth/observability';
+import { FLOW_BINDING_HEADER } from '@qtiauth/service-kit';
 
 import { confirmEmailChange, revertEmailChange, startEmailChange } from './email-change.ts';
 import {
@@ -515,7 +516,7 @@ export function socialEnabled(ctx: Context, providerId?: string): boolean {
 }
 
 export async function startSocial(
-  { ctx, log }: FlowInput,
+  { ctx, log, identity }: FlowInput,
   input: {
     providerId: string;
     intent: SocialIntent;
@@ -531,6 +532,7 @@ export async function startSocial(
     providerId: input.providerId,
     intent: input.intent,
     userId: input.userId,
+    sessionId: identity?.sid ?? null,
     returnTo: input.returnTo,
     locale: input.locale,
     redirectUri: socialCallbackUrl(ctx.config, input.providerId),
@@ -604,13 +606,15 @@ export async function finishSocial(
     error: string | undefined;
   },
 ): Promise<CompleteSocialResult> {
-  const { ctx, request } = input;
+  const { ctx, request, identity } = input;
   const store = oauthStoreOf(ctx);
   if (store === undefined) return { status: 'invalid' };
   const result = await completeSocial(ctx.db, store, {
     social: ctx.config.features.auth.social,
     providerId: args.providerId,
     state: args.state,
+    binding: request.headers.get(FLOW_BINDING_HEADER),
+    sessionId: identity?.sid ?? null,
     code: args.code,
     params: args.params,
     error: args.error,

@@ -1,5 +1,5 @@
 import type { CaptchaWidget } from '@qtiauth/captcha';
-import type { Router } from '@qtiauth/service-kit';
+import { FLOW_BINDING_HEADER, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
@@ -36,7 +36,7 @@ import {
   totpEnabled,
   verify,
 } from './flows.ts';
-import { revokedHeaders, sessionHeaders } from './headers.ts';
+import { NO_STORE, revokedHeaders, sessionHeaders } from './headers.ts';
 import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts';
 import { preferredLocale } from './locale.ts';
 import { identityMetrics } from './metrics.ts';
@@ -159,10 +159,11 @@ ${hiddenInput('signup_token', signupToken)}
 
 function signedIn(ctx: Context, session: CreatedSession, returnTo: string | null): Response {
   const headers = sessionHeaders(session);
-  if (returnTo !== null) {
+  const target = safeReturnTo(returnTo ?? undefined);
+  if (target !== null) {
     return new Response(null, {
       status: 303,
-      headers: { ...headers, location: accountPath(ctx.config, returnTo) },
+      headers: { ...headers, location: accountPath(ctx.config, target) },
     });
   }
   return page(ctx, {
@@ -1282,7 +1283,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
           providerId: params.provider,
           intent: 'signin',
           userId: null,
-          returnTo: query.return_to ?? null,
+          returnTo: safeReturnTo(query.return_to),
           locale: preferredLocale(request.headers.get('accept-language')) ?? null,
         },
       );
@@ -1293,7 +1294,10 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
           body: paragraph('Sign in another way.'),
         });
       }
-      return new Response(null, { status: 302, headers: { location: result.url } });
+      return new Response(null, {
+        status: 302,
+        headers: { ...NO_STORE, [FLOW_BINDING_HEADER]: result.binding, location: result.url },
+      });
     },
   });
 
@@ -1334,7 +1338,10 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
           body: paragraph('Sign in another way.'),
         });
       }
-      return new Response(null, { status: 302, headers: { location: result.url } });
+      return new Response(null, {
+        status: 302,
+        headers: { ...NO_STORE, [FLOW_BINDING_HEADER]: result.binding, location: result.url },
+      });
     },
   });
 

@@ -1,4 +1,4 @@
-import { ProblemError, type Router } from '@qtiauth/service-kit';
+import { FLOW_BINDING_HEADER, ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { SIGNED_IN_STATES } from './accounts.ts';
@@ -71,9 +71,7 @@ function requireProvider(ctx: Context, providerId: string): void {
 }
 
 async function start(
-  ctx: Context,
-  request: Request,
-  log: Parameters<typeof startSocial>[0]['log'],
+  flow: Parameters<typeof startSocial>[0],
   input: {
     providerId: string;
     intent: 'signin' | 'link';
@@ -82,17 +80,15 @@ async function start(
     locale: string | undefined;
   },
 ) {
+  const { ctx, request } = flow;
   requireProvider(ctx, input.providerId);
-  const result = await startSocial(
-    { ctx, request, log },
-    {
-      providerId: input.providerId,
-      intent: input.intent,
-      userId: input.userId,
-      returnTo: input.returnTo,
-      locale: localeOf(ctx, request, input.locale),
-    },
-  );
+  const result = await startSocial(flow, {
+    providerId: input.providerId,
+    intent: input.intent,
+    userId: input.userId,
+    returnTo: input.returnTo,
+    locale: localeOf(ctx, request, input.locale),
+  });
   if (result.status === 'disabled') throw new ProblemError('AUTH_METHOD_DISABLED');
   return result;
 }
@@ -180,16 +176,19 @@ export function socialRoutes(router: Router<Context>): void {
     },
     errors: ['AUTH_METHOD_DISABLED'],
     handler: async ({ ctx, params, body, request, log }) => {
-      const result = await start(ctx, request, log, {
-        providerId: params.provider,
-        intent: 'signin',
-        userId: null,
-        returnTo: body.return_to ?? null,
-        locale: body.locale,
-      });
+      const result = await start(
+        { ctx, request, log },
+        {
+          providerId: params.provider,
+          intent: 'signin',
+          userId: null,
+          returnTo: body.return_to ?? null,
+          locale: body.locale,
+        },
+      );
       return {
         status: 200,
-        headers: NO_STORE,
+        headers: { ...NO_STORE, [FLOW_BINDING_HEADER]: result.binding },
         body: { url: result.url, expires_at: result.expiresAt.toISOString() },
       };
     },
@@ -216,16 +215,19 @@ export function socialRoutes(router: Router<Context>): void {
     errors: ['AUTH_METHOD_DISABLED'],
     handler: async ({ ctx, params, body, identity, request, log }) => {
       const { userId } = signedIn(identity);
-      const result = await start(ctx, request, log, {
-        providerId: params.provider,
-        intent: 'link',
-        userId,
-        returnTo: body.return_to ?? null,
-        locale: body.locale,
-      });
+      const result = await start(
+        { ctx, request, log, identity },
+        {
+          providerId: params.provider,
+          intent: 'link',
+          userId,
+          returnTo: body.return_to ?? null,
+          locale: body.locale,
+        },
+      );
       return {
         status: 200,
-        headers: NO_STORE,
+        headers: { ...NO_STORE, [FLOW_BINDING_HEADER]: result.binding },
         body: { url: result.url, expires_at: result.expiresAt.toISOString() },
       };
     },
@@ -266,10 +268,10 @@ export function socialRoutes(router: Router<Context>): void {
       'ACCOUNT_LIMIT_REACHED',
       'PARENTAL_CONSENT_UNAVAILABLE',
     ],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requireProvider(ctx, body.provider);
       const result = await finishSocial(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         {
           providerId: body.provider,
           state: body.state,

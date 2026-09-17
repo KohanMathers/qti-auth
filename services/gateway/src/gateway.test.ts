@@ -6,6 +6,7 @@ import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing'
 import {
   AUTH_MODES,
   createServiceRouter,
+  FLOW_BINDING_HEADER,
   hashSessionToken,
   IDENTITY_HEADER,
   type ManifestRoute,
@@ -622,6 +623,44 @@ describe('gateway handler', () => {
     revoke = false;
     await request('/api/v1/me', { headers: signedIn });
     expect(resolves).toHaveLength(2);
+  });
+
+  it('keeps the flow binding in a cookie and hands it back only to identity', async () => {
+    const binding = randomBytes(32).toString('base64url');
+    const { request, forwarded } = await setup({
+      upstream: () => ({
+        status: 'ok',
+        response: new Response(null, { status: 204, headers: { [FLOW_BINDING_HEADER]: binding } }),
+      }),
+    });
+    const started = await request('/auth/login');
+    expect(started.headers.get('set-cookie')).toBe(
+      `__Host-qtiauth_session_flow=${binding}; Path=/; Max-Age=600; Secure; HttpOnly; SameSite=Lax`,
+    );
+    expect(started.headers.has(FLOW_BINDING_HEADER)).toBe(false);
+
+    await request('/auth/login', {
+      headers: {
+        cookie: `__Host-qtiauth_session_flow=${binding}`,
+        [FLOW_BINDING_HEADER]: 'spoofed',
+      },
+    });
+    expect(forwarded[1]?.headers.get(FLOW_BINDING_HEADER)).toBe(binding);
+
+    await request('/auth/login', { headers: { [FLOW_BINDING_HEADER]: binding } });
+    expect(forwarded[2]?.headers.has(FLOW_BINDING_HEADER)).toBe(false);
+  });
+
+  it('does not hand the flow binding to other services', async () => {
+    const binding = randomBytes(32).toString('base64url');
+    const manifests: RouteManifest[] = [
+      { service: 'notes', version: '1.0.0', permissions: [], routes: [route({ auth: 'none' })] },
+    ];
+    const { request, forwarded } = await setup({ manifests });
+    await request('/api/v1/me', {
+      headers: { cookie: `__Host-qtiauth_session_flow=${binding}` },
+    });
+    expect(forwarded[0]?.headers.has(FLOW_BINDING_HEADER)).toBe(false);
   });
 
   it('ignores session headers from services other than identity', async () => {

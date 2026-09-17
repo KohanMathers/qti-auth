@@ -74,6 +74,11 @@ export function bindAttemptCookieName(cookies: CookiesConfig): string {
   return cookies.domain === null ? `__Host-${name}` : name;
 }
 
+export function flowCookieName(cookies: CookiesConfig): string {
+  const name = `${cookies.name}_flow`;
+  return cookies.domain === null ? `__Host-${name}` : name;
+}
+
 export function readCookie(header: string | null, name: string): string | null {
   if (header === null) return null;
   for (const part of header.split(';')) {
@@ -105,6 +110,18 @@ export function bindAttemptCookie(cookies: CookiesConfig): string {
     `${bindAttemptCookieName(cookies)}=1`,
     'Path=/',
     'Max-Age=60',
+    ...(cookies.domain === null ? [] : [`Domain=${cookies.domain}`]),
+    'Secure',
+    'HttpOnly',
+    'SameSite=Lax',
+  ].join('; ');
+}
+
+export function flowCookie(cookies: CookiesConfig, value: string, maxAge: number): string {
+  return [
+    `${flowCookieName(cookies)}=${value}`,
+    'Path=/',
+    `Max-Age=${String(maxAge)}`,
     ...(cookies.domain === null ? [] : [`Domain=${cookies.domain}`]),
     'Secure',
     'HttpOnly',

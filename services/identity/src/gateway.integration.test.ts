@@ -46,6 +46,7 @@ interface Browser {
 
 function browser(country = 'GB'): Browser {
   let cookie: string | null = null;
+  const others = new Map<string, string>();
   return {
     cookie: () => cookie,
     setCookie: (value) => {
@@ -55,17 +56,26 @@ function browser(country = 'GB'): Browser {
       const headers = new Headers(init.headers);
       headers.set('cf-ipcountry', country);
       if (init.method !== undefined && init.method !== 'GET') headers.set('origin', ORIGIN);
-      if (cookie !== null) headers.set('cookie', cookie);
+      const jar = [...(cookie === null ? [] : [cookie]), ...others.values()];
+      if (jar.length > 0) headers.set('cookie', jar.join('; '));
       const response = await fetch(`http://localhost:${String(gateway.ports[0])}${path}`, {
         ...init,
         headers,
         redirect: 'manual',
       });
-      const set = response.headers.get('set-cookie');
-      if (set?.startsWith(`${COOKIE}=`)) {
+      for (const set of response.headers.getSetCookie()) {
         const pair = set.split(';')[0] ?? '';
-        cookie = pair.endsWith('=') ? null : pair;
-        if (cookie !== null) secrets.push(pair.slice(COOKIE.length + 1));
+        const name = pair.slice(0, pair.indexOf('='));
+        const value = pair.slice(name.length + 1);
+        if (name === COOKIE) {
+          cookie = value === '' ? null : pair;
+          if (cookie !== null) secrets.push(value);
+        } else if (value === '') {
+          others.delete(name);
+        } else {
+          others.set(name, pair);
+          if (name.endsWith('_flow')) secrets.push(value);
+        }
       }
       return response;
     },

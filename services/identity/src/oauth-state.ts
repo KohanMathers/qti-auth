@@ -9,6 +9,8 @@ export interface OauthState {
   provider: string;
   intent: SocialIntent;
   userId: string | null;
+  sessionId: string | null;
+  bindingHash: string;
   returnTo: string | null;
   locale: string | null;
   redirectUri: string;

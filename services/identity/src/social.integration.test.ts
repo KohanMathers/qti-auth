@@ -2,6 +2,7 @@ import { type Bus, connectBus, rpcRequest } from '@qtiauth/bus';
 import { sections } from '@qtiauth/config';
 import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing';
 import {
+  FLOW_BINDING_HEADER,
   hashSessionToken,
   type Identity,
   RESOLVE_SESSION_METHOD,
@@ -97,19 +98,34 @@ async function finish(response: Response) {
   return { userId: body.user_id, token, sessionId: session?.session_id ?? '', response };
 }
 
-async function completeProvider(provider = 'corp') {
-  const start = await post(`/api/v1/auth/social/${provider}/start`, {});
+async function authorize(start: Response) {
   expect(start.status).toBe(200);
+  const binding = start.headers.get(FLOW_BINDING_HEADER) ?? '';
+  secrets.push(binding);
   const { url } = (await start.json()) as { url: string };
-  const authorize = await fetch(url, { redirect: 'manual' });
-  const location = authorize.headers.get('location') ?? '';
-  const redirected = new URL(location);
-  secrets.push(redirected.searchParams.get('state') ?? '');
-  return post('/api/v1/auth/social/complete', {
-    provider,
-    state: redirected.searchParams.get('state'),
-    code: redirected.searchParams.get('code'),
+  const authorized = await fetch(url, { redirect: 'manual' });
+  const redirected = new URL(authorized.headers.get('location') ?? '');
+  const state = redirected.searchParams.get('state') ?? '';
+  secrets.push(state);
+  return { binding, state, code: redirected.searchParams.get('code') ?? '', redirected };
+}
+
+function complete(
+  provider: string,
+  flow: { binding: string | null; state: string; code: string },
+  as?: Partial<Identity>,
+) {
+  return call('/api/v1/auth/social/complete', {
+    method: 'POST',
+    body: JSON.stringify({ provider, state: flow.state, code: flow.code }),
+    headers: flow.binding === null ? {} : { [FLOW_BINDING_HEADER]: flow.binding },
+    ...(as === undefined ? {} : { as }),
   });
+}
+
+async function completeProvider(provider = 'corp') {
+  const flow = await authorize(await post(`/api/v1/auth/social/${provider}/start`, {}));
+  return complete(provider, flow);
 }
 
 async function signUpWithProvider(user: {
@@ -293,6 +309,70 @@ describe('social sign-in', () => {
       as: asUser,
     });
     expect(removed.status).toBe(204);
+  });
+
+  it('refuses a callback in a browser that did not start the flow', async () => {
+    oidc.setUser({ sub: 'csrf-signin', email: 'csrf-signin@example.com', email_verified: true });
+    const missing = await authorize(await post('/api/v1/auth/social/corp/start', {}));
+    const withoutBinding = await complete('corp', { ...missing, binding: null });
+    expect(withoutBinding.status).toBe(400);
+    expect(await withoutBinding.json()).toMatchObject({ code: 'OAUTH_FAILED' });
+
+    const attacker = await authorize(await post('/api/v1/auth/social/corp/start', {}));
+    const victim = await authorize(await post('/api/v1/auth/social/corp/start', {}));
+    const crossed = await complete('corp', { ...attacker, binding: victim.binding });
+    expect(crossed.status).toBe(400);
+    expect(crossed.headers.has(SESSION_TOKEN_HEADER)).toBe(false);
+  });
+
+  it('links only to the session that started connecting', async () => {
+    const owner = await signUpWithProvider({
+      sub: 'link-owner',
+      email: 'link-owner@example.com',
+      email_verified: true,
+    });
+    const asOwner = signedInAs(owner.userId, owner.sessionId);
+    const other = await signUpWithProvider({
+      sub: 'link-other',
+      email: 'link-other@example.com',
+      email_verified: true,
+    });
+
+    oidc.setUser({ sub: 'link-victim', email: 'link-victim@example.com', email_verified: true });
+    for (const as of [anonymous, { ...anonymous, sid: other.sessionId }]) {
+      const stolen = await authorize(await post('/api/v1/me/identities/corp/connect', {}, asOwner));
+      const elsewhere = await complete('corp', stolen, as);
+      expect(elsewhere.status).toBe(400);
+      expect(await elsewhere.json()).toMatchObject({ code: 'OAUTH_FAILED' });
+    }
+
+    oidc.setUser({ sub: 'link-owner', email: 'link-owner@example.com', email_verified: true });
+    const own = await authorize(await post('/api/v1/me/identities/corp/connect', {}, asOwner));
+    const linked = await complete('corp', own, { ...anonymous, sid: owner.sessionId });
+    expect(linked.status).toBe(200);
+    expect(await linked.json()).toMatchObject({ status: 'linked', user_id: owner.userId });
+  });
+
+  it('only goes back to a path on the account surface after signing in', async () => {
+    await signUpWithProvider({
+      sub: 'redirected',
+      email: 'redirected@example.com',
+      email_verified: true,
+    });
+    const start = await call('/auth/social/corp/start?return_to=//evil.example/login');
+    expect(start.status).toBe(302);
+    const binding = start.headers.get(FLOW_BINDING_HEADER) ?? '';
+    secrets.push(binding);
+    const authorized = await fetch(start.headers.get('location') ?? '', { redirect: 'manual' });
+    const redirected = new URL(authorized.headers.get('location') ?? '');
+    secrets.push(redirected.searchParams.get('state') ?? '');
+    const callback = await call(`/auth/social/corp/callback${redirected.search}`, {
+      headers: { [FLOW_BINDING_HEADER]: binding },
+      redirect: 'manual',
+    });
+    secrets.push(callback.headers.get(SESSION_TOKEN_HEADER) ?? '');
+    expect(callback.headers.get('location')).toBeNull();
+    expect(callback.status).toBe(200);
   });
 
   it('sends our own verification when the provider email is unverified', async () => {

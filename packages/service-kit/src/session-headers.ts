@@ -6,10 +6,12 @@ export const SESSION_COUNTRY_HEADER = 'X-QTIAuth-Country';
 export const SESSION_TIMEZONE_HEADER = 'X-QTIAuth-Timezone';
 export const SESSION_SCREEN_HEADER = 'X-QTIAuth-Screen';
 export const SESSION_CLIENT_FINGERPRINT_HEADER = 'X-QTIAuth-Client-Fingerprint';
+export const FLOW_BINDING_HEADER = 'X-QTIAuth-Flow-Binding';
 
 export const SESSION_RESPONSE_HEADERS = [
   SESSION_TOKEN_HEADER,
   SESSION_EXPIRES_HEADER,
   SESSION_CLEAR_HEADER,
   REVOKED_SESSIONS_HEADER,
+  FLOW_BINDING_HEADER,
 ] as const;

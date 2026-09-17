@@ -15,7 +15,7 @@ import { type AgeBands, ageBand, ageOn, isValidDateOfBirth } from './age.ts';
 import { challengePayload, insertChallenge, takeChallenge, useChallenge } from './challenges.ts';
 import type { Database } from './database.ts';
 import { type UserCreatedData, userCreatedEvent } from './events.ts';
-import { newToken } from './tokens.ts';
+import { hashToken, newToken } from './tokens.ts';
 import {
   authorizationUrl,
   discoverIssuer,
@@ -76,7 +76,7 @@ interface SignupPayload {
 }
 
 export type BeginSocialResult =
-  { status: 'disabled' } | { status: 'ok'; url: string; expiresAt: Date };
+  { status: 'disabled' } | { status: 'ok'; url: string; binding: string; expiresAt: Date };
 
 export type CompleteSocialResult =
   | { status: 'invalid' }
@@ -126,6 +126,7 @@ export async function beginSocial(
     providerId: string;
     intent: SocialIntent;
     userId: string | null;
+    sessionId: string | null;
     returnTo: string | null;
     locale: string | null;
     redirectUri: string;
@@ -137,12 +138,15 @@ export async function beginSocial(
   const provider = findSocialProvider(options.social, options.providerId);
   if (provider === undefined) return { status: 'disabled' };
   const state = newToken();
+  const binding = newToken();
   const codeVerifier = provider.usePkce ? pkceVerifier() : null;
   const nonce = provider.useNonce ? newToken() : null;
   const value: OauthState = {
     provider: provider.id,
     intent: options.intent,
     userId: options.intent === 'link' ? options.userId : null,
+    sessionId: options.intent === 'link' ? options.sessionId : null,
+    bindingHash: hashToken(binding),
     returnTo: options.returnTo,
     locale: options.locale,
     redirectUri: options.redirectUri,
@@ -159,7 +163,12 @@ export async function beginSocial(
     nonce,
     fetch: options.fetch ?? fetch,
   });
-  return { status: 'ok', url, expiresAt: new Date(options.now.getTime() + OAUTH_STATE_TTL) };
+  return {
+    status: 'ok',
+    url,
+    binding,
+    expiresAt: new Date(options.now.getTime() + OAUTH_STATE_TTL),
+  };
 }
 
 async function authorizeUrl(
@@ -204,6 +213,8 @@ export async function completeSocial(
     social: SocialConfig;
     providerId: string;
     state: string;
+    binding: string | null;
+    sessionId: string | null;
     code: string | undefined;
     params: URLSearchParams;
     error: string | undefined;
@@ -219,6 +230,9 @@ export async function completeSocial(
   }
   const stored = await store.take(options.state);
   if (stored?.provider !== options.providerId) return { status: 'invalid' };
+  if (options.binding === null || hashToken(options.binding) !== stored.bindingHash) {
+    return { status: 'invalid' };
+  }
   const provider = findSocialProvider(options.social, options.providerId);
   if (provider === undefined) return { status: 'invalid' };
   const fetchImpl = options.fetch ?? fetch;
@@ -235,7 +249,8 @@ export async function completeSocial(
   }
 
   if (stored.intent === 'link') {
-    if (stored.userId === null) return { status: 'invalid' };
+    if (stored.userId === null || stored.sessionId === null) return { status: 'invalid' };
+    if (stored.sessionId !== options.sessionId) return { status: 'invalid' };
     return linkIdentity(db, {
       userId: stored.userId,
       type: provider.type,

@@ -179,7 +179,7 @@ Passwords equal to or containing the email local part (3 or more characters) are
 
 Google, GitHub, Discord, Steam (OpenID 2.0) and generic OIDC issuers can be used to sign in or to connect to an existing account. Connecting only happens when the user is signed in and chooses **Connect …**. Matching emails never link accounts.
 
-`state`, PKCE (S256) and OIDC `nonce` are stored in Valkey for 10 minutes. Only verified provider emails are trusted: Google and generic OIDC use `email_verified`, GitHub uses a verified primary address from `/user/emails`, Discord uses `verified` on the user, and Steam provides no email. An unverified or missing address is collected at signup and confirmed with our own email.
+`state`, PKCE (S256) and OIDC `nonce` are stored in Valkey for 10 minutes. Starting a flow also sets a 10-minute flow cookie, and the flow only finishes in the browser that holds it, so nobody can finish their own flow in someone else's browser. Connecting also has to finish in the same session that started it. `return_to` must be a path on the account surface. Only verified provider emails are trusted: Google and generic OIDC use `email_verified`, GitHub uses a verified primary address from `/user/emails`, Discord uses `verified` on the user, and Steam provides no email. An unverified or missing address is collected at signup and confirmed with our own email.
 
 | Endpoint                                       | Does                                                                                           |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -362,8 +362,9 @@ Services never see cookies, so identity asks the gateway to set one with respons
 | `X-QTIAuth-Session-Expires`  | With the token: when the cookie expires (RFC 3339)                       |
 | `X-QTIAuth-Session-Clear`    | Clears the session cookie                                                |
 | `X-QTIAuth-Revoked-Sessions` | Comma-separated session IDs to drop from its session cache straight away |
+| `X-QTIAuth-Flow-Binding`     | Sets the 10-minute flow cookie that ties a social sign-in to the browser |
 
-The names are exported from `@qtiauth/service-kit`, and `sessionHeaders`, `revokedHeaders` and `signedOutHeaders` in `services/identity/src/headers.ts` build them. Restoring a challenged session keeps the existing cookie and sends `X-QTIAuth-Revoked-Sessions` with that session's ID so the gateway drops the cached `aal0` copy.
+The gateway sends the flow cookie's value back to identity, and only to identity, in `X-QTIAuth-Flow-Binding` on each request. The names are exported from `@qtiauth/service-kit`, and `sessionHeaders`, `revokedHeaders` and `signedOutHeaders` in `services/identity/src/headers.ts` build them. Restoring a challenged session keeps the existing cookie and sends `X-QTIAuth-Revoked-Sessions` with that session's ID so the gateway drops the cached `aal0` copy.
 
 ### Tests
 
