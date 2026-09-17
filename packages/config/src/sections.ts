@@ -183,18 +183,25 @@ export const network = z
   .prefault({})
   .describe('Network settings.');
 
+export const GEOIP_SOURCES = ['dbip_lite', 'maxmind', 'header', 'none'] as const;
+export type GeoipSource = (typeof GEOIP_SOURCES)[number];
+
 export const geoip = z
   .strictObject({
-    source: z
-      .enum(['dbip_lite', 'maxmind', 'header', 'none'])
-      .default('dbip_lite')
-      .describe('Where IP geolocation comes from.'),
+    source: z.enum(GEOIP_SOURCES).default('dbip_lite').describe('Where IP geolocation comes from.'),
     header: z
       .string()
       .min(1)
       .nullable()
       .default(null)
       .describe('Request header holding the country code when source is header.'),
+    database_path: z
+      .string()
+      .min(1)
+      .default('/var/lib/qtiauth/geoip/dbip-country-lite.csv.gz')
+      .describe(
+        'Country database file. DB-IP Lite CSV or gzipped CSV, or a MaxMind MMDB when source is maxmind.',
+      ),
   })
   .refine((g) => g.source !== 'header' || g.header !== null, {
     message: 'Required when source is header',
@@ -888,6 +895,42 @@ export const sessions = z
   .prefault({})
   .describe('Sessions.');
 
+export const COUNTRY_CHANGE_POLICIES = ['challenge', 'block', 'notify', 'ignore'] as const;
+export type CountryChangePolicy = (typeof COUNTRY_CHANGE_POLICIES)[number];
+
+export const sessionSecurity = z
+  .strictObject({
+    on_country_change: z
+      .enum(COUNTRY_CHANGE_POLICIES)
+      .default('challenge')
+      .describe(
+        'When a session moves to another country: challenge drops it to aal0 until the user signs in again, block ends it, notify allows it and emails, ignore does nothing.',
+      ),
+    new_device_email: z
+      .boolean()
+      .default(true)
+      .describe('Email the user when they sign in from a browser or OS that has not been seen.'),
+    tls_fingerprint: z
+      .strictObject({
+        header: z
+          .string()
+          .min(1)
+          .nullable()
+          .default(null)
+          .describe(
+            'Request header holding a TLS fingerprint such as JA4. null turns this signal off.',
+          ),
+      })
+      .prefault({})
+      .describe('Optional TLS fingerprint from an upstream proxy.'),
+    alert_min_interval: duration(
+      '1h',
+      'Shortest gap between security-alert emails to the same user.',
+    ),
+  })
+  .prefault({})
+  .describe('Session security checks.');
+
 const bandStart = (band: string, value: number) =>
   z.int().min(1).max(150).default(value).describe(`Age the ${band} band starts at.`);
 
@@ -1311,6 +1354,7 @@ export const retention = z
       '24h',
       'Keep magic-link and other emailed tokens for this long after they expire.',
     ),
+    session_security_events: duration('90d', 'Keep session security event log rows for this long.'),
   })
   .prefault({})
   .describe('How long data is kept. retention.sweep deletes anything older.');
@@ -1337,6 +1381,7 @@ export const sections = {
   magic_link: magicLink,
   password,
   sessions,
+  session_security: sessionSecurity,
   age,
   parental,
   rate_limits: rateLimits,

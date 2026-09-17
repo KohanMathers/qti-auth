@@ -52,6 +52,10 @@ export function checkPolicy(
     return { code: 'TWO_FACTOR_ENROLMENT_REQUIRED' };
   }
 
+  if (session.acr === 'aal0' && !route.allow_aal0) {
+    return { code: 'REAUTHENTICATION_REQUIRED' };
+  }
+
   const required = route.permissions.map(
     (name) => table.permissions.get(name) ?? { name, description: '', wildcard: false },
   );
@@ -82,6 +86,7 @@ export function impliedGatewayErrors(table: TableRoute): (GatewayErrorCode | Kit
   if (!route.allow_pending_parental_consent) codes.push('PARENTAL_CONSENT_PENDING');
   if (!route.allow_pending_legal) codes.push('LEGAL_ACCEPTANCE_REQUIRED');
   if (!route.allow_pending_2fa_enrolment) codes.push('TWO_FACTOR_ENROLMENT_REQUIRED');
+  if (!route.allow_aal0) codes.push('REAUTHENTICATION_REQUIRED');
   if (route.step_up) codes.push('STEP_UP_REQUIRED');
   return codes;
 }
@@ -96,7 +101,7 @@ export function identityFor(
     request_id: requestId,
     auth: table.route.auth,
     sub: signedIn ? session.user_id : null,
-    sid: signedIn ? session.session_id : null,
+    sid: session?.session_id ?? null,
     client_id: null,
     scopes: [],
     permissions: signedIn ? session.permissions : [],

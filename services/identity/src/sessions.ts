@@ -8,8 +8,18 @@ import type { Kysely } from 'kysely';
 import { dateOfBirthColumn } from './accounts.ts';
 import { type AgeBands, ageBand, ageOn } from './age.ts';
 import type { Database, RevocationReason } from './database.ts';
+import { countryName, describePlace, deviceKey, parseDevice } from './device.ts';
 import { sessionCreatedEvent, sessionRevokedEvent } from './events.ts';
 import { loadPermissions, twoFactorEnrolmentRequired } from './factors.ts';
+import {
+  applyResolvedSecurity,
+  baselineFromSession,
+  currentSignals,
+  recentlyNotified,
+  recordSecurityEvent,
+  type RequestSignals,
+  type SessionSecuritySettings,
+} from './security.ts';
 import { newToken } from './tokens.ts';
 
 export const MAX_USER_AGENT_LENGTH = 512;
@@ -26,6 +36,21 @@ export interface SessionSettings {
 export interface SessionClient {
   userAgent: string | null;
   cookieScope: string;
+  ip: string;
+  tlsFingerprint: string | null;
+  country: string | null;
+  timezone: string | null;
+  screen: string | null;
+  clientFingerprint: string | null;
+  restoreSessionId: string | null;
+}
+
+export interface NewDeviceNotice {
+  email: string;
+  locale: string | null;
+  browser: string;
+  os: string;
+  place: string;
 }
 
 export interface NewSession {
@@ -35,6 +60,7 @@ export interface NewSession {
   acr: 'aal1' | 'aal2';
   client: SessionClient;
   settings: SessionSettings;
+  lookupCountry?: (ip: string) => string | null;
   now: Date;
 }
 
@@ -43,12 +69,15 @@ export interface CreatedSession {
   token: string;
   expiresAt: Date;
   evicted: string[];
+  restored: boolean;
+  newDevice: NewDeviceNotice | null;
 }
 
 export interface SessionListItem {
   id: string;
   auth_method: string;
   user_agent: string | null;
+  last_country: string | null;
   created_at: Date;
   last_active_at: Date;
   expires_at: Date;
@@ -108,9 +137,19 @@ export async function createSession(
   session: NewSession,
 ): Promise<CreatedSession> {
   const { settings, now } = session;
+  const restored = await restoreChallengedSession(trx, session);
+  if (restored) return restored;
+
   const id = randomUUIDv7();
   const token = newToken();
   const expiresAt = new Date(now.getTime() + settings.sessionTtl);
+  const captured = currentSignals(
+    requestSignals(session.client),
+    session.lookupCountry ?? (() => null),
+  );
+  const device = parseDevice(session.client.userAgent);
+  const key = deviceKey(device);
+  const userAgent = session.client.userAgent?.slice(0, MAX_USER_AGENT_LENGTH) ?? null;
 
   await trx
     .insertInto('sessions')
@@ -121,7 +160,17 @@ export async function createSession(
       amr: session.amr,
       acr: session.acr,
       step_up_at: session.acr === 'aal2' ? now : null,
-      user_agent: session.client.userAgent?.slice(0, MAX_USER_AGENT_LENGTH) ?? null,
+      user_agent: userAgent,
+      ip: captured.ip,
+      ip_subnet: captured.subnet,
+      country: captured.country,
+      last_country: captured.country,
+      tls_fingerprint: captured.tlsFingerprint,
+      timezone: captured.timezone,
+      screen: captured.screen,
+      client_fingerprint: captured.clientFingerprint,
+      device_key: key,
+      trust_level: 'full',
       created_at: now,
       last_active_at: now,
       expires_at: expiresAt,
@@ -142,6 +191,42 @@ export async function createSession(
     }),
   );
 
+  const seen = await trx
+    .selectFrom('sessions')
+    .select('id')
+    .where('user_id', '=', session.userId)
+    .where('device_key', '=', key)
+    .where('id', '!=', id)
+    .executeTakeFirst();
+  let newDevice: NewDeviceNotice | null = null;
+  if (seen === undefined) {
+    const account = await trx
+      .selectFrom('users')
+      .select(['email', 'locale'])
+      .where('id', '=', session.userId)
+      .executeTakeFirst();
+    if (account) {
+      newDevice = {
+        email: account.email,
+        locale: account.locale,
+        browser: device.browser,
+        os: device.os,
+        place: describePlace(captured.country),
+      };
+      await recordSecurityEvent(trx, {
+        userId: session.userId,
+        sessionId: id,
+        kind: 'new_device',
+        trustFrom: null,
+        trustTo: 'full',
+        countryFrom: null,
+        countryTo: captured.country,
+        notified: false,
+        now,
+      });
+    }
+  }
+
   const overLimit = await activeSessions(trx, session.userId, now, settings.idleTimeout)
     .select('id')
     .orderBy('created_at', 'desc')
@@ -155,7 +240,86 @@ export async function createSession(
     now,
     only: overLimit.map((row) => row.id),
   });
-  return { id, token, expiresAt, evicted };
+  return { id, token, expiresAt, evicted, restored: false, newDevice };
+}
+
+function canRestore(session: NewSession): boolean {
+  if (session.authMethod === 'magic_link' || session.authMethod === 'passkey') return true;
+  return session.authMethod === 'password' && session.acr === 'aal2';
+}
+
+function requestSignals(client: SessionClient): RequestSignals {
+  return {
+    ip: client.ip,
+    userAgent: client.userAgent,
+    country: client.country,
+    tlsFingerprint: client.tlsFingerprint,
+    timezone: client.timezone,
+    screen: client.screen,
+    clientFingerprint: client.clientFingerprint,
+  };
+}
+
+async function restoreChallengedSession(
+  trx: Kysely<Database>,
+  session: NewSession,
+): Promise<CreatedSession | null> {
+  const sessionId = session.client.restoreSessionId;
+  if (sessionId === null || !canRestore(session)) return null;
+  const row = await trx
+    .selectFrom('sessions')
+    .select(['id', 'acr', 'amr', 'expires_at', 'last_active_at', 'trust_level', 'country'])
+    .where('id', '=', sessionId)
+    .where('user_id', '=', session.userId)
+    .where('revoked_at', 'is', null)
+    .where('expires_at', '>', session.now)
+    .executeTakeFirst();
+  if (row?.acr !== 'aal0') return null;
+  const captured = currentSignals(
+    requestSignals(session.client),
+    session.lookupCountry ?? (() => null),
+  );
+  const amr = [...new Set([...row.amr, ...session.amr])];
+  await trx
+    .updateTable('sessions')
+    .set({
+      amr,
+      acr: session.acr,
+      step_up_at: session.acr === 'aal2' ? session.now : null,
+      trust_level: 'full',
+      ip: captured.ip,
+      ip_subnet: captured.subnet,
+      country: captured.country,
+      last_country: captured.country,
+      tls_fingerprint: captured.tlsFingerprint,
+      timezone: captured.timezone,
+      screen: captured.screen,
+      client_fingerprint: captured.clientFingerprint,
+      user_agent: session.client.userAgent?.slice(0, MAX_USER_AGENT_LENGTH) ?? null,
+      device_key: deviceKey(parseDevice(session.client.userAgent)),
+      last_active_at: session.now,
+    })
+    .where('id', '=', row.id)
+    .execute();
+  await recordSecurityEvent(trx, {
+    userId: session.userId,
+    sessionId: row.id,
+    kind: 'reauthenticated',
+    trustFrom: row.trust_level,
+    trustTo: 'full',
+    countryFrom: row.country,
+    countryTo: captured.country,
+    notified: false,
+    now: session.now,
+  });
+  return {
+    id: row.id,
+    token: '',
+    expiresAt: sessionExpiry(row, session.settings.idleTimeout),
+    evicted: [],
+    restored: true,
+    newDevice: null,
+  };
 }
 
 async function writeBinding(
@@ -200,6 +364,13 @@ export async function bindCookieScope(
   return { token, expiresAt: sessionExpiry(row, options.idleTimeout) };
 }
 
+export interface SecurityAlert {
+  email: string;
+  locale: string | null;
+  summary: string;
+  place: string;
+}
+
 export async function resolveSession(
   db: Kysely<Database>,
   options: {
@@ -209,8 +380,11 @@ export async function resolveSession(
     bands: AgeBands;
     require2faFor: readonly string[];
     now: Date;
+    signals?: RequestSignals;
+    security?: SessionSecuritySettings;
+    lookupCountry?: (ip: string) => string | null;
   },
-): Promise<ResolvedSession | null> {
+): Promise<{ session: ResolvedSession | null; alert: SecurityAlert | null } | null> {
   const { now, idleTimeout } = options;
   const row = await db
     .selectFrom('session_bindings')
@@ -224,6 +398,15 @@ export async function resolveSession(
       'sessions.step_up_at',
       'sessions.expires_at',
       'sessions.last_active_at',
+      'sessions.ip',
+      'sessions.ip_subnet',
+      'sessions.country',
+      'sessions.user_agent',
+      'sessions.tls_fingerprint',
+      'sessions.timezone',
+      'sessions.screen',
+      'sessions.client_fingerprint',
+      'sessions.trust_level',
       'users.state',
       dateOfBirthColumn.as('date_of_birth'),
     ])
@@ -236,7 +419,47 @@ export async function resolveSession(
     .executeTakeFirst();
   if (!row) return null;
 
+  let acr = row.acr;
   let lastActive = row.last_active_at;
+  let alert: SecurityAlert | null = null;
+  const security = options.security;
+  if (security !== undefined && security.enabled && options.signals !== undefined) {
+    const current = currentSignals(options.signals, options.lookupCountry ?? (() => null));
+    const applied = await db.transaction().execute(async (trx) => {
+      const result = await applyResolvedSecurity(trx, {
+        sessionId: row.id,
+        userId: row.user_id,
+        acr: row.acr,
+        trustLevel: row.trust_level,
+        baseline: baselineFromSession(row),
+        current,
+        settings: security,
+        now,
+      });
+      if (result.blocked) {
+        await revokeSessions(trx, {
+          userId: row.user_id,
+          reason: 'blocked',
+          now,
+          only: [row.id],
+        });
+      }
+      return result;
+    });
+    if (applied.notify) {
+      alert = await securityAlert(db, {
+        userId: row.user_id,
+        countryFrom: applied.countryFrom,
+        countryTo: applied.countryTo,
+        blocked: applied.blocked,
+        interval: security.alertMinInterval,
+        now,
+      });
+    }
+    if (applied.blocked) return { session: null, alert };
+    acr = applied.acr;
+  }
+
   if (now.getTime() - lastActive.getTime() >= LAST_ACTIVE_RESOLUTION) {
     await db
       .updateTable('sessions')
@@ -249,26 +472,71 @@ export async function resolveSession(
 
   const permissions = await loadPermissions(db, row.user_id);
   return {
-    session_id: row.id,
-    user_id: row.user_id,
-    account_state: row.state,
-    permissions,
-    restrictions: [],
-    age_band: ageBand(ageOn(row.date_of_birth, now), options.bands),
-    parental_controls: null,
-    amr: row.amr,
-    acr: row.acr,
-    step_up_at: row.step_up_at?.toISOString() ?? null,
-    legal_acceptance_required: false,
-    two_factor_enrolment_required: await twoFactorEnrolmentRequired(db, {
-      userId: row.user_id,
+    session: {
+      session_id: row.id,
+      user_id: row.user_id,
+      account_state: row.state,
       permissions,
-      patterns: options.require2faFor,
-    }),
-    expires_at: sessionExpiry(
-      { expires_at: row.expires_at, last_active_at: lastActive },
-      idleTimeout,
-    ).toISOString(),
+      restrictions: [],
+      age_band: ageBand(ageOn(row.date_of_birth, now), options.bands),
+      parental_controls: null,
+      amr: row.amr,
+      acr,
+      step_up_at: acr === 'aal0' ? null : (row.step_up_at?.toISOString() ?? null),
+      legal_acceptance_required: false,
+      two_factor_enrolment_required: await twoFactorEnrolmentRequired(db, {
+        userId: row.user_id,
+        permissions,
+        patterns: options.require2faFor,
+      }),
+      expires_at: sessionExpiry(
+        { expires_at: row.expires_at, last_active_at: lastActive },
+        idleTimeout,
+      ).toISOString(),
+    },
+    alert,
+  };
+}
+
+async function securityAlert(
+  db: Kysely<Database>,
+  options: {
+    userId: string;
+    countryFrom: string | null;
+    countryTo: string | null;
+    blocked: boolean;
+    interval: number;
+    now: Date;
+  },
+): Promise<SecurityAlert | null> {
+  if (
+    await recentlyNotified(db, options.userId, new Date(options.now.getTime() - options.interval))
+  ) {
+    return null;
+  }
+  const account = await db
+    .selectFrom('users')
+    .select(['email', 'locale'])
+    .where('id', '=', options.userId)
+    .executeTakeFirst();
+  if (!account) return null;
+  const from = countryName(options.countryFrom) ?? 'an unknown location';
+  const to = countryName(options.countryTo) ?? 'an unknown location';
+  const summary = options.blocked
+    ? `A session was ended after a sign-in from ${to}`
+    : `A session moved from ${from} to ${to}`;
+  await db
+    .updateTable('session_security_events')
+    .set({ notified: true })
+    .where('user_id', '=', options.userId)
+    .where('notified', '=', false)
+    .where('created_at', '>', new Date(options.now.getTime() - options.interval))
+    .execute();
+  return {
+    email: account.email,
+    locale: account.locale,
+    summary,
+    place: describePlace(options.countryTo),
   };
 }
 
@@ -283,7 +551,15 @@ export function listSessions(
   },
 ): Promise<SessionListItem[]> {
   let query = activeSessions(db, options.userId, options.now, options.idleTimeout)
-    .select(['id', 'auth_method', 'user_agent', 'created_at', 'last_active_at', 'expires_at'])
+    .select([
+      'id',
+      'auth_method',
+      'user_agent',
+      'last_country',
+      'created_at',
+      'last_active_at',
+      'expires_at',
+    ])
     .orderBy('created_at', 'desc')
     .orderBy('id', 'desc')
     .limit(options.limit);

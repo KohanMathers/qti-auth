@@ -84,6 +84,8 @@ Values are escaped in the HTML part, and line breaks are removed from values in 
 | `password_reset`      | `security` | high     | `link`, `expires_in_minutes` |
 | `email_change`        | `auth`     | high     | `link`, `expires_in_minutes` |
 | `email_change_notice` | `security` | high     | `link`, `expires_in_days`    |
+| `new_device`          | `security` | high     | `browser`, `os`, `place`     |
+| `security_alert`      | `security` | high     | `summary`, `place`           |
 
 ### Checks
 

@@ -19,6 +19,7 @@
     "@qtiauth/db": "workspace:*",
     "@qtiauth/email": "workspace:*",
     "@qtiauth/events": "workspace:*",
+    "@qtiauth/geoip": "workspace:*",
     "@qtiauth/observability": "workspace:*",
     "@qtiauth/service-kit": "workspace:*",
     "@qtiauth/valkey": "workspace:*",

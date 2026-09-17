@@ -25,6 +25,7 @@ function table(overrides: Partial<ManifestRoute> = {}): TableRoute {
       allow_pending_legal: false,
       allow_pending_parental_consent: false,
       allow_pending_2fa_enrolment: false,
+      allow_aal0: false,
       rate_limit: 'global',
       step_up: false,
       ...overrides,
@@ -120,6 +121,11 @@ describe('checkPolicy', () => {
     expect(code(route, session({ acr: 'aal1', step_up_at: at(1) }))).toBe('STEP_UP_REQUIRED');
     expect(code(route, session({ acr: 'aal2' }))).toBe('STEP_UP_REQUIRED');
   });
+
+  it('needs re-authentication when the session is at aal0', () => {
+    expect(code(table(), session({ acr: 'aal0' }))).toBe('REAUTHENTICATION_REQUIRED');
+    expect(code(table({ allow_aal0: true }), session({ acr: 'aal0' }))).toBeNull();
+  });
 });
 
 describe('identityFor', () => {
@@ -141,10 +147,11 @@ describe('identityFor', () => {
     });
   });
 
-  it('is anonymous on auth: none routes even with a session', () => {
+  it('carries the session id on auth: none routes so identity can restore a challenged session', () => {
     expect(identityFor(table({ auth: 'none' }), session(), 'req-2')).toMatchObject({
       auth: 'none',
       sub: null,
+      sid: 's1',
       permissions: [],
       account_state: null,
     });
@@ -164,7 +171,11 @@ describe('impliedGatewayErrors', () => {
         'PARENTAL_CONSENT_PENDING',
         'STEP_UP_REQUIRED',
         'TWO_FACTOR_ENROLMENT_REQUIRED',
+        'REAUTHENTICATION_REQUIRED',
       ]),
+    );
+    expect(impliedGatewayErrors(table({ allow_aal0: true }))).not.toContain(
+      'REAUTHENTICATION_REQUIRED',
     );
     expect(impliedGatewayErrors(table({ allow_pending_legal: true }))).not.toContain(
       'LEGAL_ACCEPTANCE_REQUIRED',

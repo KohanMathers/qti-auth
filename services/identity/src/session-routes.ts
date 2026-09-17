@@ -9,6 +9,7 @@ import {
 import * as z from 'zod';
 
 import type { RevocationReason } from './database.ts';
+import { parseDevice } from './device.ts';
 import { NO_STORE, revokedHeaders, signedOutHeaders } from './headers.ts';
 import { identityMetrics } from './metrics.ts';
 import type { Context } from './service.ts';
@@ -21,6 +22,8 @@ const sessionSchema = z.object({
   current: z.boolean().describe('Whether this is the session making the request.'),
   auth_method: z.string(),
   user_agent: z.string().nullable(),
+  device: z.object({ browser: z.string(), os: z.string() }),
+  country: z.string().nullable().describe('Approximate country from GeoIP, as an ISO code.'),
   created_at: z.iso.datetime(),
   last_active_at: z.iso.datetime(),
   expires_at: z.iso.datetime().describe('When the session ends if it stays idle.'),
@@ -90,6 +93,8 @@ export function sessionRoutes(router: Router<Context>): void {
             current: row.id === sessionId,
             auth_method: row.auth_method,
             user_agent: row.user_agent,
+            device: parseDevice(row.user_agent),
+            country: row.last_country,
             created_at: row.created_at.toISOString(),
             last_active_at: row.last_active_at.toISOString(),
             expires_at: sessionExpiry(row, idleTimeout).toISOString(),

@@ -64,6 +64,7 @@ export interface RoutePolicy {
   allow_pending_legal: boolean;
   allow_pending_parental_consent: boolean;
   allow_pending_2fa_enrolment: boolean;
+  allow_aal0: boolean;
   rate_limit: string;
   step_up: boolean;
 }
@@ -89,6 +90,7 @@ export interface RouteDefinition<
   allow_pending_legal?: boolean;
   allow_pending_parental_consent?: boolean;
   allow_pending_2fa_enrolment?: boolean;
+  allow_aal0?: boolean;
   rate_limit: string;
   step_up?: boolean;
   request?: { params?: P; query?: Q; body?: B };
@@ -133,6 +135,7 @@ export const manifestRouteSchema = z.strictObject({
   allow_pending_legal: z.boolean(),
   allow_pending_parental_consent: z.boolean(),
   allow_pending_2fa_enrolment: z.boolean(),
+  allow_aal0: z.boolean(),
   rate_limit: z.string().regex(RATE_LIMIT),
   step_up: z.boolean(),
 });
@@ -211,6 +214,7 @@ export function manifestRoute(route: RouteInfo): ManifestRoute {
     allow_pending_legal: route.allow_pending_legal,
     allow_pending_parental_consent: route.allow_pending_parental_consent,
     allow_pending_2fa_enrolment: route.allow_pending_2fa_enrolment,
+    allow_aal0: route.allow_aal0,
     rate_limit: route.rate_limit,
     step_up: route.step_up,
   };
@@ -280,6 +284,7 @@ function validate(
     'Scopes need auth: oauth, service or game_authoritative',
   );
   check(!route.step_up || route.auth === 'session', name, 'step_up needs auth: session');
+  check(!route.allow_aal0 || route.auth === 'session', name, 'allow_aal0 needs auth: session');
 
   check(route.allow_account_states.length > 0, name, 'allow_account_states must not be empty');
   for (const state of route.allow_account_states) {
@@ -340,6 +345,7 @@ export function createRouter<Ctx>(options: RouterOptions): Router<Ctx> {
         allow_pending_legal: definition.allow_pending_legal ?? false,
         allow_pending_parental_consent: definition.allow_pending_parental_consent ?? false,
         allow_pending_2fa_enrolment: definition.allow_pending_2fa_enrolment ?? false,
+        allow_aal0: definition.allow_aal0 ?? false,
         rate_limit: definition.rate_limit,
         step_up: definition.step_up ?? false,
         request: definition.request ?? {},

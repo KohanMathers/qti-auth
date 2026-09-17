@@ -4,14 +4,20 @@ import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { canRemovePasskey, lastSignInMethodError, totpEnrolled } from './factors.ts';
-import { finishTwoFactor, passkeysEnabled, totpEnabled } from './flows.ts';
+import { finishTwoFactor, notifyNewDevice, passkeysEnabled, totpEnabled } from './flows.ts';
 import { NO_STORE, revokedHeaders, sessionHeaders } from './headers.ts';
 import { identityMetrics } from './metrics.ts';
 import { deletePasskey, listPasskeys, PASSKEY_NAME_MAX, renamePasskey } from './passkeys.ts';
 import { replaceRecoveryCodes, unusedRecoveryCount } from './recovery.ts';
 import type { Context } from './service.ts';
 import { signedIn } from './session-routes.ts';
-import { encryptionKey, relyingParty, sessionClient, sessionSettings } from './settings.ts';
+import {
+  clientFor,
+  encryptionKey,
+  relyingParty,
+  sessionClient,
+  sessionSettings,
+} from './settings.ts';
 import {
   beginPasskeyAuthenticate,
   beginPasskeyRegister,
@@ -490,11 +496,11 @@ export function factorRoutes(router: Router<Context>): void {
       },
     },
     errors: ['AUTH_METHOD_DISABLED', 'CHALLENGE_INVALID', 'TOTP_INVALID', 'RECOVERY_CODE_INVALID'],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       if (body.totp !== undefined) requireTotp(ctx);
       const factor = body.totp !== undefined ? 'totp' : 'recovery';
       const result = await finishTwoFactor(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { challenge: body.challenge, totp: body.totp, recoveryCode: body.recovery_code },
       );
       if (result.status === 'invalid') throw new ProblemError('CHALLENGE_INVALID');
@@ -581,14 +587,14 @@ export function factorRoutes(router: Router<Context>): void {
       },
     },
     errors: ['AUTH_METHOD_DISABLED', 'PASSKEY_INVALID', 'CHALLENGE_INVALID'],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requirePasskeys(ctx);
       const metrics = identityMetrics(ctx.metrics);
       const result = await completePasskeyAuthenticate(ctx.db, {
         challenge: body.challenge,
         response: body.response as unknown as AuthenticationResponseJSON,
         rp: relyingParty(ctx.config),
-        client: sessionClient(ctx.config, request),
+        client: clientFor(ctx, request, identity),
         sessions: sessionSettings(ctx.config),
         now: new Date(),
       });
@@ -599,7 +605,10 @@ export function factorRoutes(router: Router<Context>): void {
       ctx.outbox.wake();
       if (result.secondFactor) metrics.twoFactor('passkey', 'success');
       metrics.signIn(result.authMethod, 'success');
-      metrics.sessionCreated(result.authMethod, result.session.evicted.length);
+      if (!result.session.restored) {
+        metrics.sessionCreated(result.authMethod, result.session.evicted.length);
+      }
+      await notifyNewDevice(ctx, result.session);
       log.info('signed in', {
         method: result.authMethod,
         user_id: result.userId,

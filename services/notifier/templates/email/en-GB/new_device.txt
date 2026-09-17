@@ -1,0 +1,9 @@
+New sign-in to {{ brand.product_name }}
+
+Someone signed in to your account from {{ browser }} on {{ os }}, {{ place }}.
+
+If this was you, you can ignore this email. If it wasn't, sign in and end that session, and change your password if you use one.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

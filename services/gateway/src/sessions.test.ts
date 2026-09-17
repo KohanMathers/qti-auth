@@ -111,6 +111,22 @@ describe('createSessionResolver', () => {
     expect(outcomes).toEqual(['cache_miss', 'cache_hit']);
   });
 
+  it('asks identity again when the request signals change', async () => {
+    const { resolver, rpc } = setup();
+    const gb = {
+      ip: '203.0.113.10',
+      user_agent: 'Firefox',
+      country: 'GB',
+      tls_fingerprint: null,
+      timezone: null,
+      screen: null,
+      client_fingerprint: null,
+    };
+    await resolver.resolve(token, 'me.example.com', gb);
+    await resolver.resolve(token, 'me.example.com', { ...gb, country: 'US' });
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
   it('stops using the cache when the session, user or everything is invalidated', async () => {
     const { resolver, cache, rpc, advance, now } = setup();
     await resolver.resolve(token, 'me.example.com');

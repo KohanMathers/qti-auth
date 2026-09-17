@@ -395,6 +395,12 @@
               "type": "null"
             }
           ]
+        },
+        "database_path": {
+          "default": "/var/lib/qtiauth/geoip/dbip-country-lite.csv.gz",
+          "description": "Country database file. DB-IP Lite CSV or gzipped CSV, or a MaxMind MMDB when source is maxmind.",
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false
@@ -2148,6 +2154,57 @@
       },
       "additionalProperties": false
     },
+    "session_security": {
+      "description": "Session security checks.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "on_country_change": {
+          "default": "challenge",
+          "description": "When a session moves to another country: challenge drops it to aal0 until the user signs in again, block ends it, notify allows it and emails, ignore does nothing.",
+          "type": "string",
+          "enum": [
+            "challenge",
+            "block",
+            "notify",
+            "ignore"
+          ]
+        },
+        "new_device_email": {
+          "default": true,
+          "description": "Email the user when they sign in from a browser or OS that has not been seen.",
+          "type": "boolean"
+        },
+        "tls_fingerprint": {
+          "description": "Optional TLS fingerprint from an upstream proxy.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "header": {
+              "default": null,
+              "description": "Request header holding a TLS fingerprint such as JA4. null turns this signal off.",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "alert_min_interval": {
+          "default": "1h",
+          "description": "Shortest gap between security-alert emails to the same user. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        }
+      },
+      "additionalProperties": false
+    },
     "age": {
       "description": "Age bands, computed from the date of birth.",
       "default": {},
@@ -2350,6 +2407,12 @@
         "tokens": {
           "default": "24h",
           "description": "Keep magic-link and other emailed tokens for this long after they expire. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "session_security_events": {
+          "default": "90d",
+          "description": "Keep session security event log rows for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }

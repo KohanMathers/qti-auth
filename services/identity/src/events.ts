@@ -23,6 +23,14 @@ export interface SessionRevokedData {
   reason: RevocationReason;
 }
 
+export interface SessionFlaggedData {
+  session_id: string;
+  user_id: string;
+  reason: 'country_change' | 'trust';
+  trust_level: string;
+  acr: string;
+}
+
 export function userCreatedEvent(userId: string, data: UserCreatedData): NewEvent<UserCreatedData> {
   return {
     type: IDENTITY_EVENTS.userCreated,
@@ -47,6 +55,15 @@ export function sessionCreatedEvent(
 export function sessionRevokedEvent(data: SessionRevokedData): NewEvent<SessionRevokedData> {
   return {
     type: IDENTITY_EVENTS.sessionRevoked,
+    actor: { type: 'user', id: data.user_id },
+    subject: { type: 'session', id: data.session_id },
+    data,
+  };
+}
+
+export function sessionFlaggedEvent(data: SessionFlaggedData): NewEvent<SessionFlaggedData> {
+  return {
+    type: IDENTITY_EVENTS.sessionFlagged,
     actor: { type: 'user', id: data.user_id },
     subject: { type: 'session', id: data.session_id },
     data,

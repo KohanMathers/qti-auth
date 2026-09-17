@@ -29,6 +29,8 @@ export const definition = defineService({
     'magic_link',
     'password',
     'sessions',
+    'session_security',
+    'geoip',
     'age',
     'parental',
     'security',

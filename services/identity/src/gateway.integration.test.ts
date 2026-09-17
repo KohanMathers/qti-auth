@@ -44,7 +44,7 @@ interface Browser {
   setCookie: (value: string | null) => void;
 }
 
-function browser(): Browser {
+function browser(country = 'GB'): Browser {
   let cookie: string | null = null;
   return {
     cookie: () => cookie,
@@ -53,6 +53,7 @@ function browser(): Browser {
     },
     request: async (path, init = {}) => {
       const headers = new Headers(init.headers);
+      headers.set('cf-ipcountry', country);
       if (init.method !== undefined && init.method !== 'GET') headers.set('origin', ORIGIN);
       if (cookie !== null) headers.set('cookie', cookie);
       const response = await fetch(`http://localhost:${String(gateway.ports[0])}${path}`, {
@@ -156,6 +157,7 @@ beforeAll(async () => {
       },
       captcha: { after: 1000, altcha: { hmac_key: 'integration-captcha-key', max_number: 400 } },
       security: { encryption_key: Buffer.alloc(32, 9).toString('base64') },
+      geoip: { source: 'header', header: 'cf-ipcountry' },
       features: {
         auth: {
           social: {
@@ -185,6 +187,7 @@ beforeAll(async () => {
       valkey: { host: valkey.getHost(), port: valkey.getPort() },
       observability,
       surfaces,
+      geoip: { source: 'header', header: 'cf-ipcountry' },
       gateway: {
         identity_keys: { encryption_key: Buffer.alloc(32, 7).toString('base64') },
         discovery: { interval: '500ms', expiry: '5s', startup_grace: '1ms' },
@@ -503,6 +506,31 @@ describe('identity through the gateway', () => {
     );
     expect(refused.status).toBe(403);
     expect(await refused.json()).toMatchObject({ code: 'STEP_UP_REQUIRED' });
+  });
+
+  it('drops a session to aal0 on a country change and restores it on the next sign-in', async () => {
+    const home = browser('GB');
+    await signUpInBrowser(home, 'travel@example.com');
+    const before = (await (await home.request('/api/v1/me')).json()) as {
+      session: { id: string; acr: string };
+    };
+    expect(before.session.acr).toBe('aal1');
+
+    const away = browser('US');
+    away.setCookie(home.cookie());
+    const challenged = await away.request('/api/v1/me');
+    expect(challenged.status).toBe(403);
+    expect(await challenged.json()).toMatchObject({ code: 'REAUTHENTICATION_REQUIRED' });
+
+    const token = await openLink(away, 'travel@example.com');
+    const confirm = await away.request('/auth/magic-link', form({ token }));
+    expect(confirm.status).toBe(200);
+    expect(away.cookie()).toBe(home.cookie());
+
+    const after = (await (await away.request('/api/v1/me')).json()) as {
+      session: { id: string; acr: string };
+    };
+    expect(after.session).toMatchObject({ id: before.session.id, acr: 'aal1' });
   });
 
   it('keeps session tokens and links out of every log', () => {

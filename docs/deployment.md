@@ -62,12 +62,15 @@ Everything runs on the `internal` network, which has no route in or out of the h
 
 ## Data
 
-| Volume     | Holds                          |
-| ---------- | ------------------------------ |
-| `postgres` | The `qtiauth` database         |
-| `nats`     | JetStream streams and messages |
+| Volume     | Holds                                                                          |
+| ---------- | ------------------------------------------------------------------------------ |
+| `postgres` | The `qtiauth` database                                                         |
+| `nats`     | JetStream streams and messages                                                 |
+| `geoip`    | The DB-IP Lite (or MaxMind) country database, read by identity and the gateway |
 
 Valkey keeps nothing on disk. Nothing in it is a source of truth, so restarting it only clears caches and rate-limit counters.
+
+The `geoip` profile runs `geoip-updater`, which downloads DB-IP Lite into that volume and refreshes it about once a month. Until a database is present, `GET /api/v1/meta/health` reports `GEOIP_UNAVAILABLE` and country checks switch off.
 
 The database is created as `qtiauth`, the default `database.name`. If you change `database.name`, create that database before running `qtiauth db provision` (see [database.md](database.md)).
 

@@ -10,8 +10,8 @@
     "session_id": { "description": "The revoked session.", "type": "string", "format": "uuid" },
     "user_id": { "description": "The session's user.", "type": "string", "format": "uuid" },
     "reason": {
-      "description": "logout when the user signed out, revoked when they ended it from their session list, evicted when a newer sign-in went over sessions.max_per_user.",
-      "enum": ["logout", "revoked", "evicted"]
+      "description": "logout when the user signed out, revoked when they ended it from their session list, evicted when a newer sign-in went over sessions.max_per_user, blocked when session security ended it.",
+      "enum": ["logout", "revoked", "evicted", "blocked"]
     }
   }
 }

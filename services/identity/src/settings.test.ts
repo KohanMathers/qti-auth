@@ -63,13 +63,22 @@ describe('sessionClient', () => {
     const request = new Request('http://identity:8080/', {
       headers: { 'x-forwarded-host': 'me.example.com', 'user-agent': 'Firefox' },
     });
-    expect(sessionClient({ cookies: sections.cookies.parse({}) }, request)).toEqual({
+    const cookies = { cookies: sections.cookies.parse({}) };
+    const extra = {
+      geoip: sections.geoip.parse({}),
+      session_security: sections.session_security.parse({}),
+    };
+    expect(sessionClient({ ...cookies, ...extra }, request)).toMatchObject({
       userAgent: 'Firefox',
       cookieScope: 'me.example.com',
+      ip: '',
+      restoreSessionId: null,
     });
     expect(
-      sessionClient({ cookies: sections.cookies.parse({ domain: 'example.com' }) }, request)
-        .cookieScope,
+      sessionClient(
+        { cookies: sections.cookies.parse({ domain: 'example.com' }), ...extra },
+        request,
+      ).cookieScope,
     ).toBe('example.com');
   });
 });

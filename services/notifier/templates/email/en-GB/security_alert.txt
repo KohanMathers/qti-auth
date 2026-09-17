@@ -1,0 +1,9 @@
+Security alert for {{ brand.product_name }}
+
+{{ summary }}, {{ place }}.
+
+If this was you, you can ignore this email. If it wasn't, sign in and end any sessions you don't recognise, and change your password if you use one.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

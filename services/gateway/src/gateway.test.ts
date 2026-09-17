@@ -53,6 +53,7 @@ function route(overrides: Partial<ManifestRoute>): ManifestRoute {
     allow_pending_legal: false,
     allow_pending_parental_consent: false,
     allow_pending_2fa_enrolment: false,
+    allow_aal0: false,
     rate_limit: 'global',
     step_up: false,
     ...overrides,
@@ -112,6 +113,9 @@ async function setup(options: SetupOptions = {}) {
     cookies: sections.cookies.parse({}),
     gateway: sections.gateway.parse({ http: { max_body_size: 1024 } }),
     security: sections.security.parse({}),
+    geoip: sections.geoip.parse({}),
+    session_security: sections.session_security.parse({}),
+    features: sections.features.parse({}),
   };
   const surfaces =
     options.surfaces ??
@@ -187,17 +191,29 @@ async function setup(options: SetupOptions = {}) {
       surface,
       health: () =>
         healthReport({
-          config: { branding: sections.branding.parse({}), features: sections.features.parse({}) },
+          config: {
+            branding: sections.branding.parse({}),
+            features: sections.features.parse({}),
+            geoip: sections.geoip.parse({}),
+          },
           services: [],
           routeProblems: table.problems,
           starting: false,
         }),
       features: () =>
         featuresReport({
-          config: { branding: sections.branding.parse({}), features: sections.features.parse({}) },
+          config: {
+            branding: sections.branding.parse({}),
+            features: sections.features.parse({}),
+            geoip: sections.geoip.parse({}),
+          },
           surfaces,
           isRunning: () => false,
         }),
+      about: () => ({
+        product_name: 'Example Account',
+        geoip: { source: 'dbip_lite', available: false, attribution: null },
+      }),
       openapi: (target) =>
         Promise.resolve(
           mergeOpenApi({

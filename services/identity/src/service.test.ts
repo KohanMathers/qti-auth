@@ -18,6 +18,7 @@ describe('identity service', () => {
       '0007_factors',
       '0008_social',
       '0009_bindings',
+      '0010_session_security',
     ]);
   });
 
@@ -124,6 +125,7 @@ describe('identity service', () => {
       allow_pending_legal: true,
       allow_pending_parental_consent: true,
       allow_pending_2fa_enrolment: true,
+      allow_aal0: true,
       allow_account_states: expect.arrayContaining(['active', 'banned', 'locked']) as unknown,
     });
     expect(route('POST', '/api/v1/auth/password/login')).toMatchObject({

@@ -8,7 +8,15 @@ import * as z from 'zod';
 
 import packageJson from '../package.json' with { type: 'json' };
 import { GATEWAY_ERRORS } from './errors.ts';
-import { type Features, featuresSchema, type Health, healthSchema } from './meta.ts';
+import {
+  type About,
+  aboutHtml,
+  aboutSchema,
+  type Features,
+  featuresSchema,
+  type Health,
+  healthSchema,
+} from './meta.ts';
 import type { Surface } from './surfaces.ts';
 
 export const definition = defineService({
@@ -22,6 +30,8 @@ export const definition = defineService({
     'cors',
     'network',
     'features',
+    'geoip',
+    'session_security',
     'valkey',
     'gateway',
     'rate_limits',
@@ -36,6 +46,7 @@ export interface LocalContext {
   surface: Surface;
   health: () => Health;
   features: () => Features;
+  about: () => About;
   openapi: (surface: Surface) => Promise<OpenApiDocument>;
 }
 
@@ -56,6 +67,37 @@ router.route({
   responses: { 200: { description: 'What this deployment offers', schema: featuresSchema } },
   handler: ({ ctx }) =>
     Promise.resolve({ status: 200 as const, body: ctx.features(), headers: noStore }),
+});
+
+router.route({
+  method: 'GET',
+  path: '/api/v1/meta/about',
+  operation_id: 'getAbout',
+  summary: 'Product name and third-party attribution, including GeoIP',
+  tags: ['meta'],
+  auth: 'none',
+  rate_limit: 'global',
+  responses: { 200: { description: 'About this deployment', schema: aboutSchema } },
+  handler: ({ ctx }) =>
+    Promise.resolve({ status: 200 as const, body: ctx.about(), headers: noStore }),
+});
+
+router.route({
+  method: 'GET',
+  path: '/about',
+  operation_id: 'aboutPage',
+  summary: 'Attribution for GeoIP and other third-party data',
+  tags: ['meta'],
+  auth: 'none',
+  rate_limit: 'global',
+  responses: { 200: { description: 'An HTML about page' } },
+  handler: ({ ctx }) =>
+    Promise.resolve(
+      new Response(aboutHtml(ctx.about()), {
+        status: 200,
+        headers: { ...noStore, 'content-type': 'text/html; charset=utf-8' },
+      }),
+    ),
 });
 
 router.route({

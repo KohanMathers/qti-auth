@@ -1,13 +1,22 @@
 import { SURFACES } from '@qtiauth/config';
+import { normalizeCountry } from '@qtiauth/geoip';
+import {
+  SESSION_CLIENT_FINGERPRINT_HEADER,
+  SESSION_COUNTRY_HEADER,
+  SESSION_SCREEN_HEADER,
+  SESSION_TIMEZONE_HEADER,
+} from '@qtiauth/service-kit';
 
 import { emailNormalizer } from './email.ts';
 import { parseEncryptionKey } from './encrypt.ts';
 import type { EmailChangeSettings } from './email-change.ts';
+import { geoIpOf } from './geoip-state.ts';
 import type { MagicLinkSettings } from './magic-links.ts';
 import type { RelyingParty } from './passkeys.ts';
 import type { PasswordSettings } from './password-auth.ts';
 import type { IdentityConfig } from './service.ts';
 import type { SessionClient, SessionSettings } from './sessions.ts';
+import type { SessionSecuritySettings } from './security.ts';
 import type { SocialSettings } from './social.ts';
 
 export const RETURN_TO = /^\/(?![/\\])[^\s\\]*$/;
@@ -69,14 +78,50 @@ export function magicLinkSettings(config: IdentityConfig): MagicLinkSettings {
   };
 }
 
+export function sessionSecuritySettings(
+  config: Pick<IdentityConfig, 'features' | 'session_security'>,
+): SessionSecuritySettings {
+  return {
+    enabled: config.features.session_security.enabled,
+    onCountryChange: config.session_security.on_country_change,
+    alertMinInterval: config.session_security.alert_min_interval,
+  };
+}
+
 export function sessionClient(
-  config: Pick<IdentityConfig, 'cookies'>,
+  config: Pick<IdentityConfig, 'cookies' | 'geoip' | 'session_security'>,
   request: Request,
+  extras: { sid?: string | null; lookupCountry?: (ip: string) => string | null } = {},
 ): SessionClient {
+  const ip = clientIp(request);
+  const countryHeader =
+    request.headers.get(SESSION_COUNTRY_HEADER) ??
+    (config.geoip.source === 'header' && config.geoip.header !== null
+      ? request.headers.get(config.geoip.header)
+      : null);
+  const tlsHeader = config.session_security.tls_fingerprint.header;
   return {
     userAgent: request.headers.get('user-agent'),
     cookieScope: config.cookies.domain ?? request.headers.get('x-forwarded-host') ?? '',
+    ip,
+    tlsFingerprint: tlsHeader === null ? null : request.headers.get(tlsHeader),
+    country: normalizeCountry(countryHeader) ?? extras.lookupCountry?.(ip) ?? null,
+    timezone: request.headers.get(SESSION_TIMEZONE_HEADER),
+    screen: request.headers.get(SESSION_SCREEN_HEADER),
+    clientFingerprint: request.headers.get(SESSION_CLIENT_FINGERPRINT_HEADER),
+    restoreSessionId: extras.sid ?? null,
   };
+}
+
+export function clientFor(
+  ctx: { config: IdentityConfig },
+  request: Request,
+  identity?: { sid: string | null } | null,
+): SessionClient {
+  return sessionClient(ctx.config, request, {
+    sid: identity?.sid ?? null,
+    lookupCountry: (ip) => geoIpOf(ctx)?.lookup(ip) ?? null,
+  });
 }
 
 export type SurfaceName = (typeof SURFACES)[number];

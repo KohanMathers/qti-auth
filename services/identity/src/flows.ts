@@ -34,6 +34,7 @@ import type { Context } from './service.ts';
 import {
   accountOrigin,
   CHANGE_EMAIL_PAGE,
+  clientFor,
   clientIp,
   emailChangeSettings,
   emailLinkUrl,
@@ -43,12 +44,12 @@ import {
   passwordSettings,
   RESET_PASSWORD_PAGE,
   REVERT_EMAIL_PAGE,
-  sessionClient,
   sessionSettings,
   socialCallbackUrl,
   socialSettings,
   VERIFY_EMAIL_PAGE,
 } from './settings.ts';
+import type { CreatedSession } from './sessions.ts';
 import {
   beginSocial,
   completeSocial,
@@ -61,10 +62,38 @@ export interface FlowInput {
   ctx: Context;
   request: Request;
   log: Logger;
+  identity?: { sid: string | null } | null;
 }
 
 function expiresInMinutes(ms: number): number {
   return Math.max(1, Math.ceil(ms / 60_000));
+}
+
+export async function notifyNewDevice(ctx: Context, session: CreatedSession): Promise<void> {
+  const notice = session.newDevice;
+  if (notice === null || !ctx.config.session_security.new_device_email) return;
+  await queueEmail(ctx.bus, {
+    template: 'new_device',
+    to: { address: notice.email },
+    locale: notice.locale ?? ctx.config.email.default_locale,
+    variables: {
+      browser: notice.browser,
+      os: notice.os,
+      place: notice.place,
+    },
+  });
+  await ctx.db
+    .updateTable('session_security_events')
+    .set({ notified: true })
+    .where('session_id', '=', session.id)
+    .where('kind', '=', 'new_device')
+    .execute();
+}
+
+async function trackSession(ctx: Context, method: string, session: CreatedSession): Promise<void> {
+  if (!session.restored)
+    identityMetrics(ctx.metrics).sessionCreated(method, session.evicted.length);
+  await notifyNewDevice(ctx, session);
 }
 
 export function magicLinkEnabled(ctx: Context): boolean {
@@ -111,14 +140,14 @@ export async function sendMagicLink(
 }
 
 export async function verify(
-  { ctx, request, log }: FlowInput,
+  { ctx, request, log, identity }: FlowInput,
   input: { token: string; userId: string | undefined },
 ): Promise<VerifyResult> {
   const metrics = identityMetrics(ctx.metrics);
   const result = await verifyMagicLink(ctx.db, {
     token: input.token,
     userId: input.userId,
-    client: sessionClient(ctx.config, request),
+    client: clientFor(ctx, request, identity),
     settings: magicLinkSettings(ctx.config),
     now: new Date(),
   });
@@ -139,7 +168,7 @@ export async function verify(
       ctx.outbox.wake();
       metrics.magicLink('used');
       metrics.signIn(MAGIC_LINK_METHOD, 'success');
-      metrics.sessionCreated(MAGIC_LINK_METHOD, result.session.evicted.length);
+      await trackSession(ctx, MAGIC_LINK_METHOD, result.session);
       log.info('signed in', {
         method: MAGIC_LINK_METHOD,
         user_id: result.userId,
@@ -152,14 +181,14 @@ export async function verify(
 }
 
 export async function signup(
-  { ctx, request, log }: FlowInput,
+  { ctx, request, log, identity }: FlowInput,
   input: { signupToken: string; dateOfBirth: string },
 ): Promise<SignupResult> {
   const metrics = identityMetrics(ctx.metrics);
   const result = await completeSignup(ctx.db, {
     signupToken: input.signupToken,
     dateOfBirth: input.dateOfBirth,
-    client: sessionClient(ctx.config, request),
+    client: clientFor(ctx, request, identity),
     settings: magicLinkSettings(ctx.config),
     now: new Date(),
   });
@@ -176,7 +205,7 @@ export async function signup(
     case 'signed_in':
       ctx.outbox.wake();
       metrics.signup(MAGIC_LINK_METHOD, result.ageBand);
-      metrics.sessionCreated(MAGIC_LINK_METHOD, result.session.evicted.length);
+      await trackSession(ctx, MAGIC_LINK_METHOD, result.session);
       log.info('account created', {
         method: MAGIC_LINK_METHOD,
         user_id: result.userId,
@@ -239,7 +268,7 @@ export async function registerWithPassword(
 }
 
 export async function loginPassword(
-  { ctx, request, log }: FlowInput,
+  { ctx, request, log, identity }: FlowInput,
   input: { email: string; password: string },
 ): Promise<PasswordLoginResult> {
   const metrics = identityMetrics(ctx.metrics);
@@ -247,7 +276,7 @@ export async function loginPassword(
     email: input.email,
     password: input.password,
     ip: clientIp(request),
-    client: sessionClient(ctx.config, request),
+    client: clientFor(ctx, request, identity),
     settings: passwordSettings(ctx.config),
     now: new Date(),
   });
@@ -263,7 +292,7 @@ export async function loginPassword(
     case 'signed_in':
       ctx.outbox.wake();
       metrics.signIn(PASSWORD_METHOD, 'success');
-      metrics.sessionCreated(PASSWORD_METHOD, result.session.evicted.length);
+      await trackSession(ctx, PASSWORD_METHOD, result.session);
       log.info('signed in', {
         method: PASSWORD_METHOD,
         user_id: result.userId,
@@ -313,7 +342,7 @@ export async function inspectPasswordReset(
 }
 
 export async function completePasswordReset(
-  { ctx, request, log }: FlowInput,
+  { ctx, request, log, identity }: FlowInput,
   input: {
     token: string;
     password: string;
@@ -327,7 +356,7 @@ export async function completePasswordReset(
     password: input.password,
     keepOtherSessions: input.keepOtherSessions,
     userId: input.userId,
-    client: sessionClient(ctx.config, request),
+    client: clientFor(ctx, request, identity),
     settings: passwordSettings(ctx.config),
     now: new Date(),
   });
@@ -345,7 +374,7 @@ export async function completePasswordReset(
     case 'signed_in':
       ctx.outbox.wake();
       metrics.signIn(PASSWORD_METHOD, 'success');
-      metrics.sessionCreated(PASSWORD_METHOD, result.session.evicted.length);
+      await trackSession(ctx, PASSWORD_METHOD, result.session);
       if (result.revoked.length > 0) metrics.sessionsRevoked('revoked', result.revoked.length);
       log.info('password reset', {
         user_id: result.userId,
@@ -387,12 +416,12 @@ export async function sendEmailVerification(
 }
 
 export async function completeEmailVerification(
-  { ctx, request, log }: FlowInput,
+  { ctx, request, log, identity }: FlowInput,
   input: { token: string },
 ): Promise<EmailVerifyResult> {
   const result = await verifyEmailAddress(ctx.db, {
     token: input.token,
-    client: sessionClient(ctx.config, request),
+    client: clientFor(ctx, request, identity),
     settings: passwordSettings(ctx.config),
     now: new Date(),
   });
@@ -402,7 +431,7 @@ export async function completeEmailVerification(
       break;
     case 'signed_in':
       ctx.outbox.wake();
-      identityMetrics(ctx.metrics).sessionCreated(PASSWORD_METHOD, result.session.evicted.length);
+      await trackSession(ctx, PASSWORD_METHOD, result.session);
       log.info('email verified', { user_id: result.userId, session_id: result.session.id });
       break;
   }
@@ -446,7 +475,7 @@ export async function updatePassword(
 }
 
 export async function finishTwoFactor(
-  { ctx, request, log }: FlowInput,
+  { ctx, request, log, identity }: FlowInput,
   input: { challenge: string; totp?: string | undefined; recoveryCode?: string | undefined },
 ): Promise<Awaited<ReturnType<typeof completeSecondFactor>>> {
   const metrics = identityMetrics(ctx.metrics);
@@ -456,7 +485,7 @@ export async function finishTwoFactor(
     totp: input.totp,
     recoveryCode: input.recoveryCode,
     key: encryptionKey(ctx.config),
-    client: sessionClient(ctx.config, request),
+    client: clientFor(ctx, request, identity),
     sessions: sessionSettings(ctx.config),
     now: new Date(),
   });
@@ -468,7 +497,7 @@ export async function finishTwoFactor(
   ctx.outbox.wake();
   metrics.twoFactor(result.method, 'success');
   metrics.signIn(result.authMethod, 'success');
-  metrics.sessionCreated(result.authMethod, result.session.evicted.length);
+  await trackSession(ctx, result.authMethod, result.session);
   log.info('signed in', {
     method: result.method,
     user_id: result.userId,
@@ -514,11 +543,11 @@ export async function startSocial(
   return result;
 }
 
-function noteSocialComplete(
+async function noteSocialComplete(
   { ctx, log }: FlowInput,
   providerId: string,
   result: CompleteSocialResult,
-): void {
+): Promise<void> {
   const metrics = identityMetrics(ctx.metrics);
   const method = metricMethod(
     findSocialProvider(ctx.config.features.auth.social, providerId)?.type ?? providerId,
@@ -554,7 +583,7 @@ function noteSocialComplete(
         metrics.signup(method, result.ageBand);
       }
       metrics.signIn(method, 'success');
-      metrics.sessionCreated(method, result.session.evicted.length);
+      await trackSession(ctx, method, result.session);
       log.info('signed in', {
         method,
         user_id: result.userId,
@@ -585,11 +614,11 @@ export async function finishSocial(
     code: args.code,
     params: args.params,
     error: args.error,
-    client: sessionClient(ctx.config, request),
+    client: clientFor(ctx, request),
     settings: socialSettings(ctx.config),
     now: new Date(),
   });
-  noteSocialComplete(input, args.providerId, result);
+  await noteSocialComplete(input, args.providerId, result);
   return result;
 }
 
@@ -602,7 +631,7 @@ export async function completeSocialSignup(
     challenge: input.challenge,
     dateOfBirth: input.dateOfBirth,
     email: input.email,
-    client: sessionClient(ctx.config, request),
+    client: clientFor(ctx, request),
     settings: socialSettings(ctx.config),
     now: new Date(),
   });
@@ -620,7 +649,7 @@ export async function completeSocialSignup(
       ctx.outbox.wake();
       const method = metricMethod(result.method);
       metrics.signup(method, result.ageBand);
-      metrics.sessionCreated(method, result.session.evicted.length);
+      await trackSession(ctx, method, result.session);
       log.info('account created', {
         method,
         user_id: result.userId,

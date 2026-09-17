@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.session.flagged.v1",
+  "title": "Session flagged",
+  "description": "Session security challenged or blocked a session. The gateway drops it from its cache. The subject is the session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["session_id", "user_id", "reason", "trust_level", "acr"],
+  "properties": {
+    "session_id": { "description": "The flagged session.", "type": "string", "format": "uuid" },
+    "user_id": { "description": "The session's user.", "type": "string", "format": "uuid" },
+    "reason": {
+      "description": "country_change when the client moved country, trust when other signals dropped the trust level.",
+      "enum": ["country_change", "trust"]
+    },
+    "trust_level": {
+      "description": "The session's trust level after the check.",
+      "enum": ["full", "partial", "challenge", "blocked"]
+    },
+    "acr": {
+      "description": "The session's assurance level after the check. aal0 means the user must sign in again.",
+      "enum": ["aal0", "aal1", "aal2"]
+    }
+  }
+}

@@ -386,13 +386,13 @@ Spec: §2.10
 ### P2.6 Session security — M
 Spec: §4.8, §2.9
 
-- [ ] GeoIP sources: DB-IP Lite (default), MaxMind, header, none. `geoip-updater` container.
+- [x] GeoIP sources: DB-IP Lite (default), MaxMind, header, none. `geoip-updater` container.
       CC-BY attribution added to docs and the about page.
-- [ ] Signal collection and weighting, trust-level transitions.
-- [ ] Country-change policy: `challenge` (default), `block`, `notify`, `ignore`.
-- [ ] Optional TLS fingerprint header.
-- [ ] New-device sign-in email, with the app-wide toggle.
-- [ ] Security event log and rate-limited alert emails.
+- [x] Signal collection and weighting, trust-level transitions.
+- [x] Country-change policy: `challenge` (default), `block`, `notify`, `ignore`.
+- [x] Optional TLS fingerprint header.
+- [x] New-device sign-in email, with the app-wide toggle.
+- [x] Security event log and rate-limited alert emails.
 
 **Done when:** a country change under `challenge` drops the session to `aal0` and re-auth restores it,
 without creating a new session.
@@ -958,44 +958,15 @@ and the accessibility suite passes.
 
 ---
 
-## Phase 10 — Migration and v1.0 release
+## Phase 10 — v1.0 release
 
-### P10.1 Migration from the old Cloudflare system — L
-
-**Not covered by SPEC.md.** Needs confirming before this phase starts. Proposed scope:
-
-| Data | Migrates? | Notes |
-|---|---|---|
-| Users, emails, DOB, roles | Yes | Roles map to built-in RBAC roles |
-| Usernames and username history | Yes | Run existing names through the text filter and report hits for manual review. Don't auto-block |
-| Social identities (`oauth_provider`, `oauth_id`) | Yes | Become `identities` rows |
-| Ban and lock state | Yes | Become moderation actions with a "migrated" reason |
-| Sessions | **No** | Everyone signs in again |
-| Reports and moderation actions | Yes | Mapped to the new taxonomy |
-| Tickets, messages, KB articles and categories | Yes | Ticket numbers preserved |
-| Games, achievements, `games_owned` | Yes | `games_owned` becomes base-product entitlements with source `admin_grant` |
-| OAuth clients and consents | Yes | Client secrets must be **regenerated** (old hashes aren't compatible), and client owners are emailed |
-| Minecraft / JagSMP tables | **No** | Removed per spec |
-| `daily_stats`, `banned_words`, `content_flags` | **No** | Replaced |
-
-- [ ] D1 export script and idempotent import CLI (`qtiauth import legacy`).
-- [ ] Dry-run mode with a full report.
-- [ ] Rehearsal on a copy of production data.
-- [ ] Cutover plan: freeze writes on the old worker → final export → import → DNS switch → notify OAuth
-      client owners.
-
-**Done when:** a rehearsal import of production data completes with zero unexplained discrepancies.
-
-### P10.2 Release — M
+### P10.1 Release — M
 
 - [ ] Every milestone above done.
 - [ ] Versioned images published, compose files tagged, upgrade policy documented (semver, expand/
       contract guarantee across one minor version).
 - [ ] Public repository cleanup: no production config, secrets or data in history.
 - [ ] Announcement and docs site live.
-
-**v1.0 is released when:** P10.2 is complete and the production cutover (P10.1) has run for 14 days
-without a critical incident.
 
 ---
 
@@ -1006,7 +977,6 @@ These don't block the roadmap, but must be resolved at the milestone listed.
 | Item | Resolve at |
 |---|---|
 | LDNOOBW, SCOWL, name/surname lists and GeoNames licences allow redistribution | P2b.1 |
-| DB-IP Lite CC-BY attribution placement | P2.6 |
 | SI 2026/268 report fields, timeframes and retention | P5.3 |
 | NCA CSEA-IRP registration for each deployment operator | P5.3 |
 | Steamworks partner access and publisher key | P7.8 |

@@ -10,8 +10,9 @@ import type { CreatedSession } from './sessions.ts';
 export const NO_STORE = { 'cache-control': 'no-store' };
 
 export function sessionHeaders(
-  session: Pick<CreatedSession, 'token' | 'expiresAt' | 'evicted'>,
+  session: Pick<CreatedSession, 'id' | 'token' | 'expiresAt' | 'evicted' | 'restored'>,
 ): Record<string, string> {
+  if (session.restored) return revokedHeaders([...session.evicted, session.id]);
   return {
     ...revokedHeaders(session.evicted),
     [SESSION_TOKEN_HEADER]: session.token,

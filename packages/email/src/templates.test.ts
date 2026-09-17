@@ -76,5 +76,10 @@ describe('defineEmailTemplates', () => {
       category: 'security',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.new_device).toMatchObject({ category: 'security', priority: 'high' });
+    expect(EMAIL_TEMPLATES.security_alert).toMatchObject({
+      category: 'security',
+      priority: 'high',
+    });
   });
 });

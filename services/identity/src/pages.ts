@@ -541,13 +541,13 @@ ${hiddenInput('token', query.token)}
     auth: 'none',
     rate_limit: 'auth_verify',
     responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       if (!magicLinkEnabled(ctx)) return disabled(ctx);
       const form = await readForm(request);
       const token = form['token'] ?? '';
       const userId = form['user_id'];
       const result = await verify(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { token, userId: z.uuid().safeParse(userId).success ? userId : undefined },
       );
       switch (result.status) {
@@ -620,7 +620,7 @@ ${socialButtons(ctx, 'signup')}
     auth: 'none',
     rate_limit: 'auth_verify',
     responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       if (!magicLinkEnabled(ctx)) return disabled(ctx);
       const form = await readForm(request);
       const signupToken = form['signup_token'] ?? '';
@@ -628,7 +628,7 @@ ${socialButtons(ctx, 'signup')}
       if (!isValidDateOfBirth(dateOfBirth, new Date())) {
         return dateOfBirthForm(ctx, signupToken, 'Enter your real date of birth.');
       }
-      const result = await signup({ ctx, request, log }, { signupToken, dateOfBirth });
+      const result = await signup({ ctx, request, log, identity }, { signupToken, dateOfBirth });
       switch (result.status) {
         case 'invalid':
           return invalidLink(ctx);
@@ -676,7 +676,7 @@ ${socialButtons(ctx, 'signup')}
     auth: 'none',
     rate_limit: 'magic_link',
     responses: htmlResponses,
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       if (!magicLinkEnabled(ctx)) return disabled(ctx);
       const form = await readForm(request);
       const email = form['email'] ?? '';
@@ -688,7 +688,7 @@ ${socialButtons(ctx, 'signup')}
         return magicLinkStartForm(ctx, email, captchaAlert(captcha), captcha.widget);
       }
       await sendMagicLink(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { email, locale: localeOf(ctx, request), returnTo: null },
       );
       await noteCaptchaAttempt(ctx, request, 'magic_link');
@@ -723,7 +723,7 @@ ${socialButtons(ctx, 'signup')}
     auth: 'none',
     rate_limit: 'auth_password',
     responses: htmlResponses,
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       if (!passwordEnabled(ctx)) return passwordDisabled(ctx);
       const form = await readForm(request);
       const email = form['email'] ?? '';
@@ -740,7 +740,7 @@ ${socialButtons(ctx, 'signup')}
         return registerForm(ctx, { email, dateOfBirth }, captchaAlert(captcha), captcha.widget);
       }
       const result = await registerWithPassword(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { email, password, dateOfBirth, locale: localeOf(ctx, request) },
       );
       await noteCaptchaAttempt(ctx, request, 'password_signup');
@@ -804,7 +804,7 @@ ${socialButtons(ctx, 'signup')}
     auth: 'none',
     rate_limit: 'auth_password',
     responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       if (!passwordEnabled(ctx)) return passwordDisabled(ctx);
       const form = await readForm(request);
       const email = form['email'] ?? '';
@@ -814,7 +814,7 @@ ${socialButtons(ctx, 'signup')}
       if (captcha.status !== 'ok') {
         return loginForm(ctx, email, captchaAlert(captcha), captcha.widget, 403, returnTo);
       }
-      const result = await loginPassword({ ctx, request, log }, { email, password });
+      const result = await loginPassword({ ctx, request, log, identity }, { email, password });
       if (result.status === 'invalid') {
         const next = await checkCaptcha(ctx, request, 'password_login', undefined);
         return loginForm(
@@ -866,11 +866,14 @@ ${socialButtons(ctx, 'signup')}
     auth: 'none',
     rate_limit: 'magic_link',
     responses: htmlResponses,
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       if (!passwordEnabled(ctx)) return passwordDisabled(ctx);
       const email = (await readForm(request))['email'] ?? '';
       if (z.email().safeParse(email).success) {
-        await sendPasswordReset({ ctx, request, log }, { email, locale: localeOf(ctx, request) });
+        await sendPasswordReset(
+          { ctx, request, log, identity },
+          { email, locale: localeOf(ctx, request) },
+        );
       }
       return page(ctx, {
         title: 'Check your email',
@@ -915,14 +918,14 @@ ${hiddenInput('token', query.token)}
     auth: 'none',
     rate_limit: 'auth_verify',
     responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       if (!passwordEnabled(ctx)) return passwordDisabled(ctx);
       const form = await readForm(request);
       const token = form['token'] ?? '';
       const userId = z.uuid().safeParse(form['user_id']).success ? form['user_id'] : undefined;
       const password = form['password'];
       if (password === undefined) {
-        const peek = await inspectPasswordReset({ ctx, request, log }, { token, userId });
+        const peek = await inspectPasswordReset({ ctx, request, log, identity }, { token, userId });
         switch (peek.status) {
           case 'invalid':
             return invalidLink(ctx);
@@ -945,7 +948,7 @@ ${peek.accounts
         }
       }
       const result = await completePasswordReset(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         {
           token,
           password,
@@ -1018,10 +1021,10 @@ ${hiddenInput('token', query.token)}
     auth: 'none',
     rate_limit: 'auth_verify',
     responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       if (!passwordEnabled(ctx)) return passwordDisabled(ctx);
       const token = (await readForm(request))['token'] ?? '';
-      const result = await completeEmailVerification({ ctx, request, log }, { token });
+      const result = await completeEmailVerification({ ctx, request, log, identity }, { token });
       if (result.status === 'invalid') return invalidLink(ctx);
       return signedIn(ctx, result.session, null);
     },
@@ -1060,7 +1063,7 @@ ${hiddenInput('token', query.token)}
     auth: 'none',
     rate_limit: 'auth_password',
     responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       const form = await readForm(request);
       const challenge = form['challenge'] ?? '';
       const totpRaw = form['totp']?.trim();
@@ -1069,7 +1072,7 @@ ${hiddenInput('token', query.token)}
       const recoveryCode =
         recoveryRaw === undefined || recoveryRaw === '' ? undefined : recoveryRaw;
       const result = await finishTwoFactor(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { challenge, totp, recoveryCode },
       );
       if (result.status === 'invalid') {
@@ -1265,7 +1268,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
       query: z.object({ return_to: z.string().max(2048).optional() }),
     },
     responses: { 302: { description: 'Redirect to the provider' }, ...htmlResponses },
-    handler: async ({ ctx, params, query, request, log }) => {
+    handler: async ({ ctx, params, query, request, log, identity }) => {
       if (!socialEnabled(ctx, params.provider)) {
         return page(ctx, {
           status: 403,
@@ -1274,7 +1277,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
         });
       }
       const result = await startSocial(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         {
           providerId: params.provider,
           intent: 'signin',
@@ -1315,7 +1318,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
       }
       const { userId } = sessionUser(identity);
       const result = await startSocial(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         {
           providerId: params.provider,
           intent: 'link',
@@ -1345,7 +1348,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     rate_limit: 'auth_verify',
     request: { params: z.object({ provider: z.string().max(64) }) },
     responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
-    handler: async ({ ctx, params, request, log }) => {
+    handler: async ({ ctx, params, request, log, identity }) => {
       if (!socialEnabled(ctx, params.provider)) {
         return page(ctx, {
           status: 403,
@@ -1355,7 +1358,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
       }
       const url = new URL(request.url);
       const result = await finishSocial(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         {
           providerId: params.provider,
           state: url.searchParams.get('state') ?? '',
@@ -1406,7 +1409,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     auth: 'none',
     rate_limit: 'auth_verify',
     responses: { ...htmlResponses, 303: { description: 'Signed in, going to return_to' } },
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       const form = await readForm(request);
       const challenge = form['challenge'] ?? '';
       const needsEmail = form['needs_email'] === '1';
@@ -1415,7 +1418,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
         return socialSignupForm(ctx, challenge, needsEmail, 'Enter your real date of birth.');
       }
       const result = await completeSocialSignup(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { challenge, dateOfBirth, email: form['email'] },
       );
       switch (result.status) {
@@ -1516,9 +1519,9 @@ ${hiddenInput('token', query.token)}
     auth: 'none',
     rate_limit: 'auth_verify',
     responses: htmlResponses,
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       const token = (await readForm(request))['token'] ?? '';
-      const result = await finishEmailChange({ ctx, request, log }, { token });
+      const result = await finishEmailChange({ ctx, request, log, identity }, { token });
       if (result.status === 'invalid') return invalidLink(ctx);
       if (result.status === 'account_limit') {
         return page(ctx, {
@@ -1567,9 +1570,9 @@ ${hiddenInput('token', query.token)}
     auth: 'none',
     rate_limit: 'auth_verify',
     responses: htmlResponses,
-    handler: async ({ ctx, request, log }) => {
+    handler: async ({ ctx, request, log, identity }) => {
       const token = (await readForm(request))['token'] ?? '';
-      const result = await finishEmailRevert({ ctx, request, log }, { token });
+      const result = await finishEmailRevert({ ctx, request, log, identity }, { token });
       if (result.status === 'invalid') return invalidLink(ctx);
       if (result.status === 'account_limit') {
         return page(ctx, {
@@ -1669,7 +1672,13 @@ ${hiddenInput('token', query.token)}
       log.info('session bound', { target, cookie_scope: cookieScope });
       return redirect(
         result.returnPath,
-        sessionHeaders({ token: result.token, expiresAt: result.expiresAt, evicted: [] }),
+        sessionHeaders({
+          token: result.token,
+          expiresAt: result.expiresAt,
+          evicted: [],
+          restored: false,
+          id: '',
+        }),
       );
     },
   });

@@ -18,6 +18,7 @@ function config(features: unknown = {}): MetaConfig {
   return {
     branding: sections.branding.parse({}),
     features: sections.features.parse(features),
+    geoip: sections.geoip.parse({ source: 'header', header: 'cf-ipcountry' }),
   };
 }
 
@@ -150,6 +151,7 @@ describe('featuresReport', () => {
       { id: 'google', name: 'Google', icon: null },
       { id: 'corp', name: 'Corp', icon: null },
     ]);
+    expect(report.auth.session_security).toBe(true);
     expect(report.features['games']?.['licensing']).toBe(true);
     expect(report.features['support']?.['tickets']).toBe(false);
     expect(report.surface_pairs).toEqual([
@@ -183,5 +185,19 @@ describe('featuresReport', () => {
       { code: 'CROSS_SITE_SURFACES', surfaces: ['account', 'api'] },
       { code: 'CROSS_SITE_SURFACES', surfaces: ['support', 'api'] },
     ]);
+  });
+
+  it('warns when GeoIP is unavailable without degrading the stack', () => {
+    const report = healthReport({
+      config: {
+        ...config(minimal),
+        geoip: sections.geoip.parse({ source: 'none' }),
+      },
+      services: running('identity', 'notifier', 'scheduler'),
+      routeProblems: [],
+      starting: false,
+    });
+    expect(report.status).toBe('ok');
+    expect(report.problems).toEqual([{ code: 'GEOIP_UNAVAILABLE', source: 'none' }]);
   });
 });

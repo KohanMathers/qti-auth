@@ -1,11 +1,12 @@
 import type { QtiauthConfig } from '@qtiauth/config';
+import { type GeoipAttribution, geoipAvailable } from '@qtiauth/geoip';
 import * as z from 'zod';
 
 import type { RunningService } from './discovery.ts';
 import type { RouteProblem } from './routes.ts';
 import { DEFAULT_MODULES, type Module, type Surface, surfacePairs } from './surfaces.ts';
 
-export type MetaConfig = Pick<QtiauthConfig, 'branding' | 'features'>;
+export type MetaConfig = Pick<QtiauthConfig, 'branding' | 'features' | 'geoip'>;
 
 export const CORE_SERVICES = ['identity', 'notifier', 'scheduler'] as const;
 
@@ -39,7 +40,8 @@ export type HealthProblem =
   | RouteProblem
   | { code: 'SERVICE_NOT_RUNNING'; service: string }
   | { code: 'FEATURE_SERVICE_NOT_RUNNING'; feature: string; service: string }
-  | { code: 'CROSS_SITE_SURFACES'; surfaces: [string, string] };
+  | { code: 'CROSS_SITE_SURFACES'; surfaces: [string, string] }
+  | { code: 'GEOIP_UNAVAILABLE'; source: string };
 
 const toggles = z.record(z.string(), z.boolean());
 
@@ -71,6 +73,69 @@ export const featuresSchema = z.object({
 });
 
 export type Features = z.output<typeof featuresSchema>;
+
+export const aboutSchema = z.object({
+  product_name: z.string(),
+  geoip: z.object({
+    source: z.string(),
+    available: z.boolean(),
+    attribution: z
+      .object({
+        name: z.string(),
+        product: z.string(),
+        url: z.string(),
+        license: z.string(),
+        license_url: z.string(),
+        notice: z.string(),
+      })
+      .nullable(),
+  }),
+});
+
+export type About = z.output<typeof aboutSchema>;
+
+export function aboutReport(config: MetaConfig, attribution: GeoipAttribution | null): About {
+  return {
+    product_name: config.branding.product_name,
+    geoip: {
+      source: config.geoip.source,
+      available: geoipAvailable(config.geoip),
+      attribution,
+    },
+  };
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+export function aboutHtml(about: About): string {
+  const credit = about.geoip.attribution;
+  const body = credit
+    ? `<p>${escapeHtml(credit.notice)}.</p>
+<p><a href="${escapeHtml(credit.url)}">${escapeHtml(credit.name)} ${escapeHtml(credit.product)}</a>
+ is licensed under <a href="${escapeHtml(credit.license_url)}">${escapeHtml(credit.license)}</a>.</p>`
+    : '<p>This deployment does not use a GeoIP database that requires attribution.</p>';
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About · ${escapeHtml(about.product_name)}</title>
+</head>
+<body>
+<main>
+<h1>About ${escapeHtml(about.product_name)}</h1>
+${body}
+</main>
+</body>
+</html>
+`;
+}
 
 export function enabledFeatures(
   features: QtiauthConfig['features'],
@@ -111,8 +176,13 @@ export function healthReport(input: HealthInput): Health {
         code: 'CROSS_SITE_SURFACES' as const,
         surfaces: pair.surfaces,
       })),
+    ...(geoipAvailable(input.config.geoip)
+      ? []
+      : [{ code: 'GEOIP_UNAVAILABLE' as const, source: input.config.geoip.source }]),
   ];
-  const degrading = problems.filter((problem) => problem.code !== 'CROSS_SITE_SURFACES');
+  const degrading = problems.filter(
+    (problem) => problem.code !== 'CROSS_SITE_SURFACES' && problem.code !== 'GEOIP_UNAVAILABLE',
+  );
   let status: Health['status'] = 'ok';
   if (degrading.length > 0) status = input.starting ? 'starting' : 'degraded';
   return {

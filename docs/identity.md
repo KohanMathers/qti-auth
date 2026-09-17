@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), and offers TOTP, recovery codes, step-up and email changes. Usernames, roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), and offers TOTP, recovery codes, step-up, email changes and session security. Usernames, roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -39,6 +39,17 @@ captcha:
 sessions:
   max_per_user: 10
 
+session_security:
+  on_country_change: challenge
+  new_device_email: true
+  tls_fingerprint: { header: null }
+  alert_min_interval: 1h
+
+geoip:
+  source: dbip_lite
+  header: null
+  database_path: /var/lib/qtiauth/geoip/dbip-country-lite.csv.gz
+
 cookies:
   session_ttl: 7d
   idle_timeout: 30d
@@ -65,6 +76,7 @@ security:
 retention:
   sessions: 30d
   tokens: 24h
+  session_security_events: 90d
 ```
 
 - `accounts.max_per_email` is how many accounts can share one email address, after normalization.
@@ -74,14 +86,17 @@ retention:
 - `password.min_length` and `password.max_length` bound a password. 256 characters is the hard cap. Composition rules are off unless you turn them on. `password.breach_check` asks Have I Been Pwned whether the password has appeared in a breach (only the first 5 hex characters of a SHA-1 hash leave the server); if HIBP is unreachable the check is skipped. `password.argon2` is Argon2id; stored hashes are rehashed on login when these change. `password.reset_ttl` and `password.verification_ttl` are how long reset and email-confirmation links work. `password.failure_delay` slows repeated failures per account and per IP. There is no lockout.
 - `captcha.provider` is `altcha` (self-hosted proof-of-work, the default), `turnstile`, `hcaptcha`, `friendly_captcha` or `none`. `captcha.after` is how many failed password attempts, or signup or magic-link starts, from one IP it takes before a CAPTCHA is required. Attempts older than `captcha.window` do not count. `none` turns CAPTCHA off. Vendor providers need `site_key` and `secret_key`. Altcha can generate an HMAC key at startup; set `captcha.altcha.hmac_key` when running more than one identity replica.
 - `sessions.max_per_user` is how many sessions a user can have. Signing in again ends the oldest.
+- `session_security.on_country_change` is `challenge` (drop the session to `aal0` until the user signs in again), `block`, `notify` or `ignore`. `session_security.new_device_email` sends mail on a first sign-in from a browser or OS this account has not used. `session_security.tls_fingerprint.header` is an optional request header such as JA4; `null` turns that signal off. `session_security.alert_min_interval` is the minimum gap between security-alert emails to the same user.
+- `geoip.source` is `dbip_lite` (default), `maxmind`, `header` or `none`. `geoip.header` is required when source is `header`. `geoip.database_path` is a DB-IP Lite CSV (or gzipped CSV), or a MaxMind MMDB when source is `maxmind`.
 - `cookies.session_ttl` is the longest a session lasts, and `cookies.idle_timeout` ends it sooner if it isn't used.
 - `age.bands` is the age in whole years each band starts at. Anyone younger than `13_to_15` is `under_13`.
 - `parental.consent_age` is the age below which an account needs a parent or guardian's approval.
 - `security.encryption_key` is a base64 32-byte key (`openssl rand -base64 32`) that encrypts TOTP secrets at rest. Identity will not start without it. Set `APP_ENCRYPTION_KEY` in `.env`.
 - `security.step_up_window` is how recently a session must have reached `aal2` for a route that needs step-up, and for adding a password after a magic-link sign-in.
 - `security.require_2fa_for_permissions` is the staff permissions that require a passkey or TOTP. Matching accounts can sign in but only reach enrolment until they set one up. Permissions themselves arrive in a later release; until then this is tested with a stub grant.
-- `retention.sessions` is how long ended sessions are kept, and `retention.tokens` how long used or expired emailed tokens are kept after they expire.
+- `retention.sessions` is how long ended sessions are kept, `retention.tokens` how long used or expired emailed tokens are kept after they expire, and `retention.session_security_events` how long session security log rows are kept.
 - `features.auth.magic_link.enabled: false` turns magic links off. `features.auth.password.enabled: false` turns passwords off. `features.auth.passkeys.enabled: false` turns passkeys off. `features.auth.totp.enabled: false` turns authenticator-app sign-in off.
+- `features.session_security.enabled: false` turns session security checks off.
 - Each social provider is off until you enable it. Enabling Google, GitHub or Discord without `client_id` and `client_secret` fails config validation. Steam has no credentials. Generic OIDC providers are listed under `features.auth.social.generic_oidc`; their `id` must not collide with a built-in method.
 
 Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha`, `security`, `features` and `valkey`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one. Passkey origins are those same account origins. Session-binding codes live in Valkey for 60 seconds. When a social provider is enabled, OAuth `state`, PKCE verifiers and OIDC nonces live in Valkey for 10 minutes.
@@ -236,6 +251,27 @@ When a browser navigation needs a session on a host that has no binding, the gat
 
 A session ends when it's `cookies.session_ttl` old, when it hasn't been used for `cookies.idle_timeout`, or when it's revoked. Activity is recorded at most once a minute.
 
+`GET /api/v1/sessions` includes `device` (browser and OS from the user agent) and `country` (ISO code from GeoIP).
+
+### Session security
+
+`features.session_security.enabled` (on by default) scores each request against the signals captured at sign-in: IP, subnet (/24 IPv4, /48 IPv6), country, User-Agent, and optionally a TLS fingerprint header plus low-weight client timezone, screen and fingerprint headers (`X-QTIAuth-Timezone`, `X-QTIAuth-Screen`, `X-QTIAuth-Client-Fingerprint`). Trust moves `full` → `partial` → `challenge` → `blocked`.
+
+`session_security.on_country_change` decides what happens when the country changes:
+
+| Policy      | Effect                                                             |
+| ----------- | ------------------------------------------------------------------ |
+| `challenge` | Default. The session drops to `aal0` until the user signs in again |
+| `block`     | The session is ended and a security-alert email is sent            |
+| `notify`    | The session continues, and a security-alert email is sent          |
+| `ignore`    | Nothing                                                            |
+
+Re-authentication after `aal0` uses a magic link, a passkey, or password plus 2FA, and restores the **same** session rather than minting a new cookie. Social sign-in always starts a new session. Routes that need a session refuse `aal0` with `403 REAUTHENTICATION_REQUIRED`, except `POST /api/v1/auth/logout` (`allow_aal0: true`). A top-level navigation in that state is sent to `/auth/login`.
+
+A first sign-in from a browser or OS that this account has not used sends a `new_device` email, unless `session_security.new_device_email` is false. Security-alert emails are at most one per user per `session_security.alert_min_interval`.
+
+GeoIP defaults to DB-IP Lite (CC-BY 4.0) at `geoip.database_path`. Set `geoip.source` to `maxmind`, `header` (with `geoip.header`) or `none`. Country checks switch off when no country can be resolved. Attribution is on `GET /about` and `GET /api/v1/meta/about`.
+
 Errors, on top of the [codes every service can return](services.md#errors):
 
 | Code                           | Status | When                                                                                   |
@@ -274,19 +310,20 @@ Errors, on top of the [codes every service can return](services.md#errors):
 
 ## Events
 
-| Event                                 | When                                                                                                     |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `qtiauth.identity.user.created.v1`    | An account was created                                                                                   |
-| `qtiauth.identity.session.created.v1` | Someone signed in                                                                                        |
-| `qtiauth.identity.session.revoked.v1` | A session was ended by signing out (`logout`), by the user (`revoked`) or by a newer sign-in (`evicted`) |
+| Event                                 | When                                                                                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `qtiauth.identity.user.created.v1`    | An account was created                                                                                                                    |
+| `qtiauth.identity.session.created.v1` | Someone signed in                                                                                                                         |
+| `qtiauth.identity.session.revoked.v1` | A session was ended by signing out (`logout`), by the user (`revoked`), by a newer sign-in (`evicted`) or by session security (`blocked`) |
+| `qtiauth.identity.session.flagged.v1` | Session security challenged or blocked a session                                                                                          |
 
-The gateway clears cached sessions when it sees `session.revoked`. Schemas are in `packages/events/schemas/identity/`.
+The gateway clears cached sessions when it sees `session.revoked` or `session.flagged`. Schemas are in `packages/events/schemas/identity/`.
 
 ## Retention and data rights
 
-`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, and auth-failure counters `retention.tokens` after they were last updated.
+`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, and session security events `retention.session_security_events` after they were recorded.
 
-A user's export has their account, sign-in methods (without password hashes or TOTP secrets), sessions, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its sign-in methods, recovery codes, sessions, and the tokens and password-failure counters too unless another account uses the same address.
+A user's export has their account, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address.
 
 ## Metrics
 
@@ -326,8 +363,8 @@ Services never see cookies, so identity asks the gateway to set one with respons
 | `X-QTIAuth-Session-Clear`    | Clears the session cookie                                                |
 | `X-QTIAuth-Revoked-Sessions` | Comma-separated session IDs to drop from its session cache straight away |
 
-The names are exported from `@qtiauth/service-kit`, and `sessionHeaders`, `revokedHeaders` and `signedOutHeaders` in `services/identity/src/headers.ts` build them.
+The names are exported from `@qtiauth/service-kit`, and `sessionHeaders`, `revokedHeaders` and `signedOutHeaders` in `services/identity/src/headers.ts` build them. Restoring a challenged session keeps the existing cookie and sends `X-QTIAuth-Revoked-Sessions` with that session's ID so the gateway drops the cached `aal0` copy.
 
 ### Tests
 
-`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`. `bind.integration.test.ts` does the same across three hostnames on two registrable domains.
+`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session. `bind.integration.test.ts` does the same across three hostnames on two registrable domains.

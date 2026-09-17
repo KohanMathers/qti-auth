@@ -47,8 +47,23 @@ export async function captureEmails(bus: Bus): Promise<CapturedEmails> {
     jobs,
     nextJob,
     nextLink: async (address, timeout = 10_000) => {
-      const job = await nextJob(address, undefined, timeout);
-      return new URL(String(job.variables['link']));
+      const deadline = Date.now() + timeout;
+      for (;;) {
+        const job = jobs.find(
+          (candidate) =>
+            candidate.to.address === address &&
+            !taken.has(candidate.delivery_id) &&
+            typeof candidate.variables['link'] === 'string',
+        );
+        if (job) {
+          taken.add(job.delivery_id);
+          return new URL(String(job.variables['link']));
+        }
+        if (Date.now() > deadline) {
+          throw new Error(`No link was queued for ${address}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
     },
     stop: () => consumer.stop(),
   };

@@ -115,6 +115,25 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       expires_in_days: z.int().min(1),
     }),
   },
+  new_device: {
+    description: 'A notice that the account signed in from a new browser or OS',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      browser: z.string().min(1),
+      os: z.string().min(1),
+      place: z.string().min(1),
+    }),
+  },
+  security_alert: {
+    description: 'A rate-limited alert that session security saw something unusual',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      summary: z.string().min(1),
+      place: z.string().min(1),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

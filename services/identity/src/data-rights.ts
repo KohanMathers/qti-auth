@@ -28,7 +28,7 @@ export async function exportUser(
     .executeTakeFirst();
   if (!user) return {};
 
-  const [identities, sessions, tokens, unusedRecovery] = await Promise.all([
+  const [identities, sessions, tokens, unusedRecovery, securityEvents] = await Promise.all([
     db
       .selectFrom('identities')
       .select(['type', 'subject', 'created_at', 'last_used_at'])
@@ -42,6 +42,10 @@ export async function exportUser(
         'auth_method',
         'acr',
         'user_agent',
+        'ip',
+        'country',
+        'last_country',
+        'trust_level',
         'created_at',
         'last_active_at',
         'expires_at',
@@ -63,6 +67,20 @@ export async function exportUser(
       .where('user_id', '=', userId)
       .where('used_at', 'is', null)
       .executeTakeFirst(),
+    db
+      .selectFrom('session_security_events')
+      .select([
+        'kind',
+        'trust_from',
+        'trust_to',
+        'country_from',
+        'country_to',
+        'notified',
+        'created_at',
+      ])
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
   ]);
 
   return {
@@ -96,6 +114,10 @@ export async function exportUser(
       used_at: iso(token.used_at),
     })),
     recovery_codes: { unused: Number(unusedRecovery?.count ?? 0) },
+    session_security_events: securityEvents.map((event) => ({
+      ...event,
+      created_at: iso(event.created_at),
+    })),
   };
 }
 

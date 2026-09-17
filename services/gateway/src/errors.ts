@@ -11,6 +11,10 @@ export const GATEWAY_ERRORS = defineErrors({
     status: 403,
     title: 'Two-factor authentication must be set up first',
   },
+  REAUTHENTICATION_REQUIRED: {
+    status: 403,
+    title: 'Sign in again to continue',
+  },
   ORIGIN_NOT_ALLOWED: { status: 403, title: 'The request origin is not allowed' },
   METHOD_NOT_ALLOWED: { status: 405, title: 'The route does not accept this method' },
   PAYLOAD_TOO_LARGE: { status: 413, title: 'The request body is too large' },

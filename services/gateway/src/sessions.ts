@@ -1,6 +1,7 @@
 import type { RpcResult } from '@qtiauth/bus';
 import type { QtiauthConfig } from '@qtiauth/config';
 import { type EventEnvelope, IDENTITY_EVENTS } from '@qtiauth/events';
+import { normalizeCountry, type GeoIp } from '@qtiauth/geoip';
 import type { Metrics } from '@qtiauth/observability';
 import {
   hashSessionToken,
@@ -8,6 +9,9 @@ import {
   resolvedSessionSchema,
   type ResolveSessionRequest,
   resolveSessionResponseSchema,
+  SESSION_CLIENT_FINGERPRINT_HEADER,
+  SESSION_SCREEN_HEADER,
+  SESSION_TIMEZONE_HEADER,
 } from '@qtiauth/service-kit';
 import { KEY_PREFIX, type Valkey } from '@qtiauth/valkey';
 
@@ -20,6 +24,7 @@ const EPOCH_PREFIX = `${KEY_PREFIX}gateway:session_epoch:`;
 export interface CachedSession {
   session: ResolvedSession;
   cached_at: number;
+  signals?: ResolveSessionRequest['signals'] | null;
 }
 
 export type EpochKind = 'session' | 'user' | 'all';
@@ -52,7 +57,11 @@ export interface SessionResolverOptions {
 }
 
 export interface SessionResolver {
-  resolve: (token: string, cookieScope: string) => Promise<SessionResolution>;
+  resolve: (
+    token: string,
+    cookieScope: string,
+    signals?: ResolveSessionRequest['signals'],
+  ) => Promise<SessionResolution>;
   invalidate: (kind: EpochKind, id: string) => Promise<void>;
 }
 
@@ -103,8 +112,38 @@ export function bindAttemptCookie(cookies: CookiesConfig): string {
   ].join('; ');
 }
 
+export function sessionSignals(
+  request: Request,
+  ip: string,
+  config: Pick<QtiauthConfig, 'geoip' | 'session_security'>,
+  geoip: GeoIp | undefined,
+): NonNullable<ResolveSessionRequest['signals']> {
+  const headerCountry =
+    config.geoip.source === 'header' && config.geoip.header !== null
+      ? request.headers.get(config.geoip.header)
+      : null;
+  const tls = config.session_security.tls_fingerprint.header;
+  return {
+    ip,
+    user_agent: request.headers.get('user-agent'),
+    country: normalizeCountry(headerCountry) ?? geoip?.lookup(ip) ?? null,
+    tls_fingerprint: tls === null ? null : request.headers.get(tls),
+    timezone: request.headers.get(SESSION_TIMEZONE_HEADER),
+    screen: request.headers.get(SESSION_SCREEN_HEADER),
+    client_fingerprint: request.headers.get(SESSION_CLIENT_FINGERPRINT_HEADER),
+  };
+}
+
 export function isSessionToken(token: string): boolean {
   return TOKEN.test(token);
+}
+
+export function signalsMatch(
+  cached: ResolveSessionRequest['signals'] | null | undefined,
+  current: ResolveSessionRequest['signals'] | undefined,
+): boolean {
+  if (current === undefined || cached === undefined || cached === null) return true;
+  return JSON.stringify(cached) === JSON.stringify(current);
 }
 
 export function prometheusSessionMetrics(metrics: Metrics): SessionMetrics {
@@ -179,7 +218,7 @@ export function createSessionResolver(options: SessionResolverOptions): SessionR
   const { cache, metrics } = options;
 
   return {
-    resolve: async (token, cookieScope) => {
+    resolve: async (token, cookieScope, signals) => {
       if (!isSessionToken(token)) {
         metrics.lookup('not_found');
         return { status: 'none', stale_cookie: true };
@@ -189,7 +228,11 @@ export function createSessionResolver(options: SessionResolverOptions): SessionR
       let cacheUsable = true;
       try {
         const cached = await cache.get(hash);
-        if (cached && Date.parse(cached.session.expires_at) > now()) {
+        if (
+          cached &&
+          Date.parse(cached.session.expires_at) > now() &&
+          signalsMatch(cached.signals, signals)
+        ) {
           metrics.lookup('cache_hit');
           return { status: 'ok', session: cached.session };
         }
@@ -200,7 +243,11 @@ export function createSessionResolver(options: SessionResolverOptions): SessionR
       }
 
       const startedAt = now();
-      const result = await options.resolve({ binding_token_hash: hash, cookie_scope: cookieScope });
+      const result = await options.resolve({
+        binding_token_hash: hash,
+        cookie_scope: cookieScope,
+        ...(signals === undefined ? {} : { signals }),
+      });
       if (result.status !== 'ok') {
         metrics.lookup('unavailable');
         if (result.status === 'error') {
@@ -226,9 +273,11 @@ export function createSessionResolver(options: SessionResolverOptions): SessionR
       if (cacheUsable) metrics.lookup('cache_miss');
       const ttl = Math.min(options.cacheTtl, Date.parse(session.expires_at) - now());
       if (cacheUsable && ttl > 0) {
-        await cache.set(hash, { session, cached_at: startedAt }, ttl).catch((error: unknown) => {
-          options.onError('session cache write failed', error);
-        });
+        await cache
+          .set(hash, { session, cached_at: startedAt, signals: signals ?? null }, ttl)
+          .catch((error: unknown) => {
+            options.onError('session cache write failed', error);
+          });
       }
       return { status: 'ok', session };
     },

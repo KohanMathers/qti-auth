@@ -73,6 +73,9 @@ services:
     command: ['node', 'src/main.ts']
     networks: [internal, public]
     ports: ['8000:8000']
+    volumes:
+      - ../config:/srv/app/config:ro
+      - geoip:/var/lib/qtiauth/geoip:ro
 
   identity:
     <<: *qtiauth-service
@@ -81,6 +84,9 @@ services:
       context: ..
       dockerfile: services/identity/Dockerfile
     command: ['node', 'src/main.ts']
+    volumes:
+      - ../config:/srv/app/config:ro
+      - geoip:/var/lib/qtiauth/geoip:ro
 
   notifier:
     <<: *qtiauth-service
@@ -119,8 +125,18 @@ services:
     profiles: [storage]
 
   geoip-updater:
-    <<: *placeholder
+    image: qtiauth/geoip-updater:dev
+    build:
+      context: ..
+      dockerfile: deploy/geoip-updater/Dockerfile
+    volumes:
+      - geoip:/var/lib/qtiauth/geoip
+    networks: [public]
     profiles: [geoip]
+    tmpfs: [/tmp]
+    read_only: true
+    cap_drop: [ALL]
+    restart: unless-stopped
 
   caddy:
     <<: *placeholder
@@ -154,3 +170,4 @@ networks:
 volumes:
   postgres:
   nats:
+  geoip:

@@ -1,7 +1,7 @@
 import type { AccountState } from '@qtiauth/service-kit';
 import type { ColumnType, Generated } from 'kysely';
 
-export const REVOCATION_REASONS = ['logout', 'revoked', 'evicted'] as const;
+export const REVOCATION_REASONS = ['logout', 'revoked', 'evicted', 'blocked'] as const;
 export type RevocationReason = (typeof REVOCATION_REASONS)[number];
 
 export const EMAIL_TOKEN_PURPOSES = [
@@ -19,6 +19,14 @@ export type AuthFailureKind = (typeof AUTH_FAILURE_KINDS)[number];
 
 export const AUTH_FAILURE_SCOPES = ['password', 'magic_link', 'signup'] as const;
 export type AuthFailureScope = (typeof AUTH_FAILURE_SCOPES)[number];
+
+export const SECURITY_EVENT_KINDS = [
+  'trust_transition',
+  'country_change',
+  'new_device',
+  'reauthenticated',
+] as const;
+export type SecurityEventKind = (typeof SECURITY_EVENT_KINDS)[number];
 
 export const AUTH_CHALLENGE_KINDS = [
   'second_factor',
@@ -60,6 +68,16 @@ export interface SessionsTable {
   acr: string;
   step_up_at: Date | null;
   user_agent: string | null;
+  ip: string | null;
+  ip_subnet: string | null;
+  country: string | null;
+  last_country: string | null;
+  tls_fingerprint: string | null;
+  timezone: string | null;
+  screen: string | null;
+  client_fingerprint: string | null;
+  device_key: string | null;
+  trust_level: string;
   created_at: Generated<Date>;
   last_active_at: Date;
   expires_at: Date;
@@ -122,6 +140,19 @@ export interface UserPermissionsTable {
   permission: string;
 }
 
+export interface SessionSecurityEventsTable {
+  id: string;
+  user_id: string;
+  session_id: string | null;
+  kind: SecurityEventKind;
+  trust_from: string | null;
+  trust_to: string | null;
+  country_from: string | null;
+  country_to: string | null;
+  notified: boolean;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   users: UsersTable;
   identities: IdentitiesTable;
@@ -132,4 +163,5 @@ export interface Database {
   auth_challenges: AuthChallengesTable;
   recovery_codes: RecoveryCodesTable;
   user_permissions: UserPermissionsTable;
+  session_security_events: SessionSecurityEventsTable;
 }

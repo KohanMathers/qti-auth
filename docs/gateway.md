@@ -43,6 +43,8 @@ security:
 - `security.encryption_key` encrypts TOTP secrets in identity. See [identity.md](identity.md).
 - `security.require_2fa_for_permissions` is which staff permissions need a passkey or TOTP before the rest of the product is available. Until then the session carries `two_factor_enrolment_required` and only enrolment routes are allowed.
 
+The gateway also reads `geoip`, `session_security` and `features.session_security`, covered in [identity.md](identity.md#session-security).
+
 Surfaces, cookies, CORS, trusted proxies and rate limits have their own sections, covered below.
 
 ## What happens to a request
@@ -50,7 +52,7 @@ Surfaces, cookies, CORS, trusted proxies and rate limits have their own sections
 1. **Surface.** The `Host` header and the port the request arrived on pick a surface. Where surfaces share a host, the longest matching `base_path` wins. A request that matches no surface gets `404`.
 2. **Route.** The rest of the path is looked up in the route table. Unknown paths get `404 NOT_FOUND`, and known paths with the wrong method get `405 METHOD_NOT_ALLOWED` with an `Allow` header.
 3. **Body.** Bodies over `http.max_body_size` get `413 PAYLOAD_TOO_LARGE`.
-4. **Session.** For `auth: session` routes, the session cookie is resolved (see [sessions](#sessions)).
+4. **Session.** The session cookie is resolved if present (see [sessions](#sessions)).
 5. **Rate limits.** The route's policy and the `global` policy are applied (see [rate limiting](#rate-limiting)). Unknown paths and CORS preflights are counted against `global`.
 6. **Origin.** A state-changing request (anything but `GET`, `HEAD` and `OPTIONS`) with an `Origin` that isn't allowed, or a session-cookie request without an `Origin`, gets `403 ORIGIN_NOT_ALLOWED`.
 7. **Policy.** The route's declared policy is checked (see [route policy](#route-policy)).
@@ -79,11 +81,11 @@ surfaces:
 
 ## Sessions
 
-The session cookie is `__Host-<cookies.name>` (`__Host-qtiauth_session` by default), or `<cookies.name>` when `cookies.domain` is set. Only `auth: session` routes read it. On other routes the caller is anonymous, even with a cookie.
+The session cookie is `__Host-<cookies.name>` (`__Host-qtiauth_session` by default), or `<cookies.name>` when `cookies.domain` is set. The cookie is resolved on every request so identity can restore an `aal0` session from `auth: none` sign-in routes. `sub` and permissions are only attached on `auth: session` routes; on other routes the caller is otherwise anonymous, with `sid` set when a session exists.
 
-When a top-level navigation (`Sec-Fetch-Mode: navigate`, or `GET`/`HEAD` with `Accept: text/html`) needs a session on a host that does not share the account cookie, the gateway redirects to `/auth/bind` on the account surface and sets a one-minute `__Host-<cookies.name>_bound` cookie so a failed bind is not retried in a loop. `/auth/bind` itself, if the account host has no session, redirects to `/auth/login` with `return_to`. API clients still get `401 AUTHENTICATION_REQUIRED`.
+When a top-level navigation (`Sec-Fetch-Mode: navigate`, or `GET`/`HEAD` with `Accept: text/html`) needs a session on a host that does not share the account cookie, the gateway redirects to `/auth/bind` on the account surface and sets a one-minute `__Host-<cookies.name>_bound` cookie so a failed bind is not retried in a loop. `/auth/bind` itself, if the account host has no session, redirects to `/auth/login` with `return_to`. A top-level navigation whose session is at `aal0` is sent to `/auth/login`. API clients still get `401 AUTHENTICATION_REQUIRED`, or `403 REAUTHENTICATION_REQUIRED` when the session is at `aal0`.
 
-The gateway hashes the cookie's token and looks the session up in Valkey. On a miss, or when Valkey is down, it asks identity over `qtiauth.rpc.identity.resolve_session` and caches the answer for `session_cache.ttl` or until the session expires. If identity can't be reached, the request gets `503 SERVICE_UNAVAILABLE`. A cookie that doesn't resolve to a session is cleared in the response.
+The gateway hashes the cookie's token and looks the session up in Valkey. On a miss, when Valkey is down, or when `features.session_security.enabled` is on and the request's signals (IP, User-Agent, country, TLS fingerprint, timezone, screen, client fingerprint) differ from the cached snapshot, it asks identity over `qtiauth.rpc.identity.resolve_session` and caches the answer for `session_cache.ttl` or until the session expires. If identity can't be reached, the request gets `503 SERVICE_UNAVAILABLE`. A cookie that doesn't resolve to a session is cleared in the response.
 
 Identity sets and clears the cookie when someone signs in or out, through headers on its responses (see [identity.md](identity.md#how-identity-sets-the-cookie)). The cookie lasts until the session's absolute expiry. When identity's response ends sessions, the gateway drops them from the cache before answering, so they stop working on the very next request from any replica.
 
@@ -100,6 +102,7 @@ For `auth: session` routes, in order:
 | Pending parental consent, without `allow_pending_parental_consent`          | `403 PARENTAL_CONSENT_PENDING`                                                                    |
 | Updated legal documents not yet accepted, without `allow_pending_legal`     | `403 LEGAL_ACCEPTANCE_REQUIRED`                                                                   |
 | Two-factor enrolment still required, without `allow_pending_2fa_enrolment`  | `403 TWO_FACTOR_ENROLMENT_REQUIRED`                                                               |
+| Session at `aal0`, without `allow_aal0`                                     | `403 REAUTHENTICATION_REQUIRED`                                                                   |
 | A required permission isn't granted                                         | `403 PERMISSION_DENIED`                                                                           |
 | `step_up: true` and the session didn't reach `aal2` within `step_up_window` | `403 STEP_UP_REQUIRED`                                                                            |
 
@@ -170,6 +173,8 @@ These are served by the gateway on every surface, rate-limited by `global`:
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/meta/features` | Enabled modules and sub-features, auth methods and social providers, surfaces with their origins and modules, which surface pairs are same-site, and branding |
 | `GET /api/v1/meta/health`   | `ok`, `starting` or `degraded`, the running services, any problems, and cross-site surface pairs                                                              |
+| `GET /api/v1/meta/about`    | Product name and GeoIP attribution                                                                                                                            |
+| `GET /about`                | The same attribution as HTML                                                                                                                                  |
 | `GET /api/v1/openapi.json`  | OpenAPI 3.1 for every route on the surface it's requested from                                                                                                |
 
 A module or sub-feature counts as enabled only when it's switched on in config and its service is running. Same-site means the same scheme and registrable domain (using the public suffix list). Browsers only send cookies on cross-surface `fetch` calls between same-site surfaces.
@@ -183,6 +188,7 @@ Health problems:
 | `ROUTE_CONFLICT`              | Two services declare the same route on a surface. Neither is served                                                |
 | `UNKNOWN_RATE_LIMIT_POLICY`   | A route names a policy that isn't configured. The route isn't served                                               |
 | `CROSS_SITE_SURFACES`         | Two surfaces are not same-site, so browsers will not send cookies on `fetch` between them. Does not degrade health |
+| `GEOIP_UNAVAILABLE`           | The configured GeoIP source has no database (or is `none`). Country checks switch off. Does not degrade health     |
 
 For `discovery.startup_grace` after the gateway starts, problems are reported with the status `starting` instead of `degraded`, while services are still announcing themselves.
 
@@ -199,6 +205,7 @@ On top of the [codes every service can return](services.md#errors):
 | `ACCOUNT_LOCKED`            | 403    | The account is locked and the route doesn't allow locked accounts |
 | `PARENTAL_CONSENT_PENDING`  | 403    | A guardian hasn't approved the account yet                        |
 | `LEGAL_ACCEPTANCE_REQUIRED` | 403    | Updated legal documents must be accepted first                    |
+| `REAUTHENTICATION_REQUIRED` | 403    | The session is at `aal0` and the route does not allow it          |
 | `STEP_UP_REQUIRED`          | 403    | The route needs recent two-factor authentication                  |
 | `ORIGIN_NOT_ALLOWED`        | 403    | A state-changing request came from an origin that isn't allowed   |
 | `METHOD_NOT_ALLOWED`        | 405    | The path exists, but not for this method                          |
@@ -236,11 +243,20 @@ Identity answers `qtiauth.rpc.identity.resolve_session`:
 ```json
 {
   "binding_token_hash": "<base64url SHA-256 of the cookie token>",
-  "cookie_scope": "me.example.com"
+  "cookie_scope": "me.example.com",
+  "signals": {
+    "ip": "203.0.113.10",
+    "user_agent": "Mozilla/5.0 …",
+    "country": "GB",
+    "tls_fingerprint": null,
+    "timezone": null,
+    "screen": null,
+    "client_fingerprint": null
+  }
 }
 ```
 
-`cookie_scope` is `cookies.domain` if set, or the request's host. The answer is `{ "session": null }` or:
+`cookie_scope` is `cookies.domain` if set, or the request's host. `signals` is sent when `features.session_security.enabled` is on. The answer is `{ "session": null }` or:
 
 ```json
 {

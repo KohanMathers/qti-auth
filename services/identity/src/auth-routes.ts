@@ -128,11 +128,11 @@ export function authRoutes(router: Router<Context>): void {
       },
     },
     errors: ['AUTH_METHOD_DISABLED', 'CAPTCHA_REQUIRED', 'CAPTCHA_INVALID'],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requireMagicLink(ctx);
       await requireCaptcha(ctx, request, 'magic_link', body.captcha);
       await sendMagicLink(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         {
           email: body.email,
           locale:
@@ -190,11 +190,11 @@ export function authRoutes(router: Router<Context>): void {
       'CAPTCHA_REQUIRED',
       'CAPTCHA_INVALID',
     ],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requirePassword(ctx);
       await requireCaptcha(ctx, request, 'password_signup', body.captcha);
       const result = await registerWithPassword(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         {
           email: body.email,
           password: body.password,
@@ -260,11 +260,11 @@ export function authRoutes(router: Router<Context>): void {
       'CAPTCHA_REQUIRED',
       'CAPTCHA_INVALID',
     ],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requirePassword(ctx);
       await requireCaptcha(ctx, request, 'password_login', body.captcha);
       const result = await loginPassword(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { email: body.email, password: body.password },
       );
       if (result.status === 'invalid') throw new ProblemError('CREDENTIALS_INCORRECT');
@@ -355,10 +355,10 @@ export function authRoutes(router: Router<Context>): void {
       },
     },
     errors: ['AUTH_METHOD_DISABLED'],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requirePassword(ctx);
       await sendPasswordReset(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { email: body.email, locale: localeOf(ctx, request, body.locale) },
       );
       return { status: 202, body: { status: 'sent' as const }, headers: NO_STORE };
@@ -405,10 +405,10 @@ export function authRoutes(router: Router<Context>): void {
       },
     },
     errors: ['AUTH_METHOD_DISABLED', 'RESET_TOKEN_INVALID', 'PASSWORD_REJECTED'],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requirePassword(ctx);
       const result = await completePasswordReset(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         {
           token: body.token,
           password: body.password,
@@ -471,10 +471,10 @@ export function authRoutes(router: Router<Context>): void {
       },
     },
     errors: ['AUTH_METHOD_DISABLED'],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requirePassword(ctx);
       await sendEmailVerification(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { email: body.email, locale: localeOf(ctx, request, body.locale) },
       );
       return { status: 202, body: { status: 'sent' as const }, headers: NO_STORE };
@@ -499,9 +499,12 @@ export function authRoutes(router: Router<Context>): void {
       },
     },
     errors: ['AUTH_METHOD_DISABLED', 'EMAIL_VERIFICATION_INVALID'],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requirePassword(ctx);
-      const result = await completeEmailVerification({ ctx, request, log }, { token: body.token });
+      const result = await completeEmailVerification(
+        { ctx, request, log, identity },
+        { token: body.token },
+      );
       if (result.status === 'invalid') throw new ProblemError('EMAIL_VERIFICATION_INVALID');
       return {
         status: 200,
@@ -545,7 +548,7 @@ export function authRoutes(router: Router<Context>): void {
       requirePassword(ctx);
       const { userId, sessionId } = signedIn(identity);
       const result = await updatePassword(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         {
           userId,
           sessionId,
@@ -593,10 +596,10 @@ export function authRoutes(router: Router<Context>): void {
       },
     },
     errors: ['AUTH_METHOD_DISABLED', 'MAGIC_LINK_INVALID'],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requireMagicLink(ctx);
       const result = await verify(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { token: body.token, userId: body.user_id },
       );
       switch (result.status) {
@@ -664,10 +667,10 @@ export function authRoutes(router: Router<Context>): void {
       'ACCOUNT_LIMIT_REACHED',
       'PARENTAL_CONSENT_UNAVAILABLE',
     ],
-    handler: async ({ ctx, body, request, log }) => {
+    handler: async ({ ctx, body, request, log, identity }) => {
       requireMagicLink(ctx);
       const result = await signup(
-        { ctx, request, log },
+        { ctx, request, log, identity },
         { signupToken: body.signup_token, dateOfBirth: body.date_of_birth },
       );
       switch (result.status) {
@@ -702,6 +705,7 @@ export function authRoutes(router: Router<Context>): void {
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     allow_pending_2fa_enrolment: true,
+    allow_aal0: true,
     rate_limit: 'global',
     responses: { 204: { description: 'Signed out. The session cookie is cleared.' } },
     handler: async ({ ctx, identity, log }) => {

@@ -2,6 +2,7 @@ import type { Server } from 'node:http';
 
 import { type Http2Bindings, type HttpBindings, serve } from '@hono/node-server';
 import { consumeCron, consumeIdempotentEvents, rpcRequest, serveRpc } from '@qtiauth/bus';
+import { openGeoIp } from '@qtiauth/geoip';
 import {
   closeServer,
   IDENTITY_KEYS_METHOD,
@@ -24,7 +25,7 @@ import { parseEncryptionKey } from './envelope.ts';
 import { createGatewayHandler, GATEWAY_SERVICE, type GatewayHandler } from './gateway.ts';
 import { hstsValue } from './headers.ts';
 import { type Keyring, kvKeySetStore, type KeySetStore, openKeyring } from './identity-keys.ts';
-import { featuresReport, healthReport } from './meta.ts';
+import { aboutReport, featuresReport, healthReport } from './meta.ts';
 import { prometheusGatewayMetrics } from './metrics.ts';
 import { mergeOpenApi } from './openapi.ts';
 import { upstreamUrl } from './proxy.ts';
@@ -101,6 +102,11 @@ export async function startGateway(
     }
 
     const metrics = prometheusGatewayMetrics(ctx.metrics);
+    const geoip = openGeoIp(config.geoip);
+    stack.push(() => {
+      geoip.close();
+      return Promise.resolve();
+    });
     const valkey = connectValkey(config.valkey, GATEWAY_SERVICE, (error) => {
       log.warn('valkey client error', { error });
     });
@@ -271,6 +277,7 @@ export async function startGateway(
         }),
       features: () =>
         featuresReport({ config, surfaces, isRunning: (service) => registry.isRunning(service) }),
+      about: () => aboutReport(config, geoip.attribution),
       openapi: async (surface) => {
         const services = registry.services().filter((service) => service.name !== GATEWAY_SERVICE);
         const entries = await Promise.all(
@@ -300,6 +307,7 @@ export async function startGateway(
       routes: () => table,
       rateLimiter,
       sessions,
+      geoip,
       signingKey: () => keyring.signingKey(),
       local: router,
       localContext: (surface) => ({ ...local, surface }),

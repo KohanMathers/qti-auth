@@ -2,7 +2,12 @@ import { createEvent } from '@qtiauth/bus';
 import { loadEventCatalog } from '@qtiauth/events';
 import { describe, expect, it } from 'vitest';
 
-import { sessionCreatedEvent, sessionRevokedEvent, userCreatedEvent } from './events.ts';
+import {
+  sessionCreatedEvent,
+  sessionFlaggedEvent,
+  sessionRevokedEvent,
+  userCreatedEvent,
+} from './events.ts';
 
 const USER_ID = '0199a0e0-0000-7000-8000-000000000001';
 const SESSION_ID = '0199a0e0-0000-7000-8000-000000000002';
@@ -28,6 +33,15 @@ describe('identity events', () => {
       ),
       createEvent(
         sessionRevokedEvent({ session_id: SESSION_ID, user_id: USER_ID, reason: 'evicted' }),
+      ),
+      createEvent(
+        sessionFlaggedEvent({
+          session_id: SESSION_ID,
+          user_id: USER_ID,
+          reason: 'country_change',
+          trust_level: 'challenge',
+          acr: 'aal0',
+        }),
       ),
     ];
     for (const event of events) {

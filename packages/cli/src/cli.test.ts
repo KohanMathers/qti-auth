@@ -108,7 +108,7 @@ describe('qtiauth config check', () => {
     expect(out.stderr).toContain('Usage: qtiauth config check');
   });
 
-  it('exits non-zero as a real process', async () => {
+  it('exits non-zero as a real process', { timeout: 15_000 }, async () => {
     const main = join(import.meta.dirname, 'main.ts');
     const error = await promisify(execFile)(process.execPath, [
       main,

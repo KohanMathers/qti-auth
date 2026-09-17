@@ -94,7 +94,7 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
   });
   const revoked = metrics.counter({
     name: 'qtiauth_sessions_revoked_total',
-    help: 'Sessions ended before they expired, by reason: logout, revoked or evicted.',
+    help: 'Sessions ended before they expired, by reason: logout, revoked, evicted or blocked.',
     labelNames: ['reason'],
   });
   const accounts = metrics.gauge({

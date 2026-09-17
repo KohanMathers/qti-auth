@@ -1,4 +1,5 @@
 import type { QtiauthConfig } from '@qtiauth/config';
+import type { GeoIp } from '@qtiauth/geoip';
 import { type Logger, traceHttpRequest } from '@qtiauth/observability';
 import {
   IDENTITY_HEADER,
@@ -14,8 +15,12 @@ import {
   REVOKED_SESSIONS_HEADER,
   type Router,
   SESSION_CLEAR_HEADER,
+  SESSION_CLIENT_FINGERPRINT_HEADER,
+  SESSION_COUNTRY_HEADER,
   SESSION_EXPIRES_HEADER,
   SESSION_RESPONSE_HEADERS,
+  SESSION_SCREEN_HEADER,
+  SESSION_TIMEZONE_HEADER,
   SESSION_TOKEN_HEADER,
   signIdentityToken,
   type SigningKey,
@@ -51,6 +56,7 @@ import {
   readCookie,
   sessionCookie,
   sessionCookieName,
+  sessionSignals,
   type SessionResolver,
 } from './sessions.ts';
 import {
@@ -65,7 +71,10 @@ import {
   type Surface,
 } from './surfaces.ts';
 
-export type GatewayConfig = Pick<QtiauthConfig, 'cookies' | 'gateway' | 'security'>;
+export type GatewayConfig = Pick<
+  QtiauthConfig,
+  'cookies' | 'gateway' | 'security' | 'geoip' | 'session_security' | 'features'
+>;
 
 export const GATEWAY_SERVICE = 'gateway';
 
@@ -85,6 +94,7 @@ export interface GatewayHandlerOptions {
   routes: () => RouteTable;
   rateLimiter: RateLimiter;
   sessions: SessionResolver;
+  geoip?: GeoIp;
   signingKey: () => SigningKey;
   local: Router<LocalContext>;
   localContext: (surface: Surface) => LocalContext;
@@ -273,8 +283,13 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
 
       let session: ResolvedSession | null = null;
       const token = readCookie(request.headers.get('cookie'), cookieName);
-      if (route.auth === 'session' && token !== null) {
-        const resolved = await sessions.resolve(token, config.cookies.domain ?? host ?? '');
+      const signals = sessionSignals(request, ip, config, options.geoip);
+      if (token !== null) {
+        const resolved = await sessions.resolve(
+          token,
+          config.cookies.domain ?? host ?? '',
+          config.features.session_security.enabled ? signals : undefined,
+        );
         if (resolved.status === 'unavailable') return problem('SERVICE_UNAVAILABLE');
         if (resolved.status === 'ok') {
           session = resolved.session;
@@ -298,13 +313,22 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         now: now(),
       });
       if (denial) {
-        if (denial.code === 'AUTHENTICATION_REQUIRED' && route.auth === 'session') {
+        if (
+          (denial.code === 'AUTHENTICATION_REQUIRED' ||
+            denial.code === 'REAUTHENTICATION_REQUIRED') &&
+          route.auth === 'session'
+        ) {
           const topLevel = isTopLevelNavigation(request);
           const attempted =
             readCookie(request.headers.get('cookie'), bindAttemptCookieName(config.cookies)) !==
             null;
           const account = options.surfaces.find((surface) => surface.name === 'account');
           if (topLevel && account) {
+            if (denial.code === 'REAUTHENTICATION_REQUIRED') {
+              const login = surfacePublicUrl(account, LOGIN_PATH);
+              if (login !== null)
+                return new Response(null, { status: 302, headers: { location: login } });
+            }
             if (matched.path === BIND_PATH && !needsSessionBinding(config.cookies, host, account)) {
               const returnTo = `${matched.path}${url.search}`;
               const login = surfacePublicUrl(
@@ -367,6 +391,16 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
           'x-forwarded-for': ip,
           ...(host === null ? {} : { 'x-forwarded-host': host }),
           'x-forwarded-proto': matched.surface.origins[0]?.startsWith('http:') ? 'http' : 'https',
+          ...(signals.country === null ? {} : { [SESSION_COUNTRY_HEADER]: signals.country }),
+          ...(signals.timezone === null ? {} : { [SESSION_TIMEZONE_HEADER]: signals.timezone }),
+          ...(signals.screen === null ? {} : { [SESSION_SCREEN_HEADER]: signals.screen }),
+          ...(signals.client_fingerprint === null
+            ? {}
+            : { [SESSION_CLIENT_FINGERPRINT_HEADER]: signals.client_fingerprint }),
+          ...(signals.tls_fingerprint === null ||
+          config.session_security.tls_fingerprint.header === null
+            ? {}
+            : { [config.session_security.tls_fingerprint.header]: signals.tls_fingerprint }),
         }),
       });
       if (result.status === 'ok') return applySessionHeaders(entry.service, result.response);

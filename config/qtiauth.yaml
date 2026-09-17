@@ -29,6 +29,7 @@ network:
 geoip:
   source: dbip_lite # dbip_lite | maxmind | header | none
   header: null
+  database_path: /var/lib/qtiauth/geoip/dbip-country-lite.csv.gz
 
 database:
   host: postgres
@@ -199,6 +200,12 @@ password:
 sessions:
   max_per_user: 10
 
+session_security:
+  on_country_change: challenge # challenge | block | notify | ignore
+  new_device_email: true
+  tls_fingerprint: { header: null }
+  alert_min_interval: 1h
+
 age:
   bands: { 13_to_15: 13, 16_to_17: 16, adult: 18 } # age each band starts at; younger is under_13
 
@@ -238,3 +245,4 @@ retention:
   delivery_logs: 30d
   sessions: 30d
   tokens: 24h
+  session_security_events: 90d

@@ -10,12 +10,14 @@ import {
   features,
   gateway,
   magicLink,
+  geoip,
   network,
   password,
   rateLimits,
   retention,
   scheduler,
   security,
+  sessionSecurity,
   surfaces,
 } from './sections.ts';
 
@@ -425,6 +427,27 @@ describe('retention', () => {
       delivery_logs: 2_592_000_000,
       sessions: 2_592_000_000,
       tokens: 86_400_000,
+      session_security_events: 7_776_000_000,
+    });
+  });
+});
+
+describe('geoip', () => {
+  it('needs a header when the source is a header', () => {
+    expect(messages(geoip.safeParse({ source: 'header' }))).toEqual([
+      'header: Required when source is header',
+    ]);
+    expect(messages(geoip.safeParse({ source: 'header', header: 'x-country' }))).toEqual([]);
+  });
+});
+
+describe('sessionSecurity', () => {
+  it('challenges on a country change and emails new devices by default', () => {
+    expect(sessionSecurity.parse({})).toEqual({
+      on_country_change: 'challenge',
+      new_device_email: true,
+      tls_fingerprint: { header: null },
+      alert_min_interval: 3_600_000,
     });
   });
 });

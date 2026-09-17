@@ -1,4 +1,6 @@
 import { consumeCron, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
+import { queueEmail } from '@qtiauth/email';
+import { openGeoIp } from '@qtiauth/geoip';
 import { untraced } from '@qtiauth/observability';
 import {
   RESOLVE_SESSION_METHOD,
@@ -17,12 +19,14 @@ import { eraseUser, exportUser } from './data-rights.ts';
 import { sweepTokens } from './email-tokens.ts';
 import { sweepAuthFailures } from './failures.ts';
 import { attachBindStore, valkeyBindStore } from './bind-state.ts';
+import { attachGeoIp } from './geoip-state.ts';
 import { identityMetrics } from './metrics.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
 import { anySocialEnabled } from './providers.ts';
+import { sweepSecurityEvents } from './security.ts';
 import { type Context, type definition, router } from './service.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
-import { accountOrigin, encryptionKey } from './settings.ts';
+import { accountOrigin, encryptionKey, sessionSecuritySettings } from './settings.ts';
 
 export const RETENTION_JOB = 'retention.sweep';
 export const STATS_INTERVAL = 60_000;
@@ -67,6 +71,14 @@ export function identityService(options: IdentityOptions = {}) {
       accountOrigin(config);
       encryptionKey(config);
       const stack: Stoppable[] = [];
+      const geoip = openGeoIp(config.geoip);
+      attachGeoIp(ctx, geoip);
+      stack.push({
+        stop: () => {
+          geoip.close();
+          return Promise.resolve();
+        },
+      });
       const valkey = connectValkey(config.valkey, 'identity', (error) => {
         log.warn('valkey client error', { error });
       });
@@ -87,16 +99,43 @@ export function identityService(options: IdentityOptions = {}) {
                   'binding_token_hash and cookie_scope are required',
                 );
               }
-              return {
-                session: await resolveSession(db, {
-                  tokenHash: parsed.data.binding_token_hash,
-                  cookieScope: parsed.data.cookie_scope,
-                  idleTimeout: config.cookies.idle_timeout,
-                  bands: config.age.bands,
-                  require2faFor: config.security.require_2fa_for_permissions,
-                  now: new Date(),
-                }),
-              };
+              const signals = parsed.data.signals;
+              const resolved = await resolveSession(db, {
+                tokenHash: parsed.data.binding_token_hash,
+                cookieScope: parsed.data.cookie_scope,
+                idleTimeout: config.cookies.idle_timeout,
+                bands: config.age.bands,
+                require2faFor: config.security.require_2fa_for_permissions,
+                now: new Date(),
+                ...(signals === undefined
+                  ? {}
+                  : {
+                      signals: {
+                        ip: signals.ip ?? '',
+                        userAgent: signals.user_agent,
+                        country: signals.country,
+                        tlsFingerprint: signals.tls_fingerprint,
+                        timezone: signals.timezone,
+                        screen: signals.screen,
+                        clientFingerprint: signals.client_fingerprint,
+                      },
+                    }),
+                security: sessionSecuritySettings(config),
+                lookupCountry: (ip) => geoip.lookup(ip),
+              });
+              if (resolved?.alert) {
+                await queueEmail(bus, {
+                  template: 'security_alert',
+                  to: { address: resolved.alert.email },
+                  locale: resolved.alert.locale ?? config.email.default_locale,
+                  variables: {
+                    summary: resolved.alert.summary,
+                    place: resolved.alert.place,
+                  },
+                });
+                ctx.outbox.wake();
+              }
+              return { session: resolved?.session ?? null };
             },
             onError: (error) => {
               log.error('session resolution failed', { error });
@@ -124,12 +163,17 @@ export function identityService(options: IdentityOptions = {}) {
                 retention: config.retention.tokens,
                 now,
               });
+              const securityEvents = await sweepSecurityEvents(db, {
+                retention: config.retention.session_security_events,
+                now,
+              });
               const pruned = await pruneBusTables(db, config.bus);
               log.info('retention sweep finished', {
                 sessions,
                 email_tokens: tokens,
                 auth_challenges: challenges,
                 auth_failures: failures,
+                session_security_events: securityEvents,
                 outbox: pruned.outbox,
                 processed_events: pruned.processedEvents,
               });

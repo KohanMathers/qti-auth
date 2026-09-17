@@ -12,6 +12,17 @@ export const SESSION_TOKEN_HASH = /^[A-Za-z0-9_-]{43}$/;
 export const resolveSessionRequestSchema = z.strictObject({
   binding_token_hash: z.string().regex(SESSION_TOKEN_HASH),
   cookie_scope: z.string().max(253),
+  signals: z
+    .strictObject({
+      ip: z.string().max(45).nullable(),
+      user_agent: z.string().max(512).nullable(),
+      country: z.string().max(8).nullable(),
+      tls_fingerprint: z.string().max(256).nullable(),
+      timezone: z.string().max(64).nullable(),
+      screen: z.string().max(32).nullable(),
+      client_fingerprint: z.string().max(128).nullable(),
+    })
+    .optional(),
 });
 
 export const resolvedSessionSchema = z.strictObject({
