@@ -12,6 +12,9 @@ services:
   nats:
     ports: ['127.0.0.1:4222:4222', '127.0.0.1:8222:8222']
 
+  minio:
+    ports: ['127.0.0.1:9000:9000', '127.0.0.1:9001:9001']
+
   gateway: *dev-service
   identity: *dev-service
   notifier: *dev-service

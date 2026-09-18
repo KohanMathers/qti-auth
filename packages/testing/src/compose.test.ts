@@ -78,6 +78,7 @@ describe('deploy/compose.yaml', () => {
     for (const name of INFRA) {
       expect(base.services[name]?.image, name).toBe(IMAGES[name]);
     }
+    expect(base.services['minio']?.image).toBe(IMAGES.minio);
   });
 
   it('runs infra without a profile, with a healthcheck, on the internal network', () => {

@@ -145,6 +145,23 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       link: z.url({ protocol: /^https?$/ }),
     }),
   },
+  data_export: {
+    description: 'A download link for a requested account data export',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      link: z.url({ protocol: /^https?$/ }),
+      expires_in_days: z.int().min(1),
+    }),
+  },
+  data_export_attachment: {
+    description: 'An account data export sent as an email attachment when object storage is off',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      filename: z.string().min(1),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

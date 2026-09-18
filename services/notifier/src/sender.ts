@@ -110,6 +110,7 @@ export function createEmailSender(
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
+        attachments: job.attachments,
       }));
     } catch (error) {
       metrics.sendAttempt(provider.name, 'error', seconds());

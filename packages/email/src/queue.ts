@@ -17,6 +17,12 @@ export function emailQueue(priority: EmailPriority): string {
   return `email.${priority}`;
 }
 
+export const emailAttachmentSchema = z.object({
+  filename: z.string().min(1).max(200),
+  content_type: z.string().min(1).max(100),
+  content: z.string().min(1),
+});
+
 export const emailJobSchema = z.object({
   delivery_id: z.uuid(),
   template: z.string().min(1),
@@ -28,6 +34,7 @@ export const emailJobSchema = z.object({
   user_id: z.uuid().nullable(),
   variables: z.record(z.string(), z.unknown()),
   queued_at: z.iso.datetime(),
+  attachments: z.array(emailAttachmentSchema).max(1).default([]),
 });
 
 export type EmailJob = z.output<typeof emailJobSchema>;
@@ -38,6 +45,7 @@ export interface QueueEmailRequest<T extends EmailTemplateName> {
   locale: string;
   userId?: string | null;
   variables: EmailVariables<T>;
+  attachments?: { filename: string; contentType: string; body: Uint8Array }[];
 }
 
 export class EmailRequestError extends Error {
@@ -79,6 +87,11 @@ export function createEmailJob<T extends EmailTemplateName>(
     user_id: request.userId ?? null,
     variables: variables.success ? variables.data : {},
     queued_at: now.toISOString(),
+    attachments: (request.attachments ?? []).map((attachment) => ({
+      filename: attachment.filename,
+      content_type: attachment.contentType,
+      content: Buffer.from(attachment.body).toString('base64'),
+    })),
   });
   if (!job.success) issues.push(...describeIssues(job.error));
   if (issues.length > 0 || !job.success) throw new EmailRequestError(request.template, issues);

@@ -379,6 +379,9 @@ importers:
       '@qtiauth/observability':
         specifier: workspace:*
         version: link:../observability
+      '@qtiauth/storage':
+        specifier: workspace:*
+        version: link:../storage
       hono:
         specifier: 4.13.8
         version: 4.13.8
@@ -388,6 +391,22 @@ importers:
       zod:
         specifier: 4.6.5
         version: 4.6.5
+    devDependencies:
+      '@qtiauth/testing':
+        specifier: workspace:*
+        version: link:../testing
+
+  packages/storage:
+    dependencies:
+      '@qtiauth/config':
+        specifier: workspace:*
+        version: link:../config
+      '@qtiauth/observability':
+        specifier: workspace:*
+        version: link:../observability
+      undici:
+        specifier: 8.10.2
+        version: 8.10.2
     devDependencies:
       '@qtiauth/testing':
         specifier: workspace:*
@@ -505,6 +524,9 @@ importers:
       '@qtiauth/service-kit':
         specifier: workspace:*
         version: link:../../packages/service-kit
+      '@qtiauth/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@qtiauth/text-filter':
         specifier: workspace:*
         version: link:../../packages/text-filter

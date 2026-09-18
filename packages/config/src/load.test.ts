@@ -102,6 +102,23 @@ describe('parseConfig', () => {
       'Invalid config in test.yaml:\n  geoip.header (line 2, column 3): Required when source is header',
     );
   });
+
+  it('refuses features that need object storage when storage is off', async () => {
+    const issues = await issuesFor(
+      [
+        'storage: { enabled: false }',
+        'features:',
+        '  games: { cloud_saves: { enabled: true } }',
+        '  support: { attachments: { enabled: true } }',
+        'backups: { destination: storage }',
+      ].join('\n'),
+    );
+    expect(issues.map((i) => `${i.path.join('.')}: ${i.message}`)).toEqual([
+      'features.games.cloud_saves.enabled: Needs storage.enabled',
+      'features.support.attachments.enabled: Needs storage.enabled',
+      'backups.destination: Needs storage.enabled',
+    ]);
+  });
 });
 
 describe('serviceConfigSchema', () => {

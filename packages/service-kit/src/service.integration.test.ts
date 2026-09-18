@@ -237,7 +237,7 @@ describe('service skeleton', () => {
         type: USER_DELETED_EVENT,
         actor: { type: 'system', id: 'identity' },
         subject: { type: 'user', id: userId },
-        data: {},
+        data: { held: false },
       });
     });
     service.context.outbox.wake();

@@ -14,6 +14,7 @@ describe('consoleProvider', () => {
       subject: 'Your sign-in link',
       text: 'Open https://me.example.com/magic\n\n',
       html: '<p>Open the link</p>',
+      attachments: [],
     });
 
     expect(result).toEqual({ provider_message_id: 'console-delivery-1' });

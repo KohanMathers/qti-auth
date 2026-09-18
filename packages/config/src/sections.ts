@@ -874,6 +874,22 @@ export const accounts = z
       '7d',
       'The "this wasn\'t me" link sent to the previous email address works for this long.',
     ),
+    deletion_grace: duration(
+      '30d',
+      'How long an account stays in pending_deletion after the user asks to delete it. Signing in during this time cancels the deletion.',
+    ),
+    export_ttl: duration(
+      '7d',
+      'How long a data-export download link works. After this the zip is deleted.',
+    ),
+    export_email_max_bytes: z
+      .int()
+      .min(1)
+      .max(10_485_760)
+      .default(524_288)
+      .describe(
+        'Largest export that can be emailed as an attachment when object storage is not configured. Larger exports need storage.',
+      ),
   })
   .prefault({})
   .describe('Accounts.');
@@ -1567,6 +1583,118 @@ export const retention = z
   .prefault({})
   .describe('How long data is kept. retention.sweep deletes anything older.');
 
+export const BACKUP_DESTINATIONS = ['directory', 'storage'] as const;
+export type BackupDestination = (typeof BACKUP_DESTINATIONS)[number];
+
+export const backups = z
+  .strictObject({
+    destination: z
+      .enum(BACKUP_DESTINATIONS)
+      .default('directory')
+      .describe(
+        'Where backups and the deletion ledger are written. directory is a mounted volume. storage is the S3 bucket. Restore replay is a later release.',
+      ),
+    directory: z
+      .string()
+      .min(1)
+      .default('/var/lib/qtiauth/backups')
+      .describe('Directory for backups and the deletion ledger when destination is directory.'),
+    retention: duration(
+      '35d',
+      'How long backups are kept. The deletion ledger is kept this long plus 30 days.',
+    ),
+  })
+  .prefault({})
+  .describe('Encrypted backups and the deletion ledger destination.');
+
+function isStorageEndpoint(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.pathname === '/';
+  } catch {
+    return false;
+  }
+}
+
+export const storage = z
+  .strictObject({
+    enabled: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Use S3-compatible object storage (the bundled MinIO or any external S3/R2/B2). Required for data exports above export_email_max_bytes, ticket attachments and cloud saves.',
+      ),
+    endpoint: z
+      .string()
+      .default('')
+      .describe(
+        'S3 API base URL, such as http://minio:9000 or https://s3.amazonaws.com. Empty when storage is off.',
+      ),
+    region: z.string().min(1).default('us-east-1').describe('S3 region. MinIO accepts us-east-1.'),
+    bucket: z
+      .string()
+      .min(1)
+      .default('qtiauth')
+      .describe('Bucket for exports, attachments, cloud saves and the deletion ledger.'),
+    access_key: z
+      .string()
+      .default('')
+      .describe('S3 access key. Empty when storage is off. Reference a secret.'),
+    secret_key: z
+      .string()
+      .default('')
+      .describe('S3 secret key. Empty when storage is off. Reference a secret.'),
+    force_path_style: z
+      .boolean()
+      .default(true)
+      .describe('Path-style URLs (bucket in the path). Required for MinIO. Set false for AWS S3.'),
+    create_bucket: z
+      .boolean()
+      .default(true)
+      .describe('Create the bucket on startup if it does not exist. Turn off for Amazon S3.'),
+    tls: z
+      .strictObject({
+        ca_file: z
+          .string()
+          .min(1)
+          .nullable()
+          .default(null)
+          .describe('CA certificate file for verifying the server. null uses the system CAs.'),
+      })
+      .prefault({})
+      .describe('TLS to the S3 endpoint.'),
+    presign_expires: duration(
+      '15m',
+      'How long a presigned upload or download URL works, other than data-export links which use accounts.export_ttl.',
+    ),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.enabled) return;
+    if (!isStorageEndpoint(value.endpoint)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Must be an origin like http://minio:9000',
+        path: ['endpoint'],
+      });
+    }
+    if (!value.access_key) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Required when storage is enabled',
+        path: ['access_key'],
+      });
+    }
+    if (!value.secret_key) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Required when storage is enabled',
+        path: ['secret_key'],
+      });
+    }
+  })
+  .prefault({})
+  .describe('S3-compatible object storage.');
+
 export const sections = {
   branding,
   surfaces,
@@ -1599,6 +1727,8 @@ export const sections = {
   rate_limits: rateLimits,
   scheduler,
   retention,
+  storage,
+  backups,
 };
 
 export type SectionName = keyof typeof sections;

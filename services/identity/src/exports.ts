@@ -1,0 +1,294 @@
+import { randomUUIDv7 } from 'node:crypto';
+
+import { type Bus, type BusMetrics, rpcRequest } from '@qtiauth/bus';
+import { queueEmail } from '@qtiauth/email';
+import {
+  EXPORT_USER_METHOD,
+  exportObjectKey,
+  type ObjectStore,
+  type UserExport,
+} from '@qtiauth/service-kit';
+import type { Kysely } from 'kysely';
+
+import { findAccount } from './accounts.ts';
+import type { Database, DataExportStatus } from './database.ts';
+import { exportUser } from './data-rights.ts';
+import { zipFiles } from './zip.ts';
+
+export const EXPORT_SERVICES = ['notifier', 'oidc', 'games', 'safety', 'support'] as const;
+
+export interface ExportSettings {
+  ttl: number;
+  emailMaxBytes: number;
+  defaultLocale: string;
+}
+
+export interface DataExport {
+  id: string;
+  status: DataExportStatus;
+  download_url: string | null;
+  bytes: number | null;
+  expires_at: string | null;
+  error: string | null;
+}
+
+function jsonFile(name: string, data: unknown): { name: string; body: Uint8Array } {
+  return { name, body: new TextEncoder().encode(`${JSON.stringify(data, null, 2)}\n`) };
+}
+
+function presignSeconds(ttl: number): number {
+  return Math.max(1, Math.ceil(ttl / 1000));
+}
+
+function expiresInDays(ttl: number): number {
+  return Math.max(1, Math.round(ttl / (24 * 60 * 60 * 1000)));
+}
+
+export async function collectExportArchive(
+  db: Kysely<Database>,
+  bus: Bus,
+  userId: string,
+  options: { metrics?: BusMetrics } = {},
+): Promise<Uint8Array> {
+  const identity = await exportUser(db, userId);
+  const entries = [jsonFile('identity.json', identity)];
+  for (const service of EXPORT_SERVICES) {
+    const result = await rpcRequest<UserExport>(
+      bus,
+      service,
+      EXPORT_USER_METHOD,
+      { user_id: userId },
+      options.metrics === undefined ? {} : { metrics: options.metrics },
+    );
+    if (result.status !== 'ok') continue;
+    entries.push(jsonFile(`${result.data.service}.json`, result.data.data));
+  }
+  return zipFiles(entries);
+}
+
+export async function requestExport(
+  db: Kysely<Database>,
+  options: { userId: string; now: Date },
+): Promise<{ status: 'not_found' } | { status: 'ok'; id: string }> {
+  const account = await findAccount(db, options.userId);
+  if (!account || account.state === 'deleted') return { status: 'not_found' };
+  const id = randomUUIDv7();
+  await db
+    .insertInto('data_exports')
+    .values({
+      id,
+      user_id: options.userId,
+      status: 'pending',
+      created_at: options.now,
+    })
+    .execute();
+  return { status: 'ok', id };
+}
+
+async function markExport(
+  db: Kysely<Database>,
+  id: string,
+  patch: {
+    status: DataExportStatus;
+    object_key?: string | null;
+    bytes?: number | null;
+    download_expires_at?: Date | null;
+    error?: string | null;
+    completed_at: Date;
+  },
+): Promise<void> {
+  await db
+    .updateTable('data_exports')
+    .set({
+      status: patch.status,
+      object_key: patch.object_key ?? null,
+      bytes: patch.bytes ?? null,
+      download_expires_at: patch.download_expires_at ?? null,
+      error: patch.error ?? null,
+      completed_at: patch.completed_at,
+    })
+    .where('id', '=', id)
+    .where('status', '=', 'pending')
+    .execute();
+}
+
+export async function completeExport(
+  db: Kysely<Database>,
+  bus: Bus,
+  exportId: string,
+  options: {
+    store: ObjectStore | null;
+    settings: ExportSettings;
+    metrics?: BusMetrics;
+    now: Date;
+  },
+): Promise<DataExportStatus> {
+  const row = await db
+    .selectFrom('data_exports')
+    .select(['id', 'user_id', 'status'])
+    .where('id', '=', exportId)
+    .executeTakeFirst();
+  if (row === undefined) return 'failed';
+  if (row.status !== 'pending') return row.status;
+  const account = await findAccount(db, row.user_id);
+  if (!account || account.state === 'deleted') {
+    await markExport(db, exportId, {
+      status: 'failed',
+      error: 'account_gone',
+      completed_at: options.now,
+    });
+    return 'failed';
+  }
+
+  let archive: Uint8Array;
+  try {
+    archive = await collectExportArchive(db, bus, row.user_id, {
+      ...(options.metrics === undefined ? {} : { metrics: options.metrics }),
+    });
+  } catch {
+    await markExport(db, exportId, {
+      status: 'failed',
+      error: 'collect_failed',
+      completed_at: options.now,
+    });
+    return 'failed';
+  }
+
+  const locale = account.locale ?? options.settings.defaultLocale;
+  const filename = `export-${row.user_id}.zip`;
+
+  if (options.store !== null) {
+    const key = exportObjectKey(row.user_id, exportId);
+    const expiresAt = new Date(options.now.getTime() + options.settings.ttl);
+    try {
+      await options.store.put(key, archive, 'application/zip');
+      const link = await options.store.presignGet(key, presignSeconds(options.settings.ttl));
+      await queueEmail(bus, {
+        template: 'data_export',
+        to: { address: account.email },
+        locale,
+        userId: row.user_id,
+        variables: { link, expires_in_days: expiresInDays(options.settings.ttl) },
+      });
+      await markExport(db, exportId, {
+        status: 'ready',
+        object_key: key,
+        bytes: archive.byteLength,
+        download_expires_at: expiresAt,
+        completed_at: options.now,
+      });
+      return 'ready';
+    } catch {
+      await markExport(db, exportId, {
+        status: 'failed',
+        error: 'store_failed',
+        completed_at: options.now,
+      });
+      return 'failed';
+    }
+  }
+
+  if (archive.byteLength > options.settings.emailMaxBytes) {
+    await markExport(db, exportId, {
+      status: 'unavailable',
+      bytes: archive.byteLength,
+      error: 'too_large',
+      completed_at: options.now,
+    });
+    return 'unavailable';
+  }
+
+  try {
+    await queueEmail(bus, {
+      template: 'data_export_attachment',
+      to: { address: account.email },
+      locale,
+      userId: row.user_id,
+      variables: { filename },
+      attachments: [{ filename, contentType: 'application/zip', body: archive }],
+    });
+    await markExport(db, exportId, {
+      status: 'ready',
+      bytes: archive.byteLength,
+      completed_at: options.now,
+    });
+    return 'ready';
+  } catch {
+    await markExport(db, exportId, {
+      status: 'failed',
+      error: 'email_failed',
+      completed_at: options.now,
+    });
+    return 'failed';
+  }
+}
+
+export async function getExport(
+  db: Kysely<Database>,
+  options: { userId: string; exportId: string; store: ObjectStore | null; now: Date },
+): Promise<DataExport | undefined> {
+  const row = await db
+    .selectFrom('data_exports')
+    .select(['id', 'status', 'object_key', 'bytes', 'download_expires_at', 'error'])
+    .where('id', '=', options.exportId)
+    .where('user_id', '=', options.userId)
+    .executeTakeFirst();
+  if (!row) return undefined;
+  let downloadUrl: string | null = null;
+  if (
+    row.status === 'ready' &&
+    row.object_key !== null &&
+    options.store !== null &&
+    row.download_expires_at !== null &&
+    row.download_expires_at.getTime() > options.now.getTime()
+  ) {
+    downloadUrl = await options.store.presignGet(
+      row.object_key,
+      presignSeconds(row.download_expires_at.getTime() - options.now.getTime()),
+    );
+  }
+  return {
+    id: row.id,
+    status: row.status,
+    download_url: downloadUrl,
+    bytes: row.bytes,
+    expires_at: row.download_expires_at?.toISOString() ?? null,
+    error: row.error,
+  };
+}
+
+export async function sweepExports(
+  db: Kysely<Database>,
+  options: { store: ObjectStore | null; ttl: number; now: Date },
+): Promise<number> {
+  const cutoff = new Date(options.now.getTime() - options.ttl);
+  const rows = await db
+    .selectFrom('data_exports')
+    .select(['id', 'object_key'])
+    .where((eb) =>
+      eb.or([
+        eb.and([
+          eb('status', '=', 'ready'),
+          eb('download_expires_at', 'is not', null),
+          eb('download_expires_at', '<=', options.now),
+        ]),
+        eb.and([eb('status', '!=', 'pending'), eb('created_at', '<=', cutoff)]),
+      ]),
+    )
+    .execute();
+  if (options.store !== null) {
+    for (const row of rows) {
+      if (row.object_key !== null) await options.store.delete(row.object_key);
+    }
+  }
+  if (rows.length === 0) return 0;
+  const result = await db
+    .deleteFrom('data_exports')
+    .where(
+      'id',
+      'in',
+      rows.map((row) => row.id),
+    )
+    .executeTakeFirst();
+  return Number(result.numDeletedRows);
+}

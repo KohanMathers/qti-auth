@@ -18,6 +18,7 @@ import { IDENTITY_ERRORS } from './errors.ts';
 import { factorRoutes } from './factor-routes.ts';
 import { filterRoutes } from './filter-routes.ts';
 import { legalRoutes } from './legal-routes.ts';
+import { lifecycleRoutes } from './lifecycle-routes.ts';
 import { pageRoutes } from './pages.ts';
 import { roleRoutes } from './role-routes.ts';
 import { sessionRoutes } from './session-routes.ts';
@@ -52,6 +53,8 @@ export const definition = defineService({
     'roles',
     'retention',
     'valkey',
+    'storage',
+    'backups',
   ],
   database: { schema: 'identity', migrations: () => loadMigrations(MIGRATIONS_DIR) },
   permissions: definePermissions({
@@ -88,4 +91,5 @@ adminUserRoutes(router);
 roleRoutes(router);
 auditRoutes(router);
 legalRoutes(router);
+lifecycleRoutes(router);
 pageRoutes(router);

@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, stores the audit log, syncs legal documents that users accept at signup and again when a material version takes effect, and lets staff search and act on accounts. Parental consent comes in a later release (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, stores the audit log, syncs legal documents that users accept at signup and again when a material version takes effect, lets staff search and act on accounts, and handles account deletion, data export, legal holds and the deletion ledger. Parental consent comes in a later release (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -12,6 +12,9 @@ accounts:
     googlemail.com: { remove_dots: true, subaddress_separator: '+', domain: gmail.com }
   email_change_ttl: 15m
   email_revert_ttl: 7d
+  deletion_grace: 30d
+  export_ttl: 7d
+  export_email_max_bytes: 524288
 
 magic_link:
   ttl: 15m
@@ -130,11 +133,31 @@ retention:
   session_security_events: 90d
   filter_decisions: 30d
   audit: 730d
+
+storage:
+  enabled: false
+  endpoint: ''
+  region: us-east-1
+  bucket: qtiauth
+  access_key: '${env:S3_ACCESS_KEY}'
+  secret_key: '${env:S3_SECRET_KEY}'
+  force_path_style: true
+  create_bucket: true
+  presign_expires: 15m
+
+backups:
+  destination: directory
+  directory: /var/lib/qtiauth/backups
+  retention: 35d
 ```
 
 - `accounts.max_per_email` is how many accounts can share one email address, after normalization.
 - `accounts.email_normalization` decides when two addresses count as the same, per domain. Case is always ignored. `remove_dots` ignores dots in the local part, `subaddress_separator` ignores everything from that character to the `@`, and `domain` counts the address as belonging to another domain. Setting it replaces the built-in Gmail rules, so copy them if you want to keep them.
 - `accounts.email_change_ttl` is how long the confirmation link sent to a new address works. `accounts.email_revert_ttl` is how long the “this wasn’t me” link sent to the previous address works.
+- `accounts.deletion_grace` is how long an account stays in `pending_deletion` before it is erased. Signing in during that time cancels the deletion.
+- `accounts.export_ttl` is how long a data-export download link works. `accounts.export_email_max_bytes` is the largest zip that can be emailed as an attachment when object storage is off.
+- `storage` is the S3-compatible bucket (bundled MinIO or any external S3/R2/B2). It is off by default. Enable it and set `S3_ACCESS_KEY` and `S3_SECRET_KEY` for exports above the email limit, ticket attachments and cloud saves. Identity does not depend on MinIO starting.
+- `backups.destination` is `directory` (the `backups` volume) or `storage` (the same bucket). The deletion ledger is written there through an outbox. Restore replay is a later release.
 - `magic_link.ttl` is how long a link works. `magic_link.signup_ttl` is how long a new user has to enter their date of birth after opening their link.
 - `password.min_length` and `password.max_length` bound a password. 256 characters is the hard cap. Composition rules are off unless you turn them on. `password.breach_check` asks Have I Been Pwned whether the password has appeared in a breach (only the first 5 hex characters of a SHA-1 hash leave the server); if HIBP is unreachable the check is skipped. `password.argon2` is Argon2id; stored hashes are rehashed on login when these change. `password.reset_ttl` and `password.verification_ttl` are how long reset and email-confirmation links work. `password.failure_delay` slows repeated failures per account and per IP. There is no lockout.
 - `captcha.provider` is `altcha` (self-hosted proof-of-work, the default), `turnstile`, `hcaptcha`, `friendly_captcha` or `none`. `captcha.after` is how many failed password attempts, or signup or magic-link starts, from one IP it takes before a CAPTCHA is required. Attempts older than `captcha.window` do not count. `none` turns CAPTCHA off. Vendor providers need `site_key` and `secret_key`. Altcha can generate an HMAC key at startup; set `captcha.altcha.hmac_key` when running more than one identity replica.
@@ -157,7 +180,7 @@ retention:
 - `features.session_security.enabled: false` turns session security checks off.
 - Each social provider is off until you enable it. Enabling Google, GitHub or Discord without `client_id` and `client_secret` fails config validation. Steam has no credentials. Generic OIDC providers are listed under `features.auth.social.generic_oidc`; their `id` must not collide with a built-in method.
 
-Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha`, `security`, `features` and `valkey`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one. Passkey origins are those same account origins. Session-binding codes live in Valkey for 60 seconds. When a social provider is enabled, OAuth `state`, PKCE verifiers and OIDC nonces live in Valkey for 10 minutes.
+Identity also reads `branding`, `surfaces`, `cookies.domain`, `email.default_locale`, `captcha`, `security`, `features`, `valkey`, `storage` and `backups`. Links in emails point at the first origin of `surfaces.account`, so an account surface bound only to ports needs `origins`, and identity refuses to start without one. Passkey origins are those same account origins. Session-binding codes live in Valkey for 60 seconds. When a social provider is enabled, OAuth `state`, PKCE verifiers and OIDC nonces live in Valkey for 10 minutes.
 
 ## Accounts
 
@@ -180,6 +203,22 @@ Changing email is `POST /api/v1/me/email` with `{ email }` and needs a recent `a
 A user can’t remove their last sign-in method. Magic link (when enabled), password, passkeys and connected social identities all count. Trying to remove the last one answers `409 LAST_SIGN_IN_METHOD` with the spec’s warning and `delete_account_path: "/account/delete"`.
 
 The date of birth is stored, and the age band is worked out from it whenever it's needed. Users cannot edit their own date of birth after signup. Staff with `users.edit_dob` can change it, with a reason that is stored. Users younger than `parental.consent_age` can't sign up yet: signup answers `403 PARENTAL_CONSENT_UNAVAILABLE` and nothing is kept, until the guardian approval flow is available.
+
+`GET /api/v1/me` includes `deletion_requested_at`, which is set while the account is `pending_deletion`.
+
+Deleting an account is `POST /api/v1/me/deletion` and needs a recent `aal2` session. The account moves to `pending_deletion` for `accounts.deletion_grace`, every session ends, and signing in during that time returns it to `active`. `accounts.purge_deleted` then emits `identity.user.deleted` and every service erases the user, including objects in storage. A `{ user_id, deleted_at }` ledger entry is written to the backup destination through an outbox and kept for `backups.retention` plus 30 days (`deletion_ledger.prune`). Safety can place a legal hold over RPC (`place_legal_hold`); held objects stay isolated under `legal-hold/` when everything else is deleted.
+
+A copy of the account's data is `POST /api/v1/me/export`, also after step-up. Identity zips its own export with `export_user` answers from notifier, oidc, games, safety and support (a service that isn't running is skipped). With storage, a download link is emailed for `accounts.export_ttl`. Without storage, the zip is emailed as an attachment when it is under `accounts.export_email_max_bytes`; otherwise the export is `unavailable` and `GET /api/v1/meta/health` reports `STORAGE_UNAVAILABLE`. `GET /api/v1/me/export/:export_id` is the status, including a fresh presigned URL while the object is still there. `GET`/`POST /auth/delete` and `/auth/export` are the interim pages.
+
+| Endpoint                           | Does                                                                        |
+| ---------------------------------- | --------------------------------------------------------------------------- |
+| `POST /api/v1/me/deletion`         | Schedule deletion. Needs step-up. Signs the caller out                      |
+| `POST /api/v1/me/export`           | Start a data export. Needs step-up. Answers `202 { id, status: "pending" }` |
+| `GET /api/v1/me/export/:export_id` | Export status, download URL when ready, or `unavailable`                    |
+| `GET`/`POST /auth/delete`          | Interim deletion page                                                       |
+| `GET`/`POST /auth/export`          | Interim export page                                                         |
+
+`docker compose run --rm identity qtiauth user export <user-id>` prints identity's export JSON. `qtiauth user delete <user-id>` schedules deletion as the system actor.
 
 ## Magic links
 
@@ -478,25 +517,29 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `FILTER_ENTRY_NOT_FOUND`       | 404    | No admin-added allowlist or extra-block word with that value                           |
 | `ROLE_NOT_FOUND`               | 404    | No role with that ID                                                                   |
 | `LEGAL_DOCUMENT_NOT_FOUND`     | 404    | No such legal document, or that version is not public                                  |
+| `EXPORT_NOT_FOUND`             | 404    | No data export with that id belongs to the user                                        |
 | `USERNAME_UNAVAILABLE`         | 409    | The username is taken, reserved, held or blocked by the text filter                    |
 | `USERNAME_COOLDOWN`            | 409    | `usernames.change_cooldown` has not elapsed since the last claim or change             |
 | `USERNAME_CHANGE_LIMIT`        | 409    | `usernames.changes_per_year` changes have already been used in `change_window`         |
 | `ACCOUNT_LIMIT_REACHED`        | 409    | The address already has `accounts.max_per_email` accounts                              |
 | `ACCOUNT_SELF`                 | 409    | Staff tried to ban, lock, or otherwise act on their own account                        |
 | `ACCOUNT_STATE_CONFLICT`       | 409    | The account is not in a state that allows that staff action                            |
+| `DELETION_NOT_PENDING`         | 409    | The account is not waiting to be deleted                                               |
 | `TOTP_ALREADY_ENABLED`         | 409    | Authenticator-app sign-in is already set up                                            |
 | `IDENTITY_IN_USE`              | 409    | That provider identity is already connected to another account                         |
 | `LAST_SIGN_IN_METHOD`          | 409    | Removing this method would leave the account with no sign-in method                    |
 | `ROLE_SLUG_TAKEN`              | 409    | A role with this slug already exists                                                   |
 | `ROLE_BUILTIN`                 | 409    | Built-in roles cannot be deleted                                                       |
 | `PROVIDER_UNAVAILABLE`         | 502    | The upstream provider did not complete token exchange or userinfo                      |
+| `EXPORT_UNAVAILABLE`           | 503    | A data export cannot be delivered without object storage                               |
 
 ## Events
 
 | Event                                         | When                                                                                                                                      |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `qtiauth.identity.user.created.v1`            | An account was created                                                                                                                    |
-| `qtiauth.identity.user.updated.v1`            | An account field changed. `fields` names what changed (`username`, `date_of_birth`, `roles`, `legal`)                                     |
+| `qtiauth.identity.user.updated.v1`            | An account field changed. `fields` names what changed (`username`, `date_of_birth`, `roles`, `legal`, `state`)                            |
+| `qtiauth.identity.user.deleted.v1`            | The deletion grace period ended. Every service must erase this user. `held` is true when a legal hold kept isolated copies                |
 | `qtiauth.identity.user.banned.v1`             | Staff banned an account. Sessions stay. The gateway drops cached sessions for the user                                                    |
 | `qtiauth.identity.user.unbanned.v1`           | Staff lifted a ban                                                                                                                        |
 | `qtiauth.identity.user.locked.v1`             | Staff locked an account until `expires_at`                                                                                                |
@@ -508,13 +551,13 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `qtiauth.identity.legal.version_published.v1` | A legal document version took effect. The gateway drops every cached session. Non-material versions also queue a `legal_update` email     |
 | `qtiauth.audit.recorded.v1`                   | A staff or security-sensitive action. Identity stores these in the audit log                                                              |
 
-The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated`, `user.banned`, `user.unbanned`, `user.locked`, `user.unlocked` or `user.age_band_changed`, and every cached session when it sees `legal.version_published`. Accepting a legal version publishes `user.updated` with `fields: ["legal"]` so the gate lifts without waiting for the cache TTL. Schemas are in `packages/events/schemas/identity/` and `packages/events/schemas/audit/`.
+The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated`, `user.banned`, `user.unbanned`, `user.locked`, `user.unlocked`, `user.deleted` or `user.age_band_changed`, and every cached session when it sees `legal.version_published`. Accepting a legal version publishes `user.updated` with `fields: ["legal"]` so the gate lifts without waiting for the cache TTL. Schemas are in `packages/events/schemas/identity/` and `packages/events/schemas/audit/`.
 
 ## Retention and data rights
 
 `retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, text-filter decisions `retention.filter_decisions` after they were recorded, and the oldest audit log rows `retention.audit` after they were recorded.
 
-A user's export has their account (including username, public profile, leaderboard visibility, security-notification flag, lock expiry and whether a username reset is required), username history, age-assurance results, staff date-of-birth changes, staff account actions, assigned roles, audit rows where they are the actor or the target, legal acceptances, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, staff account actions, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address. Legal acceptances go with the account. Audit rows stay, so the hash chain remains intact.
+A user's export has their account (including username, public profile, leaderboard visibility, security-notification flag, lock expiry, whether a username reset is required and `deletion_requested_at`), username history, age-assurance results, staff date-of-birth changes, staff account actions, assigned roles, audit rows where they are the actor or the target, legal acceptances, legal holds, data-export requests, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, staff account actions, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address. Legal acceptances and data-export rows go with the account. Audit rows stay, so the hash chain remains intact. Objects under `users/` and `exports/` are deleted; objects under `legal-hold/` stay when `held` is true. A ledger entry `{ user_id, deleted_at }` is written to `backups.directory/deletion-ledger/` or the storage prefix `deletion-ledger/`.
 
 ## Metrics
 
@@ -537,11 +580,13 @@ A user's export has their account (including username, public profile, leaderboa
 | `qtiauth_filter_decisions_total`           | `rule`               |
 | `qtiauth_usernames_claimed_total`          | `action`             |
 | `qtiauth_admin_user_actions_total`         | `action`             |
+| `qtiauth_account_deletions_total`          | `event`              |
+| `qtiauth_data_exports_total`               | `status`             |
 | `qtiauth_age_band_changes_total`           |                      |
 | `qtiauth_audit_recorded_total`             |                      |
 | `qtiauth_legal_acceptance_pending`         |                      |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Staff account `action` is `ban`, `unban`, `lock`, `unlock`, `force_reauth`, `revoke_sessions` or `force_username_reset`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. `qtiauth_audit_recorded_total` counts rows stored from `audit.recorded`. `qtiauth_legal_acceptance_pending` is how many accounts have not accepted a currently effective material version, counted every minute. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Staff account `action` is `ban`, `unban`, `lock`, `unlock`, `force_reauth`, `revoke_sessions` or `force_username_reset`. Deletion `event` is `requested`, `cancelled` or `completed`. Data-export `status` is `ready`, `failed` or `unavailable`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. `qtiauth_audit_recorded_total` counts rows stored from `audit.recorded`. `qtiauth_legal_acceptance_pending` is how many accounts have not accepted a currently effective material version, counted every minute. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 
@@ -565,4 +610,4 @@ The gateway sends the flow cookie's value back to identity, and only to identity
 
 ### Tests
 
-`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session, and a material legal version that gates `/api/v1/me/identities` until it is accepted. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit. `legal.integration.test.ts` syncs the shipped documents, rejects an edited body without a version bump, and covers material re-acceptance, the HTML form, and a non-material email. `admin-users.integration.test.ts` searches accounts, omits optional-service detail until those RPC methods answer, and covers ban, lock, force re-auth, session revoke and username reset.
+`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session, and a material legal version that gates `/api/v1/me/identities` until it is accepted. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit. `legal.integration.test.ts` syncs the shipped documents, rejects an edited body without a version bump, and covers material re-acceptance, the HTML form, and a non-material email. `admin-users.integration.test.ts` searches accounts, omits optional-service detail until those RPC methods answer, and covers ban, lock, force re-auth, session revoke and username reset. `identity.integration.test.ts` covers deletion, sign-in cancel, purge to a ledger file, an emailed export attachment, and a legal hold that outlives the account. `gateway.integration.test.ts` needs a passkey `aal2` session for `POST /api/v1/me/deletion`.

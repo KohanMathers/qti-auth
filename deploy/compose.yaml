@@ -87,6 +87,7 @@ services:
     volumes:
       - ../config:/srv/app/config:ro
       - geoip:/var/lib/qtiauth/geoip:ro
+      - backups:/var/lib/qtiauth/backups
 
   notifier:
     <<: *qtiauth-service
@@ -121,8 +122,21 @@ services:
     profiles: [games]
 
   minio:
-    <<: *placeholder
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - minio:/data
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://127.0.0.1:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
     profiles: [storage]
+    restart: unless-stopped
 
   geoip-updater:
     image: qtiauth/geoip-updater:dev
@@ -171,3 +185,5 @@ volumes:
   postgres:
   nats:
   geoip:
+  minio:
+  backups:

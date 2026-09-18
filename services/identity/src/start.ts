@@ -5,18 +5,22 @@ import { AUDIT_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { openGeoIp } from '@qtiauth/geoip';
 import { untraced } from '@qtiauth/observability';
 import {
+  heldObjectKey,
+  heldObjectPrefix,
   RESOLVE_SESSION_METHOD,
   resolveSessionRequestSchema,
   type ResolveSessionResponse,
   type StartServiceOptions,
   type Stoppable,
+  storageHealthCheck,
+  tryOpenObjectStore,
   unwind,
 } from '@qtiauth/service-kit';
 import { openTextFilter, resolveListsDir } from '@qtiauth/text-filter';
 import { closeValkey, connectValkey } from '@qtiauth/valkey';
 
 import { expireLocks, UNLOCK_JOB } from './account-locks.ts';
-import { countAccountsByState } from './accounts.ts';
+import { countAccountsByState, findAccount } from './accounts.ts';
 import { AGE_RECOMPUTE_JOB, recomputeAgeBands } from './age-bands.ts';
 import { AUDIT_CONSUMER, insertAuditRecord, sweepAuditLog } from './audit.ts';
 import { attachBindStore, valkeyBindStore } from './bind-state.ts';
@@ -24,6 +28,7 @@ import { sweepChallenges } from './challenges.ts';
 import type { Database } from './database.ts';
 import { eraseUser, exportUser } from './data-rights.ts';
 import { sweepTokens } from './email-tokens.ts';
+import { sweepExports } from './exports.ts';
 import { sweepAuthFailures } from './failures.ts';
 import { loadFilterOverlay, sweepFilterDecisions } from './filter.ts';
 import { attachTextFilter } from './filter-state.ts';
@@ -36,6 +41,26 @@ import {
   queueLegalUpdateNotices,
 } from './legal.ts';
 import { resolveDocumentsDir } from './legal-documents.ts';
+import {
+  GET_LEGAL_HOLD_METHOD,
+  getActiveHold,
+  getHoldRequestSchema,
+  LIFT_LEGAL_HOLD_METHOD,
+  liftHoldRequestSchema,
+  liftLegalHold,
+  PLACE_LEGAL_HOLD_METHOD,
+  placeHoldRequestSchema,
+  placeLegalHold,
+} from './legal-holds.ts';
+import {
+  LEDGER_PRUNE_JOB,
+  ledgerDestination,
+  ledgerKeepUntil,
+  flushLedgerOutbox,
+  pruneLedgerDestination,
+  sweepLedgerOutbox,
+} from './ledger.ts';
+import { PURGE_JOB, purgeExpiredDeletions } from './lifecycle.ts';
 import { identityMetrics } from './metrics.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
 import { openPermissionCatalog } from './permission-registry.ts';
@@ -45,6 +70,7 @@ import { sweepSecurityEvents } from './security.ts';
 import { type Context, definition, router } from './service.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
 import { accountOrigin, encryptionKey, sessionSecuritySettings } from './settings.ts';
+import { attachObjectStore } from './storage-state.ts';
 
 export const RETENTION_JOB = 'retention.sweep';
 export const STATS_INTERVAL = 60_000;
@@ -81,16 +107,37 @@ function startStats(ctx: Context, interval: number): Stoppable {
 export function identityService(options: IdentityOptions = {}) {
   return {
     router,
-    dataRights: ({ db }) => ({
-      exportUser: (userId) => exportUser(db, userId),
-      eraseUser: (userId, trx) => eraseUser(trx, userId),
-    }),
+    readinessChecks: (ctx) => {
+      const store = tryOpenObjectStore(ctx.config.storage);
+      return store === null ? {} : { storage: storageHealthCheck(store) };
+    },
+    dataRights: (ctx) => {
+      const store = tryOpenObjectStore(ctx.config.storage);
+      const ledger = ledgerDestination(ctx.config.backups, store);
+      return {
+        exportUser: (userId) => exportUser(ctx.db, userId),
+        eraseUser: (userId, trx, event) =>
+          eraseUser(trx, userId, {
+            held: event.data['held'] === true,
+            store,
+            ledger,
+            now: new Date(),
+          }),
+      };
+    },
     start: async (ctx: Context) => {
       const { config, log, bus, db } = ctx;
       // Emails link to the account surface; fail now rather than on the first send.
       accountOrigin(config);
       encryptionKey(config);
       const stack: Stoppable[] = [];
+      const store = tryOpenObjectStore(config.storage);
+      if (store !== null) {
+        if (config.storage.create_bucket) await store.ensureBucket();
+        stack.push({ stop: () => store.close() });
+      }
+      attachObjectStore(ctx, store);
+      const ledger = ledgerDestination(config.backups, store);
       const geoip = openGeoIp(config.geoip, {
         onError: (error, path) => {
           log.warn('geoip database could not be read', { error, path });
@@ -235,6 +282,11 @@ export function identityService(options: IdentityOptions = {}) {
                 retention: config.retention.audit,
                 now,
               });
+              const exports = await sweepExports(db, {
+                store,
+                ttl: config.accounts.export_ttl,
+                now,
+              });
               const pruned = await pruneBusTables(db, config.bus);
               log.info('retention sweep finished', {
                 sessions,
@@ -244,6 +296,7 @@ export function identityService(options: IdentityOptions = {}) {
                 session_security_events: securityEvents,
                 filter_decisions: filterDecisions,
                 audit,
+                data_exports: exports,
                 outbox: pruned.outbox,
                 processed_events: pruned.processedEvents,
               });
@@ -332,6 +385,137 @@ export function identityService(options: IdentityOptions = {}) {
             onError: (error) => {
               log.error('legal publish failed', { error });
             },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: PURGE_JOB,
+            metrics: ctx.busMetrics,
+            handler: async () => {
+              const deleted = await purgeExpiredDeletions(db, {
+                grace: config.accounts.deletion_grace,
+                now: new Date(),
+              });
+              if (deleted.length > 0) {
+                identityMetrics(ctx.metrics).deletion('completed', deleted.length);
+                ctx.outbox.wake();
+                log.info('pending deletions completed', { deleted: deleted.length });
+              }
+            },
+            onError: (error) => {
+              log.error('pending deletion purge failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: LEDGER_PRUNE_JOB,
+            metrics: ctx.busMetrics,
+            handler: async () => {
+              const now = new Date();
+              const cutoff = ledgerKeepUntil(config.backups.retention, now);
+              const flushed = await flushLedgerOutbox(db, ledger, now);
+              const pruned = await pruneLedgerDestination(ledger, cutoff);
+              const outbox = await sweepLedgerOutbox(db, cutoff);
+              log.info('deletion ledger pruned', { flushed, pruned, outbox });
+            },
+            onError: (error) => {
+              log.error('deletion ledger prune failed', { error });
+            },
+          }),
+        );
+
+        const onHoldError = (error: unknown) => {
+          log.error('legal hold rpc failed', { error });
+        };
+        stack.push(
+          serveRpc(bus, {
+            method: PLACE_LEGAL_HOLD_METHOD,
+            handler: async (request) => {
+              const parsed = placeHoldRequestSchema.safeParse(request);
+              if (!parsed.success)
+                throw new RpcError('bad_request', 'user_id and reason are required');
+              const account = await findAccount(db, parsed.data.user_id);
+              if (!account || account.state === 'deleted') {
+                throw new RpcError('not_found', 'No such user');
+              }
+              const result = await placeLegalHold(db, {
+                userId: parsed.data.user_id,
+                reason: parsed.data.reason,
+                ...(parsed.data.case_id === undefined ? {} : { caseId: parsed.data.case_id }),
+                actor: { type: 'service', id: 'safety' },
+                now: new Date(),
+              });
+              if (result.status === 'conflict') {
+                throw new RpcError('conflict', 'A legal hold is already in place');
+              }
+              if (store !== null) {
+                const snapshot = await exportUser(db, parsed.data.user_id);
+                await store.put(
+                  heldObjectKey(parsed.data.user_id, 'identity.json'),
+                  new TextEncoder().encode(`${JSON.stringify(snapshot, null, 2)}\n`),
+                  'application/json',
+                );
+              }
+              return {
+                hold: {
+                  id: result.hold.id,
+                  user_id: result.hold.user_id,
+                  reason: result.hold.reason,
+                  case_id: result.hold.case_id,
+                  placed_at: result.hold.placed_at.toISOString(),
+                  lifted_at: null,
+                },
+              };
+            },
+            onError: onHoldError,
+          }),
+        );
+        stack.push(
+          serveRpc(bus, {
+            method: LIFT_LEGAL_HOLD_METHOD,
+            handler: async (request) => {
+              const parsed = liftHoldRequestSchema.safeParse(request);
+              if (!parsed.success) throw new RpcError('bad_request', 'user_id is required');
+              const lifted = await liftLegalHold(db, {
+                userId: parsed.data.user_id,
+                ...(parsed.data.hold_id === undefined ? {} : { holdId: parsed.data.hold_id }),
+                now: new Date(),
+              });
+              if (!lifted) throw new RpcError('not_found', 'No active legal hold');
+              const account = await findAccount(db, parsed.data.user_id);
+              if ((account === undefined || account.state === 'deleted') && store !== null) {
+                await store.deletePrefix(heldObjectPrefix(parsed.data.user_id));
+              }
+              return { lifted: true };
+            },
+            onError: onHoldError,
+          }),
+        );
+        stack.push(
+          serveRpc(bus, {
+            method: GET_LEGAL_HOLD_METHOD,
+            handler: async (request) => {
+              const parsed = getHoldRequestSchema.safeParse(request);
+              if (!parsed.success) throw new RpcError('bad_request', 'user_id is required');
+              const hold = await getActiveHold(db, parsed.data.user_id);
+              return {
+                hold:
+                  hold === undefined
+                    ? null
+                    : {
+                        id: hold.id,
+                        user_id: hold.user_id,
+                        reason: hold.reason,
+                        case_id: hold.case_id,
+                        placed_at: hold.placed_at.toISOString(),
+                        lifted_at: hold.lifted_at?.toISOString() ?? null,
+                      },
+              };
+            },
+            onError: onHoldError,
           }),
         );
 

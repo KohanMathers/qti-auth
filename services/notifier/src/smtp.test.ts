@@ -12,6 +12,7 @@ const message: EmailMessage = {
   subject: 'Your sign-in link',
   text: 'Open https://me.example.com/magic',
   html: '<p>Open <a href="https://me.example.com/magic">the link</a></p>',
+  attachments: [],
 };
 
 const cleanup: (() => Promise<void>)[] = [];

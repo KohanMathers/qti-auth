@@ -71,6 +71,8 @@ describe('qtiauth templates check', () => {
         { name: 'new_device', locales: ['en-GB'] },
         { name: 'security_alert', locales: ['en-GB'] },
         { name: 'legal_update', locales: ['en-GB'] },
+        { name: 'data_export', locales: ['en-GB'] },
+        { name: 'data_export_attachment', locales: ['en-GB'] },
       ],
     });
   });

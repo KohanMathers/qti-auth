@@ -444,6 +444,65 @@ describe('identity through the gateway', () => {
     expect(await refused.json()).toMatchObject({ code: 'STEP_UP_REQUIRED' });
   });
 
+  it('needs a recent aal2 session to delete the account, and signing in cancels it', async () => {
+    const aal1 = browser();
+    await signUpInBrowser(aal1, 'delete-aal1@example.com');
+    const blocked = await aal1.request('/api/v1/me/deletion', { method: 'POST' });
+    expect(blocked.status).toBe(403);
+    expect(await blocked.json()).toMatchObject({ code: 'STEP_UP_REQUIRED' });
+
+    const client = browser();
+    await signUpInBrowser(client, 'delete-aal2@example.com');
+    const authenticator = await softwarePasskey(ORIGIN);
+    const start = await client.request('/api/v1/me/passkeys/register/start', json({}));
+    const creation = (await start.json()) as {
+      challenge: string;
+      options: Parameters<typeof authenticator.register>[0];
+    };
+    secrets.push(creation.challenge);
+    const attested = await authenticator.register(creation.options);
+    expect(
+      (
+        await client.request(
+          '/api/v1/me/passkeys/register',
+          json({ challenge: creation.challenge, name: 'Laptop', response: attested }),
+        )
+      ).status,
+    ).toBe(201);
+    await client.request('/api/v1/auth/logout', { method: 'POST' });
+
+    const begin = await client.request('/api/v1/auth/passkey/authenticate/start', json({}));
+    const assertion = (await begin.json()) as {
+      challenge: string;
+      options: Parameters<typeof authenticator.authenticate>[0];
+    };
+    secrets.push(assertion.challenge);
+    const asserted = await authenticator.authenticate(assertion.options);
+    expect(
+      (
+        await client.request(
+          '/api/v1/auth/passkey/authenticate',
+          json({ challenge: assertion.challenge, response: asserted }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const deleted = await client.request('/api/v1/me/deletion', { method: 'POST' });
+    expect(deleted.status).toBe(204);
+    expect(client.cookie()).toBeNull();
+    expect((await client.request('/api/v1/me')).status).toBe(401);
+
+    const token = await openLink(client, 'delete-aal2@example.com');
+    const confirm = await client.request('/auth/magic-link', form({ token }));
+    expect(confirm.status).toBe(200);
+    expect(client.cookie()).not.toBeNull();
+    expect(await (await client.request('/api/v1/me')).json()).toMatchObject({
+      email: 'delete-aal2@example.com',
+      account_state: 'active',
+      deletion_requested_at: null,
+    });
+  });
+
   it('lets staff without 2FA reach enrolment but not the rest of the product', async () => {
     const client = browser();
     await signUpInBrowser(client, 'staff-walker@example.com');

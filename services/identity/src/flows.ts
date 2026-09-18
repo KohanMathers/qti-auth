@@ -111,6 +111,7 @@ export async function trackSession(
 ): Promise<void> {
   if (!session.restored)
     identityMetrics(ctx.metrics).sessionCreated(method, session.evicted.length);
+  if (session.cancelledDeletion) identityMetrics(ctx.metrics).deletion('cancelled');
   await notifyNewDevice(ctx, session);
 }
 

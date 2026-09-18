@@ -6,6 +6,16 @@ function mailbox({ name, address }: Mailbox): string {
 
 export function formatConsoleEmail(message: EmailMessage): string {
   const rule = '-'.repeat(72);
+  const attachments =
+    message.attachments.length === 0
+      ? []
+      : [
+          '',
+          ...message.attachments.map(
+            (attachment) =>
+              `Attachment: ${attachment.filename} (${String(Buffer.from(attachment.content, 'base64').byteLength)} bytes)`,
+          ),
+        ];
   return [
     rule,
     `Email ${message.id}`,
@@ -14,6 +24,7 @@ export function formatConsoleEmail(message: EmailMessage): string {
     `Subject: ${message.subject}`,
     '',
     message.text.trimEnd(),
+    ...attachments,
     rule,
     '',
   ].join('\n');

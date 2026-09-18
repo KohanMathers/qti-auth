@@ -13,6 +13,7 @@ import { countryName, describePlace, deviceKey, parseDevice } from './device.ts'
 import { sessionCreatedEvent, sessionFlaggedEvent, sessionRevokedEvent } from './events.ts';
 import { loadPermissions, twoFactorEnrolmentRequired } from './factors.ts';
 import { legalAcceptanceRequired } from './legal.ts';
+import { cancelPendingDeletion } from './pending-deletion.ts';
 import {
   applyResolvedSecurity,
   baselineFromSession,
@@ -78,6 +79,7 @@ export interface CreatedSession {
   evicted: string[];
   restored: boolean;
   newDevice: NewDeviceNotice | null;
+  cancelledDeletion: boolean;
 }
 
 export interface SessionListItem {
@@ -247,7 +249,8 @@ export async function createSession(
     now,
     only: overLimit.map((row) => row.id),
   });
-  return { id, token, expiresAt, evicted, restored: false, newDevice };
+  const cancelledDeletion = await cancelPendingDeletion(trx, { userId: session.userId, now });
+  return { id, token, expiresAt, evicted, restored: false, newDevice, cancelledDeletion };
 }
 
 function canRestore(session: NewSession): boolean {
@@ -326,6 +329,7 @@ async function restoreChallengedSession(
     evicted: [],
     restored: true,
     newDevice: null,
+    cancelledDeletion: false,
   };
 }
 

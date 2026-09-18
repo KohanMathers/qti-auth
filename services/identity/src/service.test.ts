@@ -26,6 +26,7 @@ describe('identity service', () => {
       '0015_audit',
       '0016_legal',
       '0017_admin_users',
+      '0018_account_lifecycle',
     ]);
   });
 
@@ -55,6 +56,7 @@ describe('identity service', () => {
       'GET /api/v1/legal/:id',
       'GET /api/v1/legal/:id/:version',
       'GET /api/v1/me',
+      'GET /api/v1/me/export/:export_id',
       'GET /api/v1/me/factors',
       'GET /api/v1/me/identities',
       'GET /api/v1/me/legal',
@@ -63,6 +65,8 @@ describe('identity service', () => {
       'GET /auth/bind',
       'GET /auth/bind/callback',
       'GET /auth/change-email',
+      'GET /auth/delete',
+      'GET /auth/export',
       'GET /auth/forgot-password',
       'GET /auth/identities',
       'GET /auth/identities/:provider/connect',
@@ -116,7 +120,9 @@ describe('identity service', () => {
       'POST /api/v1/auth/social/:provider/start',
       'POST /api/v1/auth/social/complete',
       'POST /api/v1/auth/social/signup',
+      'POST /api/v1/me/deletion',
       'POST /api/v1/me/email',
+      'POST /api/v1/me/export',
       'POST /api/v1/me/identities/:provider/connect',
       'POST /api/v1/me/legal/accept',
       'POST /api/v1/me/passkeys/:passkey_id',
@@ -134,6 +140,8 @@ describe('identity service', () => {
       'POST /api/v1/sessions/revoke-all',
       'POST /api/v1/sessions/revoke-others',
       'POST /auth/change-email',
+      'POST /auth/delete',
+      'POST /auth/export',
       'POST /auth/forgot-password',
       'POST /auth/login',
       'POST /auth/magic-link',
@@ -195,6 +203,14 @@ describe('identity service', () => {
       step_up: true,
     });
     expect(route('POST', '/api/v1/me/email')).toMatchObject({
+      auth: 'session',
+      step_up: true,
+    });
+    expect(route('POST', '/api/v1/me/deletion')).toMatchObject({
+      auth: 'session',
+      step_up: true,
+    });
+    expect(route('POST', '/api/v1/me/export')).toMatchObject({
       auth: 'session',
       step_up: true,
     });
@@ -277,6 +293,18 @@ describe('identity service', () => {
       auth: 'session',
       allow_account_states: ['active'],
     });
+    expect(route('POST', '/api/v1/me/deletion')).toMatchObject({
+      auth: 'session',
+      step_up: true,
+    });
+    expect(route('POST', '/api/v1/me/export')).toMatchObject({
+      auth: 'session',
+      step_up: true,
+    });
+    expect(route('GET', '/api/v1/me/export/:export_id')).toMatchObject({
+      auth: 'session',
+      step_up: false,
+    });
   });
 
   it('lists its error codes in OpenAPI', () => {
@@ -307,6 +335,8 @@ describe('identity service', () => {
         'ACCOUNT_SELF',
         'ACCOUNT_STATE_CONFLICT',
         'LOCK_EXPIRY_INVALID',
+        'EXPORT_NOT_FOUND',
+        'DELETION_NOT_PENDING',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

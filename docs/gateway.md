@@ -189,6 +189,7 @@ Health problems:
 | `UNKNOWN_RATE_LIMIT_POLICY`   | A route names a policy that isn't configured. The route isn't served                                               |
 | `CROSS_SITE_SURFACES`         | Two surfaces are not same-site, so browsers will not send cookies on `fetch` between them. Does not degrade health |
 | `GEOIP_UNAVAILABLE`           | The configured GeoIP source has no database (or is `none`). Country checks switch off. Does not degrade health     |
+| `STORAGE_UNAVAILABLE`         | `storage.enabled` is false. Large data exports cannot be delivered. Does not degrade health                        |
 
 For `discovery.startup_grace` after the gateway starts, problems are reported with the status `starting` instead of `degraded`, while services are still announcing themselves.
 

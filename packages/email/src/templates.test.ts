@@ -85,5 +85,13 @@ describe('defineEmailTemplates', () => {
       category: 'security',
       priority: 'normal',
     });
+    expect(EMAIL_TEMPLATES.data_export).toMatchObject({
+      category: 'security',
+      priority: 'high',
+    });
+    expect(EMAIL_TEMPLATES.data_export_attachment).toMatchObject({
+      category: 'security',
+      priority: 'high',
+    });
   });
 });

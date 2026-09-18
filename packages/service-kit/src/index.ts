@@ -153,6 +153,22 @@ export {
 } from './routes.ts';
 export { closeServer, listen, unwind } from './server.ts';
 export {
+  eraseUserObjects,
+  exportObjectKey,
+  heldObjectKey,
+  heldObjectPrefix,
+  isHeldObjectKey,
+  LEDGER_OBJECT_PREFIX,
+  ledgerObjectKey,
+  type ObjectStore,
+  openObjectStore,
+  storageHealthCheck,
+  StorageError,
+  type StoredObject,
+  tryOpenObjectStore,
+  userObjectKey,
+} from './storage.ts';
+export {
   hashSessionToken,
   RESOLVE_SESSION_METHOD,
   RESOLVE_SESSION_SERVICE,

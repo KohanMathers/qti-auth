@@ -2122,6 +2122,25 @@
           "description": "The \"this wasn't me\" link sent to the previous email address works for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "deletion_grace": {
+          "default": "30d",
+          "description": "How long an account stays in pending_deletion after the user asks to delete it. Signing in during this time cancels the deletion. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "export_ttl": {
+          "default": "7d",
+          "description": "How long a data-export download link works. After this the zip is deleted. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "export_email_max_bytes": {
+          "default": 524288,
+          "description": "Largest export that can be emailed as an attachment when object storage is not configured. Larger exports need storage.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10485760
         }
       },
       "additionalProperties": false
@@ -2666,6 +2685,112 @@
         "audit": {
           "default": "730d",
           "description": "Keep audit log rows for this long. Oldest rows are removed first. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "storage": {
+      "description": "S3-compatible object storage.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Use S3-compatible object storage (the bundled MinIO or any external S3/R2/B2). Required for data exports above export_email_max_bytes, ticket attachments and cloud saves.",
+          "type": "boolean"
+        },
+        "endpoint": {
+          "default": "",
+          "description": "S3 API base URL, such as http://minio:9000 or https://s3.amazonaws.com. Empty when storage is off.",
+          "type": "string"
+        },
+        "region": {
+          "default": "us-east-1",
+          "description": "S3 region. MinIO accepts us-east-1.",
+          "type": "string",
+          "minLength": 1
+        },
+        "bucket": {
+          "default": "qtiauth",
+          "description": "Bucket for exports, attachments, cloud saves and the deletion ledger.",
+          "type": "string",
+          "minLength": 1
+        },
+        "access_key": {
+          "default": "",
+          "description": "S3 access key. Empty when storage is off. Reference a secret.",
+          "type": "string"
+        },
+        "secret_key": {
+          "default": "",
+          "description": "S3 secret key. Empty when storage is off. Reference a secret.",
+          "type": "string"
+        },
+        "force_path_style": {
+          "default": true,
+          "description": "Path-style URLs (bucket in the path). Required for MinIO. Set false for AWS S3.",
+          "type": "boolean"
+        },
+        "create_bucket": {
+          "default": true,
+          "description": "Create the bucket on startup if it does not exist. Turn off for Amazon S3.",
+          "type": "boolean"
+        },
+        "tls": {
+          "description": "TLS to the S3 endpoint.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "ca_file": {
+              "default": null,
+              "description": "CA certificate file for verifying the server. null uses the system CAs.",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "presign_expires": {
+          "default": "15m",
+          "description": "How long a presigned upload or download URL works, other than data-export links which use accounts.export_ttl. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "backups": {
+      "description": "Encrypted backups and the deletion ledger destination.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "destination": {
+          "default": "directory",
+          "description": "Where backups and the deletion ledger are written. directory is a mounted volume. storage is the S3 bucket. Restore replay is a later release.",
+          "type": "string",
+          "enum": [
+            "directory",
+            "storage"
+          ]
+        },
+        "directory": {
+          "default": "/var/lib/qtiauth/backups",
+          "description": "Directory for backups and the deletion ledger when destination is directory.",
+          "type": "string",
+          "minLength": 1
+        },
+        "retention": {
+          "default": "35d",
+          "description": "How long backups are kept. The deletion ledger is kept this long plus 30 days. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }

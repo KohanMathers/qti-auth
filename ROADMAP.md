@@ -487,13 +487,13 @@ enabled.
 ### P2b.8 Account lifecycle and object storage — L
 Spec: §4.12, §2.11
 
-- [ ] `storage` profile (MinIO) and the external S3 option, with presigned upload/download helpers in
+- [x] `storage` profile (MinIO) and the external S3 option, with presigned upload/download helpers in
       service-kit.
-- [ ] Data export orchestration over RPC, with a zipped result, expiring link, and email fallback.
-- [ ] Deletion: grace period, cancel on sign-in, `user.deleted` fan-out, erasure handlers in every
+- [x] Data export orchestration over RPC, with a zipped result, expiring link, and email fallback.
+- [x] Deletion: grace period, cancel on sign-in, `user.deleted` fan-out, erasure handlers in every
       existing service.
-- [ ] Legal hold interface (used by Safety in Phase 5).
-- [ ] **Deletion ledger writer** with an outbox to the backup destination. Restore replay comes in
+- [x] Legal hold interface (used by Safety in Phase 5).
+- [x] **Deletion ledger writer** with an outbox to the backup destination. Restore replay comes in
       P8.1.
 
 **Done when:** deleting a user removes their data from every running service and object storage, and

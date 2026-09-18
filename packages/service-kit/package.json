@@ -20,6 +20,7 @@
     "@qtiauth/db": "workspace:*",
     "@qtiauth/events": "workspace:*",
     "@qtiauth/observability": "workspace:*",
+    "@qtiauth/storage": "workspace:*",
     "hono": "4.13.8",
     "kysely": "0.29.6",
     "zod": "4.6.5"

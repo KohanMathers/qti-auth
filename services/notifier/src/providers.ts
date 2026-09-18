@@ -11,6 +11,12 @@ export interface Mailbox {
   name: string | null;
 }
 
+export interface EmailAttachment {
+  filename: string;
+  content_type: string;
+  content: string;
+}
+
 export interface EmailMessage {
   id: string;
   from: Mailbox;
@@ -18,6 +24,7 @@ export interface EmailMessage {
   subject: string;
   text: string;
   html: string;
+  attachments: EmailAttachment[];
 }
 
 export interface SendResult {

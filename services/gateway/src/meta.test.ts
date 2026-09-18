@@ -19,6 +19,12 @@ function config(features: unknown = {}): MetaConfig {
     branding: sections.branding.parse({}),
     features: sections.features.parse(features),
     geoip: sections.geoip.parse({ source: 'header', header: 'cf-ipcountry' }),
+    storage: sections.storage.parse({
+      enabled: true,
+      endpoint: 'http://minio:9000',
+      access_key: 'k',
+      secret_key: 's',
+    }),
   };
 }
 
@@ -200,5 +206,16 @@ describe('featuresReport', () => {
     });
     expect(report.status).toBe('ok');
     expect(report.problems).toEqual([{ code: 'GEOIP_UNAVAILABLE', source: 'none' }]);
+  });
+
+  it('warns when object storage is off without degrading the stack', () => {
+    const report = healthReport({
+      config: { ...config(minimal), storage: sections.storage.parse({}) },
+      services: running('identity', 'notifier', 'scheduler'),
+      routeProblems: [],
+      starting: false,
+    });
+    expect(report.status).toBe('ok');
+    expect(report.problems).toEqual([{ code: 'STORAGE_UNAVAILABLE' }]);
   });
 });

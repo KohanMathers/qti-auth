@@ -7,7 +7,7 @@ import type { RunningService } from './discovery.ts';
 import type { RouteProblem } from './routes.ts';
 import { DEFAULT_MODULES, type Module, type Surface, surfacePairs } from './surfaces.ts';
 
-export type MetaConfig = Pick<QtiauthConfig, 'branding' | 'features' | 'geoip'>;
+export type MetaConfig = Pick<QtiauthConfig, 'branding' | 'features' | 'geoip' | 'storage'>;
 
 export const CORE_SERVICES = ['identity', 'notifier', 'scheduler'] as const;
 
@@ -42,7 +42,8 @@ export type HealthProblem =
   | { code: 'SERVICE_NOT_RUNNING'; service: string }
   | { code: 'FEATURE_SERVICE_NOT_RUNNING'; feature: string; service: string }
   | { code: 'CROSS_SITE_SURFACES'; surfaces: [string, string] }
-  | { code: 'GEOIP_UNAVAILABLE'; source: string };
+  | { code: 'GEOIP_UNAVAILABLE'; source: string }
+  | { code: 'STORAGE_UNAVAILABLE' };
 
 const toggles = z.record(z.string(), z.boolean());
 
@@ -156,6 +157,7 @@ export interface HealthInput {
 const ADVISORY_PROBLEMS = new Set<HealthProblem['code']>([
   'CROSS_SITE_SURFACES',
   'GEOIP_UNAVAILABLE',
+  'STORAGE_UNAVAILABLE',
 ]);
 
 export function healthReport(input: HealthInput): Health {
@@ -182,6 +184,7 @@ export function healthReport(input: HealthInput): Health {
     ...(input.geoip === undefined || input.geoip.available
       ? []
       : [{ code: 'GEOIP_UNAVAILABLE' as const, source: input.config.geoip.source }]),
+    ...(input.config.storage.enabled ? [] : [{ code: 'STORAGE_UNAVAILABLE' as const }]),
   ];
   const degrading = problems.filter((problem) => !ADVISORY_PROBLEMS.has(problem.code));
   let status: Health['status'] = 'ok';

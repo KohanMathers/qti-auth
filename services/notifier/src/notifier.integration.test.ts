@@ -176,7 +176,7 @@ describe('notifier with the console provider', () => {
         type: USER_DELETED_EVENT,
         actor: { type: 'system', id: 'identity' },
         subject: { type: 'user', id: USER_ID },
-        data: {},
+        data: { held: false },
       }),
     );
 

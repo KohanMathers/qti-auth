@@ -23,6 +23,7 @@
     "@qtiauth/geoip": "workspace:*",
     "@qtiauth/observability": "workspace:*",
     "@qtiauth/service-kit": "workspace:*",
+    "@qtiauth/storage": "workspace:*",
     "@qtiauth/text-filter": "workspace:*",
     "@qtiauth/valkey": "workspace:*",
     "@simplewebauthn/server": "13.3.2",

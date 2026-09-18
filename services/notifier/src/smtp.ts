@@ -32,6 +32,11 @@ export function smtpProvider(config: SmtpConfig): EmailProvider {
         text: message.text,
         html: message.html,
         headers: { 'X-QTIAuth-Delivery-ID': message.id },
+        attachments: message.attachments.map((attachment) => ({
+          filename: attachment.filename,
+          contentType: attachment.content_type,
+          content: Buffer.from(attachment.content, 'base64'),
+        })),
       });
       return { provider_message_id: info.messageId };
     },

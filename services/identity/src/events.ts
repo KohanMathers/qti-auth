@@ -4,6 +4,10 @@ import type { AccountState, AgeBand } from '@qtiauth/service-kit';
 
 import type { RevocationReason } from './database.ts';
 
+export interface UserDeletedData {
+  held: boolean;
+}
+
 export interface UserCreatedData {
   signup_method: string;
   account_state: AccountState;
@@ -69,6 +73,19 @@ export interface AuditRecordedData {
   action: string;
   target_type: string;
   target_id: string;
+}
+
+export function userDeletedEvent(
+  userId: string,
+  data: UserDeletedData,
+  actor: EventActor = { type: 'system', id: 'identity' },
+): NewEvent<UserDeletedData> {
+  return {
+    type: IDENTITY_EVENTS.userDeleted,
+    actor,
+    subject: { type: 'user', id: userId },
+    data,
+  };
 }
 
 export function userCreatedEvent(userId: string, data: UserCreatedData): NewEvent<UserCreatedData> {

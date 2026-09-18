@@ -45,7 +45,7 @@ import {
   totpEnabled,
   verify,
 } from './flows.ts';
-import { NO_STORE, revokedHeaders, sessionHeaders } from './headers.ts';
+import { NO_STORE, revokedHeaders, sessionHeaders, signedOutHeaders } from './headers.ts';
 import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts';
 import {
   acceptLegalVersions,
@@ -54,7 +54,9 @@ import {
   findLegalVersion,
   pendingMaterialVersions,
 } from './legal.ts';
+import { completeExport, getExport, requestExport } from './exports.ts';
 import { interpolateLegal, LEGAL_DOCUMENT_ID, LEGAL_VERSION } from './legal-documents.ts';
+import { requestDeletion } from './lifecycle.ts';
 import { preferredLocale } from './locale.ts';
 import { identityMetrics } from './metrics.ts';
 import { listPasskeys } from './passkeys.ts';
@@ -93,6 +95,8 @@ import {
   TOTP_PAGE,
   TWO_FACTOR_PAGE,
   USERNAME_PAGE,
+  DELETE_PAGE,
+  EXPORT_PAGE,
   VERIFY_EMAIL_PAGE,
   LEGAL_INDEX_PAGE,
   LEGAL_ACCEPT_PAGE,
@@ -100,6 +104,7 @@ import {
   LEGAL_VERSION_PAGE,
 } from './settings.ts';
 import { listSocialIdentities } from './social.ts';
+import { objectStoreOf } from './storage-state.ts';
 import { beginTotpEnrol, confirmTotpEnrol, disableTotp } from './two-factor.ts';
 import { claimUsername } from './usernames.ts';
 
@@ -2032,6 +2037,186 @@ ${hiddenInput('token', query.token)}
       return page(ctx, {
         title: interpolateLegal(document.summary, brand),
         body: legalBodyHtml(interpolateLegal(document.body, brand)),
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: DELETE_PAGE,
+    operation_id: 'deleteAccountPage',
+    summary: 'Ask to delete this account',
+    tags: ['pages'],
+    auth: 'session',
+    step_up: true,
+    allow_account_states: SIGNED_IN_STATES,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity }) => {
+      const { userId } = sessionUser(identity);
+      const account = await findAccount(ctx.db, userId);
+      if (!account) {
+        return page(ctx, {
+          status: 404,
+          title: 'Account not found',
+          body: paragraph('Sign in again.'),
+        });
+      }
+      if (account.state === 'pending_deletion') {
+        return page(ctx, {
+          title: 'Deletion already scheduled',
+          body: paragraph('This account will be deleted unless you sign in again.'),
+        });
+      }
+      return page(ctx, {
+        title: 'Delete your account',
+        body: `${paragraph('This signs you out everywhere. You can cancel by signing in again during the waiting period.')}
+<form method="post" action="delete">
+<p><button type="submit">Delete my account</button></p>
+</form>`,
+      });
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: DELETE_PAGE,
+    operation_id: 'deleteAccountPageSubmit',
+    summary: 'Schedule account deletion from the form',
+    tags: ['pages'],
+    auth: 'session',
+    step_up: true,
+    allow_account_states: SIGNED_IN_STATES,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity, log }) => {
+      const { userId } = sessionUser(identity);
+      const result = await requestDeletion(ctx.db, {
+        userId,
+        actor: { type: 'user', id: userId },
+        now: new Date(),
+      });
+      if (result.status === 'not_found') {
+        return page(ctx, {
+          status: 404,
+          title: 'Account not found',
+          body: paragraph('Sign in again.'),
+        });
+      }
+      if (result.status === 'conflict') {
+        return page(ctx, {
+          status: 409,
+          title: 'This account cannot be deleted',
+          body: paragraph('The account is not in a state that allows deletion.'),
+        });
+      }
+      ctx.outbox.wake();
+      identityMetrics(ctx.metrics).deletion('requested');
+      identityMetrics(ctx.metrics).sessionsRevoked('revoked', result.revoked.length);
+      log.info('account deletion requested', { user_id: userId });
+      return page(ctx, {
+        title: 'Your account will be deleted',
+        headers: signedOutHeaders(result.revoked),
+        body: paragraph('You have been signed out. Sign in again if you change your mind.'),
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: EXPORT_PAGE,
+    operation_id: 'exportAccountPage',
+    summary: 'Request a copy of this account’s data',
+    tags: ['pages'],
+    auth: 'session',
+    step_up: true,
+    allow_account_states: SIGNED_IN_STATES,
+    rate_limit: 'global',
+    request: { query: z.object({ id: z.uuid().optional() }) },
+    responses: htmlResponses,
+    handler: async ({ ctx, identity, query }) => {
+      const { userId } = sessionUser(identity);
+      if (query.id !== undefined) {
+        const exported = await getExport(ctx.db, {
+          userId,
+          exportId: query.id,
+          store: objectStoreOf(ctx) ?? null,
+          now: new Date(),
+        });
+        if (!exported) {
+          return page(ctx, {
+            status: 404,
+            title: 'Export not found',
+            body: paragraph('That export is unknown.'),
+          });
+        }
+        const status =
+          exported.status === 'ready'
+            ? 'Your export is ready. Check your email.'
+            : exported.status === 'pending'
+              ? 'Your export is still being prepared.'
+              : exported.status === 'unavailable'
+                ? 'This export is too large to email without object storage.'
+                : 'This export could not be completed.';
+        return page(ctx, { title: 'Data export', body: paragraph(status) });
+      }
+      return page(ctx, {
+        title: 'Download your data',
+        body: `${paragraph('We will email you a copy of the data this service holds about you.')}
+<form method="post" action="export">
+<p><button type="submit">Request an export</button></p>
+</form>`,
+      });
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: EXPORT_PAGE,
+    operation_id: 'exportAccountPageSubmit',
+    summary: 'Start a data export from the form',
+    tags: ['pages'],
+    auth: 'session',
+    step_up: true,
+    allow_account_states: SIGNED_IN_STATES,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity, log }) => {
+      const { userId } = sessionUser(identity);
+      const result = await requestExport(ctx.db, { userId, now: new Date() });
+      if (result.status === 'not_found') {
+        return page(ctx, {
+          status: 404,
+          title: 'Account not found',
+          body: paragraph('Sign in again.'),
+        });
+      }
+      const store = objectStoreOf(ctx) ?? null;
+      void completeExport(ctx.db, ctx.bus, result.id, {
+        store,
+        settings: {
+          ttl: ctx.config.accounts.export_ttl,
+          emailMaxBytes: ctx.config.accounts.export_email_max_bytes,
+          defaultLocale: ctx.config.email.default_locale,
+        },
+        metrics: ctx.busMetrics,
+        now: new Date(),
+      }).then(
+        (status) => {
+          if (status === 'ready' || status === 'failed' || status === 'unavailable') {
+            identityMetrics(ctx.metrics).dataExport(status);
+          }
+        },
+        (error: unknown) => {
+          ctx.log.error('data export failed', { error, export_id: result.id });
+        },
+      );
+      log.info('data export requested', { user_id: userId, export_id: result.id });
+      return page(ctx, {
+        status: 202,
+        title: 'Export started',
+        body: `${paragraph('We will email you when it is ready.')}
+<p><a href="export?id=${escapeHtml(result.id)}">Check status</a></p>`,
       });
     },
   });

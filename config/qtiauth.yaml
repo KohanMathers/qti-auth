@@ -214,6 +214,9 @@ accounts:
     googlemail.com: { remove_dots: true, subaddress_separator: '+', domain: gmail.com }
   email_change_ttl: 15m
   email_revert_ttl: 7d
+  deletion_grace: 30d
+  export_ttl: 7d
+  export_email_max_bytes: 524288
 
 magic_link:
   ttl: 15m
@@ -302,3 +305,20 @@ retention:
   session_security_events: 90d
   filter_decisions: 30d
   audit: 730d
+
+storage:
+  enabled: false
+  endpoint: '' # http://minio:9000 for the bundled MinIO, or any S3/R2/B2 endpoint
+  region: us-east-1
+  bucket: qtiauth
+  access_key: '${env:S3_ACCESS_KEY}'
+  secret_key: '${env:S3_SECRET_KEY}'
+  force_path_style: true # required for MinIO; set false for AWS S3
+  create_bucket: true
+  tls: { ca_file: null }
+  presign_expires: 15m
+
+backups:
+  destination: directory # directory | storage
+  directory: /var/lib/qtiauth/backups
+  retention: 35d

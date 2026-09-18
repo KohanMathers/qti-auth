@@ -61,6 +61,7 @@ export interface Account extends AccountSummary {
   security_notifications: boolean;
   locked_until: Date | null;
   username_reset_required: boolean;
+  deletion_requested_at: Date | null;
 }
 
 export interface NewUser {
@@ -134,6 +135,7 @@ export function findAccount(db: Kysely<Database>, id: string): Promise<Account |
       'security_notifications',
       'locked_until',
       'username_reset_required',
+      'deletion_requested_at',
       'created_at',
     ])
     .where('id', '=', id)

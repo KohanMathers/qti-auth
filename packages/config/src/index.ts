@@ -23,6 +23,8 @@ export {
   type AgeAssuranceProviderId,
   AGE_ASSURANCE_TRIGGERS,
   type AgeAssuranceTrigger,
+  BACKUP_DESTINATIONS,
+  type BackupDestination,
   BUILTIN_SOCIAL_IDS,
   type BuiltinSocialId,
   CAPTCHA_PROVIDERS,

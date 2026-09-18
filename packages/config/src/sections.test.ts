@@ -22,6 +22,8 @@ import {
   surfaces,
   usernames,
   legal,
+  storage,
+  backups,
 } from './sections.ts';
 
 function messages(result: { error?: { issues: { path: PropertyKey[]; message: string }[] } }) {
@@ -302,6 +304,9 @@ describe('accounts', () => {
       subaddress_separator: '+',
       domain: 'gmail.com',
     });
+    expect(parsed.deletion_grace).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(parsed.export_ttl).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(parsed.export_email_max_bytes).toBe(524_288);
   });
 
   it('replaces the built-in rules and checks them', () => {
@@ -525,6 +530,45 @@ describe('retention', () => {
       session_security_events: 7_776_000_000,
       filter_decisions: 2_592_000_000,
       audit: 63_072_000_000,
+    });
+  });
+});
+
+describe('storage', () => {
+  it('is off by default and needs an endpoint and keys when enabled', () => {
+    expect(storage.parse({})).toMatchObject({
+      enabled: false,
+      endpoint: '',
+      region: 'us-east-1',
+      bucket: 'qtiauth',
+      force_path_style: true,
+      create_bucket: true,
+      presign_expires: 900_000,
+    });
+    expect(messages(storage.safeParse({ enabled: true }))).toEqual([
+      'endpoint: Must be an origin like http://minio:9000',
+      'access_key: Required when storage is enabled',
+      'secret_key: Required when storage is enabled',
+    ]);
+    expect(
+      messages(
+        storage.safeParse({
+          enabled: true,
+          endpoint: 'http://minio:9000',
+          access_key: 'key',
+          secret_key: 'secret',
+        }),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('backups', () => {
+  it('writes to a directory for 35 days by default', () => {
+    expect(backups.parse({})).toEqual({
+      destination: 'directory',
+      directory: '/var/lib/qtiauth/backups',
+      retention: 35 * 24 * 60 * 60 * 1000,
     });
   });
 });

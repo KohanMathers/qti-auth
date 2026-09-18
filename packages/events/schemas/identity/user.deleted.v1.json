@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.user.deleted.v1",
+  "title": "User deleted",
+  "description": "The deletion grace period ended and every service must erase this user’s data. Held objects stay isolated. The subject is the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["held"],
+  "properties": {
+    "held": {
+      "description": "A legal hold kept isolated copies of some of this user’s data.",
+      "type": "boolean"
+    }
+  }
+}

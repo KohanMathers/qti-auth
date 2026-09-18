@@ -1,8 +1,11 @@
 import { type Kysely, sql } from 'kysely';
 
+import { eraseUserObjects, heldObjectKey, type ObjectStore } from '@qtiauth/service-kit';
+
 import { dateOfBirthColumn } from './accounts.ts';
 import { exportAuditRecords } from './audit.ts';
 import type { Database } from './database.ts';
+import { enqueueLedgerEntry, flushLedgerOutbox, type LedgerDestination } from './ledger.ts';
 
 function iso(date: Date | null): string | null {
   return date?.toISOString() ?? null;
@@ -29,6 +32,7 @@ export async function exportUser(
       'security_notifications',
       'locked_until',
       'username_reset_required',
+      'deletion_requested_at',
       'created_at',
       'updated_at',
     ])
@@ -49,6 +53,8 @@ export async function exportUser(
     audit,
     legal,
     staffActions,
+    holds,
+    exports,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -154,6 +160,18 @@ export async function exportUser(
       .where('user_id', '=', userId)
       .orderBy('created_at')
       .execute(),
+    db
+      .selectFrom('legal_holds')
+      .select(['reason', 'case_id', 'placed_at', 'lifted_at'])
+      .where('user_id', '=', userId)
+      .orderBy('placed_at')
+      .execute(),
+    db
+      .selectFrom('data_exports')
+      .select(['status', 'bytes', 'created_at', 'completed_at', 'download_expires_at'])
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
   ]);
 
   return {
@@ -168,6 +186,7 @@ export async function exportUser(
       username_updated_at: iso(user.username_updated_at),
       locked_until: iso(user.locked_until),
       username_reset_required: user.username_reset_required,
+      deletion_requested_at: iso(user.deletion_requested_at),
       public_profile: user.public_profile,
       leaderboard_visible: user.leaderboard_visible,
       security_notifications: user.security_notifications,
@@ -242,33 +261,74 @@ export async function exportUser(
       actor_id: row.actor_id,
       created_at: iso(row.created_at),
     })),
+    legal_holds: holds.map((row) => ({
+      reason: row.reason,
+      case_id: row.case_id,
+      placed_at: iso(row.placed_at),
+      lifted_at: iso(row.lifted_at),
+    })),
+    data_exports: exports.map((row) => ({
+      status: row.status,
+      bytes: row.bytes,
+      created_at: iso(row.created_at),
+      completed_at: iso(row.completed_at),
+      download_expires_at: iso(row.download_expires_at),
+    })),
   };
 }
 
-export async function eraseUser(db: Kysely<Database>, userId: string): Promise<void> {
+export async function eraseUser(
+  db: Kysely<Database>,
+  userId: string,
+  options: {
+    held: boolean;
+    store: ObjectStore | null;
+    ledger: LedgerDestination;
+    now: Date;
+  },
+): Promise<void> {
+  const snapshot =
+    options.held && options.store !== null ? await exportUser(db, userId) : undefined;
   const user = await db
     .selectFrom('users')
     .select('email_normalized')
     .where('id', '=', userId)
     .executeTakeFirst();
-  if (!user) return;
-  const others = await db
-    .selectFrom('users')
-    .select('id')
-    .where('email_normalized', '=', user.email_normalized)
-    .where('id', '!=', userId)
-    .where('state', '!=', 'deleted')
-    .executeTakeFirst();
-  if (!others) {
-    await db
-      .deleteFrom('email_tokens')
+  if (user) {
+    const others = await db
+      .selectFrom('users')
+      .select('id')
       .where('email_normalized', '=', user.email_normalized)
-      .execute();
-    await db
-      .deleteFrom('auth_failures')
-      .where('kind', '=', 'account')
-      .where('key', '=', user.email_normalized)
-      .execute();
+      .where('id', '!=', userId)
+      .where('state', '!=', 'deleted')
+      .executeTakeFirst();
+    if (!others) {
+      await db
+        .deleteFrom('email_tokens')
+        .where('email_normalized', '=', user.email_normalized)
+        .execute();
+      await db
+        .deleteFrom('auth_failures')
+        .where('kind', '=', 'account')
+        .where('key', '=', user.email_normalized)
+        .execute();
+    }
+    await db.deleteFrom('users').where('id', '=', userId).execute();
   }
-  await db.deleteFrom('users').where('id', '=', userId).execute();
+  if (options.store !== null) {
+    if (snapshot !== undefined) {
+      await options.store.put(
+        heldObjectKey(userId, 'identity.json'),
+        new TextEncoder().encode(`${JSON.stringify(snapshot, null, 2)}\n`),
+        'application/json',
+      );
+    }
+    await eraseUserObjects(options.store, userId, { preserveHeld: options.held });
+  }
+  await enqueueLedgerEntry(db, { userId, deletedAt: options.now });
+  try {
+    await flushLedgerOutbox(db, options.ledger, options.now);
+  } catch {
+    // retried by deletion_ledger.prune
+  }
 }

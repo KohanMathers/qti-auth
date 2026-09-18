@@ -1,0 +1,9 @@
+Your {{ brand.product_name }} data export
+
+Download your data. This link expires in {{ expires_in_days }} days.
+
+{{ link }}
+
+If you didn't ask for an export, contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

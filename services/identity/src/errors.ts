@@ -95,6 +95,15 @@ export const IDENTITY_ERRORS = defineErrors({
   ROLE_SLUG_TAKEN: { status: 409, title: 'A role with this slug already exists' },
   ROLE_BUILTIN: { status: 409, title: 'Built-in roles cannot be deleted' },
   LEGAL_DOCUMENT_NOT_FOUND: { status: 404, title: 'No such legal document' },
+  DELETION_NOT_PENDING: {
+    status: 409,
+    title: 'This account is not waiting to be deleted',
+  },
+  EXPORT_UNAVAILABLE: {
+    status: 503,
+    title: 'A data export cannot be delivered without object storage',
+  },
+  EXPORT_NOT_FOUND: { status: 404, title: 'No data export is available' },
 });
 
 export type IdentityErrorCode = keyof typeof IDENTITY_ERRORS;

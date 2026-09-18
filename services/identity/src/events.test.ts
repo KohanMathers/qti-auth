@@ -10,6 +10,7 @@ import {
   userAgeBandChangedEvent,
   userBannedEvent,
   userCreatedEvent,
+  userDeletedEvent,
   userLockedEvent,
   userUnbannedEvent,
   userUnlockedEvent,
@@ -60,6 +61,7 @@ describe('identity events', () => {
           acr: 'aal0',
         }),
       ),
+      createEvent(userDeletedEvent(USER_ID, { held: false })),
       createEvent(userUpdatedEvent(USER_ID, { fields: ['username'] })),
       createEvent(
         userAgeBandChangedEvent(USER_ID, {

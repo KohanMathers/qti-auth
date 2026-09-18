@@ -111,7 +111,7 @@ Pass `next_cursor` back as `cursor` for the next page. It's `null` on the last p
 
 ## Data rights
 
-Every service that stores personal data answers `qtiauth.rpc.<service>.export_user` with `{ service, data }` for a `{ user_id }`, and erases the user's data when `identity.user.deleted` arrives. Erasure runs in a durable consumer named `<service>-user_erasure`, so a service that was down when a user was deleted catches up when it starts.
+Every service that stores personal data answers `qtiauth.rpc.<service>.export_user` with `{ service, data }` for a `{ user_id }`, and erases the user's data when `identity.user.deleted` arrives. Erasure runs in a durable consumer named `<service>-user_erasure`, so a service that was down when a user was deleted catches up when it starts. The event's `held` field is true when a legal hold kept isolated copies; objects under `legal-hold/` must stay. Identity writes `{ user_id, deleted_at }` to the deletion ledger at the backup destination after its own erasure.
 
 ---
 

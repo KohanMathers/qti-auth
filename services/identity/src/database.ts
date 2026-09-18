@@ -57,6 +57,7 @@ export interface UsersTable {
   locked_until: Generated<Date | null>;
   username_reset_required: Generated<boolean>;
   search_vector: ColumnType<string, never, never>;
+  deletion_requested_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -280,6 +281,8 @@ export const ACCOUNT_ACTIONS = [
   'force_reauth',
   'revoke_sessions',
   'force_username_reset',
+  'request_deletion',
+  'cancel_deletion',
 ] as const;
 export type AccountAction = (typeof ACCOUNT_ACTIONS)[number];
 
@@ -294,6 +297,40 @@ export interface AccountActionsTable {
   to_state: AccountState | null;
   expires_at: Date | null;
   created_at: Generated<Date>;
+}
+
+export const DATA_EXPORT_STATUSES = ['pending', 'ready', 'failed', 'unavailable'] as const;
+export type DataExportStatus = (typeof DATA_EXPORT_STATUSES)[number];
+
+export interface DataExportsTable {
+  id: string;
+  user_id: string;
+  status: DataExportStatus;
+  object_key: string | null;
+  bytes: number | null;
+  download_expires_at: Date | null;
+  error: string | null;
+  created_at: Generated<Date>;
+  completed_at: Date | null;
+}
+
+export interface LegalHoldsTable {
+  id: string;
+  user_id: string;
+  reason: string;
+  case_id: string | null;
+  actor_type: string;
+  actor_id: string;
+  placed_at: Generated<Date>;
+  lifted_at: Date | null;
+}
+
+export interface DeletionLedgerOutboxTable {
+  id: Generated<number>;
+  user_id: string;
+  deleted_at: Date;
+  created_at: Generated<Date>;
+  sent_at: Date | null;
 }
 
 export interface Database {
@@ -318,4 +355,7 @@ export interface Database {
   audit_log: AuditLogTable;
   legal_versions: LegalVersionsTable;
   legal_acceptances: LegalAcceptancesTable;
+  data_exports: DataExportsTable;
+  legal_holds: LegalHoldsTable;
+  deletion_ledger_outbox: DeletionLedgerOutboxTable;
 }

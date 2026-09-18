@@ -1,4 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { solveAltcha } from '@qtiauth/captcha';
 import {
@@ -38,6 +41,8 @@ import { natsUrl, startNats, startPostgres, startValkey } from '@qtiauth/testing
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './database.ts';
+import { GET_LEGAL_HOLD_METHOD, PLACE_LEGAL_HOLD_METHOD } from './legal-holds.ts';
+import { PURGE_JOB } from './lifecycle.ts';
 import { softwarePasskey } from './passkey-testing.ts';
 import { grantUser } from './roles.ts';
 import { definition } from './service.ts';
@@ -57,6 +62,7 @@ let gateway: Bus;
 let notifier: Bus;
 let emails: CapturedEmails;
 let identity: RunningService<typeof definition, Database>;
+let backupDir: string;
 const logs = captureLogs();
 const secrets: string[] = [];
 
@@ -179,6 +185,7 @@ async function loginPassword(email: string, password = PASSWORD): Promise<Respon
 }
 
 beforeAll(async () => {
+  backupDir = await mkdtemp(join(tmpdir(), 'qtiauth-ledger-'));
   [postgres, nats, valkey] = await Promise.all([startPostgres(), startNats(), startValkey()]);
   const bus = sections.bus.parse({ servers: [natsUrl(nats)] });
   gateway = await connectBus(bus, 'gateway');
@@ -215,6 +222,7 @@ beforeAll(async () => {
       },
       captcha: { after: 1000, altcha: { hmac_key: 'integration-captcha-key', max_number: 400 } },
       security: { encryption_key: Buffer.alloc(32, 9).toString('base64') },
+      backups: { directory: backupDir },
     }),
   });
 });
@@ -224,6 +232,7 @@ afterAll(async () => {
   await emails.stop();
   await Promise.all([gateway.close(), notifier.close()]);
   await Promise.all([postgres.stop(), nats.stop(), valkey.stop()]);
+  await rm(backupDir, { recursive: true, force: true });
 });
 
 describe('magic link start', () => {
@@ -280,6 +289,7 @@ describe('signing up and signing in', () => {
       username: null,
       account_state: 'active',
       age_band: '13_to_15',
+      deletion_requested_at: null,
     });
 
     const again = await signIn('NEW@example.com');
@@ -975,7 +985,7 @@ describe('events, retention and data rights', () => {
         type: USER_DELETED_EVENT,
         actor: { type: 'system', id: 'identity' },
         subject: { type: 'user', id: user.userId },
-        data: {},
+        data: { held: false },
       }),
     );
     await vi.waitFor(async () => {
@@ -986,6 +996,134 @@ describe('events, retention and data rights', () => {
         .where('id', '=', user.userId)
         .execute();
       expect(rows).toEqual([]);
+    });
+  });
+
+  it('schedules deletion, cancels it on sign-in, then purges to a ledger entry', async () => {
+    const user = await signUp('delete-me@example.com');
+    const requested = await post(
+      '/api/v1/me/deletion',
+      undefined,
+      signedInAs(user.userId, user.sessionId),
+    );
+    expect(requested.status).toBe(204);
+    expect(requested.headers.get(SESSION_CLEAR_HEADER)).toBe('1');
+    const pending = await call('/api/v1/me', {
+      as: signedInAs(user.userId, user.sessionId),
+    });
+    expect(await pending.json()).toMatchObject({
+      account_state: 'pending_deletion',
+      deletion_requested_at: expect.any(String) as unknown,
+    });
+
+    const again = await signIn('delete-me@example.com');
+    expect(again.userId).toBe(user.userId);
+    const restored = await call('/api/v1/me', {
+      as: signedInAs(again.userId, again.sessionId),
+    });
+    expect(await restored.json()).toMatchObject({
+      account_state: 'active',
+      deletion_requested_at: null,
+    });
+
+    expect(
+      (await post('/api/v1/me/deletion', undefined, signedInAs(again.userId, again.sessionId)))
+        .status,
+    ).toBe(204);
+    await identity.context.db
+      .updateTable('users')
+      .set({ deletion_requested_at: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000) })
+      .where('id', '=', again.userId)
+      .execute();
+    await publishCronTick(gateway.js, PURGE_JOB, new Date());
+    await vi.waitFor(async () => {
+      const rows = await identity.context.db
+        .selectFrom('users')
+        .select('id')
+        .where('id', '=', again.userId)
+        .execute();
+      expect(rows).toEqual([]);
+      const ledger = JSON.parse(
+        await readFile(join(backupDir, 'deletion-ledger', `${again.userId}.json`), 'utf8'),
+      ) as { user_id: string; deleted_at: string };
+      expect(ledger).toMatchObject({ user_id: again.userId });
+    });
+    const metrics = await (await fetch(`${identity.url}/metrics`)).text();
+    expect(metrics).toContain(
+      'qtiauth_account_deletions_total{event="requested",service="identity"}',
+    );
+    expect(metrics).toContain(
+      'qtiauth_account_deletions_total{event="cancelled",service="identity"}',
+    );
+    expect(metrics).toContain(
+      'qtiauth_account_deletions_total{event="completed",service="identity"}',
+    );
+  });
+
+  it('emails a zipped export as an attachment when object storage is off', async () => {
+    const user = await signUp('export-me@example.com');
+    const started = await post(
+      '/api/v1/me/export',
+      undefined,
+      signedInAs(user.userId, user.sessionId),
+    );
+    expect(started.status).toBe(202);
+    const body = (await started.json()) as { id: string; status: string };
+    expect(body.status).toBe('pending');
+    const job = await emails.nextJob('export-me@example.com', 'data_export_attachment');
+    expect(job.attachments).toEqual([
+      expect.objectContaining({
+        filename: `export-${user.userId}.zip`,
+        content_type: 'application/zip',
+      }),
+    ]);
+    expect(job.attachments[0]?.content.length).toBeGreaterThan(0);
+    await vi.waitFor(async () => {
+      const status = await call(`/api/v1/me/export/${body.id}`, {
+        as: signedInAs(user.userId, user.sessionId),
+      });
+      expect(await status.json()).toMatchObject({ id: body.id, status: 'ready' });
+    });
+    const metrics = await (await fetch(`${identity.url}/metrics`)).text();
+    expect(metrics).toContain('qtiauth_data_exports_total{status="ready",service="identity"}');
+  });
+
+  it('keeps a legal hold after the account is erased', async () => {
+    const user = await signUp('held@example.com');
+    const placed = await rpcRequest<{ hold: { id: string; reason: string } }>(
+      gateway,
+      'identity',
+      PLACE_LEGAL_HOLD_METHOD,
+      { user_id: user.userId, reason: 'Open investigation' },
+    );
+    expect(placed).toMatchObject({
+      status: 'ok',
+      data: { hold: { user_id: user.userId, reason: 'Open investigation', lifted_at: null } },
+    });
+    expect(
+      (await post('/api/v1/me/deletion', undefined, signedInAs(user.userId, user.sessionId)))
+        .status,
+    ).toBe(204);
+    await identity.context.db
+      .updateTable('users')
+      .set({ deletion_requested_at: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000) })
+      .where('id', '=', user.userId)
+      .execute();
+    await publishCronTick(gateway.js, PURGE_JOB, new Date());
+    await vi.waitFor(async () => {
+      const rows = await identity.context.db
+        .selectFrom('users')
+        .select('id')
+        .where('id', '=', user.userId)
+        .execute();
+      expect(rows).toEqual([]);
+    });
+    const hold = await rpcRequest(gateway, 'identity', GET_LEGAL_HOLD_METHOD, {
+      user_id: user.userId,
+    });
+    expect(hold).toMatchObject({
+      status: 'ok',
+      data: { hold: { user_id: user.userId, reason: 'Open investigation', lifted_at: null } },
     });
   });
 

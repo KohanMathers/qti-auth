@@ -13,6 +13,8 @@ export type StepUpResult = 'prompt' | 'success' | 'failure';
 export type UsernameAction = 'claim' | 'change' | 'reclaim';
 export type AdminUserAction =
   'ban' | 'unban' | 'lock' | 'unlock' | 'force_reauth' | 'revoke_sessions' | 'force_username_reset';
+export type DeletionEvent = 'requested' | 'cancelled' | 'completed';
+export type DataExportResult = 'ready' | 'failed' | 'unavailable';
 
 export interface IdentityMetrics {
   magicLink: (event: MagicLinkEvent) => void;
@@ -30,6 +32,8 @@ export interface IdentityMetrics {
   filterDecision: (rule: string) => void;
   username: (action: UsernameAction) => void;
   adminUserAction: (action: AdminUserAction) => void;
+  deletion: (event: DeletionEvent, count?: number) => void;
+  dataExport: (status: DataExportResult) => void;
   ageBandChanged: (count: number) => void;
   auditRecorded: () => void;
   legalAcceptancePending: (count: number) => void;
@@ -121,6 +125,16 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     help: 'Staff account actions, by action: ban, unban, lock, unlock, force_reauth, revoke_sessions or force_username_reset.',
     labelNames: ['action'],
   });
+  const deletions = metrics.counter({
+    name: 'qtiauth_account_deletions_total',
+    help: 'Account deletions, by event: requested, cancelled or completed.',
+    labelNames: ['event'],
+  });
+  const dataExports = metrics.counter({
+    name: 'qtiauth_data_exports_total',
+    help: 'Account data exports, by status: ready, failed or unavailable.',
+    labelNames: ['status'],
+  });
   const ageBandChanges = metrics.counter({
     name: 'qtiauth_age_band_changes_total',
     help: 'Age-band changes from the daily recompute or a staff date-of-birth edit.',
@@ -190,6 +204,12 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     adminUserAction: (action) => {
       adminUserActions.inc({ action });
+    },
+    deletion: (event, count = 1) => {
+      if (count > 0) deletions.inc({ event }, count);
+    },
+    dataExport: (status) => {
+      dataExports.inc({ status });
     },
     ageBandChanged: (count) => {
       if (count > 0) ageBandChanges.inc(count);

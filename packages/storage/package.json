@@ -1,0 +1,22 @@
+{
+  "name": "@qtiauth/storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "S3-compatible object storage and presigned upload/download URLs",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qtiauth/config": "workspace:*",
+    "@qtiauth/observability": "workspace:*",
+    "undici": "8.10.2"
+  },
+  "devDependencies": {
+    "@qtiauth/testing": "workspace:*"
+  }
+}

@@ -23,6 +23,7 @@ describe('createEmailJob', () => {
       user_id: request.userId,
       variables: request.variables,
       queued_at: '2026-09-17T09:00:00.000Z',
+      attachments: [],
     });
     expect(emailJobSchema.parse(job)).toEqual(job);
   });

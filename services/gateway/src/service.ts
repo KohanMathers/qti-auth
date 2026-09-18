@@ -36,6 +36,7 @@ export const definition = defineService({
     'gateway',
     'rate_limits',
     'security',
+    'storage',
   ],
   errors: GATEWAY_ERRORS,
 });
