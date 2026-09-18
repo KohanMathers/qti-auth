@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.user.banned.v1",
+  "title": "User banned",
+  "description": "Staff banned an account. The gateway drops cached sessions for the user. The subject is the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reason"],
+  "properties": {
+    "reason": {
+      "description": "Why the account was banned. Stored with the staff action.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

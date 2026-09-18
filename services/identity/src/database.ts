@@ -26,6 +26,7 @@ export const SECURITY_EVENT_KINDS = [
   'country_change',
   'new_device',
   'reauthenticated',
+  'force_reauth',
 ] as const;
 export type SecurityEventKind = (typeof SECURITY_EVENT_KINDS)[number];
 
@@ -53,6 +54,9 @@ export interface UsersTable {
   public_profile: Generated<boolean>;
   leaderboard_visible: Generated<boolean>;
   security_notifications: Generated<boolean>;
+  locked_until: Generated<Date | null>;
+  username_reset_required: Generated<boolean>;
+  search_vector: ColumnType<string, never, never>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -268,6 +272,30 @@ export interface UsernameHistoryTable {
   released_at: Date | null;
 }
 
+export const ACCOUNT_ACTIONS = [
+  'ban',
+  'unban',
+  'lock',
+  'unlock',
+  'force_reauth',
+  'revoke_sessions',
+  'force_username_reset',
+] as const;
+export type AccountAction = (typeof ACCOUNT_ACTIONS)[number];
+
+export interface AccountActionsTable {
+  id: string;
+  user_id: string;
+  actor_type: string;
+  actor_id: string;
+  action: AccountAction;
+  reason: string;
+  from_state: AccountState | null;
+  to_state: AccountState | null;
+  expires_at: Date | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   users: UsersTable;
   identities: IdentitiesTable;
@@ -284,6 +312,7 @@ export interface Database {
   filter_decisions: FilterDecisionsTable;
   filter_list_entries: FilterListEntriesTable;
   username_history: UsernameHistoryTable;
+  account_actions: AccountActionsTable;
   age_assurance_results: AgeAssuranceResultsTable;
   date_of_birth_changes: DateOfBirthChangesTable;
   audit_log: AuditLogTable;

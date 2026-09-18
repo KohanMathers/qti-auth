@@ -6,6 +6,7 @@ import {
   ageOn,
   agePrivacyDefaults,
   bandOn,
+  dateOfBirthBounds,
   isLeapYear,
   isValidDateOfBirth,
   previousUtcDay,
@@ -107,5 +108,30 @@ describe('calendar helpers', () => {
     expect(isLeapYear(2024)).toBe(true);
     expect(isLeapYear(1900)).toBe(false);
     expect(isLeapYear(2026)).toBe(false);
+  });
+});
+
+describe('dateOfBirthBounds', () => {
+  const today = new Date('2026-09-18T12:00:00Z');
+
+  it('matches ageBand for the dates on each side of a boundary', () => {
+    const adult = dateOfBirthBounds('adult', today, bands);
+    expect(ageBand(ageOn(adult.through, today), bands)).toBe('adult');
+    expect(ageBand(ageOn('2008-09-19', today), bands)).toBe('16_to_17');
+
+    const teens = dateOfBirthBounds('16_to_17', today, bands);
+    expect(teens.after).toBe(adult.through);
+    expect(ageBand(ageOn('2008-09-19', today), bands)).toBe('16_to_17');
+    expect(ageBand(ageOn(teens.through, today), bands)).toBe('16_to_17');
+    expect(ageBand(ageOn('2010-09-19', today), bands)).toBe('13_to_15');
+
+    const younger = dateOfBirthBounds('13_to_15', today, bands);
+    expect(younger.after).toBe(teens.through);
+    expect(ageBand(ageOn(younger.through, today), bands)).toBe('13_to_15');
+
+    const children = dateOfBirthBounds('under_13', today, bands);
+    expect(children.after).toBe(younger.through);
+    expect(children.through).toBe('2026-09-18');
+    expect(ageBand(ageOn('2013-09-19', today), bands)).toBe('under_13');
   });
 });

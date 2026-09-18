@@ -10,8 +10,8 @@
     "session_id": { "description": "The flagged session.", "type": "string", "format": "uuid" },
     "user_id": { "description": "The session's user.", "type": "string", "format": "uuid" },
     "reason": {
-      "description": "country_change when the client moved country, trust when other signals dropped the trust level.",
-      "enum": ["country_change", "trust"]
+      "description": "country_change when the client moved country, trust when other signals dropped the trust level, staff when an admin forced re-authentication.",
+      "enum": ["country_change", "trust", "staff"]
     },
     "trust_level": {
       "description": "The session's trust level after the check.",

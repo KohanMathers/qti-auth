@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.user.locked.v1",
+  "title": "User locked",
+  "description": "Staff locked an account until expires_at. The gateway drops cached sessions for the user. The subject is the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reason", "expires_at"],
+  "properties": {
+    "reason": {
+      "description": "Why the account was locked. Stored with the staff action.",
+      "type": "string",
+      "minLength": 1
+    },
+    "expires_at": {
+      "description": "When the lock ends. Identity unlocks the account at this time.",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

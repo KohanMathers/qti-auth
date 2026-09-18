@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, stores the audit log, and syncs legal documents that users accept at signup and again when a material version takes effect. Parental consent comes in a later release (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, stores the audit log, syncs legal documents that users accept at signup and again when a material version takes effect, and lets staff search and act on accounts. Parental consent comes in a later release (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -106,6 +106,7 @@ roles:
       - users.ban
       - users.lock
       - users.edit_dob
+      - users.force_username_reset
       - safety.reports.read
       - safety.actions.apply
       - filter.read
@@ -354,7 +355,7 @@ Accounts can exist without a username. `POST /api/v1/me/username` with `{ userna
 
 Every candidate goes through the text filter. Taken names, reserved names, reserved prefixes and filter blocks all answer `409 USERNAME_UNAVAILABLE` ("Username not available"). Length and charset failures are `400 USERNAME_INVALID`.
 
-`GET /api/v1/me` includes `username` and `username_updated_at`, both null until a name is claimed, plus `public_profile` and `leaderboard_visible`. `GET`/`POST /auth/username` is the interim page.
+`GET /api/v1/me` includes `username`, `username_updated_at` and `username_reset_required`. Username and `username_updated_at` are null until a name is claimed. It also includes `public_profile` and `leaderboard_visible`. Staff can force a reset: the current name is released, `username_reset_required` is true, and the next claim skips cooldown and the yearly limit. `GET`/`POST /auth/username` is the interim page.
 
 | Endpoint                    | Does                                      |
 | --------------------------- | ----------------------------------------- |
@@ -371,9 +372,24 @@ Accounts under 18 start with public profile and leaderboard visibility off, and 
 
 Staff change a date of birth at `POST /api/v1/admin/users/:user_id/date-of-birth` with `{ date_of_birth, reason }`. That needs `users.edit_dob` and a recent step-up. Making someone under 18 turns public profile and leaderboards off.
 
-| Endpoint                                          | Does                                           |
-| ------------------------------------------------- | ---------------------------------------------- |
-| `POST /api/v1/admin/users/:user_id/date-of-birth` | Staff-only date-of-birth change, with a reason |
+## Admin users
+
+Staff with `users.read` search accounts at `GET /api/v1/admin/users` (Postgres full-text on username and email, filters on `state`, `age_band`, `role_id` and created date) and load detail at `GET /api/v1/admin/users/:user_id`. Detail is assembled on the bus: identity fills profile, sign-in methods (never secrets), sessions, security events, username history, staff actions and an empty guardians list. Optional services answer `qtiauth.rpc.safety.user_moderation`, `qtiauth.rpc.games.user_entitlements` and `qtiauth.rpc.support.user_tickets` with `{ user_id }`; those sections are omitted when the service is not running.
+
+Each action needs a `reason` and a recent step-up, and is audited. Staff cannot run them on their own account.
+
+| Endpoint                                            | Permission                   | Does                                                                                                                      |
+| --------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/admin/users`                           | `users.read`                 | Search and filter                                                                                                         |
+| `GET /api/v1/admin/users/:user_id`                  | `users.read`                 | Assembled detail                                                                                                          |
+| `POST /api/v1/admin/users/:user_id/ban`             | `users.ban`                  | Ban. Sessions stay, so appeals and data rights still work                                                                 |
+| `POST /api/v1/admin/users/:user_id/unban`           | `users.ban`                  | Lift a ban                                                                                                                |
+| `POST /api/v1/admin/users/:user_id/lock`            | `users.lock`                 | Lock until `expires_at`. `accounts.unlock_expired` (every minute) lifts it, as does the next session resolve after expiry |
+| `POST /api/v1/admin/users/:user_id/unlock`          | `users.lock`                 | Lift a lock                                                                                                               |
+| `POST /api/v1/admin/users/:user_id/reauth`          | `users.lock`                 | Drop every session to `aal0`                                                                                              |
+| `POST /api/v1/admin/users/:user_id/sessions/revoke` | `users.lock`                 | End every session                                                                                                         |
+| `POST /api/v1/admin/users/:user_id/username-reset`  | `users.force_username_reset` | Release the current username. The user picks a new one, skipping cooldown                                                 |
+| `POST /api/v1/admin/users/:user_id/date-of-birth`   | `users.edit_dob`             | Staff-only date-of-birth change, with a reason                                                                            |
 
 ## Roles
 
@@ -449,12 +465,13 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `USERNAME_UNCHANGED`           | 400    | The username is already this account’s                                                 |
 | `DATE_OF_BIRTH_INVALID`        | 400    | The date of birth is not a real past date                                              |
 | `DATE_OF_BIRTH_UNCHANGED`      | 400    | The date of birth is already this account’s                                            |
+| `LOCK_EXPIRY_INVALID`          | 400    | The lock expiry must be in the future                                                  |
 | `CREDENTIALS_INCORRECT`        | 401    | Email or password incorrect                                                            |
 | `AUTH_METHOD_DISABLED`         | 403    | `features.auth.magic_link`, `password`, `passkeys`, `totp` or a social provider is off |
 | `STEP_UP_REQUIRED`             | 403    | A route that needs a recent `aal2` session, or adding a password without one           |
 | `CAPTCHA_REQUIRED`             | 403    | This IP is over the CAPTCHA threshold and no valid solution was sent                   |
 | `PARENTAL_CONSENT_UNAVAILABLE` | 403    | The user is younger than `parental.consent_age`                                        |
-| `ACCOUNT_NOT_FOUND`            | 404    | The signed-in account no longer exists                                                 |
+| `ACCOUNT_NOT_FOUND`            | 404    | The signed-in account no longer exists, or staff asked for an account that does not    |
 | `SESSION_NOT_FOUND`            | 404    | No active session with that ID belongs to the user                                     |
 | `PASSKEY_NOT_FOUND`            | 404    | No passkey with that ID belongs to the user                                            |
 | `IDENTITY_NOT_FOUND`           | 404    | No connected social identity with that ID belongs to the user                          |
@@ -465,6 +482,8 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `USERNAME_COOLDOWN`            | 409    | `usernames.change_cooldown` has not elapsed since the last claim or change             |
 | `USERNAME_CHANGE_LIMIT`        | 409    | `usernames.changes_per_year` changes have already been used in `change_window`         |
 | `ACCOUNT_LIMIT_REACHED`        | 409    | The address already has `accounts.max_per_email` accounts                              |
+| `ACCOUNT_SELF`                 | 409    | Staff tried to ban, lock, or otherwise act on their own account                        |
+| `ACCOUNT_STATE_CONFLICT`       | 409    | The account is not in a state that allows that staff action                            |
 | `TOTP_ALREADY_ENABLED`         | 409    | Authenticator-app sign-in is already set up                                            |
 | `IDENTITY_IN_USE`              | 409    | That provider identity is already connected to another account                         |
 | `LAST_SIGN_IN_METHOD`          | 409    | Removing this method would leave the account with no sign-in method                    |
@@ -478,20 +497,24 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `qtiauth.identity.user.created.v1`            | An account was created                                                                                                                    |
 | `qtiauth.identity.user.updated.v1`            | An account field changed. `fields` names what changed (`username`, `date_of_birth`, `roles`, `legal`)                                     |
+| `qtiauth.identity.user.banned.v1`             | Staff banned an account. Sessions stay. The gateway drops cached sessions for the user                                                    |
+| `qtiauth.identity.user.unbanned.v1`           | Staff lifted a ban                                                                                                                        |
+| `qtiauth.identity.user.locked.v1`             | Staff locked an account until `expires_at`                                                                                                |
+| `qtiauth.identity.user.unlocked.v1`           | A lock ended, by staff or because it expired                                                                                              |
 | `qtiauth.identity.user.age_band_changed.v1`   | The computed age band changed, usually because they had a birthday                                                                        |
 | `qtiauth.identity.session.created.v1`         | Someone signed in                                                                                                                         |
 | `qtiauth.identity.session.revoked.v1`         | A session was ended by signing out (`logout`), by the user (`revoked`), by a newer sign-in (`evicted`) or by session security (`blocked`) |
-| `qtiauth.identity.session.flagged.v1`         | Session security challenged or blocked a session                                                                                          |
+| `qtiauth.identity.session.flagged.v1`         | A session dropped to `aal0`: country change, other trust signals, or staff forcing re-authentication                                      |
 | `qtiauth.identity.legal.version_published.v1` | A legal document version took effect. The gateway drops every cached session. Non-material versions also queue a `legal_update` email     |
 | `qtiauth.audit.recorded.v1`                   | A staff or security-sensitive action. Identity stores these in the audit log                                                              |
 
-The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated` or `user.age_band_changed`, and every cached session when it sees `legal.version_published`. Accepting a legal version publishes `user.updated` with `fields: ["legal"]` so the gate lifts without waiting for the cache TTL. Schemas are in `packages/events/schemas/identity/` and `packages/events/schemas/audit/`.
+The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated`, `user.banned`, `user.unbanned`, `user.locked`, `user.unlocked` or `user.age_band_changed`, and every cached session when it sees `legal.version_published`. Accepting a legal version publishes `user.updated` with `fields: ["legal"]` so the gate lifts without waiting for the cache TTL. Schemas are in `packages/events/schemas/identity/` and `packages/events/schemas/audit/`.
 
 ## Retention and data rights
 
 `retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, text-filter decisions `retention.filter_decisions` after they were recorded, and the oldest audit log rows `retention.audit` after they were recorded.
 
-A user's export has their account (including username, public profile, leaderboard visibility and security-notification flag), username history, age-assurance results, staff date-of-birth changes, assigned roles, audit rows where they are the actor or the target, legal acceptances, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address. Legal acceptances go with the account. Audit rows stay, so the hash chain remains intact.
+A user's export has their account (including username, public profile, leaderboard visibility, security-notification flag, lock expiry and whether a username reset is required), username history, age-assurance results, staff date-of-birth changes, staff account actions, assigned roles, audit rows where they are the actor or the target, legal acceptances, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, staff account actions, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address. Legal acceptances go with the account. Audit rows stay, so the hash chain remains intact.
 
 ## Metrics
 
@@ -513,11 +536,12 @@ A user's export has their account (including username, public profile, leaderboa
 | `qtiauth_accounts`                         | `state`              |
 | `qtiauth_filter_decisions_total`           | `rule`               |
 | `qtiauth_usernames_claimed_total`          | `action`             |
+| `qtiauth_admin_user_actions_total`         | `action`             |
 | `qtiauth_age_band_changes_total`           |                      |
 | `qtiauth_audit_recorded_total`             |                      |
 | `qtiauth_legal_acceptance_pending`         |                      |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. `qtiauth_audit_recorded_total` counts rows stored from `audit.recorded`. `qtiauth_legal_acceptance_pending` is how many accounts have not accepted a currently effective material version, counted every minute. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Staff account `action` is `ban`, `unban`, `lock`, `unlock`, `force_reauth`, `revoke_sessions` or `force_username_reset`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. `qtiauth_audit_recorded_total` counts rows stored from `audit.recorded`. `qtiauth_legal_acceptance_pending` is how many accounts have not accepted a currently effective material version, counted every minute. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 
@@ -541,4 +565,4 @@ The gateway sends the flow cookie's value back to identity, and only to identity
 
 ### Tests
 
-`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session, and a material legal version that gates `/api/v1/me/identities` until it is accepted. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit. `legal.integration.test.ts` syncs the shipped documents, rejects an edited body without a version bump, and covers material re-acceptance, the HTML form, and a non-material email.
+`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session, and a material legal version that gates `/api/v1/me/identities` until it is accepted. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit. `legal.integration.test.ts` syncs the shipped documents, rejects an edited body without a version bump, and covers material re-acceptance, the HTML form, and a non-material email. `admin-users.integration.test.ts` searches accounts, omits optional-service detail until those RPC methods answer, and covers ban, lock, force re-auth, session revoke and username reset.

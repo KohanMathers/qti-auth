@@ -341,6 +341,8 @@ double-run a job. The scheduler holds no job logic.
 | `parental.expire_pending` | identity | hourly |
 | `accounts.purge_deleted` | identity | daily 03:30 |
 | `age.recompute_bands` | identity | daily 00:05 |
+| `accounts.unlock_expired` | identity | every minute |
+| `legal.publish` | identity | every minute |
 | `deletion_ledger.prune` | identity | daily 04:00 |
 | `keys.rotate` | gateway, oidc, games | daily 00:00 (rotates when due) |
 | `webhooks.retry` | notifier | every minute |

@@ -8,7 +8,11 @@ import {
   sessionFlaggedEvent,
   sessionRevokedEvent,
   userAgeBandChangedEvent,
+  userBannedEvent,
   userCreatedEvent,
+  userLockedEvent,
+  userUnbannedEvent,
+  userUnlockedEvent,
   userUpdatedEvent,
   legalVersionPublishedEvent,
 } from './events.ts';
@@ -47,6 +51,15 @@ describe('identity events', () => {
           acr: 'aal0',
         }),
       ),
+      createEvent(
+        sessionFlaggedEvent({
+          session_id: SESSION_ID,
+          user_id: USER_ID,
+          reason: 'staff',
+          trust_level: 'challenge',
+          acr: 'aal0',
+        }),
+      ),
       createEvent(userUpdatedEvent(USER_ID, { fields: ['username'] })),
       createEvent(
         userAgeBandChangedEvent(USER_ID, {
@@ -62,6 +75,22 @@ describe('identity events', () => {
           material: true,
           summary: 'We added passkeys.',
         }),
+      ),
+      createEvent(
+        userBannedEvent(USER_ID, { reason: 'Repeated abuse' }, { type: 'user', id: USER_ID }),
+      ),
+      createEvent(
+        userUnbannedEvent(USER_ID, { reason: 'Appeal upheld' }, { type: 'user', id: USER_ID }),
+      ),
+      createEvent(
+        userLockedEvent(
+          USER_ID,
+          { reason: 'Investigation', expires_at: '2026-09-19T12:00:00.000Z' },
+          { type: 'user', id: USER_ID },
+        ),
+      ),
+      createEvent(
+        userUnlockedEvent(USER_ID, { reason: 'expired' }, { type: 'system', id: 'identity' }),
       ),
       createEvent(
         auditRecordedEvent(

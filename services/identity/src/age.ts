@@ -73,3 +73,34 @@ export function agePrivacyDefaults(isUnder18: boolean): AgePrivacyDefaults {
     securityNotifications: true,
   };
 }
+
+function nthBirthdayDate(today: Date, age: number): string {
+  const year = today.getUTCFullYear() - age;
+  const month = today.getUTCMonth();
+  const day = today.getUTCDate();
+  return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+}
+
+export function dateOfBirthBounds(
+  band: AgeBand,
+  today: Date,
+  bands: AgeBands,
+): { after: string; through: string } {
+  const lower =
+    band === 'adult'
+      ? bands.adult
+      : band === '16_to_17'
+        ? bands['16_to_17']
+        : band === '13_to_15'
+          ? bands['13_to_15']
+          : 0;
+  const upper =
+    band === 'under_13'
+      ? bands['13_to_15']
+      : band === '13_to_15'
+        ? bands['16_to_17']
+        : band === '16_to_17'
+          ? bands.adult
+          : MAX_AGE + 1;
+  return { after: nthBirthdayDate(today, upper), through: nthBirthdayDate(today, lower) };
+}

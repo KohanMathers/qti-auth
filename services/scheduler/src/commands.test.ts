@@ -74,7 +74,7 @@ describe('qtiauth jobs list', () => {
       enabled: false,
       next_run: null,
     });
-    expect(printed.jobs).toHaveLength(13);
+    expect(printed.jobs).toHaveLength(14);
   });
 
   it('prints its usage', async () => {

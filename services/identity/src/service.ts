@@ -9,6 +9,7 @@ import {
 } from '@qtiauth/service-kit';
 
 import packageJson from '../package.json' with { type: 'json' };
+import { adminUserRoutes } from './admin-user-routes.ts';
 import { ageRoutes } from './age-routes.ts';
 import { auditRoutes } from './audit-routes.ts';
 import { authRoutes } from './auth-routes.ts';
@@ -59,6 +60,12 @@ export const definition = defineService({
     },
     'filter.manage': { description: 'Change the text-filter allowlist and extra blocklist' },
     'users.edit_dob': { description: 'Change a user’s date of birth' },
+    'users.read': { description: 'Search and view accounts' },
+    'users.ban': { description: 'Ban and unban accounts' },
+    'users.lock': {
+      description: 'Lock and unlock accounts, force re-authentication and revoke sessions',
+    },
+    'users.force_username_reset': { description: 'Force a user to choose a new username' },
     'roles.manage': { description: 'Create, edit and assign roles' },
     'audit.read': { description: 'Read the audit log' },
   }),
@@ -77,6 +84,7 @@ sessionRoutes(router);
 filterRoutes(router);
 usernameRoutes(router);
 ageRoutes(router);
+adminUserRoutes(router);
 roleRoutes(router);
 auditRoutes(router);
 legalRoutes(router);

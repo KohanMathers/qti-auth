@@ -11,6 +11,8 @@ export type TwoFactorFactor = 'totp' | 'passkey' | 'recovery';
 export type TwoFactorResult = 'success' | 'failure';
 export type StepUpResult = 'prompt' | 'success' | 'failure';
 export type UsernameAction = 'claim' | 'change' | 'reclaim';
+export type AdminUserAction =
+  'ban' | 'unban' | 'lock' | 'unlock' | 'force_reauth' | 'revoke_sessions' | 'force_username_reset';
 
 export interface IdentityMetrics {
   magicLink: (event: MagicLinkEvent) => void;
@@ -27,6 +29,7 @@ export interface IdentityMetrics {
   sessionsRevoked: (reason: RevocationReason, count: number) => void;
   filterDecision: (rule: string) => void;
   username: (action: UsernameAction) => void;
+  adminUserAction: (action: AdminUserAction) => void;
   ageBandChanged: (count: number) => void;
   auditRecorded: () => void;
   legalAcceptancePending: (count: number) => void;
@@ -113,6 +116,11 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     help: 'Username claims, by action: claim, change or reclaim.',
     labelNames: ['action'],
   });
+  const adminUserActions = metrics.counter({
+    name: 'qtiauth_admin_user_actions_total',
+    help: 'Staff account actions, by action: ban, unban, lock, unlock, force_reauth, revoke_sessions or force_username_reset.',
+    labelNames: ['action'],
+  });
   const ageBandChanges = metrics.counter({
     name: 'qtiauth_age_band_changes_total',
     help: 'Age-band changes from the daily recompute or a staff date-of-birth edit.',
@@ -179,6 +187,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     username: (action) => {
       usernames.inc({ action });
+    },
+    adminUserAction: (action) => {
+      adminUserActions.inc({ action });
     },
     ageBandChanged: (count) => {
       if (count > 0) ageBandChanges.inc(count);

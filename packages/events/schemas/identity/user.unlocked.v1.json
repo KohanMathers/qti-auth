@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.user.unlocked.v1",
+  "title": "User unlocked",
+  "description": "A lock ended, by staff or because it expired. The gateway drops cached sessions for the user. The subject is the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reason"],
+  "properties": {
+    "reason": {
+      "description": "Why the lock was lifted, or expired when the lock ran out.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

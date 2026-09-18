@@ -253,15 +253,21 @@ function usernameForm(
   current: string | null,
   values: { username?: string } = {},
   error?: string,
+  resetRequired = false,
 ): Response {
-  const title = current === null ? 'Choose a username' : 'Change username';
+  const title = resetRequired || current === null ? 'Choose a username' : 'Change username';
+  const prompt = resetRequired
+    ? paragraph('A member of staff asked you to choose a new username.')
+    : current === null
+      ? ''
+      : paragraph(`Current username: ${current}`);
   return page(ctx, {
     title,
     body: `${error === undefined ? '' : alert(error)}
-${current === null ? '' : paragraph(`Current username: ${current}`)}
+${prompt}
 <form method="post" action="username">
 <p><label for="username">Username</label><br>
-<input id="username" name="username" required minlength="${String(ctx.config.usernames.min_length)}" maxlength="${String(ctx.config.usernames.max_length)}" value="${escapeHtml(values.username ?? current ?? '')}"></p>
+<input id="username" name="username" required minlength="${String(ctx.config.usernames.min_length)}" maxlength="${String(ctx.config.usernames.max_length)}" value="${escapeHtml(values.username ?? (resetRequired ? '' : (current ?? '')))}"></p>
 <p><button type="submit">Save</button></p>
 </form>`,
   });
@@ -1350,6 +1356,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     summary: 'Claim or change this account’s username',
     tags: ['pages'],
     auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
     rate_limit: 'global',
     responses: htmlResponses,
     handler: async ({ ctx, identity }) => {
@@ -1362,7 +1369,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
           body: paragraph('Sign in again.'),
         });
       }
-      return usernameForm(ctx, account.username);
+      return usernameForm(ctx, account.username, {}, undefined, account.username_reset_required);
     },
   });
 
@@ -1373,6 +1380,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     summary: 'Save a username from the username page',
     tags: ['pages'],
     auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
     rate_limit: 'global',
     responses: htmlResponses,
     handler: async ({ ctx, identity, request, log }) => {
@@ -1401,6 +1409,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
           account.username,
           { username },
           usernameMessage(ctx, result.status),
+          account.username_reset_required,
         );
       }
       ctx.outbox.wake();

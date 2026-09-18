@@ -84,6 +84,12 @@ export const IDENTITY_ERRORS = defineErrors({
     title: 'Accounts that need parental consent cannot be created yet',
   },
   ACCOUNT_NOT_FOUND: { status: 404, title: 'The account does not exist' },
+  ACCOUNT_SELF: { status: 409, title: 'You cannot perform this action on your own account' },
+  ACCOUNT_STATE_CONFLICT: {
+    status: 409,
+    title: 'The account is not in a state that allows this action',
+  },
+  LOCK_EXPIRY_INVALID: { status: 400, title: 'The lock expiry must be in the future' },
   SESSION_NOT_FOUND: { status: 404, title: 'No such session' },
   ROLE_NOT_FOUND: { status: 404, title: 'No such role' },
   ROLE_SLUG_TAKEN: { status: 409, title: 'A role with this slug already exists' },

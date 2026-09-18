@@ -26,9 +26,26 @@ export interface SessionRevokedData {
 export interface SessionFlaggedData {
   session_id: string;
   user_id: string;
-  reason: 'country_change' | 'trust';
+  reason: 'country_change' | 'trust' | 'staff';
   trust_level: string;
   acr: string;
+}
+
+export interface UserBannedData {
+  reason: string;
+}
+
+export interface UserUnbannedData {
+  reason: string;
+}
+
+export interface UserLockedData {
+  reason: string;
+  expires_at: string;
+}
+
+export interface UserUnlockedData {
+  reason: string;
 }
 
 export interface UserUpdatedData {
@@ -89,6 +106,58 @@ export function sessionFlaggedEvent(data: SessionFlaggedData): NewEvent<SessionF
     type: IDENTITY_EVENTS.sessionFlagged,
     actor: { type: 'user', id: data.user_id },
     subject: { type: 'session', id: data.session_id },
+    data,
+  };
+}
+
+export function userBannedEvent(
+  userId: string,
+  data: UserBannedData,
+  actor: EventActor,
+): NewEvent<UserBannedData> {
+  return {
+    type: IDENTITY_EVENTS.userBanned,
+    actor,
+    subject: { type: 'user', id: userId },
+    data,
+  };
+}
+
+export function userUnbannedEvent(
+  userId: string,
+  data: UserUnbannedData,
+  actor: EventActor,
+): NewEvent<UserUnbannedData> {
+  return {
+    type: IDENTITY_EVENTS.userUnbanned,
+    actor,
+    subject: { type: 'user', id: userId },
+    data,
+  };
+}
+
+export function userLockedEvent(
+  userId: string,
+  data: UserLockedData,
+  actor: EventActor,
+): NewEvent<UserLockedData> {
+  return {
+    type: IDENTITY_EVENTS.userLocked,
+    actor,
+    subject: { type: 'user', id: userId },
+    data,
+  };
+}
+
+export function userUnlockedEvent(
+  userId: string,
+  data: UserUnlockedData,
+  actor: EventActor,
+): NewEvent<UserUnlockedData> {
+  return {
+    type: IDENTITY_EVENTS.userUnlocked,
+    actor,
+    subject: { type: 'user', id: userId },
     data,
   };
 }

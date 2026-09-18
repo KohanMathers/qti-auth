@@ -25,6 +25,7 @@ describe('identity service', () => {
       '0014_roles',
       '0015_audit',
       '0016_legal',
+      '0017_admin_users',
     ]);
   });
 
@@ -46,6 +47,8 @@ describe('identity service', () => {
       'GET /api/v1/admin/permissions',
       'GET /api/v1/admin/roles',
       'GET /api/v1/admin/roles/:role_id',
+      'GET /api/v1/admin/users',
+      'GET /api/v1/admin/users/:user_id',
       'GET /api/v1/admin/users/:user_id/roles',
       'GET /api/v1/captcha',
       'GET /api/v1/legal',
@@ -87,7 +90,14 @@ describe('identity service', () => {
       'POST /api/v1/admin/filter/allowlist',
       'POST /api/v1/admin/filter/blocklist',
       'POST /api/v1/admin/roles',
+      'POST /api/v1/admin/users/:user_id/ban',
       'POST /api/v1/admin/users/:user_id/date-of-birth',
+      'POST /api/v1/admin/users/:user_id/lock',
+      'POST /api/v1/admin/users/:user_id/reauth',
+      'POST /api/v1/admin/users/:user_id/sessions/revoke',
+      'POST /api/v1/admin/users/:user_id/unban',
+      'POST /api/v1/admin/users/:user_id/unlock',
+      'POST /api/v1/admin/users/:user_id/username-reset',
       'POST /api/v1/auth/2fa',
       'POST /api/v1/auth/email/change',
       'POST /api/v1/auth/email/revert',
@@ -193,6 +203,33 @@ describe('identity service', () => {
       permissions: ['users.edit_dob'],
       step_up: true,
     });
+    expect(route('GET', '/api/v1/admin/users')).toMatchObject({
+      auth: 'session',
+      permissions: ['users.read'],
+    });
+    expect(route('GET', '/api/v1/admin/users/:user_id')).toMatchObject({
+      auth: 'session',
+      permissions: ['users.read'],
+    });
+    expect(route('POST', '/api/v1/admin/users/:user_id/ban')).toMatchObject({
+      auth: 'session',
+      permissions: ['users.ban'],
+      step_up: true,
+    });
+    expect(route('POST', '/api/v1/admin/users/:user_id/lock')).toMatchObject({
+      auth: 'session',
+      permissions: ['users.lock'],
+      step_up: true,
+    });
+    expect(route('POST', '/api/v1/admin/users/:user_id/username-reset')).toMatchObject({
+      auth: 'session',
+      permissions: ['users.force_username_reset'],
+      step_up: true,
+    });
+    expect(route('POST', '/api/v1/me/username')).toMatchObject({
+      auth: 'session',
+      allow_account_states: expect.arrayContaining(['active', 'banned', 'locked']) as unknown,
+    });
     expect(route('GET', '/api/v1/admin/permissions')).toMatchObject({
       auth: 'session',
       permissions: ['roles.manage'],
@@ -267,6 +304,9 @@ describe('identity service', () => {
         'ROLE_SLUG_TAKEN',
         'ROLE_BUILTIN',
         'LEGAL_DOCUMENT_NOT_FOUND',
+        'ACCOUNT_SELF',
+        'ACCOUNT_STATE_CONFLICT',
+        'LOCK_EXPIRY_INVALID',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

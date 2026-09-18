@@ -5,11 +5,12 @@ import { deletedRows } from '@qtiauth/db';
 import { hashSessionToken, type ResolvedSession } from '@qtiauth/service-kit';
 import type { Kysely } from 'kysely';
 
+import { expireLocks } from './account-locks.ts';
 import { dateOfBirthColumn } from './accounts.ts';
 import { type AgeBands, ageBand, ageOn } from './age.ts';
 import type { Database, RevocationReason, SecurityEventKind } from './database.ts';
 import { countryName, describePlace, deviceKey, parseDevice } from './device.ts';
-import { sessionCreatedEvent, sessionRevokedEvent } from './events.ts';
+import { sessionCreatedEvent, sessionFlaggedEvent, sessionRevokedEvent } from './events.ts';
 import { loadPermissions, twoFactorEnrolmentRequired } from './factors.ts';
 import { legalAcceptanceRequired } from './legal.ts';
 import {
@@ -390,7 +391,11 @@ export async function resolveSession(
     security?: SessionSecuritySettings;
     lookupCountry?: (ip: string) => string | null;
   },
-): Promise<{ session: ResolvedSession | null; alert: SecurityAlert | null } | null> {
+): Promise<{
+  session: ResolvedSession | null;
+  alert: SecurityAlert | null;
+  unlocked: boolean;
+} | null> {
   const { now, idleTimeout } = options;
   const row = await db
     .selectFrom('session_bindings')
@@ -415,6 +420,7 @@ export async function resolveSession(
       'sessions.trust_level',
       'sessions.last_country',
       'users.state',
+      'users.locked_until',
       dateOfBirthColumn.as('date_of_birth'),
     ])
     .where('session_bindings.token_hash', '=', options.tokenHash)
@@ -425,6 +431,13 @@ export async function resolveSession(
     .where('users.state', '!=', 'deleted')
     .executeTakeFirst();
   if (!row) return null;
+
+  let accountState = row.state;
+  let unlocked = false;
+  if (row.state === 'locked') {
+    unlocked = (await expireLocks(db, now, row.user_id)).length > 0;
+    if (unlocked) accountState = 'active';
+  }
 
   let acr = row.acr;
   let lastActive = row.last_active_at;
@@ -470,7 +483,7 @@ export async function resolveSession(
         now,
       });
     }
-    if (applied.blocked) return { session: null, alert };
+    if (applied.blocked) return { session: null, alert, unlocked };
     acr = applied.acr;
   }
 
@@ -489,7 +502,7 @@ export async function resolveSession(
     session: {
       session_id: row.id,
       user_id: row.user_id,
-      account_state: row.state,
+      account_state: accountState,
       permissions,
       restrictions: [],
       age_band: ageBand(ageOn(row.date_of_birth, now), options.bands),
@@ -509,6 +522,7 @@ export async function resolveSession(
       ).toISOString(),
     },
     alert,
+    unlocked,
   };
 }
 
@@ -591,6 +605,51 @@ export function listSessions(
     );
   }
   return query.execute();
+}
+
+export async function challengeSessions(
+  trx: Kysely<Database>,
+  options: { userId: string; now: Date },
+): Promise<string[]> {
+  const rows = await trx
+    .selectFrom('sessions')
+    .select(['id', 'trust_level', 'acr', 'country'])
+    .where('user_id', '=', options.userId)
+    .where('revoked_at', 'is', null)
+    .where('expires_at', '>', options.now)
+    .execute();
+  const challenged: string[] = [];
+  for (const row of rows) {
+    if (row.acr === 'aal0') continue;
+    await trx
+      .updateTable('sessions')
+      .set({ acr: 'aal0', trust_level: 'challenge', step_up_at: null })
+      .where('id', '=', row.id)
+      .execute();
+    await recordSecurityEvent(trx, {
+      userId: options.userId,
+      sessionId: row.id,
+      kind: 'force_reauth',
+      trustFrom: row.trust_level,
+      trustTo: 'challenge',
+      countryFrom: row.country,
+      countryTo: row.country,
+      notified: false,
+      now: options.now,
+    });
+    await writeEvent(
+      trx,
+      sessionFlaggedEvent({
+        session_id: row.id,
+        user_id: options.userId,
+        reason: 'staff',
+        trust_level: 'challenge',
+        acr: 'aal0',
+      }),
+    );
+    challenged.push(row.id);
+  }
+  return challenged;
 }
 
 export async function loadSession(

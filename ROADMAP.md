@@ -472,13 +472,13 @@ Spec: §4.9
 **Done when:** publishing a material version gates every non-exempt route after `effective_at`, and
 accepting lifts the gate on every surface.
 
-### P2b.7 Admin: users — M
+### P2b.7 Admin: users — M ✅
 Spec: §4.13
 
-- [ ] Search and filters (Postgres FTS).
-- [ ] User detail assembled over RPC, with optional-service sections omitted when the service isn't
+- [x] Search and filters (Postgres FTS).
+- [x] User detail assembled over RPC, with optional-service sections omitted when the service isn't
       running.
-- [ ] Ban, unban, lock with expiry, unlock, force re-auth, revoke sessions, force username reset,
+- [x] Ban, unban, lock with expiry, unlock, force re-auth, revoke sessions, force username reset,
       edit DOB.
 
 **Done when:** user detail renders correctly with only core services running and with every profile

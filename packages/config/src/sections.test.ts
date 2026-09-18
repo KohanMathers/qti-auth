@@ -235,6 +235,7 @@ describe('scheduler', () => {
     expect(jobs['keys.rotate']).toEqual({ schedule: '0 0 * * *', enabled: false });
     expect(jobs['retention.sweep']).toEqual({ schedule: '0 1 * * *', enabled: true });
     expect(jobs['reports.digest']).toEqual({ schedule: '*/30 * * * * *', enabled: true });
+    expect(jobs['accounts.unlock_expired']).toEqual({ schedule: '* * * * *', enabled: true });
     expect(jobs['webhooks.retry']).toEqual({ schedule: '* * * * *', enabled: true });
   });
 

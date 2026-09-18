@@ -173,6 +173,7 @@ export async function claimUsername(
         username,
         username_canonical: canonical,
         username_updated_at: now,
+        username_reset_required: false,
         updated_at: now,
       })
       .where('id', '=', options.userId)
@@ -201,4 +202,30 @@ export async function claimUsername(
       updatedAt: now,
     };
   });
+}
+
+export async function releaseCurrentUsername(
+  trx: Kysely<Database>,
+  options: { userId: string; now: Date },
+): Promise<boolean> {
+  const account = await findAccount(trx, options.userId);
+  if (account?.username === null || account === undefined) return false;
+  await trx
+    .updateTable('username_history')
+    .set({ released_at: options.now })
+    .where('user_id', '=', options.userId)
+    .where('released_at', 'is', null)
+    .execute();
+  await trx
+    .updateTable('users')
+    .set({
+      username: null,
+      username_canonical: null,
+      username_updated_at: options.now,
+      username_reset_required: true,
+      updated_at: options.now,
+    })
+    .where('id', '=', options.userId)
+    .execute();
+  return true;
 }

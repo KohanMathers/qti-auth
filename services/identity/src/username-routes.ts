@@ -2,6 +2,7 @@ import { USERNAME_MAX_LENGTH } from '@qtiauth/config';
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
+import { SIGNED_IN_STATES } from './accounts.ts';
 import { NO_STORE } from './headers.ts';
 import type { Context } from './service.ts';
 import { signedIn } from './session-routes.ts';
@@ -58,6 +59,7 @@ export function usernameRoutes(router: Router<Context>): void {
       'Accounts can exist without a username. Changing one is limited by usernames.change_cooldown and usernames.changes_per_year. Taken, reserved and filtered names all answer Username not available.',
     tags: ['account'],
     auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
     rate_limit: 'global',
     request: { body: usernameBody },
     responses: {

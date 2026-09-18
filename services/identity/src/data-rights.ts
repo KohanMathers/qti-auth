@@ -27,6 +27,8 @@ export async function exportUser(
       'public_profile',
       'leaderboard_visible',
       'security_notifications',
+      'locked_until',
+      'username_reset_required',
       'created_at',
       'updated_at',
     ])
@@ -46,6 +48,7 @@ export async function exportUser(
     roles,
     audit,
     legal,
+    staffActions,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -136,6 +139,21 @@ export async function exportUser(
       .where('user_id', '=', userId)
       .orderBy('accepted_at')
       .execute(),
+    db
+      .selectFrom('account_actions')
+      .select([
+        'action',
+        'reason',
+        'from_state',
+        'to_state',
+        'expires_at',
+        'actor_type',
+        'actor_id',
+        'created_at',
+      ])
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
   ]);
 
   return {
@@ -148,6 +166,8 @@ export async function exportUser(
       locale: user.locale,
       username: user.username,
       username_updated_at: iso(user.username_updated_at),
+      locked_until: iso(user.locked_until),
+      username_reset_required: user.username_reset_required,
       public_profile: user.public_profile,
       leaderboard_visible: user.leaderboard_visible,
       security_notifications: user.security_notifications,
@@ -211,6 +231,16 @@ export async function exportUser(
       accepted_at: iso(row.accepted_at),
       ip: row.ip,
       method: row.method,
+    })),
+    staff_actions: staffActions.map((row) => ({
+      action: row.action,
+      reason: row.reason,
+      from_state: row.from_state,
+      to_state: row.to_state,
+      expires_at: iso(row.expires_at),
+      actor_type: row.actor_type,
+      actor_id: row.actor_id,
+      created_at: iso(row.created_at),
     })),
   };
 }

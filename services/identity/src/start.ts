@@ -15,6 +15,7 @@ import {
 import { openTextFilter, resolveListsDir } from '@qtiauth/text-filter';
 import { closeValkey, connectValkey } from '@qtiauth/valkey';
 
+import { expireLocks, UNLOCK_JOB } from './account-locks.ts';
 import { countAccountsByState } from './accounts.ts';
 import { AGE_RECOMPUTE_JOB, recomputeAgeBands } from './age-bands.ts';
 import { AUDIT_CONSUMER, insertAuditRecord, sweepAuditLog } from './audit.ts';
@@ -191,6 +192,8 @@ export function identityService(options: IdentityOptions = {}) {
                   },
                 });
                 ctx.outbox.wake();
+              } else if (resolved?.unlocked) {
+                ctx.outbox.wake();
               }
               return { session: resolved?.session ?? null };
             },
@@ -247,6 +250,23 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('retention sweep failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: UNLOCK_JOB,
+            metrics: ctx.busMetrics,
+            handler: async () => {
+              const unlocked = await expireLocks(db, new Date());
+              if (unlocked.length > 0) {
+                ctx.outbox.wake();
+                log.info('expired locks lifted', { unlocked: unlocked.length });
+              }
+            },
+            onError: (error) => {
+              log.error('expired lock sweep failed', { error });
             },
           }),
         );

@@ -1966,6 +1966,7 @@
             "users.ban",
             "users.lock",
             "users.edit_dob",
+            "users.force_username_reset",
             "safety.reports.read",
             "safety.actions.apply",
             "filter.read",
