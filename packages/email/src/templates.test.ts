@@ -101,5 +101,13 @@ describe('defineEmailTemplates', () => {
       category: 'auth',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.family_access).toMatchObject({
+      category: 'auth',
+      priority: 'high',
+    });
+    expect(EMAIL_TEMPLATES.guardian_activity).toMatchObject({
+      category: 'auth',
+      priority: 'normal',
+    });
   });
 });

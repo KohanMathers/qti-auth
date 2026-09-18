@@ -4,6 +4,7 @@ import type { AccountState } from '@qtiauth/service-kit';
 import { type Kysely, sql } from 'kysely';
 
 import type { Database } from './database.ts';
+import { linkGuardiansToAccount } from './family.ts';
 
 export const ACCOUNT_TRANSITIONS: Readonly<Record<AccountState, readonly AccountState[]>> = {
   pending_email_verification: ['active', 'pending_parental_consent', 'deleted'],
@@ -115,6 +116,11 @@ export async function createUser(db: Kysely<Database>, user: NewUser): Promise<s
       security_notifications: user.securityNotifications,
     })
     .execute();
+  await linkGuardiansToAccount(db, {
+    userId: id,
+    emailNormalized: user.emailNormalized,
+    now: new Date(),
+  });
   return id;
 }
 

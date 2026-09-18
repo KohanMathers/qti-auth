@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, stores the audit log, syncs legal documents that users accept at signup and again when a material version takes effect, lets staff search and act on accounts, handles account deletion, data export, legal holds and the deletion ledger, stores per-category notification preferences, and runs the parental consent flow for accounts below `parental.consent_age`.
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, stores the audit log, syncs legal documents that users accept at signup and again when a material version takes effect, lets staff search and act on accounts, handles account deletion, data export, legal holds and the deletion ledger, stores per-category notification preferences, runs the parental consent flow for accounts below `parental.consent_age`, and offers a family dashboard for parents and guardians.
 
 ## Settings
 
@@ -67,6 +67,7 @@ age:
 parental:
   consent_age: 13
   pending_ttl: 14d
+  max_guardians: 2
 
 usernames:
   min_length: 8
@@ -171,6 +172,7 @@ backups:
 - `age.assurance.default_provider` is the provider used when a trigger in `age.assurance.required_for` applies. Only `self_declared` ships. `required_for` is empty by default; `claim_adult_band` records a second result when someone signs up in the adult band.
 - `parental.consent_age` is the age below which an account needs a parent or guardian's approval.
 - `parental.pending_ttl` is how long an unapproved child account waits. After that, `parental.expire_pending` (hourly) deletes it.
+- `parental.max_guardians` is how many parents or guardians a child account can have.
 - `usernames.min_length` and `usernames.max_length` bound a username. `usernames.charset` is the regex character class of allowed characters. Uniqueness is case-insensitive. `usernames.reserved` and `usernames.reserved_prefixes` are names and prefixes nobody can claim; both are empty by default and compared without regard to case. `usernames.change_cooldown` is how long after a claim or change the user must wait before changing again. `usernames.changes_per_year` is how many changes are allowed inside `usernames.change_window` after the first claim. `usernames.release_hold` is how long a released name is held for the previous owner.
 - `legal.public_history` is whether previous versions are publicly viewable at `/legal/<id>/<version>`. The currently effective version is always public. `legal.documents_dir` is the markdown directory, relative to the config file. Identity syncs those files into the database on startup.
 - `security.encryption_key` is a base64 32-byte key (`openssl rand -base64 32`) that encrypts TOTP secrets at rest. Identity will not start without it. Set `APP_ENCRYPTION_KEY` in `.env`.
@@ -206,7 +208,7 @@ A user can’t remove their last sign-in method. Magic link (when enabled), pass
 
 The date of birth is stored, and the age band is worked out from it whenever it's needed. Users cannot edit their own date of birth after signup. Staff with `users.edit_dob` can change it, with a reason that is stored. Users younger than `parental.consent_age` enter a parent or guardian email at signup. An admin invite for someone that young still answers `403 PARENTAL_CONSENT_UNAVAILABLE` and nothing is kept.
 
-`GET /api/v1/me` includes `deletion_requested_at`, which is set while the account is `pending_deletion`, and `parental_consent` while it is `pending_parental_consent`.
+`GET /api/v1/me` includes `deletion_requested_at`, which is set while the account is `pending_deletion`, and `parental_consent` while it is `pending_parental_consent`. It also includes `family.children` when this account is an active parent or guardian.
 
 Deleting an account is `POST /api/v1/me/deletion` and needs a recent `aal2` session. The account moves to `pending_deletion` for `accounts.deletion_grace`, every session ends, and signing in during that time returns it to `active`. `accounts.purge_deleted` then emits `identity.user.deleted` and every service erases the user, including objects in storage. A `{ user_id, deleted_at }` ledger entry is written to the backup destination through an outbox and kept for `backups.retention` plus 30 days (`deletion_ledger.prune`). Safety can place a legal hold over RPC (`place_legal_hold`); held objects stay isolated under `legal-hold/` when everything else is deleted.
 
@@ -396,7 +398,7 @@ Accounts can exist without a username. `POST /api/v1/me/username` with `{ userna
 
 Every candidate goes through the text filter. Taken names, reserved names, reserved prefixes and filter blocks all answer `409 USERNAME_UNAVAILABLE` ("Username not available"). Length and charset failures are `400 USERNAME_INVALID`.
 
-`GET /api/v1/me` includes `username`, `username_updated_at` and `username_reset_required`. Username and `username_updated_at` are null until a name is claimed. It also includes `public_profile` and `leaderboard_visible`. Staff can force a reset: the current name is released, `username_reset_required` is true, and the next claim skips cooldown and the yearly limit. `GET`/`POST /auth/username` is the interim page.
+`GET /api/v1/me` includes `username`, `username_updated_at` and `username_reset_required`. Username and `username_updated_at` are null until a name is claimed. It also includes `public_profile` and `leaderboard_visible`. The first claim is immediate. Later changes on an account with an active parent or guardian return `202` with `status: pending_guardian_approval` until a guardian approves. Staff can force a reset: the current name is released, `username_reset_required` is true, and the next claim skips cooldown and the yearly limit. `GET`/`POST /auth/username` is the interim page.
 
 | Endpoint                    | Does                                      |
 | --------------------------- | ----------------------------------------- |
@@ -432,6 +434,41 @@ An admin invite for someone below `consent_age` still answers `403 PARENTAL_CONS
 | `GET`/`POST /auth/waiting`                   | Interim waiting page                                              |
 | `GET`/`POST /auth/guardian/approve`          | Scanner-safe approve form                                         |
 | `GET`/`POST /auth/guardian/decline`          | Scanner-safe decline form                                         |
+
+## Family dashboard
+
+After approval, parents and guardians manage the child from the family dashboard. Access is a hashed family session from a magic link (no account required), or the guardian’s own signed-in account when that address is linked. Up to `parental.max_guardians` (default 2) per child.
+
+Game restrictions live in `parental_controls` and are copied into the internal identity token. Leaderboard and public-profile visibility are on the user row and off by default. Guardians can list and revoke the child’s sessions, approve or decline a username change, accept material legal versions with `method: guardian`, request a data export or deletion, and invite or remove another guardian (the last active one stays). `parental.activity_summary` (Monday 08:00) emails a weekly sign-in count; games and connected apps stay empty until those services land.
+
+New-device sign-in, username-change requests and legal updates also email every active guardian. Child accounts with an active guardian skip `legal_acceptance_required` on the child’s own session.
+
+`GET /api/v1/me` includes `family.children` when the signed-in account is an active guardian.
+
+| Endpoint                                                             | Does                                                                               |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `POST /api/v1/auth/family/magic-link`                                | Email a dashboard link if this address is a guardian. Same response either way     |
+| `POST /api/v1/auth/family/session`                                   | Open a family session from the emailed token                                       |
+| `POST /api/v1/auth/family/invite/accept`                             | Accept an invitation (`{ token, date_of_birth }`). Must be an adult                |
+| `POST /api/v1/auth/family/logout`                                    | End the family session                                                             |
+| `GET /api/v1/family`                                                 | Child accounts this guardian can manage                                            |
+| `GET /api/v1/family/:child_id`                                       | Controls, pending username change and pending legal versions                       |
+| `PATCH /api/v1/family/:child_id/controls`                            | Game restrictions and visibility                                                   |
+| `GET /api/v1/family/:child_id/sessions`                              | The child’s sessions                                                               |
+| `DELETE /api/v1/family/:child_id/sessions/:session_id`               | End one session                                                                    |
+| `POST /api/v1/family/:child_id/sessions/revoke-all`                  | End every session                                                                  |
+| `POST /api/v1/family/:child_id/username-changes/:request_id/approve` | Approve a queued username                                                          |
+| `POST /api/v1/family/:child_id/username-changes/:request_id/decline` | Decline it                                                                         |
+| `GET /api/v1/family/:child_id/legal`                                 | Pending material versions                                                          |
+| `POST /api/v1/family/:child_id/legal/accept`                         | Accept them on the child’s behalf                                                  |
+| `POST /api/v1/family/:child_id/export`                               | Request a copy of the child’s data                                                 |
+| `POST /api/v1/family/:child_id/deletion`                             | Schedule deletion                                                                  |
+| `GET /api/v1/family/:child_id/activity`                              | Seven-day sign-in count. `games` and `connected_apps` are empty until later phases |
+| `GET /api/v1/family/:child_id/guardians`                             | Parents and guardians                                                              |
+| `POST /api/v1/family/:child_id/guardians`                            | Invite another (`{ email, display_name? }`)                                        |
+| `DELETE /api/v1/family/:child_id/guardians/:guardian_id`             | Remove one, except the last active guardian                                        |
+| `GET`/`POST /family` and `/family/:child_id`                         | Interim dashboard pages                                                            |
+| `GET`/`POST /family/magic-link`, `/family/session`, `/family/invite` | Scanner-safe magic-link, session and invite forms                                  |
 
 ## Admin users
 
@@ -487,7 +524,7 @@ Services publish `qtiauth.audit.recorded.v1` for staff actions, security-sensiti
 
 Terms, privacy and any other documents live in `config/legal/*.md` with YAML front-matter (`id`, `version`, `effective_at`, `material`, `summary`) and a markdown body. `{{ brand.product_name }}`, `{{ brand.company_name }}` and `{{ brand.support_email }}` are filled in when a document is shown. The stored hash is of the raw body.
 
-On startup identity syncs each file into `legal_versions`. Versions are immutable: changing a body, summary, `material` flag or `effective_at` without bumping `version` is a startup error. `legal.publish` (every minute) marks versions whose `effective_at` has passed, publishes `identity.legal.version_published`, and for a non-material change queues a `legal_update` email to each account that has not accepted it, 500 at a time. Progress is saved per batch, so a restart carries on instead of starting again. Versions published at startup are emailed on the next tick. Signup records acceptance of every currently effective version (`method: signup`), so a new account is not gated. Accounts below `parental.consent_age` skip that; the guardian accepts with `method: guardian` when they approve. A later material version sets `legal_acceptance_required` on the session; the gateway answers `403 LEGAL_ACCEPTANCE_REQUIRED` on every route except those with `allow_pending_legal: true`. `POST /api/v1/me/legal/accept` and `POST /legal/accept` record `method: self` and lift the gate. Later material versions for child accounts wait for the family dashboard in Phase 3.2. `children-summary` is a normal document.
+On startup identity syncs each file into `legal_versions`. Versions are immutable: changing a body, summary, `material` flag or `effective_at` without bumping `version` is a startup error. `legal.publish` (every minute) marks versions whose `effective_at` has passed, publishes `identity.legal.version_published`, and for a non-material change queues a `legal_update` email to each account that has not accepted it, 500 at a time. Progress is saved per batch, so a restart carries on instead of starting again. Versions published at startup are emailed on the next tick. Signup records acceptance of every currently effective version (`method: signup`), so a new account is not gated. Accounts below `parental.consent_age` skip that; the guardian accepts with `method: guardian` when they approve. A later material version sets `legal_acceptance_required` on the session; the gateway answers `403 LEGAL_ACCEPTANCE_REQUIRED` on every route except those with `allow_pending_legal: true`. Child accounts with an active guardian skip that gate; the guardian accepts from the family dashboard with `method: guardian`. Adults without guardians skip the notice email for material versions. `POST /api/v1/me/legal/accept` and `POST /legal/accept` record `method: self` and lift the gate. `children-summary` is a normal document.
 
 | Endpoint                         | Does                                                                                    |
 | -------------------------------- | --------------------------------------------------------------------------------------- |
@@ -544,8 +581,11 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `GUARDIAN_EMAIL_UNCHANGED`        | 400    | The new guardian address is already the current one                                    |
 | `GUARDIAN_CONSENT_INVALID`        | 400    | The approve or decline link is unknown, has expired or has already been used           |
 | `GUARDIAN_NOT_ADULT`              | 400    | The guardian’s date of birth is below the adult band                                   |
+| `GUARDIAN_DISPLAY_NAME_INVALID`   | 400    | A guardian display name failed the text filter or length limit                         |
+| `FAMILY_LINK_INVALID`             | 400    | The family dashboard or invite link is unknown, expired or already used                |
 | `LOCK_EXPIRY_INVALID`             | 400    | The lock expiry must be in the future                                                  |
 | `CREDENTIALS_INCORRECT`           | 401    | Email or password incorrect                                                            |
+| `FAMILY_SESSION_REQUIRED`         | 401    | A family dashboard session (or a linked guardian account) is required                  |
 | `AUTH_METHOD_DISABLED`            | 403    | `features.auth.magic_link`, `password`, `passkeys`, `totp` or a social provider is off |
 | `STEP_UP_REQUIRED`                | 403    | A route that needs a recent `aal2` session, or adding a password without one           |
 | `CAPTCHA_REQUIRED`                | 403    | This IP is over the CAPTCHA threshold and no valid solution was sent                   |
@@ -559,11 +599,18 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `ROLE_NOT_FOUND`                  | 404    | No role with that ID                                                                   |
 | `LEGAL_DOCUMENT_NOT_FOUND`        | 404    | No such legal document, or that version is not public                                  |
 | `EXPORT_NOT_FOUND`                | 404    | No data export with that id belongs to the user                                        |
+| `FAMILY_CHILD_NOT_FOUND`          | 404    | This guardian has no such child account                                                |
+| `GUARDIAN_NOT_FOUND`              | 404    | No such parent or guardian on this child account                                       |
+| `USERNAME_CHANGE_NOT_FOUND`       | 404    | No username change is waiting for approval                                             |
 | `NOTIFICATION_CATEGORY_NOT_FOUND` | 404    | No such notification category, or it is a staff alert the caller cannot see            |
 | `USERNAME_UNAVAILABLE`            | 409    | The username is taken, reserved, held or blocked by the text filter                    |
 | `USERNAME_COOLDOWN`               | 409    | `usernames.change_cooldown` has not elapsed since the last claim or change             |
 | `USERNAME_CHANGE_LIMIT`           | 409    | `usernames.changes_per_year` changes have already been used in `change_window`         |
+| `USERNAME_CHANGE_PENDING`         | 409    | A username change is already waiting for a parent or guardian                          |
 | `GUARDIAN_EMAIL_CHANGE_LIMIT`     | 409    | The guardian email has already been changed 3 times                                    |
+| `GUARDIAN_LIMIT`                  | 409    | The child account already has `parental.max_guardians` parents or guardians            |
+| `GUARDIAN_ALREADY_LINKED`         | 409    | That parent or guardian is already linked to this account                              |
+| `GUARDIAN_LAST`                   | 409    | The last active parent or guardian cannot be removed                                   |
 | `ACCOUNT_LIMIT_REACHED`           | 409    | The address already has `accounts.max_per_email` accounts                              |
 | `ACCOUNT_SELF`                    | 409    | Staff tried to ban, lock, or otherwise act on their own account                        |
 | `ACCOUNT_STATE_CONFLICT`          | 409    | The account is not in a state that allows that staff action                            |
@@ -600,9 +647,9 @@ The gateway clears cached sessions when it sees `session.revoked`, `session.flag
 
 ## Retention and data rights
 
-`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, text-filter decisions `retention.filter_decisions` after they were recorded, and the oldest audit log rows `retention.audit` after they were recorded.
+`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, family dashboard sessions the same way, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, text-filter decisions `retention.filter_decisions` after they were recorded, and the oldest audit log rows `retention.audit` after they were recorded.
 
-A user's export has their account (including username, public profile, leaderboard visibility, security-notification flag, lock expiry, whether a username reset is required and `deletion_requested_at`), username history, age-assurance results, staff date-of-birth changes, staff account actions, assigned roles, audit rows where they are the actor or the target, legal acceptances, parental consent rows, legal holds, data-export requests, notification preferences, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, staff account actions, role assignments, sign-in methods, recovery codes, sessions, session security events, notification preferences, and the tokens and password-failure counters too unless another account uses the same address. Legal acceptances, parental consents and data-export rows go with the account. Audit rows stay, so the hash chain remains intact. Objects under `users/` and `exports/` are deleted; objects under `legal-hold/` stay when `held` is true. A ledger entry `{ user_id, deleted_at }` is written to `backups.directory/deletion-ledger/` or the storage prefix `deletion-ledger/`.
+A user's export has their account (including username, public profile, leaderboard visibility, security-notification flag, lock expiry, whether a username reset is required and `deletion_requested_at`), username history, age-assurance results, staff date-of-birth changes, staff account actions, assigned roles, audit rows where they are the actor or the target, legal acceptances, parental consent rows, parental controls, guardians on this account and guardian links from this address, username-change requests, family dashboard sessions (without the token), family activity notices, legal holds, data-export requests, notification preferences, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, staff account actions, role assignments, sign-in methods, recovery codes, sessions, session security events, notification preferences, and the tokens and password-failure counters too unless another account uses the same address. Guardians, parental controls, username-change requests and family activity notices cascade with the account. Legal acceptances, parental consents and data-export rows go with the account. Audit rows stay, so the hash chain remains intact. Objects under `users/` and `exports/` are deleted; objects under `legal-hold/` stay when `held` is true. A ledger entry `{ user_id, deleted_at }` is written to `backups.directory/deletion-ledger/` or the storage prefix `deletion-ledger/`.
 
 ## Metrics
 
@@ -628,11 +675,12 @@ A user's export has their account (including username, public profile, leaderboa
 | `qtiauth_account_deletions_total`          | `event`              |
 | `qtiauth_data_exports_total`               | `status`             |
 | `qtiauth_parental_consent_total`           | `result`             |
+| `qtiauth_family_sessions_total`            |                      |
 | `qtiauth_age_band_changes_total`           |                      |
 | `qtiauth_audit_recorded_total`             |                      |
 | `qtiauth_legal_acceptance_pending`         |                      |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Staff account `action` is `ban`, `unban`, `lock`, `unlock`, `force_reauth`, `revoke_sessions` or `force_username_reset`. Deletion `event` is `requested`, `cancelled` or `completed`. Data-export `status` is `ready`, `failed` or `unavailable`. Parental consent `result` is `requested`, `granted`, `declined` or `expired`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. `qtiauth_audit_recorded_total` counts rows stored from `audit.recorded`. `qtiauth_legal_acceptance_pending` is how many accounts have not accepted a currently effective material version, counted every minute. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Staff account `action` is `ban`, `unban`, `lock`, `unlock`, `force_reauth`, `revoke_sessions` or `force_username_reset`. Deletion `event` is `requested`, `cancelled` or `completed`. Data-export `status` is `ready`, `failed` or `unavailable`. Parental consent `result` is `requested`, `granted`, `declined` or `expired`. `qtiauth_family_sessions_total` counts family dashboard sessions started from a magic link. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. `qtiauth_audit_recorded_total` counts rows stored from `audit.recorded`. `qtiauth_legal_acceptance_pending` is how many accounts have not accepted a currently effective material version, counted every minute. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 
@@ -651,9 +699,12 @@ Services never see cookies, so identity asks the gateway to set one with respons
 | `X-QTIAuth-Session-Clear`    | Clears the session cookie                                                |
 | `X-QTIAuth-Revoked-Sessions` | Comma-separated session IDs to drop from its session cache straight away |
 | `X-QTIAuth-Flow-Binding`     | Sets the 10-minute flow cookie that ties a social sign-in to the browser |
+| `X-QTIAuth-Family-Token`     | Sets the family dashboard cookie                                         |
+| `X-QTIAuth-Family-Expires`   | With the family token: when that cookie expires (RFC 3339)               |
+| `X-QTIAuth-Family-Clear`     | Clears the family dashboard cookie                                       |
 
-The gateway sends the flow cookie's value back to identity, and only to identity, in `X-QTIAuth-Flow-Binding` on each request. The names are exported from `@qtiauth/service-kit`, and `sessionHeaders`, `revokedHeaders` and `signedOutHeaders` in `services/identity/src/headers.ts` build them. Restoring a challenged session keeps the existing cookie and sends `X-QTIAuth-Revoked-Sessions` with that session's ID so the gateway drops the cached `aal0` copy.
+The gateway sends the flow cookie's value back to identity, and only to identity, in `X-QTIAuth-Flow-Binding` on each request. The family cookie is `__Host-<cookies.name>_family` and is forwarded the same way as `X-QTIAuth-Family-Token`. Client-sent family headers are ignored. The names are exported from `@qtiauth/service-kit`, and `sessionHeaders`, `revokedHeaders`, `signedOutHeaders`, `familyHeaders` and `familySignedOutHeaders` in `services/identity/src/headers.ts` build them. Restoring a challenged session keeps the existing cookie and sends `X-QTIAuth-Revoked-Sessions` with that session's ID so the gateway drops the cached `aal0` copy.
 
 ### Tests
 
-`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session, a material legal version that gates `/api/v1/me/identities` until it is accepted, and a refused attempt to disable a security notification category. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit. `legal.integration.test.ts` syncs the shipped documents, rejects an edited body without a version bump, and covers material re-acceptance, the HTML form, and a non-material email. `admin-users.integration.test.ts` searches accounts, omits optional-service detail until those RPC methods answer, and covers ban, lock, force re-auth, session revoke and username reset. `identity.integration.test.ts` covers deletion, sign-in cancel, purge to a ledger file, an emailed export attachment, a legal hold that outlives the account, and parental consent approve, decline and expiry to a ledger file. `notifications.integration.test.ts` covers user and staff toggles, the required-category refusal, `notification_allowed` RPC, export and erasure. `gateway.integration.test.ts` needs a passkey `aal2` session for `POST /api/v1/me/deletion`.
+`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session, a material legal version that gates `/api/v1/me/identities` until it is accepted, and a refused attempt to disable a security notification category. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit. `legal.integration.test.ts` syncs the shipped documents, rejects an edited body without a version bump, and covers material re-acceptance, the HTML form, and a non-material email. `admin-users.integration.test.ts` searches accounts, omits optional-service detail until those RPC methods answer, and covers ban, lock, force re-auth, session revoke and username reset. `identity.integration.test.ts` covers deletion, sign-in cancel, purge to a ledger file, an emailed export attachment, a legal hold that outlives the account, parental consent approve, decline and expiry to a ledger file, and the family dashboard (magic-link access, controls, username approval, a second guardian, linked-account access and the weekly activity email). `notifications.integration.test.ts` covers user and staff toggles, the required-category refusal, `notification_allowed` RPC, export and erasure. `gateway.integration.test.ts` needs a passkey `aal2` session for `POST /api/v1/me/deletion`.

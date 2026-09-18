@@ -13,6 +13,7 @@ import {
   type UserUpdatedData,
   userUpdatedEvent,
 } from './events.ts';
+import { hasActiveGuardians, listActiveGuardians } from './family.ts';
 import {
   interpolateLegal,
   LegalDocumentsError,
@@ -20,7 +21,7 @@ import {
   type ParsedLegalDocument,
 } from './legal-documents.ts';
 import type { IdentityConfig } from './service.ts';
-import { accountOrigin, accountPath } from './settings.ts';
+import { accountOrigin, accountPath, familyChildUrl } from './settings.ts';
 
 export const LEGAL_PUBLISH_JOB = 'legal.publish';
 
@@ -125,6 +126,7 @@ export async function legalAcceptanceRequired(
   userId: string,
   now: Date,
 ): Promise<boolean> {
+  if (await hasActiveGuardians(db, userId)) return false;
   const pending = await db
     .selectFrom(currentVersionsQuery(db, now).as('v'))
     .select('v.id')
@@ -344,6 +346,45 @@ export async function acceptLegalDocuments(
   });
 }
 
+export async function acceptLegalAsGuardian(
+  db: Kysely<Database>,
+  options: {
+    childUserId: string;
+    documents: readonly { id: string; version: string }[];
+    ip: string | null;
+    actor: EventActor;
+    now: Date;
+  },
+): Promise<{ status: 'ok'; accepted: number } | { status: 'unknown' }> {
+  return db.transaction().execute(async (trx) => {
+    const result = await acceptLegalVersions(trx, {
+      userId: options.childUserId,
+      documents: options.documents,
+      ip: options.ip,
+      method: 'guardian',
+      now: options.now,
+    });
+    if (result.unknown.length > 0) return { status: 'unknown' as const };
+    for (const document of options.documents) {
+      await writeEvent<Database, AuditRecordedData>(
+        trx,
+        auditRecordedEvent(options.actor, {
+          action: 'legal.accepted',
+          target_type: 'legal_version',
+          target_id: `${document.id}:${document.version}`,
+        }),
+      );
+    }
+    if (result.accepted > 0) {
+      await writeEvent<Database, UserUpdatedData>(
+        trx,
+        userUpdatedEvent(options.childUserId, { fields: ['legal'] }, options.actor),
+      );
+    }
+    return { status: 'ok' as const, accepted: result.accepted };
+  });
+}
+
 export function legalDocumentUrl(
   config: Pick<IdentityConfig, 'surfaces'>,
   id: string,
@@ -375,8 +416,7 @@ export async function publishLegalVersions(
         .updateTable('legal_versions')
         .set({
           published_at: options.now,
-          // Material versions are gated at sign-in instead of emailed.
-          notices_sent_at: version.material ? options.now : null,
+          notices_sent_at: null,
         })
         .where('id', '=', version.id)
         .where('version', '=', version.version)
@@ -431,7 +471,31 @@ async function queueNoticeBatch(
   const recipients = await query.orderBy('id').limit(LEGAL_NOTICE_BATCH).execute();
   const link = legalDocumentUrl(options.config, version.id, version.version);
   const summary = interpolateLegal(version.summary, options.config.branding);
+  let sent = 0;
   for (const user of recipients) {
+    const guardians = await listActiveGuardians(db, user.id);
+    if (guardians.length > 0) {
+      const familyLink = familyChildUrl(options.config, user.id);
+      for (const guardian of guardians) {
+        await queueEmail(options.bus, {
+          template: 'guardian_legal_update',
+          to: { address: guardian.email },
+          locale: user.locale ?? options.config.email.default_locale,
+          userId: guardian.user_id,
+          variables: {
+            document_id: version.id,
+            version: version.version,
+            summary,
+            material: version.material,
+            link,
+            family_link: familyLink,
+          },
+        });
+        sent += 1;
+      }
+      continue;
+    }
+    if (version.material) continue;
     await queueEmail(options.bus, {
       template: 'legal_update',
       to: { address: user.email },
@@ -439,6 +503,7 @@ async function queueNoticeBatch(
       userId: user.id,
       variables: { document_id: version.id, version: version.version, summary, link },
     });
+    sent += 1;
   }
   const last = recipients.at(-1);
   const done = recipients.length < LEGAL_NOTICE_BATCH;
@@ -452,7 +517,7 @@ async function queueNoticeBatch(
     .where('id', '=', version.id)
     .where('version', '=', version.version)
     .execute();
-  return { sent: recipients.length, cursor: last?.id ?? version.notice_cursor, done };
+  return { sent, cursor: last?.id ?? version.notice_cursor, done };
 }
 
 export async function queueLegalUpdateNotices(

@@ -10,6 +10,7 @@ import {
   useEmailToken,
 } from './email-tokens.ts';
 import { type AuditRecordedData, auditRecordedEvent } from './events.ts';
+import { linkGuardiansToAccount } from './family.ts';
 
 export interface EmailChangeSettings {
   changeTtl: number;
@@ -155,6 +156,11 @@ async function applyEmailToken(
       })
       .where('id', '=', userId)
       .execute();
+    await linkGuardiansToAccount(trx, {
+      userId,
+      emailNormalized: row.email_normalized,
+      now: options.now,
+    });
     await activateVerifiedEmail(trx, userId, options.now);
     await writeEvent<Database, AuditRecordedData>(
       trx,

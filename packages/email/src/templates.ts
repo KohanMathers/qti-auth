@@ -184,6 +184,62 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       expires_in_days: z.int().min(1),
     }),
   },
+  family_access: {
+    description: 'Magic link to the family dashboard, with or without a full account',
+    category: 'auth',
+    priority: 'high',
+    variables: linkVariables,
+  },
+  family_invite: {
+    description: 'Invite another parent or guardian to a child account',
+    category: 'auth',
+    priority: 'high',
+    variables: linkVariables,
+  },
+  guardian_new_device: {
+    description: 'Tell a parent or guardian about a new-device sign-in on a child account',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      username: z.string().min(1),
+      browser: z.string().min(1),
+      os: z.string().min(1),
+      place: z.string().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  guardian_legal_update: {
+    description: 'Tell a parent or guardian that a legal document for a child account changed',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      document_id: z.string().min(1),
+      version: z.string().min(1),
+      summary: z.string().min(1),
+      material: z.boolean(),
+      link: z.url({ protocol: /^https?$/ }),
+      family_link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  guardian_username_change: {
+    description: 'Ask a parent or guardian to approve a child’s username change',
+    category: 'auth',
+    priority: 'normal',
+    variables: z.object({
+      username: z.string().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  guardian_activity: {
+    description: 'Weekly activity summary for a parent or guardian',
+    category: 'auth',
+    priority: 'normal',
+    variables: z.object({
+      username: z.string().min(1),
+      sign_ins: z.int().min(0),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

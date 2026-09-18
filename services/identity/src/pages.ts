@@ -18,6 +18,7 @@ import { getExport } from './exports.ts';
 import { type SecondFactorMethod, totpEnrolled } from './factors.ts';
 import {
   acceptLegal,
+  type ChooseUsernameResult,
   chooseUsername,
   completeEmailVerification,
   completePasswordReset,
@@ -72,6 +73,7 @@ import {
   CHANGE_EMAIL_PAGE,
   CONNECT_PAGE,
   encryptionKey,
+  FAMILY_PAGE,
   FORGOT_PASSWORD_PAGE,
   GUARDIAN_APPROVE_PAGE,
   GUARDIAN_DECLINE_PAGE,
@@ -109,7 +111,6 @@ import {
 import { listSocialIdentities } from './social.ts';
 import { objectStoreOf } from './storage-state.ts';
 import { beginTotpEnrol, confirmTotpEnrol, disableTotp } from './two-factor.ts';
-import type { ClaimUsernameResult } from './usernames.ts';
 
 const htmlResponses = { 200: { description: 'An HTML page' } };
 
@@ -325,6 +326,7 @@ async function signedIn(
     headers,
     body: `<ul>
 <li><a href="../api/v1/me">Your account</a></li>
+<li><a href="${escapeHtml(FAMILY_PAGE)}">Family dashboard</a></li>
 <li><a href="username">Username</a></li>
 <li><a href="../api/v1/sessions">Your sessions</a></li>
 ${passkeysEnabled(ctx) ? '<li><a href="passkeys">Passkeys</a></li>' : ''}
@@ -337,7 +339,7 @@ ${socialEnabled(ctx) ? '<li><a href="identities">Connected sign-in methods</a></
 
 function usernameMessage(
   ctx: Context,
-  result: Exclude<ClaimUsernameResult, { status: 'saved' }>,
+  result: Exclude<ChooseUsernameResult, { status: 'saved' } | { status: 'pending' }>,
 ): string {
   switch (result.status) {
     case 'invalid':
@@ -350,6 +352,8 @@ function usernameMessage(
       return `You can change your username again after ${result.availableAt.toISOString().slice(0, 10)}.`;
     case 'limit':
       return 'You have used all your username changes for now.';
+    case 'already_pending':
+      return 'A username change is already waiting for a parent or guardian.';
     case 'not_found':
       return 'Sign in again.';
   }
@@ -1532,6 +1536,12 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
       const form = await readForm(request);
       const username = form['username'] ?? '';
       const result = await chooseUsername({ ctx, request, log }, { userId, username });
+      if (result.status === 'pending') {
+        return page(ctx, {
+          title: 'Waiting for approval',
+          body: paragraph('A parent or guardian needs to approve this username.'),
+        });
+      }
       if (result.status !== 'saved') {
         return usernameForm(ctx, {
           current: account.username,

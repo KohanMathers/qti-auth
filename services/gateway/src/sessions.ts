@@ -79,6 +79,11 @@ export function flowCookieName(cookies: CookiesConfig): string {
   return cookies.domain === null ? `__Host-${name}` : name;
 }
 
+export function familyCookieName(cookies: CookiesConfig): string {
+  const name = `${cookies.name}_family`;
+  return cookies.domain === null ? `__Host-${name}` : name;
+}
+
 export function readCookie(header: string | null, name: string): string | null {
   if (header === null) return null;
   for (const part of header.split(';')) {
@@ -127,6 +132,22 @@ export function flowCookie(cookies: CookiesConfig, value: string, maxAge: number
     'HttpOnly',
     'SameSite=Lax',
   ].join('; ');
+}
+
+export function familyCookie(cookies: CookiesConfig, token: string, maxAge: number): string {
+  return [
+    `${familyCookieName(cookies)}=${token}`,
+    'Path=/',
+    `Max-Age=${String(maxAge)}`,
+    ...(cookies.domain === null ? [] : [`Domain=${cookies.domain}`]),
+    'Secure',
+    'HttpOnly',
+    'SameSite=Lax',
+  ].join('; ');
+}
+
+export function clearFamilyCookie(cookies: CookiesConfig): string {
+  return familyCookie(cookies, '', 0);
 }
 
 export function sessionSignals(

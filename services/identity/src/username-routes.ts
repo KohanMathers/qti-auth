@@ -3,11 +3,10 @@ import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { SIGNED_IN_STATES } from './accounts.ts';
-import { chooseUsername } from './flows.ts';
+import { chooseUsername, type ChooseUsernameResult } from './flows.ts';
 import { NO_STORE } from './headers.ts';
 import type { Context } from './service.ts';
 import { signedIn } from './session-routes.ts';
-import type { ClaimUsernameResult } from './usernames.ts';
 
 const usernameBody = z.object({
   username: z.string().min(1).max(USERNAME_MAX_LENGTH).describe('The username to claim.'),
@@ -16,9 +15,12 @@ const usernameBody = z.object({
 const usernameSchema = z.object({
   username: z.string(),
   updated_at: z.iso.datetime(),
+  status: z.enum(['saved', 'pending_guardian_approval']).optional(),
 });
 
-function usernameError(result: Exclude<ClaimUsernameResult, { status: 'saved' }>): never {
+function usernameError(
+  result: Exclude<ChooseUsernameResult, { status: 'saved' } | { status: 'pending' }>,
+): never {
   switch (result.status) {
     case 'not_found':
       throw new ProblemError('ACCOUNT_NOT_FOUND');
@@ -34,6 +36,8 @@ function usernameError(result: Exclude<ClaimUsernameResult, { status: 'saved' }>
       });
     case 'limit':
       throw new ProblemError('USERNAME_CHANGE_LIMIT');
+    case 'already_pending':
+      throw new ProblemError('USERNAME_CHANGE_PENDING');
   }
 }
 
@@ -44,7 +48,7 @@ export function usernameRoutes(router: Router<Context>): void {
     operation_id: 'setUsername',
     summary: 'Claim a username, or change it',
     description:
-      'Accounts can exist without a username. Changing one is limited by usernames.change_cooldown and usernames.changes_per_year. Taken, reserved and filtered names all answer Username not available.',
+      'Accounts can exist without a username. Changing one is limited by usernames.change_cooldown and usernames.changes_per_year. Taken, reserved and filtered names all answer Username not available. Child accounts with a parent or guardian queue a change for approval.',
     tags: ['account'],
     auth: 'session',
     allow_account_states: SIGNED_IN_STATES,
@@ -52,6 +56,10 @@ export function usernameRoutes(router: Router<Context>): void {
     request: { body: usernameBody },
     responses: {
       200: { description: 'The username is now this account’s', schema: usernameSchema },
+      202: {
+        description: 'A parent or guardian must approve this username change',
+        schema: usernameSchema,
+      },
     },
     errors: [
       'ACCOUNT_NOT_FOUND',
@@ -60,6 +68,7 @@ export function usernameRoutes(router: Router<Context>): void {
       'USERNAME_UNCHANGED',
       'USERNAME_COOLDOWN',
       'USERNAME_CHANGE_LIMIT',
+      'USERNAME_CHANGE_PENDING',
     ],
     handler: async ({ ctx, identity, body, request, log }) => {
       const { userId } = signedIn(identity);
@@ -67,6 +76,17 @@ export function usernameRoutes(router: Router<Context>): void {
         { ctx, request, log },
         { userId, username: body.username },
       );
+      if (result.status === 'pending') {
+        return {
+          status: 202,
+          headers: NO_STORE,
+          body: {
+            username: result.username,
+            updated_at: new Date().toISOString(),
+            status: 'pending_guardian_approval' as const,
+          },
+        };
+      }
       if (result.status !== 'saved') usernameError(result);
       return {
         status: 200,

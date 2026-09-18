@@ -1,4 +1,7 @@
 import {
+  FAMILY_CLEAR_HEADER,
+  FAMILY_EXPIRES_HEADER,
+  FAMILY_TOKEN_HEADER,
   REVOKED_SESSIONS_HEADER,
   SESSION_CLEAR_HEADER,
   SESSION_EXPIRES_HEADER,
@@ -31,4 +34,16 @@ export function revokedHeaders(revoked: readonly string[]): Record<string, strin
 
 export function signedOutHeaders(revoked: readonly string[]): Record<string, string> {
   return { ...revokedHeaders(revoked), [SESSION_CLEAR_HEADER]: '1' };
+}
+
+export function familyHeaders(session: { token: string; expiresAt: Date }): Record<string, string> {
+  return {
+    ...NO_STORE,
+    [FAMILY_TOKEN_HEADER]: session.token,
+    [FAMILY_EXPIRES_HEADER]: session.expiresAt.toISOString(),
+  };
+}
+
+export function familySignedOutHeaders(): Record<string, string> {
+  return { ...NO_STORE, [FAMILY_CLEAR_HEADER]: '1' };
 }

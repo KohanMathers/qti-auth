@@ -84,6 +84,24 @@ export async function invalidateEmailTokens(
     .execute();
 }
 
+export async function invalidateEmailTokensForAddress(
+  trx: Kysely<Database>,
+  options: {
+    emailNormalized: string;
+    purposes: readonly EmailTokenPurpose[];
+    now: Date;
+  },
+): Promise<void> {
+  if (options.purposes.length === 0) return;
+  await trx
+    .updateTable('email_tokens')
+    .set({ used_at: options.now })
+    .where('email_normalized', '=', options.emailNormalized)
+    .where('purpose', 'in', [...options.purposes])
+    .where('used_at', 'is', null)
+    .execute();
+}
+
 export async function sweepTokens(
   db: Kysely<Database>,
   options: { retention: number; now: Date },

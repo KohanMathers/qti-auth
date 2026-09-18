@@ -14,6 +14,8 @@ export const EMAIL_TOKEN_PURPOSES = [
   'admin_signup',
   'parental_approve',
   'parental_decline',
+  'family_access',
+  'family_invite',
 ] as const;
 export type EmailTokenPurpose = (typeof EMAIL_TOKEN_PURPOSES)[number];
 
@@ -106,6 +108,64 @@ export type LegalAcceptanceMethod = (typeof LEGAL_ACCEPTANCE_METHODS)[number];
 
 export const PARENTAL_CONSENT_STATUSES = ['pending', 'granted', 'declined', 'expired'] as const;
 export type ParentalConsentStatus = (typeof PARENTAL_CONSENT_STATUSES)[number];
+
+export const GUARDIAN_STATUSES = ['pending', 'active', 'revoked'] as const;
+export type GuardianStatus = (typeof GUARDIAN_STATUSES)[number];
+
+export interface GuardiansTable {
+  id: string;
+  child_user_id: string;
+  email: string;
+  email_normalized: string;
+  user_id: string | null;
+  display_name: string | null;
+  status: GuardianStatus;
+  invited_by: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  accepted_at: Date | null;
+  revoked_at: Date | null;
+}
+
+export interface ParentalControlsTable {
+  user_id: string;
+  online_play: Generated<boolean>;
+  in_game_chat: Generated<boolean>;
+  user_generated_content: Generated<boolean>;
+  purchases: Generated<boolean>;
+  daily_playtime_minutes: number | null;
+  updated_at: Generated<Date>;
+}
+
+export const USERNAME_CHANGE_STATUSES = ['pending', 'approved', 'declined', 'cancelled'] as const;
+export type UsernameChangeStatus = (typeof USERNAME_CHANGE_STATUSES)[number];
+
+export interface UsernameChangeRequestsTable {
+  id: string;
+  user_id: string;
+  username: string;
+  canonical: string;
+  status: UsernameChangeStatus;
+  requested_at: Date;
+  decided_at: Date | null;
+}
+
+export interface FamilySessionsTable {
+  id: string;
+  token_hash: string;
+  email: string;
+  email_normalized: string;
+  created_at: Generated<Date>;
+  last_active_at: Date;
+  expires_at: Date;
+  revoked_at: Date | null;
+}
+
+export interface FamilyActivityNoticesTable {
+  child_user_id: string;
+  period_start: ColumnType<Date, string, string>;
+  sent_at: Date;
+}
 
 export interface ParentalConsentsTable {
   id: string;
@@ -386,6 +446,11 @@ export interface Database {
   legal_versions: LegalVersionsTable;
   legal_acceptances: LegalAcceptancesTable;
   parental_consents: ParentalConsentsTable;
+  guardians: GuardiansTable;
+  parental_controls: ParentalControlsTable;
+  username_change_requests: UsernameChangeRequestsTable;
+  family_sessions: FamilySessionsTable;
+  family_activity_notices: FamilyActivityNoticesTable;
   data_exports: DataExportsTable;
   legal_holds: LegalHoldsTable;
   deletion_ledger_outbox: DeletionLedgerOutboxTable;

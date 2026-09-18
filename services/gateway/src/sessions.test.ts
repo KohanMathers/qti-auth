@@ -11,8 +11,10 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  clearFamilyCookie,
   clearSessionCookie,
   createSessionResolver,
+  familyCookieName,
   invalidationTargets,
   memorySessionCache,
   readCookie,
@@ -79,6 +81,10 @@ describe('cookies', () => {
     expect(sessionCookieName(cookies)).toBe('__Host-qtiauth_session');
     expect(clearSessionCookie(cookies)).toBe(
       '__Host-qtiauth_session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax',
+    );
+    expect(familyCookieName(cookies)).toBe('__Host-qtiauth_session_family');
+    expect(clearFamilyCookie(cookies)).toBe(
+      '__Host-qtiauth_session_family=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax',
     );
     const shared = sections.cookies.parse({ domain: 'example.com' });
     expect(sessionCookieName(shared)).toBe('qtiauth_session');

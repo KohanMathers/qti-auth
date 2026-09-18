@@ -1,0 +1,51 @@
+<mjml lang="en-GB">
+  <mj-head>
+    <mj-title>Your family dashboard link for {{ brand.product_name }}</mj-title>
+    <mj-preview>This link expires in {{ expires_in_minutes }} minutes</mj-preview>
+    <mj-attributes>
+      <mj-all
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      />
+      <mj-text font-size="16px" line-height="24px" color="#1f2937" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <mj-section padding="32px 16px 0">
+      <mj-column background-color="#ffffff" border-radius="8px" padding="24px">
+        <mj-text font-size="22px" line-height="30px" font-weight="600">
+          Open the family dashboard for {{ brand.product_name }}
+        </mj-text>
+        <mj-text>
+          Use the button below to manage a child’s account. The link works once and expires in
+          {{ expires_in_minutes }} minutes.
+        </mj-text>
+        <mj-button
+          href="{{ link }}"
+          background-color="{{ brand.primary_color }}"
+          color="#ffffff"
+          font-size="16px"
+          font-weight="600"
+          border-radius="6px"
+          align="left"
+        >
+          Open family dashboard
+        </mj-button>
+        <mj-text font-size="14px" line-height="20px" color="#4b5563">
+          If the button doesn't work, copy this link into your browser:<br />
+          <a href="{{ link }}" style="color: #4b5563; word-break: break-all">{{ link }}</a>
+        </mj-text>
+        <mj-text font-size="14px" line-height="20px" color="#4b5563">
+          If you didn't ask for this, you can safely ignore this email.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+    <mj-section padding="16px">
+      <mj-column>
+        <mj-text font-size="12px" line-height="18px" color="#6b7280" align="center">
+          Need help? Contact {{ brand.support_email }}.<br />
+          {{ brand.company_name }}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

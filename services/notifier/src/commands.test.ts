@@ -74,6 +74,13 @@ describe('qtiauth templates check', () => {
         { name: 'data_export', locales: ['en-GB'] },
         { name: 'data_export_attachment', locales: ['en-GB'] },
         { name: 'webhook_disabled', locales: ['en-GB'] },
+        { name: 'parental_consent', locales: ['en-GB'] },
+        { name: 'family_access', locales: ['en-GB'] },
+        { name: 'family_invite', locales: ['en-GB'] },
+        { name: 'guardian_new_device', locales: ['en-GB'] },
+        { name: 'guardian_legal_update', locales: ['en-GB'] },
+        { name: 'guardian_username_change', locales: ['en-GB'] },
+        { name: 'guardian_activity', locales: ['en-GB'] },
       ],
     });
   });

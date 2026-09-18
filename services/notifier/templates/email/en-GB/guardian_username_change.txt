@@ -1,0 +1,9 @@
+A child wants to use the username {{ username }} on {{ brand.product_name }}
+
+Open the family dashboard to approve or decline:
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

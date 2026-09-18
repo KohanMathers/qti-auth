@@ -20,23 +20,24 @@ Schedules are cron patterns with five fields, `minute hour day-of-month month da
 
 ## Jobs
 
-| Job                             | Owner                | Default schedule | Runs         |
-| ------------------------------- | -------------------- | ---------------- | ------------ |
-| `retention.sweep`               | every service        | `0 3 * * *`      | daily 03:00  |
-| `parental.expire_pending`       | identity             | `0 * * * *`      | hourly       |
-| `accounts.purge_deleted`        | identity             | `30 3 * * *`     | daily 03:30  |
-| `age.recompute_bands`           | identity             | `5 0 * * *`      | daily 00:05  |
-| `accounts.unlock_expired`       | identity             | `* * * * *`      | every minute |
-| `legal.publish`                 | identity             | `* * * * *`      | every minute |
-| `accounts.resume_exports`       | identity             | `*/5 * * * *`    | every 5 min  |
-| `deletion_ledger.prune`         | identity             | `0 4 * * *`      | daily 04:00  |
-| `keys.rotate`                   | gateway, oidc, games | `0 0 * * *`      | daily 00:00  |
-| `webhooks.retry`                | notifier             | `* * * * *`      | every minute |
-| `support.auto_close`            | support              | `0 * * * *`      | hourly       |
-| `achievements.recompute_rarity` | games                | `0 2 * * *`      | daily 02:00  |
-| `leaderboards.reset_periodic`   | games                | `* * * * *`      | every minute |
-| `steam.ownership_sync`          | games                | `0 5 * * *`      | daily 05:00  |
-| `backup.run`                    | backup               | `30 2 * * *`     | daily 02:30  |
+| Job                             | Owner                | Default schedule | Runs             |
+| ------------------------------- | -------------------- | ---------------- | ---------------- |
+| `retention.sweep`               | every service        | `0 3 * * *`      | daily 03:00      |
+| `parental.expire_pending`       | identity             | `0 * * * *`      | hourly           |
+| `parental.activity_summary`     | identity             | `0 8 * * 1`      | weekly Mon 08:00 |
+| `accounts.purge_deleted`        | identity             | `30 3 * * *`     | daily 03:30      |
+| `age.recompute_bands`           | identity             | `5 0 * * *`      | daily 00:05      |
+| `accounts.unlock_expired`       | identity             | `* * * * *`      | every minute     |
+| `legal.publish`                 | identity             | `* * * * *`      | every minute     |
+| `accounts.resume_exports`       | identity             | `*/5 * * * *`    | every 5 min      |
+| `deletion_ledger.prune`         | identity             | `0 4 * * *`      | daily 04:00      |
+| `keys.rotate`                   | gateway, oidc, games | `0 0 * * *`      | daily 00:00      |
+| `webhooks.retry`                | notifier             | `* * * * *`      | every minute     |
+| `support.auto_close`            | support              | `0 * * * *`      | hourly           |
+| `achievements.recompute_rarity` | games                | `0 2 * * *`      | daily 02:00      |
+| `leaderboards.reset_periodic`   | games                | `* * * * *`      | every minute     |
+| `steam.ownership_sync`          | games                | `0 5 * * *`      | daily 05:00      |
+| `backup.run`                    | backup               | `30 2 * * *`     | daily 02:30      |
 
 `keys.rotate` only replaces a key once it's due, and `leaderboards.reset_periodic` only resets leaderboards whose period has ended, so ticking often costs little. A job whose owning service isn't running is ticked anyway, and the tick is thrown away.
 

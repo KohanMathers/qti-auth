@@ -107,6 +107,46 @@ export const IDENTITY_ERRORS = defineErrors({
     status: 400,
     title: 'A parent or guardian must be an adult',
   },
+  FAMILY_SESSION_REQUIRED: {
+    status: 401,
+    title: 'A family dashboard session is required',
+  },
+  FAMILY_LINK_INVALID: {
+    status: 400,
+    title: 'The family link is unknown, has expired or has already been used',
+  },
+  FAMILY_CHILD_NOT_FOUND: {
+    status: 404,
+    title: 'No such child account for this parent or guardian',
+  },
+  GUARDIAN_DISPLAY_NAME_INVALID: {
+    status: 400,
+    title: 'This display name cannot be used',
+  },
+  GUARDIAN_LIMIT: {
+    status: 409,
+    title: 'This account already has the maximum number of parents or guardians',
+  },
+  GUARDIAN_ALREADY_LINKED: {
+    status: 409,
+    title: 'That parent or guardian is already linked to this account',
+  },
+  GUARDIAN_LAST: {
+    status: 409,
+    title: 'The last parent or guardian cannot be removed',
+  },
+  GUARDIAN_NOT_FOUND: {
+    status: 404,
+    title: 'No such parent or guardian',
+  },
+  USERNAME_CHANGE_NOT_FOUND: {
+    status: 404,
+    title: 'No username change is waiting for approval',
+  },
+  USERNAME_CHANGE_PENDING: {
+    status: 409,
+    title: 'A username change is already waiting for approval',
+  },
   ACCOUNT_NOT_FOUND: { status: 404, title: 'The account does not exist' },
   ACCOUNT_SELF: { status: 409, title: 'You cannot perform this action on your own account' },
   ACCOUNT_STATE_CONFLICT: {

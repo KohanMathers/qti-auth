@@ -1,0 +1,11 @@
+New sign-in on {{ username }}'s {{ brand.product_name }} account
+
+Someone signed in from {{ browser }} on {{ os }}, {{ place }}.
+
+Open the family dashboard to review sessions:
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

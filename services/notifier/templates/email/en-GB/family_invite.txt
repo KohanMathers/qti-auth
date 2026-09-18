@@ -1,0 +1,11 @@
+You're invited to a family dashboard on {{ brand.product_name }}
+
+A parent or guardian has asked you to help manage a child’s {{ brand.product_name }} account. Open this link to accept. It works once and expires in {{ expires_in_minutes }} minutes.
+
+{{ link }}
+
+If you didn't expect this, you can ignore the email.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

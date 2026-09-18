@@ -12,6 +12,7 @@ import type { Database, RevocationReason, SecurityEventKind } from './database.t
 import { countryName, describePlace, deviceKey, parseDevice } from './device.ts';
 import { sessionCreatedEvent, sessionFlaggedEvent, sessionRevokedEvent } from './events.ts';
 import { twoFactorEnrolmentRequired } from './factors.ts';
+import { loadParentalControls } from './family.ts';
 import { iso } from './iso.ts';
 import { legalAcceptanceRequired } from './legal.ts';
 import { cancelPendingDeletion } from './pending-deletion.ts';
@@ -512,7 +513,7 @@ export async function resolveSession(
       permissions,
       restrictions: [],
       age_band: ageBand(ageOn(row.date_of_birth, now), options.bands),
-      parental_controls: null,
+      parental_controls: await loadParentalControls(db, row.user_id),
       amr: row.amr,
       acr,
       step_up_at: acr === 'aal0' ? null : iso(row.step_up_at),

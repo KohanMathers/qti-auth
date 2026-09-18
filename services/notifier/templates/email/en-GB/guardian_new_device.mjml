@@ -1,0 +1,41 @@
+<mjml lang="en-GB">
+  <mj-head>
+    <mj-title>New sign-in on {{ username }}'s {{ brand.product_name }} account</mj-title>
+    <mj-preview>Someone signed in from {{ browser }} on {{ os }}</mj-preview>
+    <mj-attributes>
+      <mj-all
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      />
+      <mj-text font-size="16px" line-height="24px" color="#1f2937" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <mj-section padding="32px 16px 0">
+      <mj-column background-color="#ffffff" border-radius="8px" padding="24px">
+        <mj-text font-size="22px" line-height="30px" font-weight="600">
+          New sign-in on {{ username }}'s account
+        </mj-text>
+        <mj-text> Someone signed in from {{ browser }} on {{ os }}, {{ place }}. </mj-text>
+        <mj-button
+          href="{{ link }}"
+          background-color="{{ brand.primary_color }}"
+          color="#ffffff"
+          font-size="16px"
+          font-weight="600"
+          border-radius="6px"
+          align="left"
+        >
+          Open family dashboard
+        </mj-button>
+      </mj-column>
+    </mj-section>
+    <mj-section padding="16px">
+      <mj-column>
+        <mj-text font-size="12px" line-height="18px" color="#6b7280" align="center">
+          Need help? Contact {{ brand.support_email }}.<br />
+          {{ brand.company_name }}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

@@ -18,6 +18,7 @@ import { AUDIT_EVENTS, IDENTITY_EVENTS, loadEventCatalog } from '@qtiauth/events
 import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing';
 import {
   EXPORT_USER_METHOD,
+  FAMILY_TOKEN_HEADER,
   hashSessionToken,
   type Identity,
   RESOLVE_SESSION_METHOD,
@@ -41,6 +42,7 @@ import { natsUrl, startNats, startPostgres, startValkey } from '@qtiauth/testing
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './database.ts';
+import { ACTIVITY_SUMMARY_JOB } from './family.ts';
 import { GET_LEGAL_HOLD_METHOD, PLACE_LEGAL_HOLD_METHOD } from './legal-holds.ts';
 import { PURGE_JOB } from './lifecycle.ts';
 import { EXPIRE_PENDING_JOB } from './parental.ts';
@@ -1356,6 +1358,173 @@ describe('parental consent', () => {
   });
 });
 
+describe('family dashboard', () => {
+  const childDob = `${String(new Date().getUTCFullYear() - 10)}-01-01`;
+
+  async function signUpChild(email: string, guardianEmail: string): Promise<SignedIn> {
+    const verify = await post('/api/v1/auth/magic-link/verify', { token: await linkToken(email) });
+    const next = (await verify.json()) as { signup_token: string };
+    secrets.push(next.signup_token);
+    const signup = await post('/api/v1/auth/magic-link/signup', {
+      signup_token: next.signup_token,
+      date_of_birth: childDob,
+      guardian_email: guardianEmail,
+    });
+    expect(signup.status).toBe(201);
+    return finish(signup);
+  }
+
+  async function approveChild(guardianEmail: string): Promise<void> {
+    const job = await emails.nextJob(guardianEmail, 'parental_consent');
+    const token = new URL(String(job.variables['approve_link'])).searchParams.get('token') ?? '';
+    secrets.push(token);
+    const approved = await post('/api/v1/auth/parental-consent/approve', {
+      token,
+      date_of_birth: '1980-01-01',
+    });
+    expect(approved.status).toBe(204);
+  }
+
+  async function openFamilySession(email: string): Promise<string> {
+    const start = await post('/api/v1/auth/family/magic-link', { email });
+    expect(start.status).toBe(202);
+    const job = await emails.nextJob(email, 'family_access');
+    const token = new URL(String(job.variables['link'])).searchParams.get('token') ?? '';
+    secrets.push(token);
+    const opened = await post('/api/v1/auth/family/session', { token });
+    expect(opened.status).toBe(200);
+    const familyToken = opened.headers.get(FAMILY_TOKEN_HEADER) ?? '';
+    secrets.push(familyToken);
+    return familyToken;
+  }
+
+  function asFamily(token: string): RequestInit {
+    return { headers: { [FAMILY_TOKEN_HEADER]: token } };
+  }
+
+  it('does not say whether a family magic link was sent', async () => {
+    const unknown = await post('/api/v1/auth/family/magic-link', {
+      email: 'not-a-guardian@example.com',
+    });
+    expect(unknown.status).toBe(202);
+    expect(await unknown.text()).toBe('');
+  });
+
+  it('lets a guardian manage controls, sessions, username changes and another guardian', async () => {
+    const child = await signUpChild('family-child@example.com', 'family-parent@example.com');
+    await approveChild('family-parent@example.com');
+    const familyToken = await openFamilySession('family-parent@example.com');
+
+    const listed = await call('/api/v1/family', asFamily(familyToken));
+    expect(listed.status).toBe(200);
+    const children = (await listed.json()) as { children: { id: string }[] };
+    expect(children.children.map((row) => row.id)).toEqual([child.userId]);
+
+    const patched = await call(`/api/v1/family/${child.userId}/controls`, {
+      method: 'PATCH',
+      body: JSON.stringify({ online_play: true, public_profile: true }),
+      ...asFamily(familyToken),
+    });
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({
+      online_play: true,
+      in_game_chat: false,
+      public_profile: true,
+      leaderboard_visible: false,
+    });
+
+    const firstName = await post(
+      '/api/v1/me/username',
+      { username: 'ChildOne' },
+      signedInAs(child.userId, child.sessionId),
+    );
+    expect(firstName.status).toBe(200);
+    const change = await post(
+      '/api/v1/me/username',
+      { username: 'ChildTwo' },
+      signedInAs(child.userId, child.sessionId),
+    );
+    expect(change.status).toBe(202);
+    expect(await change.json()).toMatchObject({
+      username: 'ChildTwo',
+      status: 'pending_guardian_approval',
+    });
+    await emails.nextJob('family-parent@example.com', 'guardian_username_change');
+
+    const detail = await call(`/api/v1/family/${child.userId}`, asFamily(familyToken));
+    const body = (await detail.json()) as {
+      pending_username_change: { id: string; username: string };
+    };
+    expect(body.pending_username_change.username).toBe('ChildTwo');
+    const approvedName = await call(
+      `/api/v1/family/${child.userId}/username-changes/${body.pending_username_change.id}/approve`,
+      { method: 'POST', ...asFamily(familyToken) },
+    );
+    expect(approvedName.status).toBe(200);
+    expect(await approvedName.json()).toEqual({ username: 'ChildTwo' });
+
+    const sessions = await call(`/api/v1/family/${child.userId}/sessions`, asFamily(familyToken));
+    expect(sessions.status).toBe(200);
+    const sessionList = (await sessions.json()) as { items: { id: string }[] };
+    expect(sessionList.items.length).toBeGreaterThan(0);
+    const revoked = await call(
+      `/api/v1/family/${child.userId}/sessions/${sessionList.items[0]?.id ?? ''}`,
+      { method: 'DELETE', ...asFamily(familyToken) },
+    );
+    expect(revoked.status).toBe(204);
+
+    const invited = await call(`/api/v1/family/${child.userId}/guardians`, {
+      method: 'POST',
+      body: JSON.stringify({ email: 'family-parent-2@example.com' }),
+      ...asFamily(familyToken),
+    });
+    expect(invited.status).toBe(202);
+    const inviteJob = await emails.nextJob('family-parent-2@example.com', 'family_invite');
+    const inviteToken =
+      new URL(String(inviteJob.variables['link'])).searchParams.get('token') ?? '';
+    secrets.push(inviteToken);
+    const accepted = await post('/api/v1/auth/family/invite/accept', {
+      token: inviteToken,
+      date_of_birth: '1979-02-02',
+    });
+    expect(accepted.status).toBe(204);
+    const over = await call(`/api/v1/family/${child.userId}/guardians`, {
+      method: 'POST',
+      body: JSON.stringify({ email: 'family-parent-3@example.com' }),
+      ...asFamily(familyToken),
+    });
+    expect(over.status).toBe(409);
+    expect(await over.json()).toMatchObject({ code: 'GUARDIAN_LIMIT' });
+
+    const activity = await call(`/api/v1/family/${child.userId}/activity`, asFamily(familyToken));
+    expect(await activity.json()).toMatchObject({
+      sign_ins: expect.any(Number) as unknown,
+      games: [],
+    });
+
+    const adult = await signUp('family-parent@example.com');
+    const linked = await call('/api/v1/family', {
+      as: signedInAs(adult.userId, adult.sessionId),
+    });
+    expect(linked.status).toBe(200);
+    expect(((await linked.json()) as { children: { id: string }[] }).children[0]?.id).toBe(
+      child.userId,
+    );
+    const me = await call('/api/v1/me', { as: signedInAs(adult.userId, adult.sessionId) });
+    expect(await me.json()).toMatchObject({
+      family: { children: [{ id: child.userId, username: 'ChildTwo' }] },
+    });
+
+    await publishCronTick(gateway.js, ACTIVITY_SUMMARY_JOB, new Date());
+    await emails.nextJob('family-parent@example.com', 'guardian_activity');
+    await emails.nextJob('family-parent-2@example.com', 'guardian_activity');
+
+    const page = await call('/family/magic-link');
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('Family dashboard');
+  });
+});
+
 describe('log scrubbing', () => {
   it('keeps tokens, addresses and dates of birth out of the logs', () => {
     expect(logs.lines.length).toBeGreaterThan(0);
@@ -1378,6 +1547,11 @@ describe('log scrubbing', () => {
       'expire-parent@example.com',
       'pwd-child@example.com',
       'pwd-parent@example.com',
+      'not-a-guardian@example.com',
+      'family-child@example.com',
+      'family-parent@example.com',
+      'family-parent-2@example.com',
+      'family-parent-3@example.com',
       '1985-07-04',
       PASSWORD,
       postgres.getPassword(),

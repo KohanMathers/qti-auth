@@ -12,6 +12,16 @@ import {
   requestExport,
   resumePendingExports,
 } from './exports.ts';
+import {
+  childActivity,
+  childLabel,
+  childrenNeedingActivitySummary,
+  hasActiveGuardians,
+  listActiveGuardians,
+  markActivitySummarySent,
+  requestUsernameChange,
+  utcDateString,
+} from './family.ts';
 import { applyFilter } from './filter.ts';
 import { acceptLegalDocuments } from './legal.ts';
 import { requestDeletion } from './lifecycle.ts';
@@ -63,6 +73,9 @@ import {
   emailChangeSettings,
   emailLinkUrl,
   encryptionKey,
+  FAMILY_INVITE_PAGE,
+  FAMILY_SESSION_PAGE,
+  familyChildUrl,
   GUARDIAN_APPROVE_PAGE,
   GUARDIAN_DECLINE_PAGE,
   legalDocumentUrl,
@@ -86,6 +99,9 @@ import {
 import { objectStoreOf } from './storage-state.ts';
 import { completeSecondFactor } from './two-factor.ts';
 import { claimUsername, type ClaimUsernameResult } from './usernames.ts';
+
+export type ChooseUsernameResult =
+  ClaimUsernameResult | { status: 'pending'; username: string } | { status: 'already_pending' };
 
 export interface FlowInput {
   ctx: Context;
@@ -121,6 +137,31 @@ export async function notifyNewDevice(ctx: Context, session: CreatedSession): Pr
       place: notice.place,
     },
   });
+  const sessionRow = await ctx.db
+    .selectFrom('sessions')
+    .innerJoin('users', 'users.id', 'sessions.user_id')
+    .select(['sessions.user_id as user_id', 'users.username as username'])
+    .where('sessions.id', '=', session.id)
+    .executeTakeFirst();
+  if (sessionRow) {
+    const guardians = await listActiveGuardians(ctx.db, sessionRow.user_id);
+    const link = familyChildUrl(ctx.config, sessionRow.user_id);
+    for (const guardian of guardians) {
+      await queueEmail(ctx.bus, {
+        template: 'guardian_new_device',
+        to: { address: guardian.email },
+        locale: notice.locale ?? ctx.config.email.default_locale,
+        userId: guardian.user_id,
+        variables: {
+          username: childLabel(sessionRow.username),
+          browser: notice.browser,
+          os: notice.os,
+          place: notice.place,
+          link,
+        },
+      });
+    }
+  }
   await ctx.db
     .updateTable('session_security_events')
     .set({ notified: true })
@@ -1037,13 +1078,42 @@ export async function acceptLegal(
 export async function chooseUsername(
   { ctx, log }: FlowInput,
   input: { userId: string; username: string },
-): Promise<ClaimUsernameResult> {
+): Promise<ChooseUsernameResult> {
+  const account = await findAccount(ctx.db, input.userId);
+  const isBlocked = async (username: string) =>
+    (await applyFilter(ctx, username, 'username')).decision === 'block';
+  if (account?.username && (await hasActiveGuardians(ctx.db, input.userId))) {
+    const pending = await requestUsernameChange(ctx.db, {
+      userId: input.userId,
+      username: input.username,
+      settings: ctx.config.usernames,
+      isBlocked,
+      now: new Date(),
+    });
+    if (pending.status === 'pending') {
+      const guardians = await listActiveGuardians(ctx.db, input.userId);
+      const link = familyChildUrl(ctx.config, input.userId);
+      for (const guardian of guardians) {
+        await queueEmail(ctx.bus, {
+          template: 'guardian_username_change',
+          to: { address: guardian.email },
+          locale: account.locale ?? ctx.config.email.default_locale,
+          userId: guardian.user_id,
+          variables: { username: pending.username, link },
+        });
+      }
+      ctx.outbox.wake();
+      log.info('username change awaiting guardian', { user_id: input.userId });
+      return { status: 'pending', username: pending.username };
+    }
+    if (pending.status === 'already_pending') return pending;
+    return pending;
+  }
   const result = await claimUsername(ctx.db, {
     userId: input.userId,
     username: input.username,
     settings: ctx.config.usernames,
-    isBlocked: async (username) =>
-      (await applyFilter(ctx, username, 'username')).decision === 'block',
+    isBlocked,
     now: new Date(),
   });
   if (result.status !== 'saved') return result;
@@ -1051,4 +1121,66 @@ export async function chooseUsername(
   ctx.outbox.wake();
   log.info('username set', { user_id: input.userId, action: result.action });
   return result;
+}
+
+export async function sendFamilyAccessEmail(
+  ctx: Context,
+  issued: { token: string; email: string; locale: string | null; expiresAt: Date },
+): Promise<void> {
+  await queueEmail(ctx.bus, {
+    template: 'family_access',
+    to: { address: issued.email },
+    locale: issued.locale ?? ctx.config.email.default_locale,
+    variables: {
+      link: emailLinkUrl(ctx.config, FAMILY_SESSION_PAGE, issued.token),
+      expires_in_minutes: expiresInMinutes(issued.expiresAt.getTime() - Date.now()),
+    },
+  });
+}
+
+export async function sendFamilyInviteEmail(
+  ctx: Context,
+  issued: { token: string; email: string; locale: string | null; expiresAt: Date },
+): Promise<void> {
+  await queueEmail(ctx.bus, {
+    template: 'family_invite',
+    to: { address: issued.email },
+    locale: issued.locale ?? ctx.config.email.default_locale,
+    variables: {
+      link: emailLinkUrl(ctx.config, FAMILY_INVITE_PAGE, issued.token),
+      expires_in_minutes: expiresInMinutes(issued.expiresAt.getTime() - Date.now()),
+    },
+  });
+}
+
+export async function sendFamilyActivitySummaries(ctx: Context, now = new Date()): Promise<number> {
+  const periodStart = utcDateString(new Date(now.getTime() - 7 * 86_400_000));
+  const children = await childrenNeedingActivitySummary(ctx.db, periodStart);
+  let sent = 0;
+  for (const child of children) {
+    const marked = await markActivitySummarySent(ctx.db, {
+      childUserId: child.child_user_id,
+      periodStart,
+      now,
+    });
+    if (!marked) continue;
+    const activity = await childActivity(ctx.db, { childUserId: child.child_user_id, now });
+    const guardians = await listActiveGuardians(ctx.db, child.child_user_id);
+    const link = familyChildUrl(ctx.config, child.child_user_id);
+    for (const guardian of guardians) {
+      await queueEmail(ctx.bus, {
+        template: 'guardian_activity',
+        to: { address: guardian.email },
+        locale: child.locale ?? ctx.config.email.default_locale,
+        userId: guardian.user_id,
+        variables: {
+          username: childLabel(child.username),
+          sign_ins: activity.sign_ins,
+          link,
+        },
+      });
+      sent += 1;
+    }
+  }
+  return sent;
 }

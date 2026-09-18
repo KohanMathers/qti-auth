@@ -1,0 +1,13 @@
+Weekly summary for {{ username }} on {{ brand.product_name }}
+
+Sign-ins this week: {{ sign_ins }}
+
+Games played and connected apps will show here when those services are running. This summary never includes message content.
+
+Open the family dashboard:
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

@@ -26,6 +26,7 @@ import {
   userDeletedEvent,
   userUpdatedEvent,
 } from './events.ts';
+import { activateApprovingGuardian } from './family.ts';
 import { recordCurrentLegalAcceptances } from './legal.ts';
 import { hasActiveHold } from './legal-holds.ts';
 
@@ -37,6 +38,7 @@ export const CONSENT_TOKEN_PURPOSES = ['parental_approve', 'parental_decline'] a
 export interface ParentalSettings {
   consentAge: number;
   pendingTtl: number;
+  maxGuardians: number;
   bands: AgeBands;
   normalizeEmail: (address: string) => string;
 }
@@ -359,6 +361,13 @@ export async function approveConsent(
       userId,
       ip: options.ip,
       method: 'guardian',
+      now: options.now,
+    });
+    await activateApprovingGuardian(trx, {
+      childUserId: userId,
+      email: pending.guardian_email,
+      emailNormalized: pending.guardian_email_normalized,
+      maxGuardians: options.settings.maxGuardians,
       now: options.now,
     });
     const actor: EventActor = { type: 'system', id: 'identity' };

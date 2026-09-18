@@ -39,9 +39,9 @@
         <mj-text font-size="14px" line-height="20px" color="#4b5563">
           You will confirm your date of birth and accept the terms. If the button doesn't work, copy
           this link into your browser:<br />
-          <a href="{{ approve_link }}" style="color: #4b5563; word-break: break-all"
-            >{{ approve_link }}</a
-          >
+          <a href="{{ approve_link }}" style="color: #4b5563; word-break: break-all">{{
+            approve_link
+          }}</a>
         </mj-text>
         <mj-button
           href="{{ decline_link }}"

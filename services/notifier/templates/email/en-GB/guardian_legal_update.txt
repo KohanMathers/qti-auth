@@ -1,0 +1,15 @@
+A legal document changed for a child on {{ brand.product_name }}
+
+{{ summary }}
+
+Read the document:
+
+{{ link }}
+
+Open the family dashboard if you need to accept it on the child’s behalf:
+
+{{ family_link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

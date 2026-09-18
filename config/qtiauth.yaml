@@ -262,6 +262,7 @@ age:
 parental:
   consent_age: 13
   pending_ttl: 14d
+  max_guardians: 2
 
 usernames:
   min_length: 8
@@ -296,6 +297,7 @@ scheduler:
   jobs:
     retention.sweep: { schedule: '0 3 * * *', enabled: true }
     parental.expire_pending: { schedule: '0 * * * *', enabled: true }
+    parental.activity_summary: { schedule: '0 8 * * 1', enabled: true }
     accounts.purge_deleted: { schedule: '30 3 * * *', enabled: true }
     age.recompute_bands: { schedule: '5 0 * * *', enabled: true }
     accounts.unlock_expired: { schedule: '* * * * *', enabled: true }

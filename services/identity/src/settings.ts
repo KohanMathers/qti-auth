@@ -48,6 +48,11 @@ export const EXPORT_PAGE = '/auth/export';
 export const WAITING_PAGE = '/auth/waiting';
 export const GUARDIAN_APPROVE_PAGE = '/auth/guardian/approve';
 export const GUARDIAN_DECLINE_PAGE = '/auth/guardian/decline';
+export const FAMILY_PAGE = '/family';
+export const FAMILY_MAGIC_LINK_PAGE = '/family/magic-link';
+export const FAMILY_SESSION_PAGE = '/family/session';
+export const FAMILY_INVITE_PAGE = '/family/invite';
+export const FAMILY_CHILD_PAGE = '/family/:child_id';
 export const LEGAL_INDEX_PAGE = '/legal';
 export const LEGAL_ACCEPT_PAGE = '/legal/accept';
 export const LEGAL_DOCUMENT_PAGE = '/legal/:id';
@@ -283,6 +288,17 @@ export function legalDocumentUrl(config: Pick<IdentityConfig, 'surfaces'>, id: s
   return new URL(accountPath(config, `/legal/${id}`), accountOrigin(config)).toString();
 }
 
+export function familyDashboardUrl(config: Pick<IdentityConfig, 'surfaces'>): string {
+  return new URL(accountPath(config, FAMILY_PAGE), accountOrigin(config)).toString();
+}
+
+export function familyChildUrl(config: Pick<IdentityConfig, 'surfaces'>, childId: string): string {
+  return new URL(
+    accountPath(config, `/family/${encodeURIComponent(childId)}`),
+    accountOrigin(config),
+  ).toString();
+}
+
 export function emailChangeSettings(config: IdentityConfig): EmailChangeSettings {
   return {
     changeTtl: config.accounts.email_change_ttl,
@@ -297,6 +313,7 @@ export function parentalSettings(config: IdentityConfig): ParentalSettings {
   return {
     consentAge: magic.consentAge,
     pendingTtl: magic.pendingTtl,
+    maxGuardians: config.parental.max_guardians,
     bands: magic.bands,
     normalizeEmail: magic.normalizeEmail,
   };

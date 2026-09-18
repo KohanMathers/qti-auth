@@ -5,6 +5,7 @@ import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
 import { CAPTCHA_ACTIONS, inspectCaptcha, noteCaptchaAttempt, requireCaptcha } from './captcha.ts';
 import { SECOND_FACTOR_METHODS } from './factors.ts';
+import { actorFromSession, listFamilyChildren } from './family.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
@@ -84,6 +85,18 @@ const meSchema = z.object({
     })
     .nullable()
     .describe('Set while the account is waiting for a parent or guardian.'),
+  family: z
+    .object({
+      children: z.array(
+        z.object({
+          id: z.uuid(),
+          username: z.string().nullable(),
+          age_band: z.string(),
+          account_state: z.string(),
+        }),
+      ),
+    })
+    .describe('Child accounts this signed-in parent or guardian can manage.'),
   roles: z.array(z.object({ id: z.uuid(), slug: z.string(), name: z.string() })),
   permissions: z.array(z.string()),
   session: z.object({ id: z.uuid(), amr: z.array(z.string()), acr: z.string().nullable() }),
@@ -779,15 +792,20 @@ export function authRoutes(router: Router<Context>): void {
     errors: ['ACCOUNT_NOT_FOUND'],
     handler: async ({ ctx, identity }) => {
       const { userId, sessionId } = signedIn(identity);
-      const [account, roles, permissions, consent] = await Promise.all([
+      const [account, roles, permissions, consent, actor] = await Promise.all([
         findAccount(ctx.db, userId),
         loadUserRoles(ctx.db, userId),
         loadPermissions(ctx.db, userId),
         pendingParentalConsent(ctx, userId),
+        actorFromSession(ctx.db, sessionId),
       ]);
       if (!account || account.state === 'deleted') {
         throw new ProblemError('ACCOUNT_NOT_FOUND');
       }
+      const children =
+        actor === undefined
+          ? []
+          : await listFamilyChildren(ctx.db, actor, ctx.config.age.bands, new Date());
       return {
         status: 200,
         headers: NO_STORE,
@@ -806,6 +824,7 @@ export function authRoutes(router: Router<Context>): void {
           locale: account.locale,
           created_at: account.created_at.toISOString(),
           parental_consent: consent,
+          family: { children },
           roles: roles.map((role) => ({ id: role.id, slug: role.slug, name: role.name })),
           permissions,
           session: { id: sessionId, amr: identity.amr, acr: identity.acr },

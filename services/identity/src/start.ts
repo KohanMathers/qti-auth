@@ -30,9 +30,10 @@ import type { Database } from './database.ts';
 import { sweepTokens } from './email-tokens.ts';
 import { EXPORT_RESUME_JOB, sweepExports } from './exports.ts';
 import { sweepAuthFailures } from './failures.ts';
+import { ACTIVITY_SUMMARY_JOB, sweepFamilySessions } from './family.ts';
 import { loadFilterOverlay, sweepFilterDecisions } from './filter.ts';
 import { attachTextFilter } from './filter-state.ts';
-import { resumeDataExports } from './flows.ts';
+import { resumeDataExports, sendFamilyActivitySummaries } from './flows.ts';
 import { attachGeoIp } from './geoip-state.ts';
 import { iso } from './iso.ts';
 import {
@@ -261,6 +262,11 @@ export function identityService(options: IdentityOptions = {}) {
                 idleTimeout: config.cookies.idle_timeout,
                 now,
               });
+              const familySessions = await sweepFamilySessions(db, {
+                retention: config.retention.sessions,
+                idleTimeout: config.cookies.idle_timeout,
+                now,
+              });
               const tokens = await sweepTokens(db, { retention: config.retention.tokens, now });
               const challenges = await sweepChallenges(db, {
                 retention: config.retention.tokens,
@@ -290,6 +296,7 @@ export function identityService(options: IdentityOptions = {}) {
               const pruned = await pruneBusTables(db, config.bus);
               log.info('retention sweep finished', {
                 sessions,
+                family_sessions: familySessions,
                 email_tokens: tokens,
                 auth_challenges: challenges,
                 auth_failures: failures,
@@ -398,6 +405,23 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('pending parental consent expiry failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: ACTIVITY_SUMMARY_JOB,
+            metrics: ctx.busMetrics,
+            handler: async (tick) => {
+              const sent = await sendFamilyActivitySummaries(ctx, new Date(tick.data.scheduled_at));
+              if (sent > 0) {
+                ctx.outbox.wake();
+                log.info('family activity summaries queued', { sent });
+              }
+            },
+            onError: (error) => {
+              log.error('family activity summary failed', { error });
             },
           }),
         );

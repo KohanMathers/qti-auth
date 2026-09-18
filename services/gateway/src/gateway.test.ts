@@ -6,6 +6,9 @@ import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing'
 import {
   AUTH_MODES,
   createServiceRouter,
+  FAMILY_CLEAR_HEADER,
+  FAMILY_EXPIRES_HEADER,
+  FAMILY_TOKEN_HEADER,
   FLOW_BINDING_HEADER,
   hashSessionToken,
   IDENTITY_HEADER,
@@ -680,6 +683,75 @@ describe('gateway handler', () => {
       headers: { cookie: `__Host-qtiauth_session_flow=${binding}` },
     });
     expect(forwarded[0]?.headers.has(FLOW_BINDING_HEADER)).toBe(false);
+  });
+
+  it('keeps the family dashboard token in a cookie and hands it back only to identity', async () => {
+    const issued = randomBytes(32).toString('base64url');
+    const { request, forwarded } = await setup({
+      upstream: () => ({
+        status: 'ok',
+        response: new Response(null, {
+          status: 204,
+          headers: {
+            [FAMILY_TOKEN_HEADER]: issued,
+            [FAMILY_EXPIRES_HEADER]: new Date(Date.now() + 3_600_000).toISOString(),
+          },
+        }),
+      }),
+    });
+    const started = await request('/auth/login');
+    expect(started.headers.get('set-cookie')).toMatch(
+      new RegExp(
+        `^__Host-qtiauth_session_family=${issued}; Path=/; Max-Age=(?:3599|3600); Secure; HttpOnly; SameSite=Lax$`,
+      ),
+    );
+    expect(started.headers.has(FAMILY_TOKEN_HEADER)).toBe(false);
+
+    await request('/auth/login', {
+      headers: {
+        cookie: `__Host-qtiauth_session_family=${issued}`,
+        [FAMILY_TOKEN_HEADER]: 'spoofed',
+      },
+    });
+    expect(forwarded[1]?.headers.get(FAMILY_TOKEN_HEADER)).toBe(issued);
+
+    await request('/auth/login', { headers: { [FAMILY_TOKEN_HEADER]: issued } });
+    expect(forwarded[2]?.headers.has(FAMILY_TOKEN_HEADER)).toBe(false);
+  });
+
+  it('clears the family dashboard cookie when identity asks', async () => {
+    const { request } = await setup({
+      upstream: () => ({
+        status: 'ok',
+        response: new Response(null, {
+          status: 204,
+          headers: { [FAMILY_CLEAR_HEADER]: '1' },
+        }),
+      }),
+    });
+    const response = await request('/auth/login');
+    expect(response.headers.get('set-cookie')).toContain(
+      '__Host-qtiauth_session_family=; Path=/; Max-Age=0',
+    );
+    expect(response.headers.has(FAMILY_CLEAR_HEADER)).toBe(false);
+  });
+
+  it('does not hand the family dashboard token to other services', async () => {
+    const issued = randomBytes(32).toString('base64url');
+    const manifests: RouteManifest[] = [
+      {
+        service: 'notes',
+        version: '1.0.0',
+        permissions: [],
+        notifications: [],
+        routes: [route({ auth: 'none' })],
+      },
+    ];
+    const { request, forwarded } = await setup({ manifests });
+    await request('/api/v1/me', {
+      headers: { cookie: `__Host-qtiauth_session_family=${issued}` },
+    });
+    expect(forwarded[0]?.headers.has(FAMILY_TOKEN_HEADER)).toBe(false);
   });
 
   it('ignores session headers from services other than identity', async () => {

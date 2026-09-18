@@ -76,7 +76,7 @@ function browser(country = 'GB'): Browser {
           others.delete(name);
         } else {
           others.set(name, pair);
-          if (name.endsWith('_flow')) secrets.push(value);
+          if (name.endsWith('_flow') || name.endsWith('_family')) secrets.push(value);
         }
       }
       return response;

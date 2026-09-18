@@ -55,6 +55,12 @@ export async function exportUser(
     exports,
     notifications,
     parental,
+    parentalControls,
+    childGuardians,
+    guardianLinks,
+    usernameChanges,
+    familySessions,
+    activityNotices,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -174,6 +180,67 @@ export async function exportUser(
       .execute(),
     listStoredPreferences(db, userId),
     listConsents(db, userId),
+    db
+      .selectFrom('parental_controls')
+      .select([
+        'online_play',
+        'in_game_chat',
+        'user_generated_content',
+        'purchases',
+        'daily_playtime_minutes',
+        'updated_at',
+      ])
+      .where('user_id', '=', userId)
+      .executeTakeFirst(),
+    db
+      .selectFrom('guardians')
+      .select([
+        'id',
+        'email',
+        'display_name',
+        'status',
+        'user_id',
+        'created_at',
+        'accepted_at',
+        'revoked_at',
+      ])
+      .where('child_user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
+    db
+      .selectFrom('guardians')
+      .select([
+        'id',
+        'child_user_id',
+        'display_name',
+        'status',
+        'created_at',
+        'accepted_at',
+        'revoked_at',
+      ])
+      .where((eb) =>
+        eb.or([eb('user_id', '=', userId), eb('email_normalized', '=', user.email_normalized)]),
+      )
+      .orderBy('created_at')
+      .execute(),
+    db
+      .selectFrom('username_change_requests')
+      .select(['id', 'username', 'status', 'requested_at', 'decided_at'])
+      .where('user_id', '=', userId)
+      .orderBy('requested_at')
+      .execute(),
+    db
+      .selectFrom('family_sessions')
+      .select(['id', 'created_at', 'last_active_at', 'expires_at', 'revoked_at'])
+      .where('email_normalized', '=', user.email_normalized)
+      .orderBy('created_at')
+      .execute(),
+    db
+      .selectFrom('family_activity_notices')
+      .select(['period_start', 'sent_at'])
+      .where('child_user_id', '=', userId)
+      .orderBy('period_start')
+      .execute(),
   ]);
 
   return {
@@ -288,6 +355,54 @@ export async function exportUser(
       status: row.status,
       requested_at: iso(row.requested_at),
       decided_at: iso(row.decided_at),
+    })),
+    parental_controls:
+      parentalControls === undefined
+        ? null
+        : {
+            online_play: parentalControls.online_play,
+            in_game_chat: parentalControls.in_game_chat,
+            user_generated_content: parentalControls.user_generated_content,
+            purchases: parentalControls.purchases,
+            daily_playtime_minutes: parentalControls.daily_playtime_minutes,
+            updated_at: iso(parentalControls.updated_at),
+          },
+    guardians: childGuardians.map((row) => ({
+      id: row.id,
+      email: row.email,
+      display_name: row.display_name,
+      status: row.status,
+      linked: row.user_id !== null,
+      created_at: iso(row.created_at),
+      accepted_at: iso(row.accepted_at),
+      revoked_at: iso(row.revoked_at),
+    })),
+    guardian_links: guardianLinks.map((row) => ({
+      id: row.id,
+      child_user_id: row.child_user_id,
+      display_name: row.display_name,
+      status: row.status,
+      created_at: iso(row.created_at),
+      accepted_at: iso(row.accepted_at),
+      revoked_at: iso(row.revoked_at),
+    })),
+    username_change_requests: usernameChanges.map((row) => ({
+      id: row.id,
+      username: row.username,
+      status: row.status,
+      requested_at: iso(row.requested_at),
+      decided_at: iso(row.decided_at),
+    })),
+    family_sessions: familySessions.map((row) => ({
+      id: row.id,
+      created_at: iso(row.created_at),
+      last_active_at: iso(row.last_active_at),
+      expires_at: iso(row.expires_at),
+      revoked_at: iso(row.revoked_at),
+    })),
+    family_activity_notices: activityNotices.map((row) => ({
+      period_start: iso(row.period_start),
+      sent_at: iso(row.sent_at),
     })),
   };
 }

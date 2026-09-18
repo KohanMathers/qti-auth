@@ -2,6 +2,9 @@ import type { QtiauthConfig } from '@qtiauth/config';
 import type { GeoIp } from '@qtiauth/geoip';
 import { type Logger, traceHttpRequest } from '@qtiauth/observability';
 import {
+  FAMILY_CLEAR_HEADER,
+  FAMILY_EXPIRES_HEADER,
+  FAMILY_TOKEN_HEADER,
   FLOW_BINDING_HEADER,
   IDENTITY_HEADER,
   isJsonRequest,
@@ -52,7 +55,10 @@ import type { LocalContext } from './service.ts';
 import {
   bindAttemptCookie,
   bindAttemptCookieName,
+  clearFamilyCookie,
   clearSessionCookie,
+  familyCookie,
+  familyCookieName,
   flowCookie,
   flowCookieName,
   isSessionToken,
@@ -161,6 +167,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
   const cookieName = sessionCookieName(config.cookies);
   const clearCookie = clearSessionCookie(config.cookies);
   const flowName = flowCookieName(config.cookies);
+  const familyName = familyCookieName(config.cookies);
   const localRoutes = new Map(
     options.local.routes.map((route) => [`${route.method} ${route.path}`, route]),
   );
@@ -188,6 +195,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
     let setCookie: string | undefined;
     let bindCookie: string | undefined;
     let flowBinding: string | undefined;
+    let familySetCookie: string | undefined;
     let upstream: string | undefined;
 
     let clientSignals: ReturnType<typeof sessionSignals> | undefined;
@@ -212,6 +220,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
       else if (staleCookie) headers.append('Set-Cookie', clearCookie);
       if (bindCookie !== undefined) headers.append('Set-Cookie', bindCookie);
       if (flowBinding !== undefined) headers.append('Set-Cookie', flowBinding);
+      if (familySetCookie !== undefined) headers.append('Set-Cookie', familySetCookie);
       headers.set(REQUEST_ID_HEADER, requestId);
 
       const length = headers.get('content-length');
@@ -271,8 +280,20 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
       const clear = headers.has(SESSION_CLEAR_HEADER);
       const revoked = headers.get(REVOKED_SESSIONS_HEADER);
       const flow = headers.get(FLOW_BINDING_HEADER);
+      const familyToken = headers.get(FAMILY_TOKEN_HEADER);
+      const familyExpires = headers.get(FAMILY_EXPIRES_HEADER);
+      const familyClear = headers.has(FAMILY_CLEAR_HEADER);
       for (const name of SESSION_RESPONSE_HEADERS) headers.delete(name);
-      if (token === null && !clear && revoked === null && flow === null) return response;
+      if (
+        token === null &&
+        !clear &&
+        revoked === null &&
+        flow === null &&
+        familyToken === null &&
+        !familyClear
+      ) {
+        return response;
+      }
       if (service !== RESOLVE_SESSION_SERVICE) {
         requestLog.warn('ignored session headers from a service other than identity', {
           upstream: service,
@@ -311,6 +332,19 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         requestLog.error('identity sent an invalid session token or expiry');
       } else if (clear) {
         setCookie = clearCookie;
+      }
+
+      const familyExpiresAt = familyExpires === null ? Number.NaN : Date.parse(familyExpires);
+      if (familyToken !== null && isSessionToken(familyToken) && !Number.isNaN(familyExpiresAt)) {
+        familySetCookie = familyCookie(
+          config.cookies,
+          familyToken,
+          Math.max(0, Math.floor((familyExpiresAt - now()) / 1000)),
+        );
+      } else if (familyToken !== null) {
+        requestLog.error('identity sent an invalid family token or expiry');
+      } else if (familyClear) {
+        familySetCookie = clearFamilyCookie(config.cookies);
       }
       return response;
     };
@@ -431,6 +465,10 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         entry.service === RESOLVE_SESSION_SERVICE
           ? readCookie(request.headers.get('cookie'), flowName)
           : null;
+      const family =
+        entry.service === RESOLVE_SESSION_SERVICE
+          ? readCookie(request.headers.get('cookie'), familyName)
+          : null;
       const signals = signalsOf();
       const result = await send({
         url: `${options.upstreamUrl(entry.service)}${found.prefix}${matched.path}${url.search}`,
@@ -444,6 +482,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
           }),
           [REQUEST_ID_HEADER]: requestId,
           ...(flow === null || !isSessionToken(flow) ? {} : { [FLOW_BINDING_HEADER]: flow }),
+          ...(family === null || !isSessionToken(family) ? {} : { [FAMILY_TOKEN_HEADER]: family }),
           'x-forwarded-for': ip,
           ...(host === null ? {} : { 'x-forwarded-host': host }),
           'x-forwarded-proto': matched.surface.origins[0]?.startsWith('http:') ? 'http' : 'https',

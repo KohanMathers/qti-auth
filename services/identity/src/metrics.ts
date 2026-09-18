@@ -36,6 +36,7 @@ export interface IdentityMetrics {
   deletion: (event: DeletionEvent, count?: number) => void;
   dataExport: (status: DataExportResult) => void;
   parentalConsent: (result: ParentalConsentResult, count?: number) => void;
+  familySession: () => void;
   ageBandChanged: (count: number) => void;
   auditRecorded: () => void;
   legalAcceptancePending: (count: number) => void;
@@ -142,6 +143,10 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     help: 'Parental consent outcomes, by result: requested, granted, declined or expired.',
     labelNames: ['result'],
   });
+  const familySessions = metrics.counter({
+    name: 'qtiauth_family_sessions_total',
+    help: 'Family dashboard sessions started from a magic link.',
+  });
   const ageBandChanges = metrics.counter({
     name: 'qtiauth_age_band_changes_total',
     help: 'Age-band changes from the daily recompute or a staff date-of-birth edit.',
@@ -220,6 +225,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     parentalConsent: (result, count = 1) => {
       if (count > 0) parentalConsents.inc({ result }, count);
+    },
+    familySession: () => {
+      familySessions.inc();
     },
     ageBandChanged: (count) => {
       if (count > 0) ageBandChanges.inc(count);

@@ -551,12 +551,12 @@ Spec: §4.7 (signup)
 ### P3.2 Family dashboard and controls — L
 Spec: §4.7
 
-- [ ] Guardian access by magic link, or linked to their own account. Up to `max_guardians`.
-- [ ] Controls: game restrictions (in the internal token), leaderboards/profile visibility, child
+- [x] Guardian access by magic link, or linked to their own account. Up to `max_guardians`.
+- [x] Controls: game restrictions (in the internal token), leaderboards/profile visibility, child
       sessions, username change approval, data rights on the child's behalf.
-- [ ] Guardian notifications.
-- [ ] Legal acceptance for child accounts routed to guardians (completes P2b.6).
-- [ ] Activity summary: the weekly email plus dashboard shell. It fills in as Games (playtime) and OIDC
+- [x] Guardian notifications.
+- [x] Legal acceptance for child accounts routed to guardians (completes P2b.6).
+- [x] Activity summary: the weekly email plus dashboard shell. It fills in as Games (playtime) and OIDC
       (connected apps) land.
 
 **Done when:** every control in the §4.7 table works end to end through the API.

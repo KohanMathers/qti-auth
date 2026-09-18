@@ -1,0 +1,11 @@
+Open the family dashboard for {{ brand.product_name }}
+
+Open this link to manage a child’s account. It works once and expires in {{ expires_in_minutes }} minutes.
+
+{{ link }}
+
+If you didn't ask for this, you can safely ignore this email.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

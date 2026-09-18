@@ -1100,6 +1100,12 @@ export const parental = z
       '14d',
       'How long an unapproved child account waits for a parent or guardian. After this the account is deleted.',
     ),
+    max_guardians: z
+      .int()
+      .min(1)
+      .max(8)
+      .default(2)
+      .describe('How many parents or guardians a child account can have.'),
   })
   .prefault({})
   .describe('Parental consent.');
@@ -1231,6 +1237,7 @@ export interface CronJob {
 const DEFAULT_CRON_JOBS: Record<string, CronJob> = {
   'retention.sweep': { schedule: '0 3 * * *', enabled: true },
   'parental.expire_pending': { schedule: '0 * * * *', enabled: true },
+  'parental.activity_summary': { schedule: '0 8 * * 1', enabled: true },
   'accounts.purge_deleted': { schedule: '30 3 * * *', enabled: true },
   'age.recompute_bands': { schedule: '5 0 * * *', enabled: true },
   'accounts.unlock_expired': { schedule: '* * * * *', enabled: true },

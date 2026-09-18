@@ -587,7 +587,11 @@ describe('usernames', () => {
 
 describe('parental', () => {
   it('needs consent under 13 and deletes unapproved accounts after 14 days', () => {
-    expect(parental.parse({})).toEqual({ consent_age: 13, pending_ttl: 1_209_600_000 });
+    expect(parental.parse({})).toEqual({
+      consent_age: 13,
+      pending_ttl: 1_209_600_000,
+      max_guardians: 2,
+    });
   });
 });
 
