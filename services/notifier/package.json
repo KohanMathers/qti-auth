@@ -2,7 +2,7 @@
   "name": "@qtiauth/notifier",
   "version": "0.0.0",
   "private": true,
-  "description": "Sends email from MJML and text templates through a JetStream queue, with a delivery log",
+  "description": "Sends email and outbound webhooks, with delivery logs",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -18,11 +18,13 @@
     "@qtiauth/config": "workspace:*",
     "@qtiauth/db": "workspace:*",
     "@qtiauth/email": "workspace:*",
+    "@qtiauth/events": "workspace:*",
     "@qtiauth/observability": "workspace:*",
     "@qtiauth/service-kit": "workspace:*",
     "kysely": "0.29.6",
     "mjml": "5.4.1",
     "nodemailer": "10.0.10",
+    "undici": "8.10.2",
     "zod": "4.6.5"
   },
   "devDependencies": {

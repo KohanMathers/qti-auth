@@ -73,6 +73,7 @@ describe('qtiauth templates check', () => {
         { name: 'legal_update', locales: ['en-GB'] },
         { name: 'data_export', locales: ['en-GB'] },
         { name: 'data_export_attachment', locales: ['en-GB'] },
+        { name: 'webhook_disabled', locales: ['en-GB'] },
       ],
     });
   });

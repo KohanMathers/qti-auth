@@ -162,6 +162,16 @@ email:
     send_timeout: 30s
   queue: { max_attempts: 20, retry_delay: 10s, max_retry_delay: 30m }
 
+webhooks:
+  allow_private_targets: false
+  disable_after_failures: 50
+  timeout: 10s
+  retry_window: 24h
+  retry_delay: 1m
+  max_retry_delay: 1h
+  secret_overlap: 24h
+  endpoints: {}
+
 security:
   step_up_window: 10m
   encryption_key: '${env:APP_ENCRYPTION_KEY}'

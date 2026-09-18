@@ -162,6 +162,17 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       filename: z.string().min(1),
     }),
   },
+  webhook_disabled: {
+    description: 'An outbound webhook endpoint was disabled after consecutive failures',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      description: z.string().min(1),
+      host: z.string().min(1),
+      failures: z.int().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

@@ -93,5 +93,9 @@ describe('defineEmailTemplates', () => {
       category: 'security',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.webhook_disabled).toMatchObject({
+      category: 'security',
+      priority: 'high',
+    });
   });
 });

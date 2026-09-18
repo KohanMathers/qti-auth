@@ -24,6 +24,7 @@ import {
   legal,
   storage,
   backups,
+  webhooks,
 } from './sections.ts';
 
 function messages(result: { error?: { issues: { path: PropertyKey[]; message: string }[] } }) {
@@ -290,6 +291,74 @@ describe('email', () => {
       retry_delay: 10_000,
       max_retry_delay: 1_800_000,
     });
+  });
+});
+
+describe('webhooks', () => {
+  it('retries for a day and refuses private targets by default', () => {
+    expect(webhooks.parse({})).toEqual({
+      allow_private_targets: false,
+      disable_after_failures: 50,
+      timeout: 10_000,
+      retry_window: 86_400_000,
+      retry_delay: 60_000,
+      max_retry_delay: 3_600_000,
+      secret_overlap: 86_400_000,
+      endpoints: {},
+    });
+  });
+
+  it('seeds endpoints keyed by slug and checks subscriptions and URLs', () => {
+    const parsed = webhooks.parse({
+      endpoints: {
+        discord: {
+          url: 'https://discord.com/api/webhooks/1/token',
+          description: 'Moderation',
+          events: ['safety.report.*', 'identity.user.banned'],
+          format: 'discord',
+        },
+      },
+    });
+    expect(parsed.endpoints['discord']).toMatchObject({
+      format: 'discord',
+      enabled: true,
+      secret: '',
+      events: ['safety.report.*', 'identity.user.banned'],
+    });
+    expect(
+      messages(
+        webhooks.safeParse({
+          max_retry_delay: '30s',
+          retry_delay: '1m',
+          endpoints: {
+            discord_alerts: {
+              url: 'ftp://example.com/hook',
+              description: '',
+              events: ['safety.csea.*', 'not an event'],
+            },
+          },
+        }),
+      ),
+    ).toEqual([
+      'endpoints.discord_alerts.url: Must be an http or https URL without userinfo',
+      'endpoints.discord_alerts.description: Too small: expected string to have >=1 characters',
+      'endpoints.discord_alerts.events.0: Must be an event like identity.user.banned, a prefix like safety.report.*, or *',
+      'endpoints.discord_alerts.events.1: Must be an event like identity.user.banned, a prefix like safety.report.*, or *',
+      'max_retry_delay: Must be at least retry_delay',
+    ]);
+    expect(
+      messages(
+        webhooks.safeParse({
+          endpoints: {
+            'Discord.Alerts': {
+              url: 'https://example.com/hook',
+              description: 'Alerts',
+              events: ['identity.user.banned'],
+            },
+          },
+        }),
+      ),
+    ).toEqual([expect.stringMatching(/^endpoints\.Discord\.Alerts: /)]);
   });
 });
 

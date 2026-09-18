@@ -1,6 +1,6 @@
 # Notifier
 
-The notifier sends email. Other services queue an email by naming a template and giving its variables, and the notifier renders it, sends it through the configured provider and records the result in its delivery log. It always runs, uses the `notify` schema and has no public routes.
+The notifier sends email and outbound webhooks. Other services queue an email by naming a template and giving its variables, and the notifier renders it, sends it through the configured provider and records the result in its delivery log. Domain events that match a webhook endpoint's subscriptions are posted to that URL, signed or formatted for Discord and Slack, retried for up to a day, and recorded in the same schema. It always runs, uses the `notify` schema and exposes admin routes for webhook endpoints.
 
 Queueing never waits for the provider, so a slow or broken mail server delays email but doesn't fail the request that asked for it.
 
@@ -25,6 +25,16 @@ email:
     send_timeout: 30s
   queue: { max_attempts: 20, retry_delay: 10s, max_retry_delay: 30m }
 
+webhooks:
+  allow_private_targets: false
+  disable_after_failures: 50
+  timeout: 10s
+  retry_window: 24h
+  retry_delay: 1m
+  max_retry_delay: 1h
+  secret_overlap: 24h
+  endpoints: {}
+
 retention:
   delivery_logs: 30d
 ```
@@ -35,7 +45,27 @@ retention:
 - `templates_dir` holds your template overrides, relative to the directory `qtiauth.yaml` is in (see [Templates](#templates)).
 - `smtp` is only used by the `smtp` provider. `security: starttls` upgrades the connection and refuses a server that can't, `tls` connects over TLS from the start (usually port `465`), and `none` never uses TLS, which is only for a relay on a trusted network. Set `user` and `SMTP_PASSWORD` if the server needs authentication. `send_timeout` is how long the server may go quiet during a send.
 - `queue` controls retries (see [Queue and retries](#queue-and-retries)).
-- `retention.delivery_logs` is how long delivery log entries are kept.
+- `retention.delivery_logs` is how long email and webhook delivery log entries are kept.
+
+## Webhooks
+
+Endpoints are managed at `/api/v1/admin/webhooks` (`webhooks.manage`, with step-up on writes) and can be seeded from `webhooks.endpoints`, keyed by slug. The notifier inserts missing slugs on startup the same way identity seeds roles: existing rows are left alone.
+
+Each endpoint has a URL, description, event subscriptions (names like `identity.user.banned`, prefixes like `safety.report.*`, or `*`), a format and a signing secret. The secret is shown once on create and on rotation. After rotation the previous secret stays valid for `secret_overlap`.
+
+| Format     | Body                                                                                        | Signing                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `standard` | Minimised JSON envelope (`event_id`, `type`, `occurred_at`, `subject`, `data`, `admin_url`) | [Standard Webhooks](https://www.standardwebhooks.com/) (`webhook-id`, `webhook-timestamp`, `webhook-signature`) |
+| `discord`  | Discord webhook embeds                                                                      | none                                                                                                            |
+| `slack`    | Slack incoming-webhook Block Kit                                                            | none                                                                                                            |
+
+Payloads carry IDs, types, priority, timestamps, `trust` on game events and an admin deep link. They never include content snapshots, descriptions or reporter identity. CSEA events are not a deliverable type, even for `*`.
+
+A failed POST is retried from `retry_delay`, doubling up to `max_retry_delay`, until `retry_window` (24 h by default). `webhooks.retry` ticks every minute, and the notifier also polls due deliveries about once a second. After `disable_after_failures` consecutive failures the endpoint is turned off and `branding.support_email` gets a `webhook_disabled` mail. Staff with `webhooks.manage` can send a test event, read the delivery log (request and response bodies truncated) and replay a delivery.
+
+URLs whose DNS resolves to a private, loopback or link-local address are rejected at save time and again at connect time, unless `allow_private_targets` is true. That second check is what stops DNS rebinding.
+
+**Initial events:** `safety.report.created`, `safety.report.actioned`, `safety.report.dismissed`, `safety.report.sla_breached`, `safety.appeal.created`, `identity.user.created`, `identity.user.banned`, `identity.user.deleted`, `support.ticket.created`, `support.ticket.status_changed`, `games.entitlement.granted`, `games.entitlement.revoked`, `oidc.client.created`.
 
 ## Providers
 
@@ -77,15 +107,19 @@ Templates insert values with `{{ name }}`. Each template has a fixed list of var
 
 Values are escaped in the HTML part, and line breaks are removed from values in the subject. There are no conditionals or loops.
 
-| Template              | Category   | Priority | Variables                    |
-| --------------------- | ---------- | -------- | ---------------------------- |
-| `magic_link`          | `auth`     | high     | `link`, `expires_in_minutes` |
-| `email_verification`  | `auth`     | high     | `link`, `expires_in_minutes` |
-| `password_reset`      | `security` | high     | `link`, `expires_in_minutes` |
-| `email_change`        | `auth`     | high     | `link`, `expires_in_minutes` |
-| `email_change_notice` | `security` | high     | `link`, `expires_in_days`    |
-| `new_device`          | `security` | high     | `browser`, `os`, `place`     |
-| `security_alert`      | `security` | high     | `summary`, `place`           |
+| Template                 | Category   | Priority | Variables                                   |
+| ------------------------ | ---------- | -------- | ------------------------------------------- |
+| `magic_link`             | `auth`     | high     | `link`, `expires_in_minutes`                |
+| `email_verification`     | `auth`     | high     | `link`, `expires_in_minutes`                |
+| `password_reset`         | `security` | high     | `link`, `expires_in_minutes`                |
+| `email_change`           | `auth`     | high     | `link`, `expires_in_minutes`                |
+| `email_change_notice`    | `security` | high     | `link`, `expires_in_days`                   |
+| `new_device`             | `security` | high     | `browser`, `os`, `place`                    |
+| `security_alert`         | `security` | high     | `summary`, `place`                          |
+| `legal_update`           | `security` | normal   | `document_id`, `version`, `summary`, `link` |
+| `data_export`            | `security` | high     | `link`, `expires_in_days`                   |
+| `data_export_attachment` | `security` | high     | `filename`                                  |
+| `webhook_disabled`       | `security` | high     | `description`, `host`, `failures`, `link`   |
 
 ### Checks
 
@@ -132,21 +166,29 @@ The `email_deliveries` table has one row per email, updated on each attempt:
 
 Email bodies and variables are never stored or logged. Log lines carry the delivery ID, template and attempt, with the user ID hashed.
 
-`retention.sweep` deletes entries older than `retention.delivery_logs`, except ones still being retried. A user's entries are included in their data export and deleted when the account is deleted.
+`retention.sweep` deletes entries older than `retention.delivery_logs`, except ones still being retried. A user's email entries and webhook deliveries whose subject is that user are included in their data export and deleted when the account is deleted.
+
+Webhook deliveries are in `webhook_deliveries`: endpoint, event type, trigger (`event`, `test` or `replay`), status, truncated request and response, and when it was queued and accepted.
 
 ## Metrics
 
-| Metric                                 | Labels                           |
-| -------------------------------------- | -------------------------------- |
-| `qtiauth_email_deliveries_total`       | `provider`, `template`, `status` |
-| `qtiauth_email_send_duration_seconds`  | `provider`, `outcome`            |
-| `qtiauth_email_delivery_delay_seconds` | `priority`                       |
+| Metric                                      | Labels                           |
+| ------------------------------------------- | -------------------------------- |
+| `qtiauth_email_deliveries_total`            | `provider`, `template`, `status` |
+| `qtiauth_email_send_duration_seconds`       | `provider`, `outcome`            |
+| `qtiauth_email_delivery_delay_seconds`      | `priority`                       |
+| `qtiauth_webhook_deliveries_total`          | `format`, `status`               |
+| `qtiauth_webhook_delivery_duration_seconds` | `format`, `outcome`              |
+| `qtiauth_webhook_delivery_delay_seconds`    | `format`                         |
+| `qtiauth_webhook_endpoints_disabled_total`  | `format`                         |
 
 `qtiauth_email_deliveries_total` counts attempts by the status they left the email in, so an email that fails twice and then goes through counts two `retrying` and one `sent`. A send's `outcome` is `ok` or `error`. The delivery delay runs from queueing to the provider accepting the email, including retries.
 
+Webhook metrics work the same way, labelled by endpoint `format` instead of provider. `qtiauth_webhook_endpoints_disabled_total` counts auto-disables after consecutive failures.
+
 The queues' consumer lag and redeliveries are in the bus metrics, under the consumers `notifier-work-email_high` and `notifier-work-email_normal` (see [bus.md](bus.md#metrics)).
 
-Alert on any `failed` status, and on a delivery delay that keeps growing for `high`.
+Alert on any `failed` status, on a delivery delay that keeps growing for `high`, and on webhook auto-disables.
 
 ---
 

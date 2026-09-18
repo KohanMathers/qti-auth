@@ -1910,6 +1910,116 @@
       },
       "additionalProperties": false
     },
+    "webhooks": {
+      "description": "Outbound webhooks.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "allow_private_targets": {
+          "default": false,
+          "description": "Allow URLs whose DNS resolves to private, loopback or link-local addresses. Off by default.",
+          "type": "boolean"
+        },
+        "disable_after_failures": {
+          "default": 50,
+          "description": "Disable an endpoint after this many consecutive failed deliveries, and email admins.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "timeout": {
+          "default": "10s",
+          "description": "Give up on a delivery when the target is quiet for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "retry_window": {
+          "default": "24h",
+          "description": "Keep retrying a failed delivery for this long, then mark it failed. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "retry_delay": {
+          "default": "1m",
+          "description": "Delay before the first retry. Doubles with each attempt. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "max_retry_delay": {
+          "default": "1h",
+          "description": "Longest delay between retries. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "secret_overlap": {
+          "default": "24h",
+          "description": "How long the previous signing secret stays valid after rotation. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "endpoints": {
+          "default": {},
+          "description": "Endpoints to seed on startup, keyed by slug. Existing slugs are left as they are; manage them with webhooks.manage after that.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,62}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Destination URL. Discord and Slack incoming-webhook URLs can be pasted as-is."
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "What this endpoint is for."
+              },
+              "events": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "An event name, a prefix ending in .*, or *."
+                },
+                "description": "Events to send. Prefixes end in .* . CSEA events are never delivered, even to *."
+              },
+              "format": {
+                "default": "standard",
+                "description": "standard is the JSON envelope signed with Standard Webhooks. discord and slack format a readable message.",
+                "type": "string",
+                "enum": [
+                  "standard",
+                  "discord",
+                  "slack"
+                ]
+              },
+              "secret": {
+                "default": "",
+                "description": "Standard Webhooks signing secret. Empty generates one on seed. Reference a secret.",
+                "type": "string"
+              },
+              "enabled": {
+                "default": true,
+                "description": "Whether this endpoint is sent events.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "url",
+              "description",
+              "events"
+            ],
+            "additionalProperties": false,
+            "description": "A seeded webhook endpoint."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "security": {
       "description": "Account security.",
       "default": {},
@@ -2654,7 +2764,7 @@
       "properties": {
         "delivery_logs": {
           "default": "30d",
-          "description": "Keep email delivery log entries for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "description": "Keep email and webhook delivery log entries for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },

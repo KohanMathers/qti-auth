@@ -513,16 +513,16 @@ Spec: §4.16
 
 Depends on Phase 1 only.
 
-### P2c.1 Webhook delivery — L
+### P2c.1 Webhook delivery — L ✅
 Spec: §5.2
 
-- [ ] Endpoint management (admin API and config seeding) with event subscriptions and wildcards.
-- [ ] Standard Webhooks signing, secret rotation with an overlap window.
-- [ ] `discord` and `slack` formats.
-- [ ] Retries with backoff for up to 24 h, auto-disable after N failures, and an admin email.
-- [ ] Delivery log, replay, test event.
-- [ ] SSRF protection (resolved-IP check at connect time, not only at save time).
-- [ ] Payload minimisation. `trust` field passed through for game events.
+- [x] Endpoint management (admin API and config seeding) with event subscriptions and wildcards.
+- [x] Standard Webhooks signing, secret rotation with an overlap window.
+- [x] `discord` and `slack` formats.
+- [x] Retries with backoff for up to 24 h, auto-disable after N failures, and an admin email.
+- [x] Delivery log, replay, test event.
+- [x] SSRF protection (resolved-IP check at connect time, not only at save time).
+- [x] Payload minimisation. `trust` field passed through for game events.
 
 **Done when:**
 - A pasted Discord channel webhook URL receives a readable message.

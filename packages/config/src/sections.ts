@@ -1569,9 +1569,141 @@ export const emailSection = z
   .prefault({})
   .describe('Outgoing email.');
 
+export const WEBHOOK_FORMATS = ['standard', 'discord', 'slack'] as const;
+export type WebhookFormat = (typeof WEBHOOK_FORMATS)[number];
+
+export const WEBHOOK_EVENTS = [
+  'safety.report.created',
+  'safety.report.actioned',
+  'safety.report.dismissed',
+  'safety.report.sla_breached',
+  'safety.appeal.created',
+  'identity.user.created',
+  'identity.user.banned',
+  'identity.user.deleted',
+  'support.ticket.created',
+  'support.ticket.status_changed',
+  'games.entitlement.granted',
+  'games.entitlement.revoked',
+  'oidc.client.created',
+] as const;
+export type WebhookEventName = (typeof WEBHOOK_EVENTS)[number];
+
+export const WEBHOOK_SUBSCRIPTION = /^(?:\*|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*(?:\.\*)?)$/;
+export const WEBHOOK_SUBSCRIPTION_MESSAGE =
+  'Must be an event like identity.user.banned, a prefix like safety.report.*, or *';
+export const WEBHOOK_DESCRIPTION_MAX = 200;
+export const WEBHOOK_SLUG = ROLE_SLUG;
+export const WEBHOOK_SLUG_MESSAGE = 'Must be a lowercase slug like discord_moderation';
+
+export function webhookEventMatches(pattern: string, event: string): boolean {
+  if (pattern === '*') return true;
+  if (pattern === event) return true;
+  return pattern.endsWith('.*') && event.startsWith(pattern.slice(0, -1));
+}
+
+export function isWebhookSubscription(pattern: string): boolean {
+  if (!WEBHOOK_SUBSCRIPTION.test(pattern)) return false;
+  return WEBHOOK_EVENTS.some((event) => webhookEventMatches(pattern, event));
+}
+
+function isWebhookUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'https:' || url.protocol === 'http:') &&
+      url.hostname !== '' &&
+      url.username === '' &&
+      url.password === ''
+    );
+  } catch {
+    return false;
+  }
+}
+
+const webhookEndpoint = z
+  .strictObject({
+    url: z
+      .string()
+      .refine(isWebhookUrl, 'Must be an http or https URL without userinfo')
+      .describe('Destination URL. Discord and Slack incoming-webhook URLs can be pasted as-is.'),
+    description: z
+      .string()
+      .trim()
+      .min(1)
+      .max(WEBHOOK_DESCRIPTION_MAX)
+      .describe('What this endpoint is for.'),
+    events: z
+      .array(
+        z
+          .string()
+          .refine(isWebhookSubscription, WEBHOOK_SUBSCRIPTION_MESSAGE)
+          .describe('An event name, a prefix ending in .*, or *.'),
+      )
+      .min(1)
+      .refine((events) => new Set(events).size === events.length, {
+        message: 'Event subscriptions must be unique',
+      })
+      .describe('Events to send. Prefixes end in .* . CSEA events are never delivered, even to *.'),
+    format: z
+      .enum(WEBHOOK_FORMATS)
+      .default('standard')
+      .describe(
+        'standard is the JSON envelope signed with Standard Webhooks. discord and slack format a readable message.',
+      ),
+    secret: z
+      .string()
+      .default('')
+      .describe(
+        'Standard Webhooks signing secret. Empty generates one on seed. Reference a secret.',
+      ),
+    enabled: z.boolean().default(true).describe('Whether this endpoint is sent events.'),
+  })
+  .describe('A seeded webhook endpoint.');
+
+export const webhooks = z
+  .strictObject({
+    allow_private_targets: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Allow URLs whose DNS resolves to private, loopback or link-local addresses. Off by default.',
+      ),
+    disable_after_failures: z
+      .int()
+      .min(1)
+      .default(50)
+      .describe(
+        'Disable an endpoint after this many consecutive failed deliveries, and email admins.',
+      ),
+    timeout: duration('10s', 'Give up on a delivery when the target is quiet for this long.'),
+    retry_window: duration(
+      '24h',
+      'Keep retrying a failed delivery for this long, then mark it failed.',
+    ),
+    retry_delay: duration('1m', 'Delay before the first retry. Doubles with each attempt.'),
+    max_retry_delay: duration('1h', 'Longest delay between retries.'),
+    secret_overlap: duration(
+      '24h',
+      'How long the previous signing secret stays valid after rotation.',
+    ),
+    endpoints: z
+      .record(z.string().regex(WEBHOOK_SLUG, WEBHOOK_SLUG_MESSAGE), webhookEndpoint)
+      .default({})
+      .describe(
+        'Endpoints to seed on startup, keyed by slug. Existing slugs are left as they are; manage them with webhooks.manage after that.',
+      ),
+  })
+  .refine((value) => value.max_retry_delay >= value.retry_delay, {
+    message: 'Must be at least retry_delay',
+    path: ['max_retry_delay'],
+  })
+  .prefault({})
+  .describe('Outbound webhooks.');
+
 export const retention = z
   .strictObject({
-    delivery_logs: duration('30d', 'Keep email delivery log entries for this long.'),
+    delivery_logs: duration('30d', 'Keep email and webhook delivery log entries for this long.'),
     sessions: duration(
       '30d',
       'Keep sessions and their bindings for this long after they expire or are revoked.',
@@ -1720,6 +1852,7 @@ export const sections = {
   features,
   captcha,
   email: emailSection,
+  webhooks,
   security,
   roles,
   accounts,

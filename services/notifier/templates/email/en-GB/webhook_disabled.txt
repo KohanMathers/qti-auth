@@ -1,0 +1,11 @@
+A webhook endpoint was disabled on {{ brand.product_name }}
+
+{{ description }} ({{ host }}) failed {{ failures }} times in a row and has been turned off.
+
+Fix the destination, then turn the endpoint back on:
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

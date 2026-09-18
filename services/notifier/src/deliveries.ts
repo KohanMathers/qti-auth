@@ -1,34 +1,11 @@
 import { deletedRows } from '@qtiauth/db';
-import type { EmailCategory, EmailPriority } from '@qtiauth/email';
-import { type Generated, type Kysely, sql } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 
-export const DELIVERY_STATUSES = ['retrying', 'sent', 'failed'] as const;
-export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
+import { type Database, type DeliveryStatus, type EmailDeliveriesTable } from './database.ts';
+
+export { type Database, DELIVERY_STATUSES, type DeliveryStatus } from './database.ts';
 
 export const MAX_ERROR_LENGTH = 1000;
-
-export interface EmailDeliveriesTable {
-  id: string;
-  template: string;
-  locale: string;
-  category: EmailCategory;
-  priority: EmailPriority;
-  recipient: string;
-  user_id: string | null;
-  status: DeliveryStatus;
-  attempts: number;
-  provider: string;
-  provider_message_id: string | null;
-  last_error: string | null;
-  queued_at: Date;
-  sent_at: Date | null;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
-}
-
-export interface Database {
-  email_deliveries: EmailDeliveriesTable;
-}
 
 export type DeliveryRecord = Omit<EmailDeliveriesTable, 'created_at' | 'updated_at'>;
 

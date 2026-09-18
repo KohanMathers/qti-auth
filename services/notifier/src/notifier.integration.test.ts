@@ -59,7 +59,9 @@ function config(email: Record<string, unknown>) {
     }),
     migrations: sections.migrations.parse({}),
     branding: sections.branding.parse({}),
+    surfaces: sections.surfaces.parse({}),
     email: sections.email.parse(email),
+    webhooks: sections.webhooks.parse({}),
     retention: sections.retention.parse({}),
   };
 }
@@ -166,6 +168,7 @@ describe('notifier with the console provider', () => {
           email_deliveries: [
             expect.objectContaining({ template: 'magic_link', recipient: RECIPIENT }),
           ],
+          webhook_deliveries: [],
         },
       },
     });

@@ -66,6 +66,10 @@ function setup(send: EmailProvider['send']) {
     sendAttempt: vi.fn(),
     delivery: vi.fn(),
     deliveryDelay: vi.fn(),
+    webhookAttempt: vi.fn(),
+    webhookDelivery: vi.fn(),
+    webhookDeliveryDelay: vi.fn(),
+    webhookDisabled: vi.fn(),
   } satisfies NotifierMetrics;
   const provider: EmailProvider = { name: 'smtp', send: vi.fn(send), close: vi.fn() };
   const sender = createEmailSender({
