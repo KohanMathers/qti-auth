@@ -36,7 +36,7 @@ export function lifecycleRoutes(router: Router<Context>): void {
     operation_id: 'requestDeletion',
     summary: 'Ask for this account to be deleted',
     description:
-      'Needs a recent aal2 session. The account moves to pending_deletion for accounts.deletion_grace and every session ends. Signing in during that time cancels the deletion.',
+      'Needs a recent aal2 session. The account moves to pending_deletion for accounts.deletion_grace and every session ends. Signing in during that time cancels the deletion and restores the prior account state.',
     tags: ['account'],
     auth: 'session',
     step_up: true,

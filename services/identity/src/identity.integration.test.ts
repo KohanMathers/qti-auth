@@ -1060,6 +1060,37 @@ describe('events, retention and data rights', () => {
     );
   });
 
+  it('keeps a ban or lock when a deletion is cancelled by signing in', async () => {
+    const lockedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    for (const [email, state] of [
+      ['banned-delete@example.com', 'banned'],
+      ['locked-delete@example.com', 'locked'],
+    ] as const) {
+      const user = await signUp(email);
+      await identity.context.db
+        .updateTable('users')
+        .set({ state, locked_until: state === 'locked' ? lockedUntil : null })
+        .where('id', '=', user.userId)
+        .execute();
+      expect(
+        (await post('/api/v1/me/deletion', undefined, signedInAs(user.userId, user.sessionId)))
+          .status,
+      ).toBe(204);
+      await signIn(email);
+      const account = await identity.context.db
+        .selectFrom('users')
+        .select(['state', 'locked_until', 'pre_deletion_state', 'deletion_requested_at'])
+        .where('id', '=', user.userId)
+        .executeTakeFirstOrThrow();
+      expect(account).toEqual({
+        state,
+        locked_until: state === 'locked' ? lockedUntil : null,
+        pre_deletion_state: null,
+        deletion_requested_at: null,
+      });
+    }
+  });
+
   it('emails a zipped export as an attachment when object storage is off', async () => {
     const user = await signUp('export-me@example.com');
     const started = await post(

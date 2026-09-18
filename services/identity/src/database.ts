@@ -58,6 +58,7 @@ export interface UsersTable {
   username_reset_required: Generated<boolean>;
   search_vector: ColumnType<string, never, never>;
   deletion_requested_at: Date | null;
+  pre_deletion_state: Generated<'active' | 'locked' | 'banned' | null>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

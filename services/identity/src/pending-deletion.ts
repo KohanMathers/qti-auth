@@ -1,6 +1,7 @@
 import { writeEvent } from '@qtiauth/bus';
 import type { EventActor } from '@qtiauth/events';
-import type { Kysely } from 'kysely';
+import type { AccountState } from '@qtiauth/service-kit';
+import { type Kysely, sql } from 'kysely';
 
 import { recordAccountAction } from './account-locks.ts';
 import type { Database } from './database.ts';
@@ -11,12 +12,18 @@ export async function cancelPendingDeletion(
   options: { userId: string; now: Date; actor?: EventActor },
 ): Promise<boolean> {
   const actor = options.actor ?? { type: 'user' as const, id: options.userId };
+  // Go back to the state the deletion was requested from, so a ban or lock survives.
   const updated = await trx
     .updateTable('users')
-    .set({ state: 'active', deletion_requested_at: null, updated_at: options.now })
+    .set({
+      state: sql<AccountState>`coalesce(pre_deletion_state, 'active')`,
+      pre_deletion_state: null,
+      deletion_requested_at: null,
+      updated_at: options.now,
+    })
     .where('id', '=', options.userId)
     .where('state', '=', 'pending_deletion')
-    .returning(['id'])
+    .returning(['state'])
     .executeTakeFirst();
   if (!updated) return false;
   await recordAccountAction(trx, {
@@ -25,7 +32,7 @@ export async function cancelPendingDeletion(
     action: 'cancel_deletion',
     reason: 'signed_in',
     fromState: 'pending_deletion',
-    toState: 'active',
+    toState: updated.state,
     expiresAt: null,
     now: options.now,
   });

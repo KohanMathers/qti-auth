@@ -31,21 +31,26 @@ export async function requestDeletion(
     if (!account) return { status: 'not_found' as const, revoked: [] };
     if (account.state === 'pending_deletion') return { status: 'ok' as const, revoked: [] };
     if (account.state === 'deleted') return { status: 'conflict' as const, revoked: [] };
+    const priorState = account.state;
+    if (priorState !== 'active' && priorState !== 'locked' && priorState !== 'banned') {
+      return { status: 'conflict' as const, revoked: [] };
+    }
     try {
-      assertTransition(account.state, 'pending_deletion');
+      assertTransition(priorState, 'pending_deletion');
     } catch {
       return { status: 'conflict' as const, revoked: [] };
     }
+    // Keep the prior state and locked_until so cancelling can't lift a ban or lock.
     const updated = await trx
       .updateTable('users')
       .set({
         state: 'pending_deletion',
         deletion_requested_at: options.now,
-        locked_until: null,
+        pre_deletion_state: priorState,
         updated_at: options.now,
       })
       .where('id', '=', options.userId)
-      .where('state', '=', account.state)
+      .where('state', '=', priorState)
       .executeTakeFirst();
     if (updated.numUpdatedRows === 0n) return { status: 'conflict' as const, revoked: [] };
     await recordAccountAction(trx, {
@@ -53,7 +58,7 @@ export async function requestDeletion(
       actor: options.actor,
       action: 'request_deletion',
       reason: 'user_requested',
-      fromState: account.state,
+      fromState: priorState,
       toState: 'pending_deletion',
       expiresAt: null,
       now: options.now,
