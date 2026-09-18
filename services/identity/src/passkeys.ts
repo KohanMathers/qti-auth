@@ -1,6 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
+import { deletedRows } from '@qtiauth/db';
 import {
   type AuthenticationResponseJSON,
   generateAuthenticationOptions,
@@ -312,7 +313,7 @@ export async function deletePasskey(
       .where('user_id', '=', options.userId)
       .where('type', '=', PASSKEY_METHOD)
       .executeTakeFirst();
-    if (Number(result.numDeletedRows) !== 1) return false;
+    if (deletedRows(result) !== 1) return false;
     await writeEvent<Database, AuditRecordedData>(
       trx,
       auditRecordedEvent(

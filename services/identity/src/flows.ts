@@ -4,7 +4,17 @@ import { FLOW_BINDING_HEADER } from '@qtiauth/service-kit';
 
 import { dateOfBirthColumn } from './accounts.ts';
 import { ageOn, under18 } from './age.ts';
+import type { DataExportStatus } from './database.ts';
 import { confirmEmailChange, revertEmailChange, startEmailChange } from './email-change.ts';
+import {
+  completeExport,
+  type CompleteExportOptions,
+  requestExport,
+  resumePendingExports,
+} from './exports.ts';
+import { applyFilter } from './filter.ts';
+import { acceptLegalDocuments } from './legal.ts';
+import { requestDeletion } from './lifecycle.ts';
 import {
   completeSignup,
   issueMagicLink,
@@ -34,6 +44,7 @@ import {
 import { PASSWORD_METHOD } from './passwords.ts';
 import { anySocialEnabled, findSocialProvider, metricMethod } from './providers.ts';
 import type { Context } from './service.ts';
+import type { CreatedSession } from './sessions.ts';
 import {
   accountOrigin,
   CHANGE_EMAIL_PAGE,
@@ -52,14 +63,15 @@ import {
   socialSettings,
   VERIFY_EMAIL_PAGE,
 } from './settings.ts';
-import type { CreatedSession } from './sessions.ts';
 import {
   beginSocial,
   completeSocial,
   type CompleteSocialResult,
   finishSocialSignup,
 } from './social.ts';
+import { objectStoreOf } from './storage-state.ts';
 import { completeSecondFactor } from './two-factor.ts';
+import { claimUsername, type ClaimUsernameResult } from './usernames.ts';
 
 export interface FlowInput {
   ctx: Context;
@@ -237,7 +249,7 @@ export async function signup(
 }
 
 export async function registerWithPassword(
-  { ctx, log }: FlowInput,
+  { ctx, request, log }: FlowInput,
   input: { email: string; password: string; dateOfBirth: string; locale: string },
 ): Promise<PasswordSignupResult> {
   const metrics = identityMetrics(ctx.metrics);
@@ -246,6 +258,7 @@ export async function registerWithPassword(
     password: input.password,
     dateOfBirth: input.dateOfBirth,
     locale: input.locale,
+    ip: clientIp(request) || null,
     settings: passwordSettings(ctx.config),
     now: new Date(),
   });
@@ -770,5 +783,105 @@ export async function finishEmailRevert(
   log.info(result.status === 'reverted' ? 'email change reverted' : 'email revert rejected', {
     reason: result.status,
   });
+  return result;
+}
+
+function exportOptions(ctx: Context): CompleteExportOptions {
+  return {
+    store: objectStoreOf(ctx),
+    settings: {
+      ttl: ctx.config.accounts.export_ttl,
+      emailMaxBytes: ctx.config.accounts.export_email_max_bytes,
+      defaultLocale: ctx.config.email.default_locale,
+    },
+    metrics: ctx.busMetrics,
+    onError: (error, code) => {
+      ctx.log.error('data export step failed', { error, code });
+    },
+    now: new Date(),
+  };
+}
+
+function recordExportStatus(ctx: Context, status: DataExportStatus): void {
+  if (status !== 'pending') identityMetrics(ctx.metrics).dataExport(status);
+}
+
+export async function startDataExport(
+  { ctx, log }: FlowInput,
+  input: { userId: string },
+): Promise<Awaited<ReturnType<typeof requestExport>>> {
+  const result = await requestExport(ctx.db, { userId: input.userId, now: new Date() });
+  if (result.status === 'not_found') return result;
+  // Runs after the response. If this instance stops first, accounts.resume_exports picks it up.
+  void completeExport(ctx.db, ctx.bus, result.id, exportOptions(ctx)).then(
+    (status) => {
+      recordExportStatus(ctx, status);
+    },
+    (error: unknown) => {
+      ctx.log.error('data export failed', { error, export_id: result.id });
+    },
+  );
+  log.info('data export requested', { user_id: input.userId, export_id: result.id });
+  return result;
+}
+
+export async function resumeDataExports(ctx: Context): Promise<number> {
+  return resumePendingExports(ctx.db, ctx.bus, {
+    ...exportOptions(ctx),
+    onCompleted: (status) => {
+      recordExportStatus(ctx, status);
+    },
+  });
+}
+
+export async function scheduleDeletion(
+  { ctx, log }: FlowInput,
+  input: { userId: string },
+): Promise<Awaited<ReturnType<typeof requestDeletion>>> {
+  const result = await requestDeletion(ctx.db, {
+    userId: input.userId,
+    actor: { type: 'user', id: input.userId },
+    now: new Date(),
+  });
+  if (result.status !== 'ok') return result;
+  ctx.outbox.wake();
+  identityMetrics(ctx.metrics).deletion('requested');
+  identityMetrics(ctx.metrics).sessionsRevoked('revoked', result.revoked.length);
+  log.info('account deletion requested', { user_id: input.userId });
+  return result;
+}
+
+export async function acceptLegal(
+  { ctx, request, log }: FlowInput,
+  input: { userId: string; documents: readonly { id: string; version: string }[] },
+): Promise<Awaited<ReturnType<typeof acceptLegalDocuments>>> {
+  const result = await acceptLegalDocuments(ctx.db, {
+    userId: input.userId,
+    documents: input.documents,
+    ip: clientIp(request) || null,
+    now: new Date(),
+  });
+  if (result.status !== 'ok') return result;
+  ctx.outbox.wake();
+  log.info('legal documents accepted', { user_id: input.userId, accepted: result.accepted });
+  return result;
+}
+
+export async function chooseUsername(
+  { ctx, log }: FlowInput,
+  input: { userId: string; username: string },
+): Promise<ClaimUsernameResult> {
+  const result = await claimUsername(ctx.db, {
+    userId: input.userId,
+    username: input.username,
+    settings: ctx.config.usernames,
+    isBlocked: async (username) =>
+      (await applyFilter(ctx, username, 'username')).decision === 'block',
+    now: new Date(),
+  });
+  if (result.status !== 'saved') return result;
+  identityMetrics(ctx.metrics).username(result.action);
+  ctx.outbox.wake();
+  log.info('username set', { user_id: input.userId, action: result.action });
   return result;
 }

@@ -2,10 +2,10 @@ import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { SIGNED_IN_STATES } from './accounts.ts';
-import { completeExport, getExport, requestExport } from './exports.ts';
+import { DATA_EXPORT_STATUSES } from './database.ts';
+import { getExport } from './exports.ts';
+import { scheduleDeletion, startDataExport } from './flows.ts';
 import { NO_STORE, signedOutHeaders } from './headers.ts';
-import { requestDeletion } from './lifecycle.ts';
-import { identityMetrics } from './metrics.ts';
 import type { Context } from './service.ts';
 import { signedIn } from './session-routes.ts';
 import { objectStoreOf } from './storage-state.ts';
@@ -14,20 +14,12 @@ const exportIdParam = z.object({ export_id: z.uuid() });
 
 const exportSchema = z.object({
   id: z.uuid(),
-  status: z.enum(['pending', 'ready', 'failed', 'unavailable']),
+  status: z.enum(DATA_EXPORT_STATUSES),
   download_url: z.string().nullable(),
   bytes: z.int().nullable(),
   expires_at: z.iso.datetime().nullable(),
   error: z.string().nullable(),
 });
-
-function exportSettings(ctx: Context) {
-  return {
-    ttl: ctx.config.accounts.export_ttl,
-    emailMaxBytes: ctx.config.accounts.export_email_max_bytes,
-    defaultLocale: ctx.config.email.default_locale,
-  };
-}
 
 export function lifecycleRoutes(router: Router<Context>): void {
   router.route({
@@ -44,19 +36,11 @@ export function lifecycleRoutes(router: Router<Context>): void {
     rate_limit: 'global',
     responses: { 204: { description: 'Deletion is scheduled and this session has ended' } },
     errors: ['ACCOUNT_NOT_FOUND', 'ACCOUNT_STATE_CONFLICT', 'STEP_UP_REQUIRED'],
-    handler: async ({ ctx, identity, log }) => {
+    handler: async ({ ctx, identity, request, log }) => {
       const { userId } = signedIn(identity);
-      const result = await requestDeletion(ctx.db, {
-        userId,
-        actor: { type: 'user', id: userId },
-        now: new Date(),
-      });
+      const result = await scheduleDeletion({ ctx, request, log }, { userId });
       if (result.status === 'not_found') throw new ProblemError('ACCOUNT_NOT_FOUND');
       if (result.status === 'conflict') throw new ProblemError('ACCOUNT_STATE_CONFLICT');
-      ctx.outbox.wake();
-      identityMetrics(ctx.metrics).deletion('requested');
-      identityMetrics(ctx.metrics).sessionsRevoked('revoked', result.revoked.length);
-      log.info('account deletion requested', { user_id: userId });
       return { status: 204, headers: signedOutHeaders(result.revoked) };
     },
   });
@@ -80,27 +64,10 @@ export function lifecycleRoutes(router: Router<Context>): void {
       },
     },
     errors: ['ACCOUNT_NOT_FOUND', 'STEP_UP_REQUIRED'],
-    handler: async ({ ctx, identity, log }) => {
+    handler: async ({ ctx, identity, request, log }) => {
       const { userId } = signedIn(identity);
-      const result = await requestExport(ctx.db, { userId, now: new Date() });
+      const result = await startDataExport({ ctx, request, log }, { userId });
       if (result.status === 'not_found') throw new ProblemError('ACCOUNT_NOT_FOUND');
-      const store = objectStoreOf(ctx) ?? null;
-      void completeExport(ctx.db, ctx.bus, result.id, {
-        store,
-        settings: exportSettings(ctx),
-        metrics: ctx.busMetrics,
-        now: new Date(),
-      }).then(
-        (status) => {
-          if (status === 'ready' || status === 'failed' || status === 'unavailable') {
-            identityMetrics(ctx.metrics).dataExport(status);
-          }
-        },
-        (error: unknown) => {
-          ctx.log.error('data export failed', { error, export_id: result.id });
-        },
-      );
-      log.info('data export requested', { user_id: userId, export_id: result.id });
       return {
         status: 202,
         headers: NO_STORE,
@@ -126,7 +93,7 @@ export function lifecycleRoutes(router: Router<Context>): void {
       const exported = await getExport(ctx.db, {
         userId,
         exportId: params.export_id,
-        store: objectStoreOf(ctx) ?? null,
+        store: objectStoreOf(ctx),
         now: new Date(),
       });
       if (!exported) throw new ProblemError('EXPORT_NOT_FOUND');

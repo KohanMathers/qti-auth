@@ -49,6 +49,7 @@ export function createMemoryStore(clock: () => Date = () => new Date()): ObjectS
         `memory://${key}?content_type=${encodeURIComponent(contentType)}&expires=${String(expiresSeconds)}`,
       );
     },
+    checkBucket: () => Promise.resolve(),
     ensureBucket: () => Promise.resolve(),
     close: () => Promise.resolve(),
   };

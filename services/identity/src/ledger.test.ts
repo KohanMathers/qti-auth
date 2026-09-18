@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -51,6 +51,21 @@ describe('deletion ledger', () => {
     expect(pruned).toBe(1);
     expect(await store.get('deletion-ledger/old.json')).toBeUndefined();
     expect(await store.get('deletion-ledger/new.json')).toBeDefined();
+  });
+
+  it('prunes directory entries by when they were written', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'qtiauth-ledger-'));
+    const ledgerDir = join(dir, 'deletion-ledger');
+    await mkdir(ledgerDir);
+    const old = join(ledgerDir, 'old.json');
+    await writeFile(old, '{"user_id":"u1","deleted_at":"2020-01-01T00:00:00.000Z"}\n');
+    await utimes(old, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'));
+    await writeFile(join(ledgerDir, 'new.json'), '{"user_id":"u2"}\n');
+    const pruned = await pruneLedgerDestination(
+      { kind: 'directory', directory: dir },
+      new Date('2026-08-01T00:00:00Z'),
+    );
+    expect(pruned).toBe(1);
   });
 
   it('refuses a storage destination without a store', () => {

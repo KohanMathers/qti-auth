@@ -9,6 +9,7 @@ import { type AuditRecordedData, auditRecordedEvent } from './events.ts';
 import { canRemovePasskey, lastSignInMethodError, totpEnrolled } from './factors.ts';
 import { finishTwoFactor, passkeysEnabled, totpEnabled, trackSession } from './flows.ts';
 import { NO_STORE, revokedHeaders, sessionHeaders } from './headers.ts';
+import { iso } from './iso.ts';
 import { identityMetrics } from './metrics.ts';
 import { deletePasskey, listPasskeys, PASSKEY_NAME_MAX, renamePasskey } from './passkeys.ts';
 import { replaceRecoveryCodes, unusedRecoveryCount } from './recovery.ts';
@@ -116,7 +117,7 @@ function listedPasskey(passkey: Awaited<ReturnType<typeof listPasskeys>>[number]
     id: passkey.id,
     name: passkey.name,
     created_at: passkey.createdAt.toISOString(),
-    last_used_at: passkey.lastUsedAt?.toISOString() ?? null,
+    last_used_at: iso(passkey.lastUsedAt),
   };
 }
 

@@ -1,5 +1,5 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
 export interface MockOidcUser {
   sub: string;

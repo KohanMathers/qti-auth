@@ -1,6 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { type Bus, type BusMetrics, rpcRequest } from '@qtiauth/bus';
+import { deletedRows } from '@qtiauth/db';
 import { queueEmail } from '@qtiauth/email';
 import {
   EXPORT_USER_METHOD,
@@ -11,11 +12,17 @@ import {
 import type { Kysely } from 'kysely';
 
 import { findAccount } from './accounts.ts';
-import type { Database, DataExportStatus } from './database.ts';
 import { exportUser } from './data-rights.ts';
+import type { Database, DataExportStatus } from './database.ts';
+import { iso } from './iso.ts';
 import { zipFiles } from './zip.ts';
 
 export const EXPORT_SERVICES = ['notifier', 'oidc', 'games', 'safety', 'support'] as const;
+export const EXPORT_RESUME_JOB = 'accounts.resume_exports';
+// An export not finished within this long is assumed abandoned (for example by a restart).
+export const EXPORT_CLAIM_LEASE = 15 * 60 * 1000;
+
+export type ExportFailure = 'account_gone' | 'collect_failed' | 'store_failed' | 'email_failed';
 
 export interface ExportSettings {
   ttl: number;
@@ -112,62 +119,81 @@ async function markExport(
     .execute();
 }
 
+async function claimExport(
+  db: Kysely<Database>,
+  exportId: string,
+  now: Date,
+): Promise<{ user_id: string } | undefined> {
+  const staleBefore = new Date(now.getTime() - EXPORT_CLAIM_LEASE);
+  return db
+    .updateTable('data_exports')
+    .set({ started_at: now })
+    .where('id', '=', exportId)
+    .where('status', '=', 'pending')
+    .where((eb) => eb.or([eb('started_at', 'is', null), eb('started_at', '<=', staleBefore)]))
+    .returning('user_id')
+    .executeTakeFirst();
+}
+
+export interface CompleteExportOptions {
+  store: ObjectStore | null;
+  settings: ExportSettings;
+  metrics?: BusMetrics;
+  onError?: (error: unknown, code: ExportFailure) => void;
+  now: Date;
+}
+
 export async function completeExport(
   db: Kysely<Database>,
   bus: Bus,
   exportId: string,
-  options: {
-    store: ObjectStore | null;
-    settings: ExportSettings;
-    metrics?: BusMetrics;
-    now: Date;
-  },
+  options: CompleteExportOptions,
 ): Promise<DataExportStatus> {
-  const row = await db
-    .selectFrom('data_exports')
-    .select(['id', 'user_id', 'status'])
-    .where('id', '=', exportId)
-    .executeTakeFirst();
-  if (row === undefined) return 'failed';
-  if (row.status !== 'pending') return row.status;
-  const account = await findAccount(db, row.user_id);
-  if (!account || account.state === 'deleted') {
-    await markExport(db, exportId, {
-      status: 'failed',
-      error: 'account_gone',
-      completed_at: options.now,
-    });
-    return 'failed';
+  const claimed = await claimExport(db, exportId, options.now);
+  if (claimed === undefined) {
+    const row = await db
+      .selectFrom('data_exports')
+      .select('status')
+      .where('id', '=', exportId)
+      .executeTakeFirst();
+    return row?.status ?? 'failed';
   }
+  const userId = claimed.user_id;
+  const fail = async (code: ExportFailure, error?: unknown): Promise<'failed'> => {
+    if (error !== undefined) options.onError?.(error, code);
+    await markExport(db, exportId, { status: 'failed', error: code, completed_at: options.now });
+    return 'failed';
+  };
+
+  const account = await findAccount(db, userId);
+  if (!account || account.state === 'deleted') return fail('account_gone');
 
   let archive: Uint8Array;
   try {
-    archive = await collectExportArchive(db, bus, row.user_id, {
+    archive = await collectExportArchive(db, bus, userId, {
       ...(options.metrics === undefined ? {} : { metrics: options.metrics }),
     });
-  } catch {
-    await markExport(db, exportId, {
-      status: 'failed',
-      error: 'collect_failed',
-      completed_at: options.now,
-    });
-    return 'failed';
+  } catch (error) {
+    return fail('collect_failed', error);
   }
 
   const locale = account.locale ?? options.settings.defaultLocale;
-  const filename = `export-${row.user_id}.zip`;
+  const filename = `export-${userId}.zip`;
 
   if (options.store !== null) {
-    const key = exportObjectKey(row.user_id, exportId);
+    const store = options.store;
+    const key = exportObjectKey(userId, exportId);
     const expiresAt = new Date(options.now.getTime() + options.settings.ttl);
+    let stored = false;
     try {
-      await options.store.put(key, archive, 'application/zip');
-      const link = await options.store.presignGet(key, presignSeconds(options.settings.ttl));
+      await store.put(key, archive, 'application/zip');
+      stored = true;
+      const link = await store.presignGet(key, presignSeconds(options.settings.ttl));
       await queueEmail(bus, {
         template: 'data_export',
         to: { address: account.email },
         locale,
-        userId: row.user_id,
+        userId,
         variables: { link, expires_in_days: expiresInDays(options.settings.ttl) },
       });
       await markExport(db, exportId, {
@@ -178,13 +204,14 @@ export async function completeExport(
         completed_at: options.now,
       });
       return 'ready';
-    } catch {
-      await markExport(db, exportId, {
-        status: 'failed',
-        error: 'store_failed',
-        completed_at: options.now,
-      });
-      return 'failed';
+    } catch (error) {
+      // The row never gets an object_key on failure, so sweepExports cannot find the zip later.
+      if (stored) {
+        await store.delete(key).catch((cleanupError: unknown) => {
+          options.onError?.(cleanupError, 'store_failed');
+        });
+      }
+      return fail('store_failed', error);
     }
   }
 
@@ -203,7 +230,7 @@ export async function completeExport(
       template: 'data_export_attachment',
       to: { address: account.email },
       locale,
-      userId: row.user_id,
+      userId,
       variables: { filename },
       attachments: [{ filename, contentType: 'application/zip', body: archive }],
     });
@@ -213,14 +240,31 @@ export async function completeExport(
       completed_at: options.now,
     });
     return 'ready';
-  } catch {
-    await markExport(db, exportId, {
-      status: 'failed',
-      error: 'email_failed',
-      completed_at: options.now,
-    });
-    return 'failed';
+  } catch (error) {
+    return fail('email_failed', error);
   }
+}
+
+export async function resumePendingExports(
+  db: Kysely<Database>,
+  bus: Bus,
+  options: CompleteExportOptions & { onCompleted?: (status: DataExportStatus) => void },
+): Promise<number> {
+  const staleBefore = new Date(options.now.getTime() - EXPORT_CLAIM_LEASE);
+  const rows = await db
+    .selectFrom('data_exports')
+    .select('id')
+    .where('status', '=', 'pending')
+    .where((eb) => eb.or([eb('started_at', 'is', null), eb('started_at', '<=', staleBefore)]))
+    .orderBy('created_at')
+    .execute();
+  let resumed = 0;
+  for (const row of rows) {
+    const status = await completeExport(db, bus, row.id, options);
+    options.onCompleted?.(status);
+    if (status !== 'pending') resumed += 1;
+  }
+  return resumed;
 }
 
 export async function getExport(
@@ -252,7 +296,7 @@ export async function getExport(
     status: row.status,
     download_url: downloadUrl,
     bytes: row.bytes,
-    expires_at: row.download_expires_at?.toISOString() ?? null,
+    expires_at: iso(row.download_expires_at),
     error: row.error,
   };
 }
@@ -272,7 +316,7 @@ export async function sweepExports(
           eb('download_expires_at', 'is not', null),
           eb('download_expires_at', '<=', options.now),
         ]),
-        eb.and([eb('status', '!=', 'pending'), eb('created_at', '<=', cutoff)]),
+        eb('created_at', '<=', cutoff),
       ]),
     )
     .execute();
@@ -290,5 +334,5 @@ export async function sweepExports(
       rows.map((row) => row.id),
     )
     .executeTakeFirst();
-  return Number(result.numDeletedRows);
+  return deletedRows(result);
 }

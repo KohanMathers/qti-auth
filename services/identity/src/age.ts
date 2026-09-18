@@ -81,26 +81,25 @@ function nthBirthdayDate(today: Date, age: number): string {
   return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
 }
 
+// The ages, in whole years, at which a band starts and the next one begins.
+function bandAges(band: AgeBand, bands: AgeBands): { from: number; until: number } {
+  switch (band) {
+    case 'under_13':
+      return { from: 0, until: bands['13_to_15'] };
+    case '13_to_15':
+      return { from: bands['13_to_15'], until: bands['16_to_17'] };
+    case '16_to_17':
+      return { from: bands['16_to_17'], until: bands.adult };
+    case 'adult':
+      return { from: bands.adult, until: MAX_AGE + 1 };
+  }
+}
+
 export function dateOfBirthBounds(
   band: AgeBand,
   today: Date,
   bands: AgeBands,
 ): { after: string; through: string } {
-  const lower =
-    band === 'adult'
-      ? bands.adult
-      : band === '16_to_17'
-        ? bands['16_to_17']
-        : band === '13_to_15'
-          ? bands['13_to_15']
-          : 0;
-  const upper =
-    band === 'under_13'
-      ? bands['13_to_15']
-      : band === '13_to_15'
-        ? bands['16_to_17']
-        : band === '16_to_17'
-          ? bands.adult
-          : MAX_AGE + 1;
-  return { after: nthBirthdayDate(today, upper), through: nthBirthdayDate(today, lower) };
+  const { from, until } = bandAges(band, bands);
+  return { after: nthBirthdayDate(today, until), through: nthBirthdayDate(today, from) };
 }

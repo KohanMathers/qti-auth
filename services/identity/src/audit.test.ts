@@ -56,4 +56,12 @@ describe('verifyAuditRows', () => {
     const third = record(3, second.row_hash);
     expect(verifyAuditRows([second, third])).toEqual({ ok: true, count: 2 });
   });
+
+  it('checks the link to the previous batch', () => {
+    const first = record(1, AUDIT_GENESIS_HASH);
+    const second = record(2, first.row_hash);
+    expect(verifyAuditRows([second], first)).toEqual({ ok: true, count: 1 });
+    const unlinked = record(2, AUDIT_GENESIS_HASH);
+    expect(verifyAuditRows([unlinked], first)).toEqual({ ok: false, seq: 2, event_id: 'event-2' });
+  });
 });

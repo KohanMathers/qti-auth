@@ -29,6 +29,8 @@ describe('identity service', () => {
       '0018_account_lifecycle',
       '0019_notification_preferences',
       '0020_pre_deletion_state',
+      '0021_export_claims',
+      '0022_legal_notices',
     ]);
   });
 

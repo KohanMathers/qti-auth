@@ -3,10 +3,11 @@ import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { SIGNED_IN_STATES } from './accounts.ts';
+import { chooseUsername } from './flows.ts';
 import { NO_STORE } from './headers.ts';
 import type { Context } from './service.ts';
 import { signedIn } from './session-routes.ts';
-import { claimUsername } from './usernames.ts';
+import type { ClaimUsernameResult } from './usernames.ts';
 
 const usernameBody = z.object({
   username: z.string().min(1).max(USERNAME_MAX_LENGTH).describe('The username to claim.'),
@@ -17,15 +18,7 @@ const usernameSchema = z.object({
   updated_at: z.iso.datetime(),
 });
 
-export async function setUsername(
-  ctx: Context,
-  options: { userId: string; username: string },
-): Promise<{ username: string; updated_at: string }> {
-  const result = await claimUsername(ctx, {
-    userId: options.userId,
-    username: options.username,
-    now: new Date(),
-  });
+function usernameError(result: Exclude<ClaimUsernameResult, { status: 'saved' }>): never {
   switch (result.status) {
     case 'not_found':
       throw new ProblemError('ACCOUNT_NOT_FOUND');
@@ -41,11 +34,6 @@ export async function setUsername(
       });
     case 'limit':
       throw new ProblemError('USERNAME_CHANGE_LIMIT');
-    case 'claimed':
-    case 'changed':
-    case 'reclaimed':
-      ctx.outbox.wake();
-      return { username: result.username, updated_at: result.updatedAt.toISOString() };
   }
 }
 
@@ -73,11 +61,18 @@ export function usernameRoutes(router: Router<Context>): void {
       'USERNAME_COOLDOWN',
       'USERNAME_CHANGE_LIMIT',
     ],
-    handler: async ({ ctx, identity, body, log }) => {
+    handler: async ({ ctx, identity, body, request, log }) => {
       const { userId } = signedIn(identity);
-      const username = await setUsername(ctx, { userId, username: body.username });
-      log.info('username set', { user_id: userId });
-      return { status: 200, headers: NO_STORE, body: username };
+      const result = await chooseUsername(
+        { ctx, request, log },
+        { userId, username: body.username },
+      );
+      if (result.status !== 'saved') usernameError(result);
+      return {
+        status: 200,
+        headers: NO_STORE,
+        body: { username: result.username, updated_at: result.updatedAt.toISOString() },
+      };
     },
   });
 }

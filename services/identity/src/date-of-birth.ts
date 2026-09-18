@@ -1,6 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
+import type { EventActor } from '@qtiauth/events';
 import type { AgeBand } from '@qtiauth/service-kit';
 import type { Kysely } from 'kysely';
 
@@ -84,7 +85,7 @@ export async function editDateOfBirth(
       })
       .execute();
 
-    const actor = { type: 'user' as const, id: options.actorId };
+    const actor: EventActor = { type: 'user', id: options.actorId };
     await writeEvent<Database, AuditRecordedData>(
       trx,
       auditRecordedEvent(actor, {

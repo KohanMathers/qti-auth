@@ -12,6 +12,7 @@ import * as z from 'zod';
 
 import {
   ACTION_REASON_MAX,
+  type AdminUserError,
   banUser,
   forceReauth,
   forceUsernameReset,
@@ -149,7 +150,7 @@ const userDetailSchema = z.object({
   tickets: z.unknown().optional(),
 });
 
-function actionError(status: 'not_found' | 'self' | 'conflict' | 'lock_expiry'): never {
+function actionError(status: AdminUserError): never {
   switch (status) {
     case 'not_found':
       throw new ProblemError('ACCOUNT_NOT_FOUND');

@@ -1,10 +1,6 @@
-import type { QtiauthConfig } from '@qtiauth/config';
-
-import { exportObjectPrefix, HELD_OBJECT_PREFIX, userObjectPrefix } from './keys.ts';
-import { createS3Store } from './s3.ts';
-import { type ObjectStore, StorageError } from './store.ts';
-
-export type StorageConfig = QtiauthConfig['storage'];
+import { exportObjectPrefix, heldObjectPrefix, userObjectPrefix } from './keys.ts';
+import { createS3Store, type StorageConfig } from './s3.ts';
+import type { ObjectStore } from './store.ts';
 
 export function openObjectStore(config: StorageConfig): ObjectStore {
   return createS3Store(config);
@@ -20,10 +16,8 @@ export async function eraseUserObjects(
   options: { preserveHeld?: boolean } = {},
 ): Promise<number> {
   const prefixes = [userObjectPrefix(userId), exportObjectPrefix(userId)];
-  if (options.preserveHeld !== true) prefixes.push(`${HELD_OBJECT_PREFIX}${userId}/`);
+  if (options.preserveHeld !== true) prefixes.push(heldObjectPrefix(userId));
   let deleted = 0;
   for (const prefix of prefixes) deleted += await store.deletePrefix(prefix);
   return deleted;
 }
-
-export { StorageError };

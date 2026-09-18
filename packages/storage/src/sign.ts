@@ -1,7 +1,7 @@
 import { createHash, createHmac } from 'node:crypto';
 
-const UNSIGNED = 'UNSIGNED-PAYLOAD';
-const ALGORITHM = 'AWS4-HMAC-SHA256';
+export const UNSIGNED = 'UNSIGNED-PAYLOAD';
+export const ALGORITHM = 'AWS4-HMAC-SHA256';
 
 export function sha256Hex(data: Uint8Array | string): string {
   return createHash('sha256').update(data).digest('hex');
@@ -104,5 +104,3 @@ export function signature(options: {
     'hex',
   );
 }
-
-export { UNSIGNED, ALGORITHM };

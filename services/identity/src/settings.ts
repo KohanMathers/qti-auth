@@ -7,8 +7,8 @@ import {
   SESSION_TIMEZONE_HEADER,
 } from '@qtiauth/service-kit';
 
-import type { EmailChangeSettings } from './email-change.ts';
 import { emailNormalizer } from './email.ts';
+import type { EmailChangeSettings } from './email-change.ts';
 import { parseEncryptionKey } from './encrypt.ts';
 import { geoIpOf } from './geoip-state.ts';
 import type { MagicLinkSettings } from './magic-links.ts';

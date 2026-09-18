@@ -1,12 +1,20 @@
 import { writeEvent } from '@qtiauth/bus';
+import { updatedRows } from '@qtiauth/db';
 import { queueEmail } from '@qtiauth/email';
+import type { EventActor } from '@qtiauth/events';
 import { sql, type Kysely } from 'kysely';
 
 import type { Database, LegalAcceptanceMethod } from './database.ts';
-import { type LegalVersionPublishedData, legalVersionPublishedEvent } from './events.ts';
+import {
+  type AuditRecordedData,
+  auditRecordedEvent,
+  type LegalVersionPublishedData,
+  legalVersionPublishedEvent,
+  type UserUpdatedData,
+  userUpdatedEvent,
+} from './events.ts';
 import {
   interpolateLegal,
-  type LegalBrand,
   LegalDocumentsError,
   loadLegalDocuments,
   type ParsedLegalDocument,
@@ -33,11 +41,15 @@ export interface LegalAcceptance {
   method: LegalAcceptanceMethod;
 }
 
+const VERSION_COLUMNS = ['id', 'version', 'effective_at', 'material', 'summary', 'body'] as const;
+
+// The one definition of "current": the effective version with the latest effective_at, then the
+// highest version string. Every query below builds on this.
 function currentVersionsQuery(db: Kysely<Database>, now: Date) {
   return db
     .selectFrom('legal_versions')
     .distinctOn('id')
-    .select(['id', 'version', 'effective_at', 'material', 'summary', 'body'])
+    .select(VERSION_COLUMNS)
     .where('effective_at', '<=', now)
     .orderBy('id')
     .orderBy('effective_at', 'desc')
@@ -58,7 +70,7 @@ export async function findLegalVersion(
 ): Promise<LegalVersion | undefined> {
   return db
     .selectFrom('legal_versions')
-    .select(['id', 'version', 'effective_at', 'material', 'summary', 'body'])
+    .select(VERSION_COLUMNS)
     .where('id', '=', id)
     .where('version', '=', version)
     .executeTakeFirst();
@@ -69,14 +81,21 @@ export async function findCurrentLegalVersion(
   id: string,
   now: Date,
 ): Promise<LegalVersion | undefined> {
-  return db
-    .selectFrom('legal_versions')
-    .select(['id', 'version', 'effective_at', 'material', 'summary', 'body'])
-    .where('id', '=', id)
-    .where('effective_at', '<=', now)
-    .orderBy('effective_at', 'desc')
-    .orderBy('version', 'desc')
-    .executeTakeFirst();
+  return currentVersionsQuery(db, now).where('id', '=', id).executeTakeFirst();
+}
+
+// A version at or before now can be viewed if it is current, or if history is public.
+export async function findViewableLegalVersion(
+  db: Kysely<Database>,
+  options: { id: string; version: string; publicHistory: boolean; now: Date },
+): Promise<LegalVersion | undefined> {
+  const [document, current] = await Promise.all([
+    findLegalVersion(db, options.id, options.version),
+    findCurrentLegalVersion(db, options.id, options.now),
+  ]);
+  if (!document || document.effective_at.getTime() > options.now.getTime()) return undefined;
+  if (!options.publicHistory && current?.version !== document.version) return undefined;
+  return document;
 }
 
 export async function pendingMaterialVersions(
@@ -107,30 +126,9 @@ export async function legalAcceptanceRequired(
   now: Date,
 ): Promise<boolean> {
   const pending = await db
-    .selectFrom('legal_versions as v')
-    .select(sql<number>`1`.as('ok'))
-    .where('v.effective_at', '<=', now)
+    .selectFrom(currentVersionsQuery(db, now).as('v'))
+    .select('v.id')
     .where('v.material', '=', true)
-    .where((eb) =>
-      eb.not(
-        eb.exists(
-          eb
-            .selectFrom('legal_versions as newer')
-            .select(sql`1`.as('ok'))
-            .whereRef('newer.id', '=', 'v.id')
-            .where('newer.effective_at', '<=', now)
-            .where((inner) =>
-              inner.or([
-                inner('newer.effective_at', '>', inner.ref('v.effective_at')),
-                inner.and([
-                  inner('newer.effective_at', '=', inner.ref('v.effective_at')),
-                  inner('newer.version', '>', inner.ref('v.version')),
-                ]),
-              ]),
-            ),
-        ),
-      ),
-    )
     .where((eb) =>
       eb.not(
         eb.exists(
@@ -159,30 +157,9 @@ export async function countPendingLegalAcceptances(
     .where((eb) =>
       eb.exists(
         eb
-          .selectFrom('legal_versions as v')
+          .selectFrom(currentVersionsQuery(db, now).as('v'))
           .select(sql`1`.as('ok'))
-          .where('v.effective_at', '<=', now)
           .where('v.material', '=', true)
-          .where((inner) =>
-            inner.not(
-              inner.exists(
-                inner
-                  .selectFrom('legal_versions as newer')
-                  .select(sql`1`.as('ok'))
-                  .whereRef('newer.id', '=', 'v.id')
-                  .where('newer.effective_at', '<=', now)
-                  .where((newest) =>
-                    newest.or([
-                      newest('newer.effective_at', '>', newest.ref('v.effective_at')),
-                      newest.and([
-                        newest('newer.effective_at', '=', newest.ref('v.effective_at')),
-                        newest('newer.version', '>', newest.ref('v.version')),
-                      ]),
-                    ]),
-                  ),
-              ),
-            ),
-          )
           .where((inner) =>
             inner.not(
               inner.exists(
@@ -334,6 +311,39 @@ export async function acceptLegalVersions(
   return { accepted: rows.length, unknown };
 }
 
+export async function acceptLegalDocuments(
+  db: Kysely<Database>,
+  options: {
+    userId: string;
+    documents: readonly { id: string; version: string }[];
+    ip: string | null;
+    now: Date;
+  },
+): Promise<{ status: 'ok'; accepted: number } | { status: 'unknown' }> {
+  return db.transaction().execute(async (trx) => {
+    const result = await acceptLegalVersions(trx, { ...options, method: 'self' });
+    if (result.unknown.length > 0) return { status: 'unknown' as const };
+    const actor: EventActor = { type: 'user', id: options.userId };
+    for (const document of options.documents) {
+      await writeEvent<Database, AuditRecordedData>(
+        trx,
+        auditRecordedEvent(actor, {
+          action: 'legal.accepted',
+          target_type: 'legal_version',
+          target_id: `${document.id}:${document.version}`,
+        }),
+      );
+    }
+    if (result.accepted > 0) {
+      await writeEvent<Database, UserUpdatedData>(
+        trx,
+        userUpdatedEvent(options.userId, { fields: ['legal'] }, actor),
+      );
+    }
+    return { status: 'ok' as const, accepted: result.accepted };
+  });
+}
+
 export function legalDocumentUrl(
   config: Pick<IdentityConfig, 'surfaces'>,
   id: string,
@@ -347,14 +357,11 @@ export function legalDocumentUrl(
 
 export async function publishLegalVersions(
   db: Kysely<Database>,
-  options: {
-    now: Date;
-    queueNotice?: (version: LegalVersion) => Promise<void>;
-  },
+  options: { now: Date },
 ): Promise<LegalVersion[]> {
   const pending = await db
     .selectFrom('legal_versions')
-    .select(['id', 'version', 'effective_at', 'material', 'summary', 'body'])
+    .select(VERSION_COLUMNS)
     .where('effective_at', '<=', options.now)
     .where('published_at', 'is', null)
     .orderBy('effective_at')
@@ -366,12 +373,16 @@ export async function publishLegalVersions(
     const claimed = await db.transaction().execute(async (trx) => {
       const updated = await trx
         .updateTable('legal_versions')
-        .set({ published_at: options.now })
+        .set({
+          published_at: options.now,
+          // Material versions are gated at sign-in instead of emailed.
+          notices_sent_at: version.material ? options.now : null,
+        })
         .where('id', '=', version.id)
         .where('version', '=', version.version)
         .where('published_at', 'is', null)
         .executeTakeFirst();
-      if (Number(updated.numUpdatedRows) === 0) return false;
+      if (updatedRows(updated) === 0) return false;
       await writeEvent<Database, LegalVersionPublishedData>(
         trx,
         legalVersionPublishedEvent({
@@ -382,24 +393,25 @@ export async function publishLegalVersions(
           summary: version.summary,
         }),
       );
-      published.push(version);
       return true;
     });
-    if (claimed && !version.material) await options.queueNotice?.(version);
+    if (claimed) published.push(version);
   }
   return published;
 }
 
-export async function queueLegalUpdateNotices(
+export const LEGAL_NOTICE_BATCH = 500;
+
+async function queueNoticeBatch(
   db: Kysely<Database>,
   options: {
-    version: LegalVersion;
+    version: LegalVersion & { notice_cursor: string | null };
     config: IdentityConfig;
     bus: Parameters<typeof queueEmail>[0];
-    brand: LegalBrand;
   },
-): Promise<number> {
-  const recipients = await db
+): Promise<{ sent: number; cursor: string | null; done: boolean }> {
+  const { version } = options;
+  let query = db
     .selectFrom('users')
     .select(['id', 'email', 'locale'])
     .where('state', '!=', 'deleted')
@@ -410,29 +422,65 @@ export async function queueLegalUpdateNotices(
             .selectFrom('legal_acceptances')
             .select(sql`1`.as('ok'))
             .whereRef('legal_acceptances.user_id', '=', 'users.id')
-            .where('document_id', '=', options.version.id)
-            .where('version', '=', options.version.version),
+            .where('document_id', '=', version.id)
+            .where('version', '=', version.version),
         ),
       ),
-    )
-    .execute();
-  const link = legalDocumentUrl(options.config, options.version.id, options.version.version);
-  const summary = interpolateLegal(options.version.summary, options.brand);
+    );
+  if (version.notice_cursor !== null) query = query.where('id', '>', version.notice_cursor);
+  const recipients = await query.orderBy('id').limit(LEGAL_NOTICE_BATCH).execute();
+  const link = legalDocumentUrl(options.config, version.id, version.version);
+  const summary = interpolateLegal(version.summary, options.config.branding);
   for (const user of recipients) {
     await queueEmail(options.bus, {
       template: 'legal_update',
       to: { address: user.email },
       locale: user.locale ?? options.config.email.default_locale,
       userId: user.id,
-      variables: {
-        document_id: options.version.id,
-        version: options.version.version,
-        summary,
-        link,
-      },
+      variables: { document_id: version.id, version: version.version, summary, link },
     });
   }
-  return recipients.length;
+  const last = recipients.at(-1);
+  const done = recipients.length < LEGAL_NOTICE_BATCH;
+  // Saving progress after each batch means a restart resumes here instead of re-sending.
+  await db
+    .updateTable('legal_versions')
+    .set({
+      ...(last === undefined ? {} : { notice_cursor: last.id }),
+      ...(done ? { notices_sent_at: new Date() } : {}),
+    })
+    .where('id', '=', version.id)
+    .where('version', '=', version.version)
+    .execute();
+  return { sent: recipients.length, cursor: last?.id ?? version.notice_cursor, done };
+}
+
+export async function queueLegalUpdateNotices(
+  db: Kysely<Database>,
+  options: { config: IdentityConfig; bus: Parameters<typeof queueEmail>[0] },
+): Promise<number> {
+  const versions = await db
+    .selectFrom('legal_versions')
+    .select([...VERSION_COLUMNS, 'notice_cursor'])
+    .where('published_at', 'is not', null)
+    .where('notices_sent_at', 'is', null)
+    .orderBy('published_at')
+    .execute();
+  let sent = 0;
+  for (const version of versions) {
+    let cursor = version.notice_cursor;
+    for (;;) {
+      const batch = await queueNoticeBatch(db, {
+        version: { ...version, notice_cursor: cursor },
+        config: options.config,
+        bus: options.bus,
+      });
+      sent += batch.sent;
+      if (batch.done) break;
+      cursor = batch.cursor;
+    }
+  }
+  return sent;
 }
 
 export async function loadAndSyncLegalDocuments(

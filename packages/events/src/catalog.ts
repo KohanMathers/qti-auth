@@ -1,8 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 
-import { Ajv2020, type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import { Ajv2020, type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js';
 
 import envelopeSchema from '../schemas/envelope.json' with { type: 'json' };
 import type { EventEnvelope } from './envelope.ts';

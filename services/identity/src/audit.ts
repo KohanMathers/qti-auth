@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto';
 
 import { deletedRows } from '@qtiauth/db';
 import type { EventActor, EventEnvelope } from '@qtiauth/events';
-import { type Kysely, sql } from 'kysely';
+import { type Kysely, type Selectable, sql } from 'kysely';
 
+import type { AuditLogTable, Database } from './database.ts';
 import type { AuditRecordedData } from './events.ts';
-import type { Database } from './database.ts';
 
 export const AUDIT_GENESIS_HASH = '0'.repeat(64);
 export const AUDIT_CONSUMER = 'audit_store';
@@ -74,16 +74,20 @@ export function auditRowHash(input: {
     .digest('hex');
 }
 
-export function verifyAuditRows(rows: readonly AuditRecord[]): AuditVerifyResult {
-  for (const [index, row] of rows.entries()) {
-    const expected = auditRowHash(row);
-    if (expected !== row.row_hash) {
+// previous is the last row of the batch before, so a chain can be checked a batch at a time.
+export function verifyAuditRows(
+  rows: readonly AuditRecord[],
+  previous?: Pick<AuditRecord, 'row_hash'>,
+): AuditVerifyResult {
+  let prior = previous;
+  for (const row of rows) {
+    if (auditRowHash(row) !== row.row_hash) {
       return { ok: false, seq: row.seq, event_id: row.event_id };
     }
-    const previous = rows[index - 1];
-    if (previous !== undefined && row.prev_hash !== previous.row_hash) {
+    if (prior !== undefined && row.prev_hash !== prior.row_hash) {
       return { ok: false, seq: row.seq, event_id: row.event_id };
     }
+    prior = row;
   }
   return { ok: true, count: rows.length };
 }
@@ -147,6 +151,10 @@ export async function insertAuditRecord(
   return true;
 }
 
+function auditRecord(row: Selectable<AuditLogTable>): AuditRecord {
+  return { ...row, seq: seqOf(row.seq), actor_type: row.actor_type as EventActor['type'] };
+}
+
 export async function listAuditRecords(
   db: Kysely<Database>,
   options: AuditListOptions,
@@ -163,24 +171,28 @@ export async function listAuditRecords(
   if (options.to !== undefined) query = query.where('occurred_at', '<=', options.to);
   if (options.after !== undefined) query = query.where('seq', '<', options.after);
   const rows = await query.orderBy('seq', 'desc').limit(options.limit).execute();
-  return rows.map((row) => ({
-    ...row,
-    seq: seqOf(row.seq),
-    actor_type: row.actor_type as EventActor['type'],
-  }));
+  return rows.map(auditRecord);
 }
 
-export async function loadAuditChain(db: Kysely<Database>): Promise<AuditRecord[]> {
-  const rows = await db.selectFrom('audit_log').selectAll().orderBy('seq', 'asc').execute();
-  return rows.map((row) => ({
-    ...row,
-    seq: seqOf(row.seq),
-    actor_type: row.actor_type as EventActor['type'],
-  }));
-}
+export const AUDIT_VERIFY_BATCH = 1000;
 
-export async function verifyAuditLog(db: Kysely<Database>): Promise<AuditVerifyResult> {
-  return verifyAuditRows(await loadAuditChain(db));
+export async function verifyAuditLog(
+  db: Kysely<Database>,
+  options: { batchSize?: number } = {},
+): Promise<AuditVerifyResult> {
+  const batchSize = options.batchSize ?? AUDIT_VERIFY_BATCH;
+  let previous: AuditRecord | undefined;
+  let count = 0;
+  for (;;) {
+    let query = db.selectFrom('audit_log').selectAll().orderBy('seq', 'asc').limit(batchSize);
+    if (previous !== undefined) query = query.where('seq', '>', previous.seq);
+    const rows = (await query.execute()).map(auditRecord);
+    const result = verifyAuditRows(rows, previous);
+    if (!result.ok) return result;
+    count += rows.length;
+    if (rows.length < batchSize) return { ok: true, count };
+    previous = rows.at(-1);
+  }
 }
 
 export async function sweepAuditLog(

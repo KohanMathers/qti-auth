@@ -1,7 +1,7 @@
+import { sections } from '@qtiauth/config';
 import { createMetrics } from '@qtiauth/observability';
 import { createLogger } from '@qtiauth/observability';
 import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing';
-import { sections } from '@qtiauth/config';
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as z from 'zod';
 

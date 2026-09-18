@@ -1,9 +1,12 @@
 import {
-  effectivePermissions,
   PERMISSION_GRANT,
-  ProblemError,
-  type Router,
-} from '@qtiauth/service-kit';
+  PERMISSION_GRANT_MESSAGE,
+  ROLE_DESCRIPTION_MAX,
+  ROLE_NAME_MAX,
+  ROLE_SLUG,
+  ROLE_SLUG_MESSAGE,
+} from '@qtiauth/config';
+import { effectivePermissions, ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { findAccount } from './accounts.ts';
@@ -15,19 +18,15 @@ import {
   getRole,
   listRoles,
   loadUserRoles,
-  ROLE_DESCRIPTION_MAX,
-  ROLE_NAME_MAX,
-  ROLE_SLUG,
   type RoleRecord,
+  type RoleWriteResult,
   setUserRoles,
   updateRole,
 } from './roles.ts';
 import type { Context } from './service.ts';
 import { signedIn } from './session-routes.ts';
 
-const grantSchema = z
-  .string()
-  .regex(PERMISSION_GRANT, 'Must be a permission, a prefix like users.*, or *');
+const grantSchema = z.string().regex(PERMISSION_GRANT, PERMISSION_GRANT_MESSAGE);
 
 const permissionSchema = z.object({
   name: z.string(),
@@ -65,7 +64,7 @@ function presented(role: RoleRecord, ctx: Context) {
   };
 }
 
-function roleError(result: { status: string; grant?: string }): never {
+function roleError(result: Exclude<RoleWriteResult, { status: 'ok' }>): never {
   switch (result.status) {
     case 'not_found':
       throw new ProblemError('ROLE_NOT_FOUND');
@@ -75,10 +74,8 @@ function roleError(result: { status: string; grant?: string }): never {
       throw new ProblemError('ROLE_BUILTIN');
     case 'invalid_grant':
       throw new ProblemError('VALIDATION_FAILED', {
-        detail: `Permission grant ${result.grant ?? ''} is not valid`,
+        detail: `Permission grant ${result.grant} is not valid`,
       });
-    default:
-      throw new ProblemError('ROLE_NOT_FOUND');
   }
 }
 
@@ -140,7 +137,7 @@ export function roleRoutes(router: Router<Context>): void {
     rate_limit: 'global',
     request: {
       body: z.object({
-        slug: z.string().regex(ROLE_SLUG, 'Must be a lowercase slug like support_agent'),
+        slug: z.string().regex(ROLE_SLUG, ROLE_SLUG_MESSAGE),
         name: z.string().trim().min(1).max(ROLE_NAME_MAX),
         description: z.string().trim().min(1).max(ROLE_DESCRIPTION_MAX),
         permissions: z.array(grantSchema).default([]),
@@ -249,7 +246,7 @@ export function roleRoutes(router: Router<Context>): void {
         roleId: params.role_id,
         actor: { type: 'user', id: userId },
       });
-      if (result.status !== 'deleted') roleError(result);
+      if (result.status !== 'ok') roleError(result);
       ctx.outbox.wake();
       log.info('role deleted', { role_id: params.role_id });
       return { status: 204, headers: NO_STORE };

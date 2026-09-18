@@ -20,7 +20,7 @@ export {
   planMigrations,
 } from './migrations.ts';
 export { applyAuditLogPrivileges, ProvisionError, provisionRoles } from './provision.ts';
-export { deletedRows } from './result.ts';
+export { deletedRows, updatedRows } from './result.ts';
 export {
   migrateUpCommand,
   PendingMigrationsError,

@@ -4,9 +4,7 @@ import * as z from 'zod';
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
 import { CAPTCHA_ACTIONS, inspectCaptcha, noteCaptchaAttempt, requireCaptcha } from './captcha.ts';
-import { loadPermissions, SECOND_FACTOR_METHODS } from './factors.ts';
-import { loadUserRoles } from './roles.ts';
-import { RETURN_TO } from './settings.ts';
+import { SECOND_FACTOR_METHODS } from './factors.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
@@ -25,10 +23,13 @@ import {
   verify,
 } from './flows.ts';
 import { NO_STORE, sessionHeaders, signedOutHeaders } from './headers.ts';
+import { iso } from './iso.ts';
 import { isCanonicalLocale, preferredLocale } from './locale.ts';
 import type { PasswordPolicyReason } from './passwords.ts';
+import { loadPermissions, loadUserRoles } from './roles.ts';
 import type { Context } from './service.ts';
 import { revoke, signedIn } from './session-routes.ts';
+import { RETURN_TO } from './settings.ts';
 
 export const returnToSchema = z
   .string()
@@ -759,10 +760,10 @@ export function authRoutes(router: Router<Context>): void {
           email: account.email,
           email_verified: account.email_verified_at !== null,
           username: account.username,
-          username_updated_at: account.username_updated_at?.toISOString() ?? null,
+          username_updated_at: iso(account.username_updated_at),
           username_reset_required: account.username_reset_required,
           account_state: account.state,
-          deletion_requested_at: account.deletion_requested_at?.toISOString() ?? null,
+          deletion_requested_at: iso(account.deletion_requested_at),
           age_band: ageBand(ageOn(account.date_of_birth, new Date()), ctx.config.age.bands),
           public_profile: account.public_profile,
           leaderboard_visible: account.leaderboard_visible,

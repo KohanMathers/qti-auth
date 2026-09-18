@@ -1,4 +1,4 @@
-export { openObjectStore, tryOpenObjectStore, eraseUserObjects } from './client.ts';
+export { eraseUserObjects, openObjectStore, tryOpenObjectStore } from './client.ts';
 export { storageHealthCheck } from './health.ts';
 export {
   EXPORT_OBJECT_PREFIX,

@@ -38,6 +38,7 @@ jobs:
         with:
           node-version-file: .nvmrc
       - run: node scripts/check-hardcoded.ts
+      - run: node scripts/check-import-order.ts
 
   integration:
     name: Integration tests

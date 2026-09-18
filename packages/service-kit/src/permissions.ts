@@ -1,5 +1,6 @@
+import { PERMISSION_GRANT } from '@qtiauth/config';
+
 const PERMISSION = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
-export const PERMISSION_GRANT = /^(?:\*|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*(?:\.\*)?)$/;
 
 export interface PermissionDefinition {
   description: string;

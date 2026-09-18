@@ -17,7 +17,6 @@ import { type AgeBands, ageBand, ageOn, agePrivacyDefaults, under18 } from './ag
 import { recordSignupAgeAssurance } from './age-assurance.ts';
 import { insertChallenge } from './challenges.ts';
 import type { Database } from './database.ts';
-import { recordCurrentLegalAcceptances } from './legal.ts';
 import {
   insertEmailToken,
   takeEmailToken,
@@ -39,6 +38,7 @@ import {
   recordAuthFailure,
   wait,
 } from './failures.ts';
+import { recordCurrentLegalAcceptances } from './legal.ts';
 import { MAGIC_LINK_METHOD } from './magic-links.ts';
 import {
   type Argon2Params,
@@ -181,6 +181,7 @@ export async function completePasswordSignup(
     password: string;
     dateOfBirth: string;
     locale: string | null;
+    ip: string | null;
     settings: PasswordSettings;
     now: Date;
   },
@@ -226,7 +227,7 @@ export async function completePasswordSignup(
     });
     await recordCurrentLegalAcceptances(trx, {
       userId,
-      ip: null,
+      ip: options.ip,
       method: 'signup',
       now,
     });

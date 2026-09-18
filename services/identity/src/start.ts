@@ -5,7 +5,6 @@ import { AUDIT_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { openGeoIp } from '@qtiauth/geoip';
 import { untraced } from '@qtiauth/observability';
 import {
-  heldObjectKey,
   heldObjectPrefix,
   NOTIFICATION_ALLOWED_METHOD,
   notificationAllowedRequestSchema,
@@ -15,7 +14,6 @@ import {
   type StartServiceOptions,
   type Stoppable,
   storageHealthCheck,
-  tryOpenObjectStore,
   unwind,
 } from '@qtiauth/service-kit';
 import { openTextFilter, resolveListsDir } from '@qtiauth/text-filter';
@@ -27,14 +25,24 @@ import { AGE_RECOMPUTE_JOB, recomputeAgeBands } from './age-bands.ts';
 import { AUDIT_CONSUMER, insertAuditRecord, sweepAuditLog } from './audit.ts';
 import { attachBindStore, valkeyBindStore } from './bind-state.ts';
 import { sweepChallenges } from './challenges.ts';
+import { eraseUser, exportUser, storeHeldSnapshot } from './data-rights.ts';
 import type { Database } from './database.ts';
-import { eraseUser, exportUser } from './data-rights.ts';
 import { sweepTokens } from './email-tokens.ts';
-import { sweepExports } from './exports.ts';
+import { EXPORT_RESUME_JOB, sweepExports } from './exports.ts';
 import { sweepAuthFailures } from './failures.ts';
 import { loadFilterOverlay, sweepFilterDecisions } from './filter.ts';
 import { attachTextFilter } from './filter-state.ts';
+import { resumeDataExports } from './flows.ts';
 import { attachGeoIp } from './geoip-state.ts';
+import { iso } from './iso.ts';
+import {
+  LEDGER_PRUNE_JOB,
+  ledgerDestination,
+  ledgerKeepUntil,
+  flushLedgerOutbox,
+  pruneLedgerDestination,
+  sweepLedgerOutbox,
+} from './ledger.ts';
 import {
   countPendingLegalAcceptances,
   LEGAL_PUBLISH_JOB,
@@ -54,14 +62,6 @@ import {
   placeHoldRequestSchema,
   placeLegalHold,
 } from './legal-holds.ts';
-import {
-  LEDGER_PRUNE_JOB,
-  ledgerDestination,
-  ledgerKeepUntil,
-  flushLedgerOutbox,
-  pruneLedgerDestination,
-  sweepLedgerOutbox,
-} from './ledger.ts';
 import { PURGE_JOB, purgeExpiredDeletions } from './lifecycle.ts';
 import { identityMetrics } from './metrics.ts';
 import { listedNotifications, openNotificationCatalog } from './notification-registry.ts';
@@ -74,7 +74,7 @@ import { sweepSecurityEvents } from './security.ts';
 import { type Context, definition, router } from './service.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
 import { accountOrigin, encryptionKey, sessionSecuritySettings } from './settings.ts';
-import { attachObjectStore } from './storage-state.ts';
+import { sharedObjectStore } from './storage-state.ts';
 
 export const RETENTION_JOB = 'retention.sweep';
 export const STATS_INTERVAL = 60_000;
@@ -112,11 +112,11 @@ export function identityService(options: IdentityOptions = {}) {
   return {
     router,
     readinessChecks: (ctx) => {
-      const store = tryOpenObjectStore(ctx.config.storage);
+      const store = sharedObjectStore(ctx);
       return store === null ? {} : { storage: storageHealthCheck(store) };
     },
     dataRights: (ctx) => {
-      const store = tryOpenObjectStore(ctx.config.storage);
+      const store = sharedObjectStore(ctx);
       const ledger = ledgerDestination(ctx.config.backups, store);
       return {
         exportUser: (userId) => exportUser(ctx.db, userId),
@@ -125,6 +125,9 @@ export function identityService(options: IdentityOptions = {}) {
             held: event.data['held'] === true,
             store,
             ledger,
+            onLedgerError: (error) => {
+              ctx.log.warn('deletion ledger write failed; it will be retried', { error });
+            },
             now: new Date(),
           }),
       };
@@ -135,12 +138,11 @@ export function identityService(options: IdentityOptions = {}) {
       accountOrigin(config);
       encryptionKey(config);
       const stack: Stoppable[] = [];
-      const store = tryOpenObjectStore(config.storage);
+      const store = sharedObjectStore(ctx);
       if (store !== null) {
         if (config.storage.create_bucket) await store.ensureBucket();
         stack.push({ stop: () => store.close() });
       }
-      attachObjectStore(ctx, store);
       const ledger = ledgerDestination(config.backups, store);
       const geoip = openGeoIp(config.geoip, {
         onError: (error, path) => {
@@ -172,17 +174,9 @@ export function identityService(options: IdentityOptions = {}) {
       });
       const legalDir = resolveDocumentsDir(ctx.config_path, config.legal.documents_dir);
       const synced = await loadAndSyncLegalDocuments(db, legalDir);
-      const published = await publishLegalVersions(db, {
-        now: new Date(),
-        queueNotice: async (version) => {
-          await queueLegalUpdateNotices(db, {
-            version,
-            config,
-            bus,
-            brand: config.branding,
-          });
-        },
-      });
+      // Notices for anything published here go out on the next legal.publish tick, so a large
+      // user base does not hold up startup.
+      const published = await publishLegalVersions(db, { now: new Date() });
       if (published.length > 0) ctx.outbox.wake();
       log.info('legal documents synced', {
         documents: synced.documents,
@@ -371,21 +365,13 @@ export function identityService(options: IdentityOptions = {}) {
             job: LEGAL_PUBLISH_JOB,
             metrics: ctx.busMetrics,
             handler: async () => {
-              const published = await publishLegalVersions(db, {
-                now: new Date(),
-                queueNotice: async (version) => {
-                  await queueLegalUpdateNotices(db, {
-                    version,
-                    config,
-                    bus,
-                    brand: config.branding,
-                  });
-                },
-              });
+              const published = await publishLegalVersions(db, { now: new Date() });
               if (published.length > 0) {
                 ctx.outbox.wake();
                 log.info('legal versions published', { published: published.length });
               }
+              const notices = await queueLegalUpdateNotices(db, { config, bus });
+              if (notices > 0) log.info('legal update notices queued', { notices });
             },
             onError: (error) => {
               log.error('legal publish failed', { error });
@@ -410,6 +396,20 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('pending deletion purge failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: EXPORT_RESUME_JOB,
+            metrics: ctx.busMetrics,
+            handler: async () => {
+              const resumed = await resumeDataExports(ctx);
+              if (resumed > 0) log.info('abandoned data exports resumed', { resumed });
+            },
+            onError: (error) => {
+              log.error('data export resume failed', { error });
             },
           }),
         );
@@ -456,14 +456,7 @@ export function identityService(options: IdentityOptions = {}) {
               if (result.status === 'conflict') {
                 throw new RpcError('conflict', 'A legal hold is already in place');
               }
-              if (store !== null) {
-                const snapshot = await exportUser(db, parsed.data.user_id);
-                await store.put(
-                  heldObjectKey(parsed.data.user_id, 'identity.json'),
-                  new TextEncoder().encode(`${JSON.stringify(snapshot, null, 2)}\n`),
-                  'application/json',
-                );
-              }
+              if (store !== null) await storeHeldSnapshot(db, store, parsed.data.user_id);
               return {
                 hold: {
                   id: result.hold.id,
@@ -516,7 +509,7 @@ export function identityService(options: IdentityOptions = {}) {
                         reason: hold.reason,
                         case_id: hold.case_id,
                         placed_at: hold.placed_at.toISOString(),
-                        lifted_at: hold.lifted_at?.toISOString() ?? null,
+                        lifted_at: iso(hold.lifted_at),
                       },
               };
             },

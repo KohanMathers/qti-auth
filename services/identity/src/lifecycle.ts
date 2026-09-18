@@ -1,9 +1,10 @@
 import { writeEvent } from '@qtiauth/bus';
+import { updatedRows } from '@qtiauth/db';
 import type { EventActor } from '@qtiauth/events';
-import { type Kysely } from 'kysely';
+import type { Kysely } from 'kysely';
 
 import { recordAccountAction } from './account-locks.ts';
-import { assertTransition } from './accounts.ts';
+import { canTransition } from './accounts.ts';
 import type { Database } from './database.ts';
 import {
   type UserDeletedData,
@@ -32,12 +33,10 @@ export async function requestDeletion(
     if (account.state === 'pending_deletion') return { status: 'ok' as const, revoked: [] };
     if (account.state === 'deleted') return { status: 'conflict' as const, revoked: [] };
     const priorState = account.state;
-    if (priorState !== 'active' && priorState !== 'locked' && priorState !== 'banned') {
-      return { status: 'conflict' as const, revoked: [] };
-    }
-    try {
-      assertTransition(priorState, 'pending_deletion');
-    } catch {
+    if (
+      (priorState !== 'active' && priorState !== 'locked' && priorState !== 'banned') ||
+      !canTransition(priorState, 'pending_deletion')
+    ) {
       return { status: 'conflict' as const, revoked: [] };
     }
     // Keep the prior state and locked_until so cancelling can't lift a ban or lock.
@@ -52,7 +51,7 @@ export async function requestDeletion(
       .where('id', '=', options.userId)
       .where('state', '=', priorState)
       .executeTakeFirst();
-    if (updated.numUpdatedRows === 0n) return { status: 'conflict' as const, revoked: [] };
+    if (updatedRows(updated) === 0) return { status: 'conflict' as const, revoked: [] };
     await recordAccountAction(trx, {
       userId: options.userId,
       actor: options.actor,
@@ -99,7 +98,7 @@ export async function purgeExpiredDeletions(
         .where('id', '=', row.id)
         .where('state', '=', 'pending_deletion')
         .executeTakeFirst();
-      if (moved.numUpdatedRows === 0n) continue;
+      if (updatedRows(moved) === 0) continue;
       await writeEvent<Database, UserDeletedData>(trx, userDeletedEvent(row.id, { held }, actor));
       deleted.push(row.id);
     }

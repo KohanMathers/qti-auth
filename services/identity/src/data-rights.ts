@@ -1,16 +1,12 @@
-import { type Kysely, sql } from 'kysely';
-
 import { eraseUserObjects, heldObjectKey, type ObjectStore } from '@qtiauth/service-kit';
+import { type Kysely, sql } from 'kysely';
 
 import { dateOfBirthColumn } from './accounts.ts';
 import { exportAuditRecords } from './audit.ts';
 import type { Database } from './database.ts';
+import { iso } from './iso.ts';
 import { enqueueLedgerEntry, flushLedgerOutbox, type LedgerDestination } from './ledger.ts';
 import { listStoredPreferences } from './notifications.ts';
-
-function iso(date: Date | null): string | null {
-  return date?.toISOString() ?? null;
-}
 
 export async function exportUser(
   db: Kysely<Database>,
@@ -292,6 +288,7 @@ export async function eraseUser(
     held: boolean;
     store: ObjectStore | null;
     ledger: LedgerDestination;
+    onLedgerError?: (error: unknown) => void;
     now: Date;
   },
 ): Promise<void> {
@@ -324,19 +321,34 @@ export async function eraseUser(
     await db.deleteFrom('users').where('id', '=', userId).execute();
   }
   if (options.store !== null) {
-    if (snapshot !== undefined) {
-      await options.store.put(
-        heldObjectKey(userId, 'identity.json'),
-        new TextEncoder().encode(`${JSON.stringify(snapshot, null, 2)}\n`),
-        'application/json',
-      );
-    }
+    if (snapshot !== undefined) await putHeldSnapshot(options.store, userId, snapshot);
     await eraseUserObjects(options.store, userId, { preserveHeld: options.held });
   }
   await enqueueLedgerEntry(db, { userId, deletedAt: options.now });
-  try {
-    await flushLedgerOutbox(db, options.ledger, options.now);
-  } catch {
-    // retried by deletion_ledger.prune
-  }
+  // A destination that is down leaves the entry queued for deletion_ledger.prune to retry.
+  await flushLedgerOutbox(db, options.ledger, options.now, {
+    ...(options.onLedgerError === undefined
+      ? {}
+      : { onWriteError: (error: unknown) => options.onLedgerError?.(error) }),
+  });
+}
+
+export async function putHeldSnapshot(
+  store: ObjectStore,
+  userId: string,
+  snapshot: Record<string, unknown>,
+): Promise<void> {
+  await store.put(
+    heldObjectKey(userId, 'identity.json'),
+    new TextEncoder().encode(`${JSON.stringify(snapshot, null, 2)}\n`),
+    'application/json',
+  );
+}
+
+export async function storeHeldSnapshot(
+  db: Kysely<Database>,
+  store: ObjectStore,
+  userId: string,
+): Promise<void> {
+  await putHeldSnapshot(store, userId, await exportUser(db, userId));
 }

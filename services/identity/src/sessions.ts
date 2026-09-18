@@ -11,9 +11,11 @@ import { type AgeBands, ageBand, ageOn } from './age.ts';
 import type { Database, RevocationReason, SecurityEventKind } from './database.ts';
 import { countryName, describePlace, deviceKey, parseDevice } from './device.ts';
 import { sessionCreatedEvent, sessionFlaggedEvent, sessionRevokedEvent } from './events.ts';
-import { loadPermissions, twoFactorEnrolmentRequired } from './factors.ts';
+import { twoFactorEnrolmentRequired } from './factors.ts';
+import { iso } from './iso.ts';
 import { legalAcceptanceRequired } from './legal.ts';
 import { cancelPendingDeletion } from './pending-deletion.ts';
+import { loadPermissions } from './roles.ts';
 import {
   applyResolvedSecurity,
   baselineFromSession,
@@ -513,7 +515,7 @@ export async function resolveSession(
       parental_controls: null,
       amr: row.amr,
       acr,
-      step_up_at: acr === 'aal0' ? null : (row.step_up_at?.toISOString() ?? null),
+      step_up_at: acr === 'aal0' ? null : iso(row.step_up_at),
       legal_acceptance_required: await legalAcceptanceRequired(db, row.user_id, now),
       two_factor_enrolment_required: await twoFactorEnrolmentRequired(db, {
         userId: row.user_id,

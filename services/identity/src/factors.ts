@@ -1,6 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
 
-import { ProblemError, grantsOverlap } from '@qtiauth/service-kit';
+import { deletedRows } from '@qtiauth/db';
+import { grantsOverlap, ProblemError } from '@qtiauth/service-kit';
 import type { Kysely } from 'kysely';
 
 import type { Database } from './database.ts';
@@ -11,8 +12,6 @@ import { PASSWORD_METHOD } from './passwords.ts';
 import { unusedRecoveryCount } from './recovery.ts';
 import { socialIdentityCount } from './social.ts';
 import { TOTP_METHOD } from './totp.ts';
-
-export { loadPermissions } from './roles.ts';
 
 export const SECOND_FACTOR_METHODS = ['totp', 'passkey', 'recovery'] as const;
 export type SecondFactorMethod = (typeof SECOND_FACTOR_METHODS)[number];
@@ -105,7 +104,7 @@ export async function deleteTotp(db: Kysely<Database>, userId: string): Promise<
     .where('type', '=', TOTP_METHOD)
     .executeTakeFirst();
   await db.deleteFrom('recovery_codes').where('user_id', '=', userId).execute();
-  return Number(result.numDeletedRows) === 1;
+  return deletedRows(result) === 1;
 }
 
 export async function passwordCount(db: Kysely<Database>, userId: string): Promise<number> {

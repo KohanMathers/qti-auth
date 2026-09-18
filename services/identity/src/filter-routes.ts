@@ -1,4 +1,4 @@
-import { writeEvent } from '@qtiauth/bus';
+import type { EventActor } from '@qtiauth/events';
 import {
   decodeCursor,
   pageOf,
@@ -10,8 +10,6 @@ import {
 import { normalize } from '@qtiauth/text-filter';
 import * as z from 'zod';
 
-import type { Database } from './database.ts';
-import { type AuditRecordedData, auditRecordedEvent } from './events.ts';
 import { addListEntry, listFilterDecisions, removeListEntry, requireTextFilter } from './filter.ts';
 import { NO_STORE } from './headers.ts';
 import type { Context } from './service.ts';
@@ -64,20 +62,8 @@ function listedWords(
     .map(([word, source]) => ({ word, source }));
 }
 
-async function writeFilterAudit(
-  ctx: Context,
-  actorId: string,
-  action: string,
-  word: string,
-): Promise<void> {
-  await writeEvent<Database, AuditRecordedData>(
-    ctx.db,
-    auditRecordedEvent(
-      { type: 'user', id: actorId },
-      { action, target_type: 'filter_entry', target_id: word },
-    ),
-  );
-  ctx.outbox.wake();
+function staffActor(identity: Parameters<typeof signedIn>[0]): EventActor {
+  return { type: 'user', id: signedIn(identity).userId };
 }
 
 function decisionPage(rows: Awaited<ReturnType<typeof listFilterDecisions>>, limit: number) {
@@ -183,8 +169,8 @@ export function filterRoutes(router: Router<Context>): void {
       if (word === '') throw new ProblemError('FILTER_ENTRY_NOT_FOUND');
       const filter = requireTextFilter(ctx);
       filter.addAllow(word);
-      await addListEntry(ctx.db, 'allow', word);
-      await writeFilterAudit(ctx, signedIn(identity).userId, 'filter.allowlist.added', word);
+      await addListEntry(ctx.db, { list: 'allow', word, actor: staffActor(identity) });
+      ctx.outbox.wake();
       return {
         status: 200,
         headers: NO_STORE,
@@ -207,11 +193,15 @@ export function filterRoutes(router: Router<Context>): void {
     errors: ['FILTER_ENTRY_NOT_FOUND'],
     handler: async ({ ctx, identity, params }) => {
       const word = normalizedWord(params.word);
-      const removed = await removeListEntry(ctx.db, 'allow', word);
+      const removed = await removeListEntry(ctx.db, {
+        list: 'allow',
+        word,
+        actor: staffActor(identity),
+      });
       if (!removed) throw new ProblemError('FILTER_ENTRY_NOT_FOUND');
       const filter = requireTextFilter(ctx);
       if (!filter.fileAllow.has(word)) filter.removeAllow(word);
-      await writeFilterAudit(ctx, signedIn(identity).userId, 'filter.allowlist.removed', word);
+      ctx.outbox.wake();
       return { status: 204 as const, headers: NO_STORE };
     },
   });
@@ -258,8 +248,8 @@ export function filterRoutes(router: Router<Context>): void {
       if (word === '') throw new ProblemError('FILTER_ENTRY_NOT_FOUND');
       const filter = requireTextFilter(ctx);
       filter.addExtraBlock(word);
-      await addListEntry(ctx.db, 'extra_block', word);
-      await writeFilterAudit(ctx, signedIn(identity).userId, 'filter.blocklist.added', word);
+      await addListEntry(ctx.db, { list: 'extra_block', word, actor: staffActor(identity) });
+      ctx.outbox.wake();
       return {
         status: 200,
         headers: NO_STORE,
@@ -282,11 +272,15 @@ export function filterRoutes(router: Router<Context>): void {
     errors: ['FILTER_ENTRY_NOT_FOUND'],
     handler: async ({ ctx, identity, params }) => {
       const word = normalizedWord(params.word);
-      const removed = await removeListEntry(ctx.db, 'extra_block', word);
+      const removed = await removeListEntry(ctx.db, {
+        list: 'extra_block',
+        word,
+        actor: staffActor(identity),
+      });
       if (!removed) throw new ProblemError('FILTER_ENTRY_NOT_FOUND');
       const filter = requireTextFilter(ctx);
       if (!filter.fileExtra.has(word)) filter.removeExtraBlock(word);
-      await writeFilterAudit(ctx, signedIn(identity).userId, 'filter.blocklist.removed', word);
+      ctx.outbox.wake();
       return { status: 204 as const, headers: NO_STORE };
     },
   });

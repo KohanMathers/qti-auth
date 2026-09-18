@@ -17,8 +17,8 @@ import { natsUrl, startNats, startPostgres, startValkey } from '@qtiauth/testing
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { auditVerify } from './audit-verify.ts';
 import { verifyAuditLog } from './audit.ts';
+import { auditVerify } from './audit-verify.ts';
 import type { Database } from './database.ts';
 import { definition } from './service.ts';
 import { identityService } from './start.ts';

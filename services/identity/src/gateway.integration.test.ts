@@ -1,5 +1,5 @@
-import { solveAltcha } from '@qtiauth/captcha';
 import { type Bus, connectBus, publishCronTick } from '@qtiauth/bus';
+import { solveAltcha } from '@qtiauth/captcha';
 import { sections } from '@qtiauth/config';
 import {
   definition as gatewayDefinition,
@@ -15,11 +15,10 @@ import type { Database } from './database.ts';
 import { LEGAL_PUBLISH_JOB } from './legal.ts';
 import { hashLegalBody } from './legal-documents.ts';
 import { softwarePasskey } from './passkey-testing.ts';
-import { grantUser } from './roles.ts';
 import { definition } from './service.ts';
 import { startMockOidc } from './social-testing.ts';
 import { identityService } from './start.ts';
-import { type CapturedEmails, captureEmails } from './testing.ts';
+import { type CapturedEmails, captureEmails, grantUser } from './testing.ts';
 
 const ORIGIN = 'http://localhost:8000';
 const COOKIE = '__Host-qtiauth_session';

@@ -2,8 +2,8 @@ import type { CliIo } from '@qtiauth/cli';
 import { describe, expect, it } from 'vitest';
 
 import { runServiceCli, serviceCommands } from './cli.ts';
-import { defineService } from './service.ts';
 import { createRouter } from './routes.ts';
+import { defineService } from './service.ts';
 
 const definition = defineService({
   name: 'support',

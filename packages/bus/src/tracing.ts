@@ -1,5 +1,5 @@
-import type { Attributes, Context } from '@opentelemetry/api';
 import { headers, type MsgHdrs } from '@nats-io/transport-node';
+import type { Attributes, Context } from '@opentelemetry/api';
 import { extractTraceContext, injectTraceContext } from '@qtiauth/observability';
 
 export type MessagingOperation = 'send' | 'process';

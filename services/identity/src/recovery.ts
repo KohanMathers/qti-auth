@@ -1,5 +1,6 @@
 import { randomBytes, randomUUIDv7 } from 'node:crypto';
 
+import { updatedRows } from '@qtiauth/db';
 import type { Kysely } from 'kysely';
 
 import type { Database } from './database.ts';
@@ -83,5 +84,5 @@ export async function consumeRecoveryCode(
     .where('id', '=', row.id)
     .where('used_at', 'is', null)
     .executeTakeFirst();
-  return Number(result.numUpdatedRows) === 1;
+  return updatedRows(result) === 1;
 }

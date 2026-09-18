@@ -111,6 +111,8 @@ export interface LegalVersionsTable {
   body: string;
   body_hash: string;
   published_at: Date | null;
+  notice_cursor: string | null;
+  notices_sent_at: Date | null;
   created_at: Generated<Date>;
 }
 
@@ -311,6 +313,7 @@ export interface DataExportsTable {
   bytes: number | null;
   download_expires_at: Date | null;
   error: string | null;
+  started_at: Date | null;
   created_at: Generated<Date>;
   completed_at: Date | null;
 }

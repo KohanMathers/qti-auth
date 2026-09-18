@@ -1,4 +1,4 @@
-import { ProblemError, type Router } from '@qtiauth/service-kit';
+import { NOTIFICATION_AUDIENCES, ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
@@ -11,7 +11,7 @@ import { signedIn } from './session-routes.ts';
 const categorySchema = z.object({
   id: z.string(),
   description: z.string(),
-  audience: z.enum(['user', 'staff']),
+  audience: z.enum(NOTIFICATION_AUDIENCES),
   disableable: z.boolean(),
   enabled: z.boolean(),
   service: z.string(),

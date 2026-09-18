@@ -3,7 +3,6 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { solveAltcha } from '@qtiauth/captcha';
 import {
   type Bus,
   connectBus,
@@ -13,6 +12,7 @@ import {
   rpcRequest,
 } from '@qtiauth/bus';
 import { checkOutboxContract } from '@qtiauth/bus/testing';
+import { solveAltcha } from '@qtiauth/captcha';
 import { sections } from '@qtiauth/config';
 import { AUDIT_EVENTS, IDENTITY_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing';
@@ -44,10 +44,9 @@ import type { Database } from './database.ts';
 import { GET_LEGAL_HOLD_METHOD, PLACE_LEGAL_HOLD_METHOD } from './legal-holds.ts';
 import { PURGE_JOB } from './lifecycle.ts';
 import { softwarePasskey } from './passkey-testing.ts';
-import { grantUser } from './roles.ts';
 import { definition } from './service.ts';
 import { identityService } from './start.ts';
-import { type CapturedEmails, captureEmails } from './testing.ts';
+import { type CapturedEmails, captureEmails, grantUser } from './testing.ts';
 import { hashToken } from './tokens.ts';
 import { decodeBase32, totpAt } from './totp.ts';
 

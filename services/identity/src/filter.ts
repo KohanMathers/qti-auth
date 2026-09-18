@@ -1,10 +1,13 @@
 import { randomUUIDv7 } from 'node:crypto';
 
+import { writeEvent } from '@qtiauth/bus';
 import { deletedRows } from '@qtiauth/db';
+import type { EventActor } from '@qtiauth/events';
 import { type FilterResult, inputHash, type TextFilter } from '@qtiauth/text-filter';
 import type { Kysely } from 'kysely';
 
 import type { Database, FilterList } from './database.ts';
+import { type AuditRecordedData, auditRecordedEvent } from './events.ts';
 import { textFilterOf } from './filter-state.ts';
 import { identityMetrics } from './metrics.ts';
 import type { Context } from './service.ts';
@@ -48,29 +51,53 @@ export async function loadFilterOverlay(db: Kysely<Database>, filter: TextFilter
   }
 }
 
+const LIST_AUDIT_NAMES: Record<FilterList, string> = {
+  allow: 'filter.allowlist',
+  extra_block: 'filter.blocklist',
+};
+
+async function writeListAudit(
+  trx: Kysely<Database>,
+  options: { actor: EventActor; list: FilterList; word: string; change: 'added' | 'removed' },
+): Promise<void> {
+  await writeEvent<Database, AuditRecordedData>(
+    trx,
+    auditRecordedEvent(options.actor, {
+      action: `${LIST_AUDIT_NAMES[options.list]}.${options.change}`,
+      target_type: 'filter_entry',
+      target_id: options.word,
+    }),
+  );
+}
+
 export async function addListEntry(
   db: Kysely<Database>,
-  list: FilterList,
-  word: string,
+  options: { list: FilterList; word: string; actor: EventActor },
 ): Promise<void> {
-  await db
-    .insertInto('filter_list_entries')
-    .values({ list, word })
-    .onConflict((conflict) => conflict.columns(['list', 'word']).doNothing())
-    .execute();
+  await db.transaction().execute(async (trx) => {
+    await trx
+      .insertInto('filter_list_entries')
+      .values({ list: options.list, word: options.word })
+      .onConflict((conflict) => conflict.columns(['list', 'word']).doNothing())
+      .execute();
+    await writeListAudit(trx, { ...options, change: 'added' });
+  });
 }
 
 export async function removeListEntry(
   db: Kysely<Database>,
-  list: FilterList,
-  word: string,
+  options: { list: FilterList; word: string; actor: EventActor },
 ): Promise<boolean> {
-  const result = await db
-    .deleteFrom('filter_list_entries')
-    .where('list', '=', list)
-    .where('word', '=', word)
-    .execute();
-  return deletedRows(result) > 0;
+  return db.transaction().execute(async (trx) => {
+    const result = await trx
+      .deleteFrom('filter_list_entries')
+      .where('list', '=', options.list)
+      .where('word', '=', options.word)
+      .execute();
+    if (deletedRows(result) === 0) return false;
+    await writeListAudit(trx, { ...options, change: 'removed' });
+    return true;
+  });
 }
 
 export async function listFilterDecisions(

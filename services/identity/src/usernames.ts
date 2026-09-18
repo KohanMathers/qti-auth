@@ -6,9 +6,8 @@ import { type Kysely, sql } from 'kysely';
 import { findAccount } from './accounts.ts';
 import type { Database } from './database.ts';
 import { type UserUpdatedData, userUpdatedEvent } from './events.ts';
-import { applyFilter } from './filter.ts';
-import { identityMetrics, type UsernameAction } from './metrics.ts';
-import type { Context, IdentityConfig } from './service.ts';
+import type { UsernameAction } from './metrics.ts';
+import type { IdentityConfig } from './service.ts';
 
 export type UsernameRuleReason = 'too_short' | 'too_long' | 'bad_charset';
 
@@ -19,11 +18,9 @@ export type ClaimUsernameResult =
   | { status: 'unchanged' }
   | { status: 'cooldown'; availableAt: Date }
   | { status: 'limit' }
-  | {
-      status: 'claimed' | 'changed' | 'reclaimed';
-      username: string;
-      updatedAt: Date;
-    };
+  | { status: 'saved'; action: UsernameAction; username: string; updatedAt: Date };
+
+export type UsernameFailure = Exclude<ClaimUsernameResult, { status: 'saved' }>['status'];
 
 export function canonicalUsername(username: string): string {
   return username.toLowerCase();
@@ -44,12 +41,14 @@ export function usernameRuleReason(
 }
 
 export function usernameReserved(
-  canonical: string,
+  username: string,
   settings: Pick<IdentityConfig['usernames'], 'reserved' | 'reserved_prefixes'>,
 ): boolean {
-  const value = canonical.toLowerCase();
-  if (settings.reserved.some((name) => name.toLowerCase() === value)) return true;
-  return settings.reserved_prefixes.some((prefix) => value.startsWith(prefix.toLowerCase()));
+  const canonical = canonicalUsername(username);
+  if (settings.reserved.some((name) => canonicalUsername(name) === canonical)) return true;
+  return settings.reserved_prefixes.some((prefix) =>
+    canonical.startsWith(canonicalUsername(prefix)),
+  );
 }
 
 export async function lockUsername(db: Kysely<Database>, canonical: string): Promise<void> {
@@ -82,7 +81,7 @@ async function latestRelease(
     .orderBy('id', 'desc')
     .limit(1)
     .executeTakeFirst();
-  if (row?.released_at === null || row === undefined) return undefined;
+  if (!row?.released_at) return undefined;
   return { user_id: row.user_id, released_at: row.released_at };
 }
 
@@ -112,27 +111,30 @@ async function changesInWindow(
 }
 
 export async function claimUsername(
-  ctx: Context,
-  options: { userId: string; username: string; now: Date },
+  db: Kysely<Database>,
+  options: {
+    userId: string;
+    username: string;
+    settings: IdentityConfig['usernames'];
+    isBlocked: (username: string) => Promise<boolean>;
+    now: Date;
+  },
 ): Promise<ClaimUsernameResult> {
-  const { now } = options;
-  const settings = ctx.config.usernames;
-  const username = options.username;
+  const { now, settings, username } = options;
   const invalid = usernameRuleReason(username, settings);
   if (invalid !== undefined) return { status: 'invalid', reason: invalid };
   const canonical = canonicalUsername(username);
   if (usernameReserved(canonical, settings)) return { status: 'unavailable' };
 
-  const account = await findAccount(ctx.db, options.userId);
+  const account = await findAccount(db, options.userId);
   if (!account || account.state === 'deleted') return { status: 'not_found' };
   if (account.username !== null && canonicalUsername(account.username) === canonical) {
     return { status: 'unchanged' };
   }
 
-  const filtered = await applyFilter(ctx, username, 'username');
-  if (filtered.decision === 'block') return { status: 'unavailable' };
+  if (await options.isBlocked(username)) return { status: 'unavailable' };
 
-  return ctx.db.transaction().execute(async (trx): Promise<ClaimUsernameResult> => {
+  return db.transaction().execute(async (trx): Promise<ClaimUsernameResult> => {
     await lockUsername(trx, canonical);
     const latest = await findAccount(trx, options.userId);
     if (!latest || latest.state === 'deleted') return { status: 'not_found' };
@@ -195,12 +197,7 @@ export async function claimUsername(
     );
 
     const action: UsernameAction = !changing ? 'claim' : reclaiming ? 'reclaim' : 'change';
-    identityMetrics(ctx.metrics).username(action);
-    return {
-      status: action === 'claim' ? 'claimed' : action === 'reclaim' ? 'reclaimed' : 'changed',
-      username,
-      updatedAt: now,
-    };
+    return { status: 'saved', action, username, updatedAt: now };
   });
 }
 
@@ -209,7 +206,7 @@ export async function releaseCurrentUsername(
   options: { userId: string; now: Date },
 ): Promise<boolean> {
   const account = await findAccount(trx, options.userId);
-  if (account?.username === null || account === undefined) return false;
+  if (!account?.username) return false;
   await trx
     .updateTable('username_history')
     .set({ released_at: options.now })

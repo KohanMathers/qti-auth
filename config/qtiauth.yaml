@@ -289,6 +289,7 @@ scheduler:
     age.recompute_bands: { schedule: '5 0 * * *', enabled: true }
     accounts.unlock_expired: { schedule: '* * * * *', enabled: true }
     legal.publish: { schedule: '* * * * *', enabled: true }
+    accounts.resume_exports: { schedule: '*/5 * * * *', enabled: true }
     deletion_ledger.prune: { schedule: '0 4 * * *', enabled: true }
     keys.rotate: { schedule: '0 0 * * *', enabled: true }
     webhooks.retry: { schedule: '* * * * *', enabled: true }

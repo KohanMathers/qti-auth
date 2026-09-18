@@ -42,6 +42,7 @@ This also installs the Git hooks.
 | `pnpm format` / `pnpm format:check` | Prettier                                                                         |
 | `pnpm typecheck`                    | TypeScript across the workspace                                                  |
 | `pnpm check:hardcoded`              | Fails on deployment-specific values in source                                    |
+| `pnpm check:imports`                | Fails on unsorted import groups; `--fix` sorts them                              |
 | `pnpm changeset`                    | Record a change for the changelog                                                |
 | `pnpm qtiauth <command>`            | Run the `qtiauth` CLI from source                                                |
 | `pnpm config:schema`                | Regenerate `config/qtiauth.schema.json`                                          |
@@ -70,7 +71,7 @@ docs: explain session bindings
 1. Branch from `main`.
 2. Make the change, with tests.
 3. Run `pnpm changeset` if a package or service changed.
-4. Make sure `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test` and `pnpm check:hardcoded` pass. This can all be tested in one through `pnpm commitcheck`.
+4. Make sure `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test`, `pnpm check:hardcoded` and `pnpm check:imports` pass. This can all be tested in one through `pnpm commitcheck`.
 5. Open the pull request.
 
 ## Code of conduct

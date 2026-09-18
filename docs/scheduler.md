@@ -28,6 +28,7 @@ Schedules are cron patterns with five fields, `minute hour day-of-month month da
 | `age.recompute_bands`           | identity             | `5 0 * * *`      | daily 00:05  |
 | `accounts.unlock_expired`       | identity             | `* * * * *`      | every minute |
 | `legal.publish`                 | identity             | `* * * * *`      | every minute |
+| `accounts.resume_exports`       | identity             | `*/5 * * * *`    | every 5 min  |
 | `deletion_ledger.prune`         | identity             | `0 4 * * *`      | daily 04:00  |
 | `keys.rotate`                   | gateway, oidc, games | `0 0 * * *`      | daily 00:00  |
 | `webhooks.retry`                | notifier             | `* * * * *`      | every minute |

@@ -1,4 +1,5 @@
-export type ActorType = 'user' | 'service' | 'system';
+export const ACTOR_TYPES = ['user', 'service', 'system'] as const;
+export type ActorType = (typeof ACTOR_TYPES)[number];
 
 export interface EventActor {
   type: ActorType;

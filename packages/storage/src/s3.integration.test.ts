@@ -32,6 +32,7 @@ describe('S3 object store', () => {
       }),
     );
     await store.ensureBucket();
+    await expect(store.checkBucket()).resolves.toBeUndefined();
     const body = new TextEncoder().encode('export-bytes');
     const key = exportObjectKey(USER_ID, 'job-1');
     await store.put(key, body, 'application/zip');

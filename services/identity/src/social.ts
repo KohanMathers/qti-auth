@@ -1,6 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
+import { deletedRows } from '@qtiauth/db';
 import type { AgeBand } from '@qtiauth/service-kit';
 import type { Expression, ExpressionBuilder, Kysely, SqlBool } from 'kysely';
 
@@ -24,7 +25,6 @@ import { challengePayload, insertChallenge, takeChallenge, useChallenge } from '
 import type { Database } from './database.ts';
 import { type UserCreatedData, userCreatedEvent } from './events.ts';
 import { recordCurrentLegalAcceptances } from './legal.ts';
-import { hashToken, newToken } from './tokens.ts';
 import {
   authorizationUrl,
   discoverIssuer,
@@ -55,6 +55,7 @@ import {
   type SessionSettings,
 } from './sessions.ts';
 import { steamAuthorizationUrl, steamReturnTo, verifySteamAssertion } from './steam.ts';
+import { hashToken, newToken } from './tokens.ts';
 
 export const SOCIAL_SIGNUP_KIND = 'social_signup' as const;
 export const SOCIAL_SIGNUP_TTL = 30 * 60_000;
@@ -647,7 +648,7 @@ export async function deleteSocialIdentity(
     .where('user_id', '=', options.userId)
     .where(isSocial)
     .executeTakeFirst();
-  return Number(result.numDeletedRows) === 1;
+  return deletedRows(result) === 1;
 }
 
 export async function findSocialIdentity(

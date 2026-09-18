@@ -213,6 +213,9 @@ export function createS3Store(
     presignGet: (key, expiresSeconds) => Promise.resolve(presign('GET', key, expiresSeconds)),
     presignPut: (key, contentType, expiresSeconds) =>
       Promise.resolve(presign('PUT', key, expiresSeconds, { 'content-type': contentType })),
+    async checkBucket() {
+      await send({ method: 'HEAD', ok: [200] });
+    },
     async ensureBucket() {
       const existing = await send({ method: 'HEAD', ok: [200, 404] });
       if (existing.status === 200) return;

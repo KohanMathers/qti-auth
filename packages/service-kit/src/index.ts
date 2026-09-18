@@ -123,7 +123,6 @@ export {
   missingPermissions,
   type PermissionDefinition,
   PermissionDefinitionError,
-  PERMISSION_GRANT,
   type PermissionRegistry,
 } from './permissions.ts';
 export {
@@ -172,6 +171,8 @@ export { closeServer, listen, unwind } from './server.ts';
 export {
   eraseUserObjects,
   exportObjectKey,
+  exportObjectPrefix,
+  HELD_OBJECT_PREFIX,
   heldObjectKey,
   heldObjectPrefix,
   isHeldObjectKey,
@@ -179,11 +180,14 @@ export {
   ledgerObjectKey,
   type ObjectStore,
   openObjectStore,
+  type StorageConfig,
   storageHealthCheck,
   StorageError,
   type StoredObject,
   tryOpenObjectStore,
+  USER_OBJECT_PREFIX,
   userObjectKey,
+  userObjectPrefix,
 } from './storage.ts';
 export {
   hashSessionToken,

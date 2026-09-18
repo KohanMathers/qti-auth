@@ -1,4 +1,3 @@
-import { writeEvent } from '@qtiauth/bus';
 import type { CaptchaWidget } from '@qtiauth/captcha';
 import { FLOW_BINDING_HEADER, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
@@ -14,15 +13,12 @@ import {
   checkCaptcha,
   noteCaptchaAttempt,
 } from './captcha.ts';
-import type { Database } from './database.ts';
-import {
-  type AuditRecordedData,
-  type UserUpdatedData,
-  auditRecordedEvent,
-  userUpdatedEvent,
-} from './events.ts';
+import type { DataExportStatus } from './database.ts';
+import { getExport } from './exports.ts';
 import { type SecondFactorMethod, totpEnrolled } from './factors.ts';
 import {
+  acceptLegal,
+  chooseUsername,
   completeEmailVerification,
   completePasswordReset,
   completeSocialSignup,
@@ -36,11 +32,13 @@ import {
   passkeysEnabled,
   passwordEnabled,
   registerWithPassword,
+  scheduleDeletion,
   sendMagicLink,
   sendPasswordReset,
   signup,
   socialEnabled,
   socialProviderEnabled,
+  startDataExport,
   startSocial,
   totpEnabled,
   verify,
@@ -48,15 +46,12 @@ import {
 import { NO_STORE, revokedHeaders, sessionHeaders, signedOutHeaders } from './headers.ts';
 import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts';
 import {
-  acceptLegalVersions,
   currentLegalVersions,
   findCurrentLegalVersion,
-  findLegalVersion,
+  findViewableLegalVersion,
   pendingMaterialVersions,
 } from './legal.ts';
-import { completeExport, getExport, requestExport } from './exports.ts';
 import { interpolateLegal, LEGAL_DOCUMENT_ID, LEGAL_VERSION } from './legal-documents.ts';
-import { requestDeletion } from './lifecycle.ts';
 import { preferredLocale } from './locale.ts';
 import { identityMetrics } from './metrics.ts';
 import { listPasskeys } from './passkeys.ts';
@@ -106,7 +101,7 @@ import {
 import { listSocialIdentities } from './social.ts';
 import { objectStoreOf } from './storage-state.ts';
 import { beginTotpEnrol, confirmTotpEnrol, disableTotp } from './two-factor.ts';
-import { claimUsername } from './usernames.ts';
+import type { ClaimUsernameResult } from './usernames.ts';
 
 const htmlResponses = { 200: { description: 'An HTML page' } };
 
@@ -149,6 +144,27 @@ function legalNotFound(ctx: Context): Response {
     title: 'Document not found',
     body: paragraph('That legal document is not available.'),
   });
+}
+
+function accountNotFound(ctx: Context): Response {
+  return page(ctx, {
+    status: 404,
+    title: 'Account not found',
+    body: paragraph('Sign in again.'),
+  });
+}
+
+function exportMessage(status: DataExportStatus): string {
+  switch (status) {
+    case 'ready':
+      return 'Your export is ready. Check your email.';
+    case 'pending':
+      return 'Your export is still being prepared.';
+    case 'unavailable':
+      return 'This export is too large to email without object storage.';
+    case 'failed':
+      return 'This export could not be completed.';
+  }
 }
 
 function alert(text: string): string {
@@ -235,9 +251,9 @@ ${socialEnabled(ctx) ? '<li><a href="identities">Connected sign-in methods</a></
 
 function usernameMessage(
   ctx: Context,
-  status: 'invalid' | 'unavailable' | 'unchanged' | 'cooldown' | 'limit' | 'not_found',
+  result: Exclude<ClaimUsernameResult, { status: 'saved' }>,
 ): string {
-  switch (status) {
+  switch (result.status) {
     case 'invalid':
       return `Use ${String(ctx.config.usernames.min_length)}–${String(ctx.config.usernames.max_length)} characters matching ${ctx.config.usernames.charset}.`;
     case 'unavailable':
@@ -245,9 +261,9 @@ function usernameMessage(
     case 'unchanged':
       return 'That’s already your username.';
     case 'cooldown':
-      return 'You can’t change your username yet.';
+      return `You can change your username again after ${result.availableAt.toISOString().slice(0, 10)}.`;
     case 'limit':
-      return 'You can’t change your username again yet.';
+      return 'You have used all your username changes for now.';
     case 'not_found':
       return 'Sign in again.';
   }
@@ -255,24 +271,21 @@ function usernameMessage(
 
 function usernameForm(
   ctx: Context,
-  current: string | null,
-  values: { username?: string } = {},
-  error?: string,
-  resetRequired = false,
+  options: { current: string | null; resetRequired: boolean; value?: string; error?: string },
 ): Response {
+  const { current, resetRequired } = options;
   const title = resetRequired || current === null ? 'Choose a username' : 'Change username';
-  const prompt = resetRequired
-    ? paragraph('A member of staff asked you to choose a new username.')
-    : current === null
-      ? ''
-      : paragraph(`Current username: ${current}`);
+  let prompt = '';
+  if (resetRequired) prompt = paragraph('A member of staff asked you to choose a new username.');
+  else if (current !== null) prompt = paragraph(`Current username: ${current}`);
+  const value = options.value ?? (resetRequired ? '' : (current ?? ''));
   return page(ctx, {
     title,
-    body: `${error === undefined ? '' : alert(error)}
+    body: `${options.error === undefined ? '' : alert(options.error)}
 ${prompt}
 <form method="post" action="username">
 <p><label for="username">Username</label><br>
-<input id="username" name="username" required minlength="${String(ctx.config.usernames.min_length)}" maxlength="${String(ctx.config.usernames.max_length)}" value="${escapeHtml(values.username ?? (resetRequired ? '' : (current ?? '')))}"></p>
+<input id="username" name="username" required minlength="${String(ctx.config.usernames.min_length)}" maxlength="${String(ctx.config.usernames.max_length)}" value="${escapeHtml(value)}"></p>
 <p><button type="submit">Save</button></p>
 </form>`,
   });
@@ -1280,13 +1293,7 @@ ${passkeysEnabled(ctx) ? '<p><a href="passkeys">Passkeys</a></p>' : ''}`,
         });
       }
       const account = await findAccount(ctx.db, userId);
-      if (!account) {
-        return page(ctx, {
-          status: 404,
-          title: 'Account not found',
-          body: paragraph('Sign in again.'),
-        });
-      }
+      if (!account) return accountNotFound(ctx);
       const started = await beginTotpEnrol(ctx.db, {
         userId,
         email: account.email,
@@ -1367,14 +1374,11 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     handler: async ({ ctx, identity }) => {
       const { userId } = sessionUser(identity);
       const account = await findAccount(ctx.db, userId);
-      if (!account) {
-        return page(ctx, {
-          status: 404,
-          title: 'Account not found',
-          body: paragraph('Sign in again.'),
-        });
-      }
-      return usernameForm(ctx, account.username, {}, undefined, account.username_reset_required);
+      if (!account) return accountNotFound(ctx);
+      return usernameForm(ctx, {
+        current: account.username,
+        resetRequired: account.username_reset_required,
+      });
     },
   });
 
@@ -1391,34 +1395,18 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     handler: async ({ ctx, identity, request, log }) => {
       const { userId } = sessionUser(identity);
       const account = await findAccount(ctx.db, userId);
-      if (!account) {
-        return page(ctx, {
-          status: 404,
-          title: 'Account not found',
-          body: paragraph('Sign in again.'),
-        });
-      }
+      if (!account) return accountNotFound(ctx);
       const form = await readForm(request);
       const username = form['username'] ?? '';
-      const result = await claimUsername(ctx, { userId, username, now: new Date() });
-      if (
-        result.status === 'invalid' ||
-        result.status === 'unavailable' ||
-        result.status === 'unchanged' ||
-        result.status === 'cooldown' ||
-        result.status === 'limit' ||
-        result.status === 'not_found'
-      ) {
-        return usernameForm(
-          ctx,
-          account.username,
-          { username },
-          usernameMessage(ctx, result.status),
-          account.username_reset_required,
-        );
+      const result = await chooseUsername({ ctx, request, log }, { userId, username });
+      if (result.status !== 'saved') {
+        return usernameForm(ctx, {
+          current: account.username,
+          resetRequired: account.username_reset_required,
+          value: username,
+          error: usernameMessage(ctx, result),
+        });
       }
-      ctx.outbox.wake();
-      log.info('username set', { user_id: userId });
       return page(ctx, {
         title: 'Username saved',
         body: `${paragraph(`Your username is ${result.username}.`)}
@@ -1938,39 +1926,14 @@ ${hiddenInput('token', query.token)}
     responses: htmlResponses,
     handler: async ({ ctx, identity, request, log }) => {
       const { userId } = sessionUser(identity);
-      const now = new Date();
-      const pending = await pendingMaterialVersions(ctx.db, userId, now);
-      const result = await ctx.db.transaction().execute(async (trx) => {
-        const accepted = await acceptLegalVersions(trx, {
+      const pending = await pendingMaterialVersions(ctx.db, userId, new Date());
+      await acceptLegal(
+        { ctx, request, log },
+        {
           userId,
           documents: pending.map((document) => ({ id: document.id, version: document.version })),
-          ip: sessionClient(ctx.config, request).ip || null,
-          method: 'self',
-          now,
-        });
-        for (const document of pending) {
-          await writeEvent<Database, AuditRecordedData>(
-            trx,
-            auditRecordedEvent(
-              { type: 'user', id: userId },
-              {
-                action: 'legal.accepted',
-                target_type: 'legal_version',
-                target_id: `${document.id}:${document.version}`,
-              },
-            ),
-          );
-        }
-        if (accepted.accepted > 0) {
-          await writeEvent<Database, UserUpdatedData>(
-            trx,
-            userUpdatedEvent(userId, { fields: ['legal'] }),
-          );
-        }
-        return accepted;
-      });
-      ctx.outbox.wake();
-      log.info('legal documents accepted', { user_id: userId, accepted: result.accepted });
+        },
+      );
       const remaining = await pendingMaterialVersions(ctx.db, userId, new Date());
       if (remaining.length > 0) {
         return page(ctx, {
@@ -2024,15 +1987,13 @@ ${hiddenInput('token', query.token)}
     },
     responses: htmlResponses,
     handler: async ({ ctx, params }) => {
-      const now = new Date();
-      const [document, current] = await Promise.all([
-        findLegalVersion(ctx.db, params.id, params.version),
-        findCurrentLegalVersion(ctx.db, params.id, now),
-      ]);
-      if (!document || document.effective_at.getTime() > now.getTime()) return legalNotFound(ctx);
-      if (!ctx.config.legal.public_history && current?.version !== document.version) {
-        return legalNotFound(ctx);
-      }
+      const document = await findViewableLegalVersion(ctx.db, {
+        id: params.id,
+        version: params.version,
+        publicHistory: ctx.config.legal.public_history,
+        now: new Date(),
+      });
+      if (!document) return legalNotFound(ctx);
       const brand = ctx.config.branding;
       return page(ctx, {
         title: interpolateLegal(document.summary, brand),
@@ -2055,13 +2016,7 @@ ${hiddenInput('token', query.token)}
     handler: async ({ ctx, identity }) => {
       const { userId } = sessionUser(identity);
       const account = await findAccount(ctx.db, userId);
-      if (!account) {
-        return page(ctx, {
-          status: 404,
-          title: 'Account not found',
-          body: paragraph('Sign in again.'),
-        });
-      }
+      if (!account) return accountNotFound(ctx);
       if (account.state === 'pending_deletion') {
         return page(ctx, {
           title: 'Deletion already scheduled',
@@ -2089,20 +2044,10 @@ ${hiddenInput('token', query.token)}
     allow_account_states: SIGNED_IN_STATES,
     rate_limit: 'global',
     responses: htmlResponses,
-    handler: async ({ ctx, identity, log }) => {
+    handler: async ({ ctx, identity, request, log }) => {
       const { userId } = sessionUser(identity);
-      const result = await requestDeletion(ctx.db, {
-        userId,
-        actor: { type: 'user', id: userId },
-        now: new Date(),
-      });
-      if (result.status === 'not_found') {
-        return page(ctx, {
-          status: 404,
-          title: 'Account not found',
-          body: paragraph('Sign in again.'),
-        });
-      }
+      const result = await scheduleDeletion({ ctx, request, log }, { userId });
+      if (result.status === 'not_found') return accountNotFound(ctx);
       if (result.status === 'conflict') {
         return page(ctx, {
           status: 409,
@@ -2110,10 +2055,6 @@ ${hiddenInput('token', query.token)}
           body: paragraph('The account is not in a state that allows deletion.'),
         });
       }
-      ctx.outbox.wake();
-      identityMetrics(ctx.metrics).deletion('requested');
-      identityMetrics(ctx.metrics).sessionsRevoked('revoked', result.revoked.length);
-      log.info('account deletion requested', { user_id: userId });
       return page(ctx, {
         title: 'Your account will be deleted',
         headers: signedOutHeaders(result.revoked),
@@ -2140,7 +2081,7 @@ ${hiddenInput('token', query.token)}
         const exported = await getExport(ctx.db, {
           userId,
           exportId: query.id,
-          store: objectStoreOf(ctx) ?? null,
+          store: objectStoreOf(ctx),
           now: new Date(),
         });
         if (!exported) {
@@ -2150,15 +2091,7 @@ ${hiddenInput('token', query.token)}
             body: paragraph('That export is unknown.'),
           });
         }
-        const status =
-          exported.status === 'ready'
-            ? 'Your export is ready. Check your email.'
-            : exported.status === 'pending'
-              ? 'Your export is still being prepared.'
-              : exported.status === 'unavailable'
-                ? 'This export is too large to email without object storage.'
-                : 'This export could not be completed.';
-        return page(ctx, { title: 'Data export', body: paragraph(status) });
+        return page(ctx, { title: 'Data export', body: paragraph(exportMessage(exported.status)) });
       }
       return page(ctx, {
         title: 'Download your data',
@@ -2181,37 +2114,10 @@ ${hiddenInput('token', query.token)}
     allow_account_states: SIGNED_IN_STATES,
     rate_limit: 'global',
     responses: htmlResponses,
-    handler: async ({ ctx, identity, log }) => {
+    handler: async ({ ctx, identity, request, log }) => {
       const { userId } = sessionUser(identity);
-      const result = await requestExport(ctx.db, { userId, now: new Date() });
-      if (result.status === 'not_found') {
-        return page(ctx, {
-          status: 404,
-          title: 'Account not found',
-          body: paragraph('Sign in again.'),
-        });
-      }
-      const store = objectStoreOf(ctx) ?? null;
-      void completeExport(ctx.db, ctx.bus, result.id, {
-        store,
-        settings: {
-          ttl: ctx.config.accounts.export_ttl,
-          emailMaxBytes: ctx.config.accounts.export_email_max_bytes,
-          defaultLocale: ctx.config.email.default_locale,
-        },
-        metrics: ctx.busMetrics,
-        now: new Date(),
-      }).then(
-        (status) => {
-          if (status === 'ready' || status === 'failed' || status === 'unavailable') {
-            identityMetrics(ctx.metrics).dataExport(status);
-          }
-        },
-        (error: unknown) => {
-          ctx.log.error('data export failed', { error, export_id: result.id });
-        },
-      );
-      log.info('data export requested', { user_id: userId, export_id: result.id });
+      const result = await startDataExport({ ctx, request, log }, { userId });
+      if (result.status === 'not_found') return accountNotFound(ctx);
       return page(ctx, {
         status: 202,
         title: 'Export started',

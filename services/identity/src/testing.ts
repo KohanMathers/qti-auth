@@ -1,5 +1,10 @@
+import { randomUUIDv7 } from 'node:crypto';
+
 import { type Bus, consumeWork } from '@qtiauth/bus';
 import { type EmailJob, emailQueue } from '@qtiauth/email';
+import type { Kysely } from 'kysely';
+
+import type { Database } from './database.ts';
 
 export interface CapturedEmails {
   jobs: EmailJob[];
@@ -67,4 +72,33 @@ export async function captureEmails(bus: Bus): Promise<CapturedEmails> {
     },
     stop: () => consumer.stop(),
   };
+}
+
+/** Gives a user exactly these grants through a one-off role. */
+export async function grantUser(
+  db: Kysely<Database>,
+  userId: string,
+  grants: readonly string[],
+): Promise<void> {
+  const roleId = randomUUIDv7();
+  const now = new Date();
+  await db
+    .insertInto('roles')
+    .values({
+      id: roleId,
+      slug: `grant_${roleId.replaceAll('-', '')}`,
+      name: 'Grant',
+      description: 'Grants given directly by a test',
+      builtin: false,
+      created_at: now,
+      updated_at: now,
+    })
+    .execute();
+  if (grants.length > 0) {
+    await db
+      .insertInto('role_permissions')
+      .values(grants.map((grant) => ({ role_id: roleId, grant })))
+      .execute();
+  }
+  await db.insertInto('user_roles').values({ user_id: userId, role_id: roleId }).execute();
 }

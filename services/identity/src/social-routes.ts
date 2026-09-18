@@ -6,6 +6,7 @@ import { isValidDateOfBirth } from './age.ts';
 import { canRemovePrimaryMethod, lastSignInMethodError } from './factors.ts';
 import { completeSocialSignup, finishSocial, socialProviderEnabled, startSocial } from './flows.ts';
 import { NO_STORE, sessionHeaders } from './headers.ts';
+import { iso } from './iso.ts';
 import { isCanonicalLocale, preferredLocale } from './locale.ts';
 import { enabledSocialProviders, findSocialProvider } from './providers.ts';
 import type { Context } from './service.ts';
@@ -54,7 +55,7 @@ function listedIdentity(
     type: identity.type,
     name: providerName(ctx, identity.type),
     created_at: identity.createdAt.toISOString(),
-    last_used_at: identity.lastUsedAt?.toISOString() ?? null,
+    last_used_at: iso(identity.lastUsedAt),
   };
 }
 

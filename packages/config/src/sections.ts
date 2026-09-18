@@ -713,8 +713,12 @@ export const rateLimits = z
     'Named rate-limit policies, referenced by routes. Policies you set replace the built-in policy of the same name.',
   );
 
-const PERMISSION_GRANT = /^(?:\*|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*(?:\.\*)?)$/;
-const ROLE_SLUG = /^[a-z][a-z0-9_]{0,62}$/;
+export const PERMISSION_GRANT = /^(?:\*|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*(?:\.\*)?)$/;
+export const PERMISSION_GRANT_MESSAGE = 'Must be a permission, a prefix like users.*, or *';
+export const ROLE_SLUG = /^[a-z][a-z0-9_]{0,62}$/;
+export const ROLE_SLUG_MESSAGE = 'Must be a lowercase slug like support_agent';
+export const ROLE_NAME_MAX = 80;
+export const ROLE_DESCRIPTION_MAX = 500;
 
 export const DEFAULT_REQUIRE_2FA_PERMISSIONS = [
   'users.*',
@@ -744,7 +748,7 @@ export const security = z
       .array(
         z
           .string()
-          .regex(PERMISSION_GRANT, 'Must be a permission, a prefix like users.*, or *')
+          .regex(PERMISSION_GRANT, PERMISSION_GRANT_MESSAGE)
           .describe('A permission or prefix that requires two-factor enrolment.'),
       )
       .default([...DEFAULT_REQUIRE_2FA_PERMISSIONS])
@@ -759,13 +763,18 @@ export const ADMIN_ROLE = 'admin';
 
 const roleDefinition = z
   .strictObject({
-    name: z.string().trim().min(1).max(80).describe('Display name.'),
-    description: z.string().trim().min(1).max(500).describe('What this role is for.'),
+    name: z.string().trim().min(1).max(ROLE_NAME_MAX).describe('Display name.'),
+    description: z
+      .string()
+      .trim()
+      .min(1)
+      .max(ROLE_DESCRIPTION_MAX)
+      .describe('What this role is for.'),
     permissions: z
       .array(
         z
           .string()
-          .regex(PERMISSION_GRANT, 'Must be a permission, a prefix like users.*, or *')
+          .regex(PERMISSION_GRANT, PERMISSION_GRANT_MESSAGE)
           .describe('A permission, a prefix ending in .*, or *.'),
       )
       .refine((grants) => new Set(grants).size === grants.length, {
@@ -816,10 +825,7 @@ export const DEFAULT_ROLES = {
 };
 
 export const roles = z
-  .record(
-    z.string().regex(ROLE_SLUG, 'Must be a lowercase slug like support_agent'),
-    roleDefinition,
-  )
+  .record(z.string().regex(ROLE_SLUG, ROLE_SLUG_MESSAGE), roleDefinition)
   .refine((value) => Object.hasOwn(value, ADMIN_ROLE), { message: 'Must include an admin role' })
   .default(DEFAULT_ROLES)
   .describe(
@@ -1225,6 +1231,7 @@ const DEFAULT_CRON_JOBS: Record<string, CronJob> = {
   'age.recompute_bands': { schedule: '5 0 * * *', enabled: true },
   'accounts.unlock_expired': { schedule: '* * * * *', enabled: true },
   'legal.publish': { schedule: '* * * * *', enabled: true },
+  'accounts.resume_exports': { schedule: '*/5 * * * *', enabled: true },
   'deletion_ledger.prune': { schedule: '0 4 * * *', enabled: true },
   'keys.rotate': { schedule: '0 0 * * *', enabled: true },
   'webhooks.retry': { schedule: '* * * * *', enabled: true },

@@ -343,6 +343,7 @@ double-run a job. The scheduler holds no job logic.
 | `age.recompute_bands` | identity | daily 00:05 |
 | `accounts.unlock_expired` | identity | every minute |
 | `legal.publish` | identity | every minute |
+| `accounts.resume_exports` | identity | every 5 minutes |
 | `deletion_ledger.prune` | identity | daily 04:00 |
 | `keys.rotate` | gateway, oidc, games | daily 00:00 (rotates when due) |
 | `webhooks.retry` | notifier | every minute |

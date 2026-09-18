@@ -1,7 +1,8 @@
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { QtiauthConfig } from '@qtiauth/config';
+import { deletedRows } from '@qtiauth/db';
 import { LEDGER_OBJECT_PREFIX, ledgerObjectKey, type ObjectStore } from '@qtiauth/service-kit';
 import type { Kysely } from 'kysely';
 
@@ -40,23 +41,9 @@ function entryBytes(entry: LedgerEntry): Uint8Array {
   return new TextEncoder().encode(`${JSON.stringify(entry)}\n`);
 }
 
-function parseEntry(body: string): LedgerEntry | undefined {
-  try {
-    const parsed = JSON.parse(body) as unknown;
-    if (
-      parsed === null ||
-      typeof parsed !== 'object' ||
-      !('user_id' in parsed) ||
-      !('deleted_at' in parsed) ||
-      typeof parsed.user_id !== 'string' ||
-      typeof parsed.deleted_at !== 'string'
-    ) {
-      return undefined;
-    }
-    return { user_id: parsed.user_id, deleted_at: parsed.deleted_at };
-  } catch {
-    return undefined;
-  }
+// Files mirror the object keys, so both destinations share one layout.
+function ledgerDirectory(directory: string): string {
+  return join(directory, LEDGER_OBJECT_PREFIX);
 }
 
 async function writeDestination(destination: LedgerDestination, entry: LedgerEntry): Promise<void> {
@@ -65,7 +52,7 @@ async function writeDestination(destination: LedgerDestination, entry: LedgerEnt
     await destination.store.put(ledgerObjectKey(entry.user_id), body, 'application/json');
     return;
   }
-  const dir = join(destination.directory, 'deletion-ledger');
+  const dir = ledgerDirectory(destination.directory);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, `${entry.user_id}.json`), body);
 }
@@ -85,6 +72,7 @@ export async function flushLedgerOutbox(
   db: Kysely<Database>,
   destination: LedgerDestination,
   now: Date,
+  options: { onWriteError?: (error: unknown, userId: string) => void } = {},
 ): Promise<number> {
   const rows = await db
     .selectFrom('deletion_ledger_outbox')
@@ -94,10 +82,17 @@ export async function flushLedgerOutbox(
     .execute();
   let sent = 0;
   for (const row of rows) {
-    await writeDestination(destination, {
-      user_id: row.user_id,
-      deleted_at: row.deleted_at.toISOString(),
-    });
+    try {
+      await writeDestination(destination, {
+        user_id: row.user_id,
+        deleted_at: row.deleted_at.toISOString(),
+      });
+    } catch (error) {
+      // The row stays unsent, so the next flush retries it.
+      if (options.onWriteError === undefined) throw error;
+      options.onWriteError(error, row.user_id);
+      continue;
+    }
     await db
       .updateTable('deletion_ledger_outbox')
       .set({ sent_at: now })
@@ -123,7 +118,9 @@ export async function pruneLedgerDestination(
     }
     return deleted;
   }
-  const dir = join(destination.directory, 'deletion-ledger');
+  // Both destinations age entries by when they were written, not by deleted_at, so storage
+  // objects never have to be downloaded to be pruned.
+  const dir = ledgerDirectory(destination.directory);
   let names: string[];
   try {
     names = await readdir(dir);
@@ -135,10 +132,8 @@ export async function pruneLedgerDestination(
   for (const name of names) {
     if (!name.endsWith('.json')) continue;
     const path = join(dir, name);
-    const [info, body] = await Promise.all([stat(path), readFile(path, 'utf8')]);
-    const entry = parseEntry(body);
-    const when = entry === undefined ? info.mtime : new Date(entry.deleted_at);
-    if (Number.isNaN(when.getTime()) || when.getTime() > cutoff.getTime()) continue;
+    const info = await stat(path);
+    if (info.mtime.getTime() > cutoff.getTime()) continue;
     await rm(path);
     deleted += 1;
   }
@@ -151,5 +146,5 @@ export async function sweepLedgerOutbox(db: Kysely<Database>, cutoff: Date): Pro
     .where('sent_at', 'is not', null)
     .where('sent_at', '<=', cutoff)
     .executeTakeFirst();
-  return Number(result.numDeletedRows);
+  return deletedRows(result);
 }

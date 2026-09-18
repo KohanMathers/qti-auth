@@ -1,3 +1,4 @@
+import { ACTOR_TYPES } from '@qtiauth/events';
 import {
   decodeCursor,
   pageOf,
@@ -11,13 +12,13 @@ import { listAuditRecords } from './audit.ts';
 import { NO_STORE } from './headers.ts';
 import type { Context } from './service.ts';
 
-const position = z.object({ seq: z.number().int().positive() });
+const position = z.object({ seq: z.int().positive() });
 
 const recordSchema = z.object({
-  seq: z.number().int(),
+  seq: z.int(),
   event_id: z.string(),
   occurred_at: z.iso.datetime(),
-  actor_type: z.enum(['user', 'service', 'system']),
+  actor_type: z.enum(ACTOR_TYPES),
   actor_id: z.string(),
   action: z.string(),
   target_type: z.string(),
@@ -26,10 +27,7 @@ const recordSchema = z.object({
 
 const listQuery = paginationQuery({ defaultLimit: 20, maxLimit: 100 }).extend({
   actor_id: z.string().min(1).optional().describe('Only rows whose actor id matches.'),
-  actor_type: z
-    .enum(['user', 'service', 'system'])
-    .optional()
-    .describe('Only rows with this actor type.'),
+  actor_type: z.enum(ACTOR_TYPES).optional().describe('Only rows with this actor type.'),
   action: z.string().min(1).optional().describe('Only this action, such as role.updated.'),
   target_type: z.string().min(1).optional().describe('Only this kind of target, such as role.'),
   target_id: z.string().min(1).optional().describe("Only this target's id."),

@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { eraseUserObjects } from './client.ts';
-import { createMemoryStore } from './memory.ts';
+import { storageHealthCheck } from './health.ts';
 import { exportObjectKey, heldObjectKey, userObjectKey } from './keys.ts';
+import { createMemoryStore } from './memory.ts';
 
 describe('createMemoryStore', () => {
   it('stores, lists, deletes and erases a user except held objects', async () => {
@@ -33,6 +34,17 @@ describe('createMemoryStore', () => {
     expect(await store.get(heldObjectKey(userId, 'case.json'))).toBeDefined();
     expect(await eraseUserObjects(store, userId)).toBe(1);
     expect(await store.list('')).toEqual([]);
+  });
+});
+
+describe('storageHealthCheck', () => {
+  it('checks the bucket without listing it', async () => {
+    const store = createMemoryStore();
+    const list = vi.spyOn(store, 'list');
+    const checkBucket = vi.spyOn(store, 'checkBucket');
+    await storageHealthCheck(store)();
+    expect(checkBucket).toHaveBeenCalledOnce();
+    expect(list).not.toHaveBeenCalled();
   });
 });
 

@@ -7,6 +7,13 @@ import type { AgeAssuranceStrength, Database } from './database.ts';
 
 export const SELF_DECLARED_PROVIDER = 'self_declared';
 
+export class AgeAssuranceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgeAssuranceError';
+  }
+}
+
 export interface AgeAssuranceUser {
   id: string;
 }
@@ -53,7 +60,7 @@ export function selfDeclaredProvider(): AgeAssuranceProvider {
 
 export function ageAssuranceProvider(id: string): AgeAssuranceProvider {
   if (id === SELF_DECLARED_PROVIDER) return selfDeclaredProvider();
-  throw new RangeError(`Unknown age assurance provider: ${id}`);
+  throw new AgeAssuranceError(`Unknown age assurance provider: ${id}`);
 }
 
 export function assuranceRequiredFor(
@@ -97,7 +104,7 @@ export async function completeAgeAssurance(
 ): Promise<AgeAssuranceResult> {
   const begun = await options.provider.begin({ id: options.userId }, { now: options.now });
   if (begun.status !== 'completed') {
-    throw new RangeError(`Age assurance provider ${options.provider.id} did not complete`);
+    throw new AgeAssuranceError(`Age assurance provider ${options.provider.id} did not complete`);
   }
   await recordAgeAssurance(db, {
     userId: options.userId,

@@ -28,11 +28,12 @@
     "test:watch": "vitest --project unit",
     "test:integration": "vitest run --project integration",
     "check:hardcoded": "node scripts/check-hardcoded.ts",
+    "check:imports": "node scripts/check-import-order.ts",
     "config:schema": "pnpm --filter @qtiauth/config schema",
     "qtiauth": "node packages/cli/src/main.ts",
     "stack:dev": "docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.dev.yaml",
     "changeset": "changeset",
-    "commitcheck": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm check:hardcoded"
+    "commitcheck": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm check:hardcoded && pnpm check:imports"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",

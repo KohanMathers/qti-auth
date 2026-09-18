@@ -1,27 +1,20 @@
-import { writeEvent } from '@qtiauth/bus';
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
-import type { Database } from './database.ts';
-import {
-  type AuditRecordedData,
-  type UserUpdatedData,
-  auditRecordedEvent,
-  userUpdatedEvent,
-} from './events.ts';
+import { LEGAL_ACCEPTANCE_METHODS } from './database.ts';
+import { acceptLegal } from './flows.ts';
 import { NO_STORE } from './headers.ts';
 import {
-  acceptLegalVersions,
   currentLegalVersions,
   findCurrentLegalVersion,
-  findLegalVersion,
+  findViewableLegalVersion,
+  type LegalVersion,
   listLegalAcceptances,
   pendingMaterialVersions,
 } from './legal.ts';
 import { interpolateLegal, LEGAL_DOCUMENT_ID, LEGAL_VERSION } from './legal-documents.ts';
 import type { Context } from './service.ts';
-import { clientIp } from './settings.ts';
 import { signedIn } from './session-routes.ts';
 
 const documentId = z.string().regex(LEGAL_DOCUMENT_ID);
@@ -46,16 +39,7 @@ const acceptBody = z.object({
     .describe('Document versions the user is accepting.'),
 });
 
-function presentedSummary(
-  ctx: Context,
-  document: {
-    id: string;
-    version: string;
-    effective_at: Date;
-    material: boolean;
-    summary: string;
-  },
-) {
+function presentedSummary(ctx: Context, document: Omit<LegalVersion, 'body'>) {
   return {
     id: document.id,
     version: document.version,
@@ -65,29 +49,11 @@ function presentedSummary(
   };
 }
 
-function presentedDocument(
-  ctx: Context,
-  document: {
-    id: string;
-    version: string;
-    effective_at: Date;
-    material: boolean;
-    summary: string;
-    body: string;
-  },
-) {
+function presentedDocument(ctx: Context, document: LegalVersion) {
   return {
     ...presentedSummary(ctx, document),
     body: interpolateLegal(document.body, ctx.config.branding),
   };
-}
-
-function historyVisible(
-  ctx: Context,
-  current: { version: string } | undefined,
-  version: string,
-): boolean {
-  return ctx.config.legal.public_history || current?.version === version;
 }
 
 export function legalRoutes(router: Router<Context>): void {
@@ -149,17 +115,13 @@ export function legalRoutes(router: Router<Context>): void {
     responses: { 200: { description: 'That version', schema: documentSchema } },
     errors: ['LEGAL_DOCUMENT_NOT_FOUND'],
     handler: async ({ ctx, params }) => {
-      const now = new Date();
-      const [document, current] = await Promise.all([
-        findLegalVersion(ctx.db, params.id, params.version),
-        findCurrentLegalVersion(ctx.db, params.id, now),
-      ]);
-      if (!document || document.effective_at.getTime() > now.getTime()) {
-        throw new ProblemError('LEGAL_DOCUMENT_NOT_FOUND');
-      }
-      if (!historyVisible(ctx, current, document.version)) {
-        throw new ProblemError('LEGAL_DOCUMENT_NOT_FOUND');
-      }
+      const document = await findViewableLegalVersion(ctx.db, {
+        id: params.id,
+        version: params.version,
+        publicHistory: ctx.config.legal.public_history,
+        now: new Date(),
+      });
+      if (!document) throw new ProblemError('LEGAL_DOCUMENT_NOT_FOUND');
       return { status: 200, headers: NO_STORE, body: presentedDocument(ctx, document) };
     },
   });
@@ -185,7 +147,7 @@ export function legalRoutes(router: Router<Context>): void {
               id: z.string(),
               version: z.string(),
               accepted_at: z.iso.datetime(),
-              method: z.enum(['signup', 'self', 'guardian']),
+              method: z.enum(LEGAL_ACCEPTANCE_METHODS),
             }),
           ),
         }),
@@ -238,39 +200,12 @@ export function legalRoutes(router: Router<Context>): void {
     handler: async ({ ctx, identity, body, request, log }) => {
       const { userId } = signedIn(identity);
       if (!(await findAccount(ctx.db, userId))) throw new ProblemError('ACCOUNT_NOT_FOUND');
-      const now = new Date();
-      const ip = clientIp(request) || null;
-      const result = await ctx.db.transaction().execute(async (trx) => {
-        const accepted = await acceptLegalVersions(trx, {
-          userId,
-          documents: body.documents,
-          ip,
-          method: 'self',
-          now,
-        });
-        if (accepted.unknown.length > 0) throw new ProblemError('LEGAL_DOCUMENT_NOT_FOUND');
-        for (const document of body.documents) {
-          await writeEvent<Database, AuditRecordedData>(
-            trx,
-            auditRecordedEvent(
-              { type: 'user', id: userId },
-              {
-                action: 'legal.accepted',
-                target_type: 'legal_version',
-                target_id: `${document.id}:${document.version}`,
-              },
-            ),
-          );
-        }
-        await writeEvent<Database, UserUpdatedData>(
-          trx,
-          userUpdatedEvent(userId, { fields: ['legal'] }),
-        );
-        return accepted;
-      });
-      ctx.outbox.wake();
-      log.info('legal documents accepted', { user_id: userId, accepted: result.accepted });
-      const pending = await pendingMaterialVersions(ctx.db, userId, now);
+      const result = await acceptLegal(
+        { ctx, request, log },
+        { userId, documents: body.documents },
+      );
+      if (result.status === 'unknown') throw new ProblemError('LEGAL_DOCUMENT_NOT_FOUND');
+      const pending = await pendingMaterialVersions(ctx.db, userId, new Date());
       return {
         status: 200,
         headers: NO_STORE,

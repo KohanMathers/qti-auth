@@ -1,16 +1,11 @@
 import { type Bus, rpcRequest, writeEvent } from '@qtiauth/bus';
+import { updatedRows } from '@qtiauth/db';
 import type { EventActor } from '@qtiauth/events';
 import { type AccountState, type AgeBand } from '@qtiauth/service-kit';
 import { type Kysely, sql } from 'kysely';
 
 import { expireLocks, recordAccountAction } from './account-locks.ts';
-import {
-  type Account,
-  assertTransition,
-  canTransition,
-  dateOfBirthColumn,
-  findAccount,
-} from './accounts.ts';
+import { type Account, canTransition, dateOfBirthColumn, findAccount } from './accounts.ts';
 import { type AgeBands, ageBand, ageOn, dateOfBirthBounds } from './age.ts';
 import type { AccountAction, Database } from './database.ts';
 import { parseDevice } from './device.ts';
@@ -26,6 +21,7 @@ import {
   userUnlockedEvent,
   userUpdatedEvent,
 } from './events.ts';
+import { iso } from './iso.ts';
 import { loadUserRoles } from './roles.ts';
 import { challengeSessions, listSessions, revokeSessions, sessionExpiry } from './sessions.ts';
 import { releaseCurrentUsername } from './usernames.ts';
@@ -129,10 +125,6 @@ export interface UserDetail {
   moderation?: unknown;
   entitlements?: unknown;
   tickets?: unknown;
-}
-
-function iso(date: Date | null): string | null {
-  return date?.toISOString() ?? null;
 }
 
 async function staffTarget(
@@ -399,23 +391,25 @@ export async function getUserDetail(
   return detail;
 }
 
+type StateChangeResult = { status: 'ok' } | { status: AdminUserError };
+
 export async function banUser(
   db: Kysely<Database>,
   options: { userId: string; actorId: string; reason: string; now: Date },
-): Promise<{ status: 'ok' } | { status: AdminUserError }> {
+): Promise<StateChangeResult> {
   const target = await staffTarget(db, options);
   if (target.status !== 'ok') return target;
   const { account } = target;
   if (!canTransition(account.state, 'banned')) return { status: 'conflict' };
   const actor: EventActor = { type: 'user', id: options.actorId };
-  await db.transaction().execute(async (trx) => {
-    assertTransition(account.state, 'banned');
-    await trx
+  return db.transaction().execute(async (trx): Promise<StateChangeResult> => {
+    const updated = await trx
       .updateTable('users')
       .set({ state: 'banned', locked_until: null, updated_at: options.now })
       .where('id', '=', options.userId)
       .where('state', '=', account.state)
-      .execute();
+      .executeTakeFirst();
+    if (updatedRows(updated) === 0) return { status: 'conflict' };
     await recordAccountAction(trx, {
       userId: options.userId,
       actor,
@@ -430,29 +424,29 @@ export async function banUser(
       trx,
       userBannedEvent(account.id, { reason: options.reason }, actor),
     );
+    return { status: 'ok' };
   });
-  return { status: 'ok' };
 }
 
 export async function unbanUser(
   db: Kysely<Database>,
   options: { userId: string; actorId: string; reason: string; now: Date },
-): Promise<{ status: 'ok' } | { status: AdminUserError }> {
+): Promise<StateChangeResult> {
   const target = await staffTarget(db, options);
   if (target.status !== 'ok') return target;
   const { account } = target;
-  if (!canTransition(account.state, 'active') || account.state !== 'banned') {
+  if (account.state !== 'banned' || !canTransition(account.state, 'active')) {
     return { status: 'conflict' };
   }
   const actor: EventActor = { type: 'user', id: options.actorId };
-  await db.transaction().execute(async (trx) => {
-    assertTransition(account.state, 'active');
-    await trx
+  return db.transaction().execute(async (trx): Promise<StateChangeResult> => {
+    const updated = await trx
       .updateTable('users')
       .set({ state: 'active', updated_at: options.now })
       .where('id', '=', options.userId)
       .where('state', '=', 'banned')
-      .execute();
+      .executeTakeFirst();
+    if (updatedRows(updated) === 0) return { status: 'conflict' };
     await recordAccountAction(trx, {
       userId: options.userId,
       actor,
@@ -467,14 +461,14 @@ export async function unbanUser(
       trx,
       userUnbannedEvent(account.id, { reason: options.reason }, actor),
     );
+    return { status: 'ok' };
   });
-  return { status: 'ok' };
 }
 
 export async function lockUser(
   db: Kysely<Database>,
   options: { userId: string; actorId: string; reason: string; expiresAt: Date; now: Date },
-): Promise<{ status: 'ok' } | { status: AdminUserError }> {
+): Promise<StateChangeResult> {
   if (options.expiresAt.getTime() <= options.now.getTime()) return { status: 'lock_expiry' };
   const target = await staffTarget(db, options);
   if (target.status !== 'ok') return target;
@@ -483,14 +477,14 @@ export async function lockUser(
     return { status: 'conflict' };
   }
   const actor: EventActor = { type: 'user', id: options.actorId };
-  await db.transaction().execute(async (trx) => {
-    if (account.state !== 'locked') assertTransition(account.state, 'locked');
-    await trx
+  return db.transaction().execute(async (trx): Promise<StateChangeResult> => {
+    const updated = await trx
       .updateTable('users')
       .set({ state: 'locked', locked_until: options.expiresAt, updated_at: options.now })
       .where('id', '=', options.userId)
       .where('state', '=', account.state)
-      .execute();
+      .executeTakeFirst();
+    if (updatedRows(updated) === 0) return { status: 'conflict' };
     await recordAccountAction(trx, {
       userId: options.userId,
       actor,
@@ -509,27 +503,27 @@ export async function lockUser(
         actor,
       ),
     );
+    return { status: 'ok' };
   });
-  return { status: 'ok' };
 }
 
 export async function unlockUser(
   db: Kysely<Database>,
   options: { userId: string; actorId: string; reason: string; now: Date },
-): Promise<{ status: 'ok' } | { status: AdminUserError }> {
+): Promise<StateChangeResult> {
   const target = await staffTarget(db, options);
   if (target.status !== 'ok') return target;
   const { account } = target;
   if (account.state !== 'locked') return { status: 'conflict' };
   const actor: EventActor = { type: 'user', id: options.actorId };
-  await db.transaction().execute(async (trx) => {
-    assertTransition('locked', 'active');
-    await trx
+  return db.transaction().execute(async (trx): Promise<StateChangeResult> => {
+    const updated = await trx
       .updateTable('users')
       .set({ state: 'active', locked_until: null, updated_at: options.now })
       .where('id', '=', options.userId)
       .where('state', '=', 'locked')
-      .execute();
+      .executeTakeFirst();
+    if (updatedRows(updated) === 0) return { status: 'conflict' };
     await recordAccountAction(trx, {
       userId: options.userId,
       actor,
@@ -544,8 +538,8 @@ export async function unlockUser(
       trx,
       userUnlockedEvent(account.id, { reason: options.reason }, actor),
     );
+    return { status: 'ok' };
   });
-  return { status: 'ok' };
 }
 
 export async function forceReauth(
@@ -603,7 +597,7 @@ export async function revokeUserSessions(
 export async function forceUsernameReset(
   db: Kysely<Database>,
   options: { userId: string; actorId: string; reason: string; now: Date },
-): Promise<{ status: 'ok' } | { status: AdminUserError }> {
+): Promise<StateChangeResult> {
   const target = await staffTarget(db, options);
   if (target.status !== 'ok') return target;
   const actor: EventActor = { type: 'user', id: options.actorId };

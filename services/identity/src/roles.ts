@@ -4,7 +4,7 @@ import { writeEvent } from '@qtiauth/bus';
 import { ADMIN_ROLE } from '@qtiauth/config';
 import type { EventActor } from '@qtiauth/events';
 import { isPermissionGrant } from '@qtiauth/service-kit';
-import type { Kysely, Selectable } from 'kysely';
+import { type Kysely, type Selectable, sql } from 'kysely';
 
 import type { Database, RolesTable } from './database.ts';
 import {
@@ -13,10 +13,6 @@ import {
   type UserUpdatedData,
   userUpdatedEvent,
 } from './events.ts';
-
-export const ROLE_SLUG = /^[a-z][a-z0-9_]{0,62}$/;
-export const ROLE_NAME_MAX = 80;
-export const ROLE_DESCRIPTION_MAX = 500;
 
 export type RoleRow = Selectable<RolesTable>;
 
@@ -49,30 +45,30 @@ export async function seedRoles(
   definitions: Record<string, RoleDefinition>,
   now = new Date(),
 ): Promise<void> {
-  const existing = await db.selectFrom('roles').select('slug').execute();
-  const have = new Set(existing.map((row) => row.slug));
-  for (const [slug, definition] of Object.entries(definitions)) {
-    if (have.has(slug)) continue;
-    const id = randomUUIDv7();
-    await db
-      .insertInto('roles')
-      .values({
-        id,
-        slug,
-        name: definition.name,
-        description: definition.description,
-        builtin: true,
-        created_at: now,
-        updated_at: now,
-      })
-      .execute();
-    if (definition.permissions.length > 0) {
-      await db
+  // on conflict keeps this safe when several instances start at once.
+  await db.transaction().execute(async (trx) => {
+    for (const [slug, definition] of Object.entries(definitions)) {
+      const inserted = await trx
+        .insertInto('roles')
+        .values({
+          id: randomUUIDv7(),
+          slug,
+          name: definition.name,
+          description: definition.description,
+          builtin: true,
+          created_at: now,
+          updated_at: now,
+        })
+        .onConflict((conflict) => conflict.column('slug').doNothing())
+        .returning('id')
+        .executeTakeFirst();
+      if (inserted === undefined || definition.permissions.length === 0) continue;
+      await trx
         .insertInto('role_permissions')
-        .values(definition.permissions.map((grant) => ({ role_id: id, grant })))
+        .values(definition.permissions.map((grant) => ({ role_id: inserted.id, grant })))
         .execute();
     }
-  }
+  });
 }
 
 export async function loadPermissions(db: Kysely<Database>, userId: string): Promise<string[]> {
@@ -287,7 +283,7 @@ export async function updateRole(
 export async function deleteRole(
   db: Kysely<Database>,
   options: { roleId: string; actor: EventActor },
-): Promise<RoleWriteResult | { status: 'deleted' }> {
+): Promise<RoleWriteResult | { status: 'ok' }> {
   return db.transaction().execute(async (trx) => {
     const existing = await trx
       .selectFrom('roles')
@@ -304,7 +300,7 @@ export async function deleteRole(
       userIds,
     });
     await trx.deleteFrom('roles').where('id', '=', options.roleId).execute();
-    return { status: 'deleted' };
+    return { status: 'ok' };
   });
 }
 
@@ -361,6 +357,8 @@ export async function adminExists(db: Kysely<Database>): Promise<boolean> {
 }
 
 export async function assignAdminIfFirst(db: Kysely<Database>, userId: string): Promise<boolean> {
+  // Serialises concurrent first sign-ins so only one of them becomes admin.
+  await sql`select pg_advisory_xact_lock(hashtext('qtiauth.admin_bootstrap'))`.execute(db);
   const admin = await db
     .selectFrom('roles')
     .select('id')
@@ -379,32 +377,4 @@ export async function assignAdminIfFirst(db: Kysely<Database>, userId: string): 
     userUpdatedEvent(userId, { fields: ['roles'] }, { type: 'system', id: 'identity' }),
   );
   return true;
-}
-
-export async function grantUser(
-  db: Kysely<Database>,
-  userId: string,
-  grants: readonly string[],
-): Promise<void> {
-  const roleId = randomUUIDv7();
-  const now = new Date();
-  await db
-    .insertInto('roles')
-    .values({
-      id: roleId,
-      slug: `grant_${roleId.replaceAll('-', '')}`,
-      name: 'Grant',
-      description: 'Test grant',
-      builtin: false,
-      created_at: now,
-      updated_at: now,
-    })
-    .execute();
-  if (grants.length > 0) {
-    await db
-      .insertInto('role_permissions')
-      .values(grants.map((grant) => ({ role_id: roleId, grant })))
-      .execute();
-  }
-  await db.insertInto('user_roles').values({ user_id: userId, role_id: roleId }).execute();
 }

@@ -14,7 +14,6 @@ import {
 import { type AgeBands, ageBand, ageOn, agePrivacyDefaults, under18 } from './age.ts';
 import { recordSignupAgeAssurance } from './age-assurance.ts';
 import type { Database } from './database.ts';
-import { recordCurrentLegalAcceptances } from './legal.ts';
 import {
   insertEmailToken,
   takeEmailToken,
@@ -22,6 +21,7 @@ import {
   useEmailToken,
 } from './email-tokens.ts';
 import { type UserCreatedData, userCreatedEvent } from './events.ts';
+import { recordCurrentLegalAcceptances } from './legal.ts';
 import { assignAdminIfFirst } from './roles.ts';
 import {
   type CreatedSession,

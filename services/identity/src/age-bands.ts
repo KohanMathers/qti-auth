@@ -30,21 +30,22 @@ export async function recomputeAgeBands(
     .where(birthdayMatch(today))
     .execute();
 
-  let changed = 0;
-  for (const row of rows) {
+  const changes = rows.flatMap((row) => {
     const previous = bandOn(row.date_of_birth, yesterday, options.bands);
     const current = bandOn(row.date_of_birth, today, options.bands);
-    if (previous === current) continue;
-    await db.transaction().execute(async (trx) => {
+    return previous === current ? [] : [{ id: row.id, previous, current }];
+  });
+  if (changes.length === 0) return 0;
+  await db.transaction().execute(async (trx) => {
+    for (const change of changes) {
       await writeEvent<Database, UserAgeBandChangedData>(
         trx,
-        userAgeBandChangedEvent(row.id, {
-          previous_age_band: previous,
-          age_band: current,
+        userAgeBandChangedEvent(change.id, {
+          previous_age_band: change.previous,
+          age_band: change.current,
         }),
       );
-    });
-    changed += 1;
-  }
-  return changed;
+    }
+  });
+  return changes.length;
 }
