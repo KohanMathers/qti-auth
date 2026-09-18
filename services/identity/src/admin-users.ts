@@ -22,6 +22,7 @@ import {
   userUpdatedEvent,
 } from './events.ts';
 import { iso } from './iso.ts';
+import { listConsents } from './parental.ts';
 import { loadUserRoles } from './roles.ts';
 import { challengeSessions, listSessions, revokeSessions, sessionExpiry } from './sessions.ts';
 import { releaseCurrentUsername } from './usernames.ts';
@@ -121,7 +122,13 @@ export interface UserDetail {
     expires_at: string | null;
     created_at: string;
   }[];
-  guardians: [];
+  guardians: {
+    email: string;
+    status: string;
+    email_changes: number;
+    requested_at: string;
+    decided_at: string | null;
+  }[];
   moderation?: unknown;
   entitlements?: unknown;
   tickets?: unknown;
@@ -272,6 +279,7 @@ export async function getUserDetail(
     securityEvents,
     usernameHistory,
     staffActions,
+    consents,
     moderation,
     entitlements,
     tickets,
@@ -313,6 +321,7 @@ export async function getUserDetail(
       .orderBy('id', 'desc')
       .limit(USER_DETAIL_LIMIT)
       .execute(),
+    listConsents(db, options.userId),
     optionalSection(options.bus, USER_MODERATION_SERVICE, USER_MODERATION_METHOD, options.userId),
     optionalSection(
       options.bus,
@@ -383,7 +392,13 @@ export async function getUserDetail(
       expires_at: iso(row.expires_at),
       created_at: row.created_at.toISOString(),
     })),
-    guardians: [],
+    guardians: consents.map((row) => ({
+      email: row.guardian_email,
+      status: row.status,
+      email_changes: row.email_changes,
+      requested_at: row.requested_at.toISOString(),
+      decided_at: iso(row.decided_at),
+    })),
   };
   if (moderation !== undefined) detail.moderation = moderation;
   if (entitlements !== undefined) detail.entitlements = entitlements;

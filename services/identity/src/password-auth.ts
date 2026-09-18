@@ -41,6 +41,13 @@ import {
 import { recordCurrentLegalAcceptances } from './legal.ts';
 import { MAGIC_LINK_METHOD } from './magic-links.ts';
 import {
+  type ConsentLinks,
+  createPendingConsent,
+  guardianEmailProblem,
+  issueConsentLinks,
+  needsParentalConsent,
+} from './parental.ts';
+import {
   type Argon2Params,
   checkBreachedPassword,
   dummyPasswordHash,
@@ -72,6 +79,7 @@ export interface PasswordSettings {
   failureDelay: FailureDelaySettings;
   maxPerEmail: number;
   consentAge: number;
+  pendingTtl: number;
   bands: AgeBands;
   defaultProvider: string;
   requiredFor: readonly string[];
@@ -83,6 +91,8 @@ export interface PasswordSettings {
 export type PasswordSignupResult =
   | { status: 'account_limit' }
   | { status: 'parental_consent_required' }
+  | { status: 'guardian_email_required' }
+  | { status: 'guardian_email_invalid' }
   | { status: 'rejected'; reason: PasswordPolicyReason }
   | { status: 'created'; userId: string; ageBand: AgeBand; verifyToken: string; expiresAt: Date };
 
@@ -127,7 +137,7 @@ export interface EmailVerifyStartResult {
 
 export type EmailVerifyResult =
   | { status: 'invalid'; reason: TokenFailure }
-  | { status: 'signed_in'; userId: string; session: CreatedSession };
+  | { status: 'signed_in'; userId: string; session: CreatedSession; consent: ConsentLinks | null };
 
 export type SetPasswordResult =
   | { status: 'rejected'; reason: PasswordPolicyReason }
@@ -180,6 +190,7 @@ export async function completePasswordSignup(
     email: string;
     password: string;
     dateOfBirth: string;
+    guardianEmail: string | undefined;
     locale: string | null;
     ip: string | null;
     settings: PasswordSettings;
@@ -192,14 +203,24 @@ export async function completePasswordSignup(
   if (rejected !== undefined) return { status: 'rejected', reason: rejected };
 
   const age = ageOn(options.dateOfBirth, now);
+  const needsGuardian = needsParentalConsent(age, settings.consentAge);
+  const emailNormalized = settings.normalizeEmail(email);
+  if (needsGuardian) {
+    const problem = guardianEmailProblem(
+      options.guardianEmail,
+      emailNormalized,
+      settings.normalizeEmail,
+    );
+    if (problem === 'required') return { status: 'guardian_email_required' };
+    if (problem !== undefined) return { status: 'guardian_email_invalid' };
+  }
+
   const state = initialAccountState({
     emailVerified: false,
     age,
     consentAge: settings.consentAge,
   });
-  if (state === 'pending_parental_consent') return { status: 'parental_consent_required' };
 
-  const emailNormalized = settings.normalizeEmail(email);
   const hash = await hashPassword(options.password, settings.argon2);
   return db.transaction().execute(async (trx): Promise<PasswordSignupResult> => {
     await lockEmail(trx, emailNormalized);
@@ -225,12 +246,21 @@ export async function completePasswordSignup(
       requiredFor: settings.requiredFor,
       now,
     });
-    await recordCurrentLegalAcceptances(trx, {
-      userId,
-      ip: options.ip,
-      method: 'signup',
-      now,
-    });
+    if (!needsGuardian) {
+      await recordCurrentLegalAcceptances(trx, {
+        userId,
+        ip: options.ip,
+        method: 'signup',
+        now,
+      });
+    } else if (options.guardianEmail !== undefined) {
+      await createPendingConsent(trx, {
+        userId,
+        email: options.guardianEmail,
+        emailNormalized: settings.normalizeEmail(options.guardianEmail),
+        now,
+      });
+    }
     await writeEvent<Database, UserCreatedData>(
       trx,
       userCreatedEvent(userId, {
@@ -504,8 +534,29 @@ export function verifyEmailAddress(
     const userId = taken.row.user_id;
     if (userId === null) return { status: 'invalid', reason: 'unknown' };
     await useEmailToken(trx, taken.row.id, now);
-    const account = await activateVerifiedEmail(trx, userId, now);
+    const existing = await findAccount(trx, userId);
+    const account = await activateVerifiedEmail(
+      trx,
+      userId,
+      now,
+      existing === undefined
+        ? undefined
+        : {
+            age: ageOn(existing.date_of_birth, now),
+            consentAge: settings.consentAge,
+          },
+    );
     if (!account || account.state === 'deleted') return { status: 'invalid', reason: 'unknown' };
+    let consent: ConsentLinks | null = null;
+    if (account.state === 'pending_parental_consent') {
+      consent =
+        (await issueConsentLinks(trx, {
+          userId: account.id,
+          locale: account.locale,
+          pendingTtl: settings.pendingTtl,
+          now,
+        })) ?? null;
+    }
     const session = await createSession(trx, {
       userId: account.id,
       authMethod: PASSWORD_METHOD,
@@ -515,7 +566,7 @@ export function verifyEmailAddress(
       settings: settings.sessions,
       now,
     });
-    return { status: 'signed_in', userId: account.id, session };
+    return { status: 'signed_in', userId: account.id, session, consent };
   });
 }
 

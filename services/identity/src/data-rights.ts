@@ -7,6 +7,7 @@ import type { Database } from './database.ts';
 import { iso } from './iso.ts';
 import { enqueueLedgerEntry, flushLedgerOutbox, type LedgerDestination } from './ledger.ts';
 import { listStoredPreferences } from './notifications.ts';
+import { listConsents } from './parental.ts';
 
 export async function exportUser(
   db: Kysely<Database>,
@@ -53,6 +54,7 @@ export async function exportUser(
     holds,
     exports,
     notifications,
+    parental,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -171,6 +173,7 @@ export async function exportUser(
       .orderBy('created_at')
       .execute(),
     listStoredPreferences(db, userId),
+    listConsents(db, userId),
   ]);
 
   return {
@@ -277,6 +280,14 @@ export async function exportUser(
       category: row.category,
       enabled: row.enabled,
       updated_at: iso(row.updated_at),
+    })),
+    parental_consents: parental.map((row) => ({
+      guardian_email: row.guardian_email,
+      guardian_date_of_birth: row.guardian_date_of_birth,
+      email_changes: row.email_changes,
+      status: row.status,
+      requested_at: iso(row.requested_at),
+      decided_at: iso(row.decided_at),
     })),
   };
 }

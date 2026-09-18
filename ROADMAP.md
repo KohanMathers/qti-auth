@@ -287,7 +287,8 @@ Spec: §4.1 (core), §4.3, §4.8 (core)
 - [x] Magic link start/verify with identical responses, POST confirmation page, DOB collected after the
       click (`/api/v1/auth/magic-link/start|verify|signup`, interim pages at `/auth/magic-link` and
       `/auth/signup`, `magic_link` config section, `auth_verify` rate-limit policy). Under
-      `parental.consent_age`, signup answers `PARENTAL_CONSENT_UNAVAILABLE` until P3.1.
+      `parental.consent_age`, signup needs a guardian email (P3.1); an admin invite still answers
+      `PARENTAL_CONSENT_UNAVAILABLE`.
 - [x] Opaque sessions: hashed tokens, bindings table (single binding for now), idle and absolute
       expiry, `max_per_user` eviction (`sessions` and `session_bindings`, `resolve_session`, identity
       sets the cookie through `X-QTIAuth-Session-*` headers the gateway honours, `sessions` config
@@ -538,12 +539,12 @@ Depends on Phases 2 and 2b.
 ### P3.1 Consent flow — L
 Spec: §4.7 (signup)
 
-- [ ] Guardian email at signup below `consent_age`, `pending_parental_consent` state and its
+- [x] Guardian email at signup below `consent_age`, `pending_parental_consent` state and its
       restricted view.
-- [ ] Resend and change guardian email (max 3).
-- [ ] Guardian email with approve/decline, guardian DOB confirmation, terms acceptance on the child's
+- [x] Resend and change guardian email (max 3).
+- [x] Guardian email with approve/decline, guardian DOB confirmation, terms acceptance on the child's
       behalf.
-- [ ] Expiry job deletes unapproved accounts after `pending_ttl`.
+- [x] Expiry job deletes unapproved accounts after `pending_ttl`.
 
 **Done when:** an unapproved child account is fully erased after the TTL, including any ledger entry.
 

@@ -67,6 +67,7 @@ import { identityMetrics } from './metrics.ts';
 import { listedNotifications, openNotificationCatalog } from './notification-registry.ts';
 import { IDENTITY_NOTIFICATIONS, notificationAllowed } from './notifications.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
+import { EXPIRE_PENDING_JOB, expirePendingConsents } from './parental.ts';
 import { openPermissionCatalog } from './permission-registry.ts';
 import { anySocialEnabled } from './providers.ts';
 import { seedRoles } from './roles.ts';
@@ -375,6 +376,28 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('legal publish failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: EXPIRE_PENDING_JOB,
+            metrics: ctx.busMetrics,
+            handler: async () => {
+              const expired = await expirePendingConsents(db, {
+                pendingTtl: config.parental.pending_ttl,
+                now: new Date(),
+              });
+              if (expired.length > 0) {
+                identityMetrics(ctx.metrics).parentalConsent('expired', expired.length);
+                identityMetrics(ctx.metrics).deletion('completed', expired.length);
+                ctx.outbox.wake();
+                log.info('unapproved child accounts expired', { expired: expired.length });
+              }
+            },
+            onError: (error) => {
+              log.error('pending parental consent expiry failed', { error });
             },
           }),
         );

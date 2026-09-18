@@ -13,6 +13,7 @@ import {
   loginPassword,
   magicLinkEnabled,
   passwordEnabled,
+  pendingParentalConsent,
   registerWithPassword,
   requestEmailChange,
   sendEmailVerification,
@@ -25,6 +26,7 @@ import {
 import { NO_STORE, sessionHeaders, signedOutHeaders } from './headers.ts';
 import { iso } from './iso.ts';
 import { isCanonicalLocale, preferredLocale } from './locale.ts';
+import { throwGuardianSignup } from './parental-routes.ts';
 import type { PasswordPolicyReason } from './passwords.ts';
 import { loadPermissions, loadUserRoles } from './roles.ts';
 import type { Context } from './service.ts';
@@ -74,6 +76,14 @@ const meSchema = z.object({
   leaderboard_visible: z.boolean(),
   locale: z.string().nullable(),
   created_at: z.iso.datetime(),
+  parental_consent: z
+    .object({
+      guardian_email: z.string(),
+      email_changes_remaining: z.int(),
+      expires_at: z.iso.datetime(),
+    })
+    .nullable()
+    .describe('Set while the account is waiting for a parent or guardian.'),
   roles: z.array(z.object({ id: z.uuid(), slug: z.string(), name: z.string() })),
   permissions: z.array(z.string()),
   session: z.object({ id: z.uuid(), amr: z.array(z.string()), acr: z.string().nullable() }),
@@ -180,6 +190,11 @@ export function authRoutes(router: Router<Context>): void {
           .refine(isCanonicalLocale, 'Must be a canonical locale like en-GB')
           .optional()
           .describe('Language for the verification email. Defaults to Accept-Language.'),
+        guardian_email: z
+          .email()
+          .max(254)
+          .optional()
+          .describe('Parent or guardian email. Required below parental.consent_age.'),
         captcha: captchaSchema,
       }),
     },
@@ -197,6 +212,8 @@ export function authRoutes(router: Router<Context>): void {
       'PASSWORD_REJECTED',
       'ACCOUNT_LIMIT_REACHED',
       'PARENTAL_CONSENT_UNAVAILABLE',
+      'GUARDIAN_EMAIL_REQUIRED',
+      'GUARDIAN_EMAIL_INVALID',
       'CAPTCHA_REQUIRED',
       'CAPTCHA_INVALID',
     ],
@@ -209,6 +226,7 @@ export function authRoutes(router: Router<Context>): void {
           email: body.email,
           password: body.password,
           dateOfBirth: body.date_of_birth,
+          guardianEmail: body.guardian_email,
           locale: localeOf(ctx, request, body.locale),
         },
       );
@@ -220,6 +238,9 @@ export function authRoutes(router: Router<Context>): void {
           throw new ProblemError('ACCOUNT_LIMIT_REACHED');
         case 'parental_consent_required':
           throw new ProblemError('PARENTAL_CONSENT_UNAVAILABLE');
+        case 'guardian_email_required':
+        case 'guardian_email_invalid':
+          return throwGuardianSignup(result.status);
         case 'created':
           return {
             status: 201,
@@ -666,6 +687,11 @@ export function authRoutes(router: Router<Context>): void {
           .date()
           .refine((value) => isValidDateOfBirth(value, new Date()), 'Must be a real date of birth')
           .describe('YYYY-MM-DD.'),
+        guardian_email: z
+          .email()
+          .max(254)
+          .optional()
+          .describe('Parent or guardian email. Required below parental.consent_age.'),
       }),
     },
     responses: {
@@ -676,12 +702,18 @@ export function authRoutes(router: Router<Context>): void {
       'SIGNUP_TOKEN_INVALID',
       'ACCOUNT_LIMIT_REACHED',
       'PARENTAL_CONSENT_UNAVAILABLE',
+      'GUARDIAN_EMAIL_REQUIRED',
+      'GUARDIAN_EMAIL_INVALID',
     ],
     handler: async ({ ctx, body, request, log, identity }) => {
       requireMagicLink(ctx);
       const result = await signup(
         { ctx, request, log, identity },
-        { signupToken: body.signup_token, dateOfBirth: body.date_of_birth },
+        {
+          signupToken: body.signup_token,
+          dateOfBirth: body.date_of_birth,
+          guardianEmail: body.guardian_email,
+        },
       );
       switch (result.status) {
         case 'invalid':
@@ -690,6 +722,9 @@ export function authRoutes(router: Router<Context>): void {
           throw new ProblemError('ACCOUNT_LIMIT_REACHED');
         case 'parental_consent_required':
           throw new ProblemError('PARENTAL_CONSENT_UNAVAILABLE');
+        case 'guardian_email_required':
+        case 'guardian_email_invalid':
+          return throwGuardianSignup(result.status);
         case 'signed_in':
           return {
             status: 201,
@@ -744,10 +779,11 @@ export function authRoutes(router: Router<Context>): void {
     errors: ['ACCOUNT_NOT_FOUND'],
     handler: async ({ ctx, identity }) => {
       const { userId, sessionId } = signedIn(identity);
-      const [account, roles, permissions] = await Promise.all([
+      const [account, roles, permissions, consent] = await Promise.all([
         findAccount(ctx.db, userId),
         loadUserRoles(ctx.db, userId),
         loadPermissions(ctx.db, userId),
+        pendingParentalConsent(ctx, userId),
       ]);
       if (!account || account.state === 'deleted') {
         throw new ProblemError('ACCOUNT_NOT_FOUND');
@@ -769,6 +805,7 @@ export function authRoutes(router: Router<Context>): void {
           leaderboard_visible: account.leaderboard_visible,
           locale: account.locale,
           created_at: account.created_at.toISOString(),
+          parental_consent: consent,
           roles: roles.map((role) => ({ id: role.id, slug: role.slug, name: role.name })),
           permissions,
           session: { id: sessionId, amr: identity.amr, acr: identity.acr },

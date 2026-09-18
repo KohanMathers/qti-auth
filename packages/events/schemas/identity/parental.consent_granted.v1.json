@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.parental.consent_granted.v1",
+  "title": "Parental consent granted",
+  "description": "A parent or guardian approved a child account. The subject is the child.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {}
+}

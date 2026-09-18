@@ -1096,6 +1096,10 @@ export const parental = z
       .max(18)
       .default(13)
       .describe('Users younger than this need a parent or guardian to approve their account.'),
+    pending_ttl: duration(
+      '14d',
+      'How long an unapproved child account waits for a parent or guardian. After this the account is deleted.',
+    ),
   })
   .prefault({})
   .describe('Parental consent.');

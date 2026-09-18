@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.parental.consent_revoked.v1",
+  "title": "Parental consent revoked",
+  "description": "A parent or guardian link was removed from an account. The subject is the child.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {}
+}

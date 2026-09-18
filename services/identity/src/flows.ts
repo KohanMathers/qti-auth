@@ -2,7 +2,7 @@ import { queueEmail } from '@qtiauth/email';
 import type { Logger } from '@qtiauth/observability';
 import { FLOW_BINDING_HEADER } from '@qtiauth/service-kit';
 
-import { dateOfBirthColumn } from './accounts.ts';
+import { dateOfBirthColumn, findAccount } from './accounts.ts';
 import { ageOn, under18 } from './age.ts';
 import type { DataExportStatus } from './database.ts';
 import { confirmEmailChange, revertEmailChange, startEmailChange } from './email-change.ts';
@@ -25,6 +25,16 @@ import {
 } from './magic-links.ts';
 import { identityMetrics } from './metrics.ts';
 import { oauthStoreOf, type SocialIntent } from './oauth-state.ts';
+import {
+  approveConsent,
+  changeGuardianEmail,
+  CHILDREN_SUMMARY_ID,
+  type ConsentLinks,
+  declineConsent,
+  findPendingConsent,
+  presentConsent,
+  resendConsent,
+} from './parental.ts';
 import {
   completePasswordSignup,
   consumePasswordReset,
@@ -53,8 +63,12 @@ import {
   emailChangeSettings,
   emailLinkUrl,
   encryptionKey,
+  GUARDIAN_APPROVE_PAGE,
+  GUARDIAN_DECLINE_PAGE,
+  legalDocumentUrl,
   magicLinkSettings,
   magicLinkUrl,
+  parentalSettings,
   passwordSettings,
   RESET_PASSWORD_PAGE,
   REVERT_EMAIL_PAGE,
@@ -211,14 +225,131 @@ export async function verify(
   return result;
 }
 
+function expiresInDays(ms: number): number {
+  return Math.max(1, Math.ceil(ms / 86_400_000));
+}
+
+export async function sendParentalConsentEmail(ctx: Context, links: ConsentLinks): Promise<void> {
+  const remaining = links.expiresAt.getTime() - Date.now();
+  await queueEmail(ctx.bus, {
+    template: 'parental_consent',
+    to: { address: links.email },
+    locale: links.locale ?? ctx.config.email.default_locale,
+    variables: {
+      approve_link: emailLinkUrl(ctx.config, GUARDIAN_APPROVE_PAGE, links.approveToken),
+      decline_link: emailLinkUrl(ctx.config, GUARDIAN_DECLINE_PAGE, links.declineToken),
+      children_summary_link: legalDocumentUrl(ctx.config, CHILDREN_SUMMARY_ID),
+      expires_in_days: expiresInDays(remaining),
+    },
+  });
+  identityMetrics(ctx.metrics).parentalConsent('requested');
+}
+
+export async function resendParentalConsent(
+  { ctx, log }: FlowInput,
+  input: { userId: string },
+): Promise<Awaited<ReturnType<typeof resendConsent>>> {
+  const account = await findAccount(ctx.db, input.userId);
+  if (!account) return { status: 'not_pending' };
+  const result = await resendConsent(ctx.db, {
+    userId: input.userId,
+    locale: account.locale,
+    pendingTtl: ctx.config.parental.pending_ttl,
+    now: new Date(),
+  });
+  if (result.status === 'ok') {
+    await sendParentalConsentEmail(ctx, result.links);
+    ctx.outbox.wake();
+    log.info('parental consent email resent', { user_id: input.userId });
+  } else {
+    log.info('parental consent resend refused');
+  }
+  return result;
+}
+
+export async function updateGuardianEmail(
+  { ctx, log }: FlowInput,
+  input: { userId: string; email: string },
+): Promise<Awaited<ReturnType<typeof changeGuardianEmail>>> {
+  const account = await findAccount(ctx.db, input.userId);
+  if (!account) return { status: 'not_pending' };
+  const settings = parentalSettings(ctx.config);
+  const result = await changeGuardianEmail(ctx.db, {
+    userId: input.userId,
+    email: input.email,
+    locale: account.locale,
+    childNormalized: settings.normalizeEmail(account.email),
+    settings,
+    now: new Date(),
+  });
+  if (result.status === 'ok') {
+    await sendParentalConsentEmail(ctx, result.links);
+    ctx.outbox.wake();
+    log.info('guardian email changed', { user_id: input.userId });
+  } else {
+    log.info('guardian email change refused', { reason: result.status });
+  }
+  return result;
+}
+
+export async function grantParentalConsent(
+  { ctx, request, log }: FlowInput,
+  input: { token: string; dateOfBirth: string },
+): Promise<Awaited<ReturnType<typeof approveConsent>>> {
+  const result = await approveConsent(ctx.db, {
+    token: input.token,
+    dateOfBirth: input.dateOfBirth,
+    ip: clientIp(request) || null,
+    settings: parentalSettings(ctx.config),
+    now: new Date(),
+  });
+  switch (result.status) {
+    case 'ok':
+      identityMetrics(ctx.metrics).parentalConsent('granted');
+      ctx.outbox.wake();
+      log.info('parental consent granted', { user_id: result.userId });
+      break;
+    case 'not_adult':
+      log.info('parental consent refused: guardian is not an adult');
+      break;
+    case 'invalid':
+      log.info('parental consent approve rejected', { reason: result.reason });
+      break;
+  }
+  return result;
+}
+
+export async function refuseParentalConsent(
+  { ctx, log }: FlowInput,
+  input: { token: string },
+): Promise<Awaited<ReturnType<typeof declineConsent>>> {
+  const result = await declineConsent(ctx.db, { token: input.token, now: new Date() });
+  if (result.status === 'ok') {
+    identityMetrics(ctx.metrics).parentalConsent('declined');
+    identityMetrics(ctx.metrics).deletion('completed');
+    ctx.outbox.wake();
+    log.info('parental consent declined', { user_id: result.userId });
+  } else {
+    log.info('parental consent decline rejected', { reason: result.reason });
+  }
+  return result;
+}
+
+export async function pendingParentalConsent(ctx: Context, userId: string) {
+  const row = await findPendingConsent(ctx.db, userId);
+  if (!row) return null;
+  return presentConsent(row, ctx.config.parental.pending_ttl);
+}
+
 export async function signup(
   { ctx, request, log, identity }: FlowInput,
-  input: { signupToken: string; dateOfBirth: string },
+  input: { signupToken: string; dateOfBirth: string; guardianEmail: string | undefined },
 ): Promise<SignupResult> {
   const metrics = identityMetrics(ctx.metrics);
   const result = await completeSignup(ctx.db, {
     signupToken: input.signupToken,
     dateOfBirth: input.dateOfBirth,
+    guardianEmail: input.guardianEmail,
     client: clientFor(ctx, request, identity),
     settings: magicLinkSettings(ctx.config),
     now: new Date(),
@@ -231,12 +362,19 @@ export async function signup(
       log.info('signup refused: too many accounts with this email address');
       break;
     case 'parental_consent_required':
-      log.info('signup refused: parental consent is not available');
+      log.info('signup refused: admin invites cannot create child accounts');
+      break;
+    case 'guardian_email_required':
+      log.info('signup needs a parent or guardian email');
+      break;
+    case 'guardian_email_invalid':
+      log.info('signup refused: parent or guardian email is not usable');
       break;
     case 'signed_in':
       ctx.outbox.wake();
       metrics.signup(MAGIC_LINK_METHOD, result.ageBand);
       await trackSession(ctx, MAGIC_LINK_METHOD, result.session);
+      if (result.consent !== null) await sendParentalConsentEmail(ctx, result.consent);
       log.info('account created', {
         method: MAGIC_LINK_METHOD,
         user_id: result.userId,
@@ -250,13 +388,20 @@ export async function signup(
 
 export async function registerWithPassword(
   { ctx, request, log }: FlowInput,
-  input: { email: string; password: string; dateOfBirth: string; locale: string },
+  input: {
+    email: string;
+    password: string;
+    dateOfBirth: string;
+    guardianEmail: string | undefined;
+    locale: string;
+  },
 ): Promise<PasswordSignupResult> {
   const metrics = identityMetrics(ctx.metrics);
   const result = await completePasswordSignup(ctx.db, {
     email: input.email,
     password: input.password,
     dateOfBirth: input.dateOfBirth,
+    guardianEmail: input.guardianEmail,
     locale: input.locale,
     ip: clientIp(request) || null,
     settings: passwordSettings(ctx.config),
@@ -271,7 +416,13 @@ export async function registerWithPassword(
       log.info('signup refused: too many accounts with this email address');
       break;
     case 'parental_consent_required':
-      log.info('signup refused: parental consent is not available');
+      log.info('signup refused: admin invites cannot create child accounts');
+      break;
+    case 'guardian_email_required':
+      log.info('signup needs a parent or guardian email');
+      break;
+    case 'guardian_email_invalid':
+      log.info('signup refused: parent or guardian email is not usable');
       break;
     case 'created': {
       ctx.outbox.wake();
@@ -464,6 +615,7 @@ export async function completeEmailVerification(
     case 'signed_in':
       ctx.outbox.wake();
       await trackSession(ctx, PASSWORD_METHOD, result.session);
+      if (result.consent !== null) await sendParentalConsentEmail(ctx, result.consent);
       log.info('email verified', { user_id: result.userId, session_id: result.session.id });
       break;
   }
@@ -602,6 +754,8 @@ async function noteSocialComplete(
     case 'identity_in_use':
     case 'account_limit':
     case 'parental_consent_required':
+    case 'guardian_email_required':
+    case 'guardian_email_invalid':
       log.info('social sign-in refused', { provider: providerId, reason: result.status });
       break;
     case 'linked':
@@ -663,13 +817,19 @@ export async function finishSocial(
 
 export async function completeSocialSignup(
   { ctx, request, log }: FlowInput,
-  input: { challenge: string; dateOfBirth: string | undefined; email: string | undefined },
+  input: {
+    challenge: string;
+    dateOfBirth: string | undefined;
+    email: string | undefined;
+    guardianEmail: string | undefined;
+  },
 ): Promise<Awaited<ReturnType<typeof finishSocialSignup>>> {
   const metrics = identityMetrics(ctx.metrics);
   const result = await finishSocialSignup(ctx.db, {
     challenge: input.challenge,
     dateOfBirth: input.dateOfBirth,
     email: input.email,
+    guardianEmail: input.guardianEmail,
     client: clientFor(ctx, request),
     settings: socialSettings(ctx.config),
     now: new Date(),
@@ -682,7 +842,13 @@ export async function completeSocialSignup(
       log.info('signup refused: too many accounts with this email address');
       break;
     case 'parental_consent_required':
-      log.info('signup refused: parental consent is not available');
+      log.info('signup refused: admin invites cannot create child accounts');
+      break;
+    case 'guardian_email_required':
+      log.info('signup needs a parent or guardian email');
+      break;
+    case 'guardian_email_invalid':
+      log.info('signup refused: parent or guardian email is not usable');
       break;
     case 'signed_in': {
       ctx.outbox.wake();
@@ -704,6 +870,7 @@ export async function completeSocialSignup(
           },
         );
       }
+      if (result.consent !== null) await sendParentalConsentEmail(ctx, result.consent);
       break;
     }
   }

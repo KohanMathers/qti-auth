@@ -144,7 +144,15 @@ const userDetailSchema = z.object({
       created_at: z.iso.datetime(),
     }),
   ),
-  guardians: z.array(z.unknown()),
+  guardians: z.array(
+    z.object({
+      email: z.string(),
+      status: z.string(),
+      email_changes: z.int(),
+      requested_at: z.iso.datetime(),
+      decided_at: z.iso.datetime().nullable(),
+    }),
+  ),
   moderation: z.unknown().optional(),
   entitlements: z.unknown().optional(),
   tickets: z.unknown().optional(),

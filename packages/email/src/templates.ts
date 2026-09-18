@@ -173,6 +173,17 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       link: z.url({ protocol: /^https?$/ }),
     }),
   },
+  parental_consent: {
+    description: 'Ask a parent or guardian to approve a child account',
+    category: 'auth',
+    priority: 'high',
+    variables: z.object({
+      approve_link: z.url({ protocol: /^https?$/ }),
+      decline_link: z.url({ protocol: /^https?$/ }),
+      children_summary_link: z.url({ protocol: /^https?$/ }),
+      expires_in_days: z.int().min(1),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

@@ -11,6 +11,7 @@ export const IDENTITY_EVENTS = {
   sessionCreated: 'qtiauth.identity.session.created.v1',
   sessionRevoked: 'qtiauth.identity.session.revoked.v1',
   sessionFlagged: 'qtiauth.identity.session.flagged.v1',
+  parentalConsentRequested: 'qtiauth.identity.parental.consent_requested.v1',
   parentalConsentGranted: 'qtiauth.identity.parental.consent_granted.v1',
   parentalConsentRevoked: 'qtiauth.identity.parental.consent_revoked.v1',
   legalVersionPublished: 'qtiauth.identity.legal.version_published.v1',

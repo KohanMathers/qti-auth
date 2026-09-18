@@ -16,6 +16,8 @@ import {
   userUnlockedEvent,
   userUpdatedEvent,
   legalVersionPublishedEvent,
+  parentalConsentGrantedEvent,
+  parentalConsentRequestedEvent,
 } from './events.ts';
 
 const USER_ID = '0199a0e0-0000-7000-8000-000000000001';
@@ -78,6 +80,10 @@ describe('identity events', () => {
           summary: 'We added passkeys.',
         }),
       ),
+      createEvent(
+        parentalConsentRequestedEvent(USER_ID, { expires_at: '2026-10-01T00:00:00.000Z' }),
+      ),
+      createEvent(parentalConsentGrantedEvent(USER_ID)),
       createEvent(
         userBannedEvent(USER_ID, { reason: 'Repeated abuse' }, { type: 'user', id: USER_ID }),
       ),

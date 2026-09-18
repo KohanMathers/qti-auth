@@ -26,12 +26,16 @@ import {
   finishEmailRevert,
   finishSocial,
   finishTwoFactor,
+  grantParentalConsent,
   inspectPasswordReset,
   loginPassword,
   magicLinkEnabled,
   passkeysEnabled,
   passwordEnabled,
+  pendingParentalConsent,
+  refuseParentalConsent,
   registerWithPassword,
+  resendParentalConsent,
   scheduleDeletion,
   sendMagicLink,
   sendPasswordReset,
@@ -41,6 +45,7 @@ import {
   startDataExport,
   startSocial,
   totpEnabled,
+  updateGuardianEmail,
   verify,
 } from './flows.ts';
 import { NO_STORE, revokedHeaders, sessionHeaders, signedOutHeaders } from './headers.ts';
@@ -68,6 +73,8 @@ import {
   CONNECT_PAGE,
   encryptionKey,
   FORGOT_PASSWORD_PAGE,
+  GUARDIAN_APPROVE_PAGE,
+  GUARDIAN_DECLINE_PAGE,
   IDENTITIES_PAGE,
   LOGIN_PAGE,
   MAGIC_LINK_PAGE,
@@ -93,6 +100,7 @@ import {
   DELETE_PAGE,
   EXPORT_PAGE,
   VERIFY_EMAIL_PAGE,
+  WAITING_PAGE,
   LEGAL_INDEX_PAGE,
   LEGAL_ACCEPT_PAGE,
   LEGAL_DOCUMENT_PAGE,
@@ -211,7 +219,12 @@ function invalidLink(ctx: Context): Response {
   });
 }
 
-function dateOfBirthForm(ctx: Context, signupToken: string, error?: string): Response {
+function dateOfBirthForm(
+  ctx: Context,
+  signupToken: string,
+  values: { guardianEmail?: string | undefined } = {},
+  error?: string,
+): Response {
   return page(ctx, {
     status: error === undefined ? 200 : 400,
     title: 'Create your account',
@@ -220,12 +233,85 @@ function dateOfBirthForm(ctx: Context, signupToken: string, error?: string): Res
 ${hiddenInput('signup_token', signupToken)}
 <p><label for="date_of_birth">Date of birth</label><br>
 <input id="date_of_birth" name="date_of_birth" type="date" required></p>
+${guardianEmailField(ctx, values.guardianEmail)}
 <p><button type="submit">Create account</button></p>
 </form>`,
   });
 }
 
-function signedIn(ctx: Context, session: CreatedSession, returnTo: string | null): Response {
+function guardianEmailField(ctx: Context, value = ''): string {
+  return `<p>If you are under ${String(ctx.config.parental.consent_age)}, enter a parent or guardian’s email so they can approve your account.</p>
+<p><label for="guardian_email">Parent or guardian email</label><br>
+<input id="guardian_email" name="guardian_email" type="email" autocomplete="email" value="${escapeHtml(value)}"></p>`;
+}
+
+function guardianEmailOf(form: Record<string, string>): string | undefined {
+  const value = form['guardian_email']?.trim();
+  return value === undefined || value === '' ? undefined : value;
+}
+
+function guardianEmailAlert(status: 'guardian_email_required' | 'guardian_email_invalid'): string {
+  return status === 'guardian_email_required'
+    ? 'Enter a parent or guardian’s email address.'
+    : 'Enter a different email address for your parent or guardian.';
+}
+
+function waitingForm(
+  ctx: Context,
+  consent: { guardian_email: string; email_changes_remaining: number; expires_at: string },
+  message?: string,
+): Response {
+  return page(ctx, {
+    title: 'Waiting for a parent or guardian',
+    body: `${message === undefined ? '' : alert(message)}
+${paragraph(`We’ve emailed ${consent.guardian_email}. This account stays limited until they approve it.`)}
+${paragraph(`That email can be changed ${String(consent.email_changes_remaining)} more times.`)}
+<form method="post" action="waiting">
+<p><button type="submit" name="action" value="resend">Send the email again</button></p>
+<p><label for="guardian_email">New parent or guardian email</label><br>
+<input id="guardian_email" name="guardian_email" type="email" autocomplete="email"></p>
+<p><button type="submit" name="action" value="change">Use this address instead</button></p>
+</form>
+<form method="post" action="../api/v1/auth/logout"><button type="submit">Sign out</button></form>`,
+  });
+}
+
+async function guardianApproveForm(ctx: Context, token: string, error?: string): Promise<Response> {
+  const documents = await currentLegalVersions(ctx.db, new Date());
+  const items = documents
+    .map(
+      (document) =>
+        `<li><a href="${escapeHtml(accountPath(ctx.config, `/legal/${document.id}`))}">${escapeHtml(document.id)}</a></li>`,
+    )
+    .join('');
+  return page(ctx, {
+    status: error === undefined ? 200 : 400,
+    title: 'Approve this account',
+    body: `${error === undefined ? '' : alert(error)}
+${paragraph('By approving, you confirm you are an adult and accept these documents on the child’s behalf.')}
+<ul>${items}</ul>
+<form method="post" action="approve">
+${hiddenInput('token', token)}
+<p><label for="date_of_birth">Your date of birth</label><br>
+<input id="date_of_birth" name="date_of_birth" type="date" required></p>
+<p><button type="submit">Approve</button></p>
+</form>`,
+  });
+}
+
+async function signedIn(
+  ctx: Context,
+  session: CreatedSession,
+  returnTo: string | null,
+  userId: string,
+): Promise<Response> {
+  const account = await findAccount(ctx.db, userId);
+  if (account?.state === 'pending_parental_consent') {
+    return new Response(null, {
+      status: 303,
+      headers: { ...sessionHeaders(session), location: accountPath(ctx.config, WAITING_PAGE) },
+    });
+  }
   const headers = sessionHeaders(session);
   const target = safeReturnTo(returnTo ?? undefined);
   if (target !== null) {
@@ -356,6 +442,7 @@ function socialSignupForm(
   ctx: Context,
   challenge: string,
   needsEmail: boolean,
+  values: { guardianEmail?: string | undefined } = {},
   error?: string,
 ): Response {
   return page(ctx, {
@@ -372,18 +459,21 @@ ${
 }
 <p><label for="date_of_birth">Date of birth</label><br>
 <input id="date_of_birth" name="date_of_birth" type="date" required></p>
+${guardianEmailField(ctx, values.guardianEmail)}
 <p><button type="submit">Create account</button></p>
 </form>`,
   });
 }
 
-function socialResultPage(
+async function socialResultPage(
   ctx: Context,
   result: Awaited<ReturnType<typeof finishSocial>>,
-): Response {
+): Promise<Response> {
   switch (result.status) {
     case 'invalid':
     case 'denied':
+    case 'guardian_email_required':
+    case 'guardian_email_invalid':
       return page(ctx, {
         status: 400,
         title: 'Sign-in didn’t finish',
@@ -427,13 +517,17 @@ function socialResultPage(
       return new Response(null, { status: 303, headers: { location: url.pathname + url.search } });
     }
     case 'signed_in':
-      return signedIn(ctx, result.session, result.returnTo);
+      return signedIn(ctx, result.session, result.returnTo, result.userId);
   }
 }
 
 function registerForm(
   ctx: Context,
-  values: { email?: string; dateOfBirth?: string },
+  values: {
+    email?: string | undefined;
+    dateOfBirth?: string | undefined;
+    guardianEmail?: string | undefined;
+  },
   error?: string,
   widget?: CaptchaWidget,
 ): Response {
@@ -448,6 +542,7 @@ function registerForm(
 <input id="password" name="password" type="password" autocomplete="new-password" maxlength="256" required></p>
 <p><label for="date_of_birth">Date of birth</label><br>
 <input id="date_of_birth" name="date_of_birth" type="date" required value="${escapeHtml(values.dateOfBirth ?? '')}"></p>
+${guardianEmailField(ctx, values.guardianEmail)}
 ${captchaBlock(widget)}
 <p><button type="submit">Create account</button></p>
 </form>
@@ -668,7 +763,7 @@ ${hiddenInput('token', query.token)}
         case 'signup_required':
           return dateOfBirthForm(ctx, result.signupToken);
         case 'signed_in':
-          return signedIn(ctx, result.session, result.returnTo);
+          return signedIn(ctx, result.session, result.returnTo, result.userId);
         case 'choose_account':
           return page(ctx, {
             title: 'Choose an account',
@@ -738,9 +833,17 @@ ${socialButtons(ctx, 'signup')}
       const signupToken = form['signup_token'] ?? '';
       const dateOfBirth = form['date_of_birth'] ?? '';
       if (!isValidDateOfBirth(dateOfBirth, new Date())) {
-        return dateOfBirthForm(ctx, signupToken, 'Enter your real date of birth.');
+        return dateOfBirthForm(
+          ctx,
+          signupToken,
+          { guardianEmail: guardianEmailOf(form) },
+          'Enter your real date of birth.',
+        );
       }
-      const result = await signup({ ctx, request, log, identity }, { signupToken, dateOfBirth });
+      const result = await signup(
+        { ctx, request, log, identity },
+        { signupToken, dateOfBirth, guardianEmail: guardianEmailOf(form) },
+      );
       switch (result.status) {
         case 'invalid':
           return invalidLink(ctx);
@@ -758,8 +861,16 @@ ${socialButtons(ctx, 'signup')}
               `People under ${String(ctx.config.parental.consent_age)} need a parent or guardian to approve their account, and that isn’t available yet.`,
             ),
           });
+        case 'guardian_email_required':
+        case 'guardian_email_invalid':
+          return dateOfBirthForm(
+            ctx,
+            signupToken,
+            { guardianEmail: guardianEmailOf(form) },
+            guardianEmailAlert(result.status),
+          );
         case 'signed_in':
-          return signedIn(ctx, result.session, result.returnTo);
+          return signedIn(ctx, result.session, result.returnTo, result.userId);
       }
     },
   });
@@ -841,19 +952,33 @@ ${socialButtons(ctx, 'signup')}
       const email = form['email'] ?? '';
       const password = form['password'] ?? '';
       const dateOfBirth = form['date_of_birth'] ?? '';
+      const guardianEmail = guardianEmailOf(form);
       if (!z.email().safeParse(email).success) {
-        return registerForm(ctx, { email, dateOfBirth }, 'Enter a valid email address.');
+        return registerForm(
+          ctx,
+          { email, dateOfBirth, guardianEmail },
+          'Enter a valid email address.',
+        );
       }
       if (!isValidDateOfBirth(dateOfBirth, new Date())) {
-        return registerForm(ctx, { email, dateOfBirth }, 'Enter your real date of birth.');
+        return registerForm(
+          ctx,
+          { email, dateOfBirth, guardianEmail },
+          'Enter your real date of birth.',
+        );
       }
       const captcha = await checkCaptcha(ctx, request, 'password_signup', captchaFromForm(form));
       if (captcha.status !== 'ok') {
-        return registerForm(ctx, { email, dateOfBirth }, captchaAlert(captcha), captcha.widget);
+        return registerForm(
+          ctx,
+          { email, dateOfBirth, guardianEmail },
+          captchaAlert(captcha),
+          captcha.widget,
+        );
       }
       const result = await registerWithPassword(
         { ctx, request, log, identity },
-        { email, password, dateOfBirth, locale: localeOf(ctx, request) },
+        { email, password, dateOfBirth, guardianEmail, locale: localeOf(ctx, request) },
       );
       await noteCaptchaAttempt(ctx, request, 'password_signup');
       switch (result.status) {
@@ -861,7 +986,7 @@ ${socialButtons(ctx, 'signup')}
           const next = await checkCaptcha(ctx, request, 'password_signup', undefined);
           return registerForm(
             ctx,
-            { email, dateOfBirth },
+            { email, dateOfBirth, guardianEmail },
             passwordMessage(ctx, result.reason),
             next.status === 'ok' ? undefined : next.widget,
           );
@@ -880,6 +1005,13 @@ ${socialButtons(ctx, 'signup')}
               `People under ${String(ctx.config.parental.consent_age)} need a parent or guardian to approve their account, and that isn’t available yet.`,
             ),
           });
+        case 'guardian_email_required':
+        case 'guardian_email_invalid':
+          return registerForm(
+            ctx,
+            { email, dateOfBirth, guardianEmail },
+            guardianEmailAlert(result.status),
+          );
         case 'created':
           return page(ctx, {
             title: 'Check your email',
@@ -941,7 +1073,7 @@ ${socialButtons(ctx, 'signup')}
       if (result.status === 'second_factor_required') {
         return twoFactorForm(ctx, result.challenge, result.methods);
       }
-      return signedIn(ctx, result.session, returnTo);
+      return signedIn(ctx, result.session, returnTo, result.userId);
     },
   });
 
@@ -1092,6 +1224,7 @@ ${result.accounts
             ctx,
             { ...result.session, evicted: [...result.session.evicted, ...result.revoked] },
             null,
+            result.userId,
           );
       }
     },
@@ -1138,7 +1271,7 @@ ${hiddenInput('token', query.token)}
       const token = (await readForm(request))['token'] ?? '';
       const result = await completeEmailVerification({ ctx, request, log, identity }, { token });
       if (result.status === 'invalid') return invalidLink(ctx);
-      return signedIn(ctx, result.session, null);
+      return signedIn(ctx, result.session, null, result.userId);
     },
   });
 
@@ -1205,7 +1338,7 @@ ${hiddenInput('token', query.token)}
             : 'That recovery code is incorrect.',
         );
       }
-      return signedIn(ctx, result.session, null);
+      return signedIn(ctx, result.session, null, result.userId);
     },
   });
 
@@ -1580,12 +1713,19 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
       const challenge = form['challenge'] ?? '';
       const needsEmail = form['needs_email'] === '1';
       const dateOfBirth = form['date_of_birth'] ?? '';
+      const guardianEmail = guardianEmailOf(form);
       if (!isValidDateOfBirth(dateOfBirth, new Date())) {
-        return socialSignupForm(ctx, challenge, needsEmail, 'Enter your real date of birth.');
+        return socialSignupForm(
+          ctx,
+          challenge,
+          needsEmail,
+          { guardianEmail },
+          'Enter your real date of birth.',
+        );
       }
       const result = await completeSocialSignup(
         { ctx, request, log, identity },
-        { challenge, dateOfBirth, email: form['email'] },
+        { challenge, dateOfBirth, email: form['email'], guardianEmail },
       );
       switch (result.status) {
         case 'invalid':
@@ -1608,8 +1748,17 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
               `People under ${String(ctx.config.parental.consent_age)} need a parent or guardian to approve their account, and that isn’t available yet.`,
             ),
           });
+        case 'guardian_email_required':
+        case 'guardian_email_invalid':
+          return socialSignupForm(
+            ctx,
+            challenge,
+            needsEmail,
+            { guardianEmail },
+            guardianEmailAlert(result.status),
+          );
         case 'signed_in':
-          return signedIn(ctx, result.session, result.returnTo);
+          return signedIn(ctx, result.session, result.returnTo, result.userId);
       }
     },
   });
@@ -2123,6 +2272,162 @@ ${hiddenInput('token', query.token)}
         title: 'Export started',
         body: `${paragraph('We will email you when it is ready.')}
 <p><a href="export?id=${escapeHtml(result.id)}">Check status</a></p>`,
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: WAITING_PAGE,
+    operation_id: 'waitingPage',
+    summary: 'Waiting for a parent or guardian to approve the account',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: ['pending_parental_consent'],
+    allow_pending_parental_consent: true,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity }) => {
+      const { userId } = sessionUser(identity);
+      const consent = await pendingParentalConsent(ctx, userId);
+      if (consent === null) return accountNotFound(ctx);
+      return waitingForm(ctx, consent);
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: WAITING_PAGE,
+    operation_id: 'waitingPageSubmit',
+    summary: 'Resend or change the parent or guardian email',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: ['pending_parental_consent'],
+    allow_pending_parental_consent: true,
+    rate_limit: 'magic_link',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity, request, log }) => {
+      const { userId } = sessionUser(identity);
+      const form = await readForm(request);
+      if (form['action'] === 'change') {
+        const email = guardianEmailOf(form) ?? '';
+        const result = await updateGuardianEmail(
+          { ctx, request, log, identity },
+          { userId, email },
+        );
+        const consent = await pendingParentalConsent(ctx, userId);
+        if (consent === null) return accountNotFound(ctx);
+        switch (result.status) {
+          case 'ok':
+            return waitingForm(ctx, consent, 'We’ve emailed the new address.');
+          case 'unchanged':
+            return waitingForm(ctx, consent, 'That is already the parent or guardian email.');
+          case 'limit':
+            return waitingForm(ctx, consent, 'This email cannot be changed again.');
+          case 'invalid':
+            return waitingForm(ctx, consent, guardianEmailAlert('guardian_email_invalid'));
+          case 'not_pending':
+            return accountNotFound(ctx);
+        }
+      }
+      const result = await resendParentalConsent({ ctx, request, log, identity }, { userId });
+      const consent = await pendingParentalConsent(ctx, userId);
+      if (result.status !== 'ok' || consent === null) return accountNotFound(ctx);
+      return waitingForm(ctx, consent, 'We’ve sent the email again.');
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: GUARDIAN_APPROVE_PAGE,
+    operation_id: 'guardianApprovePage',
+    summary: 'Ask a parent or guardian to approve a child account',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { query: z.object({ token: z.string().max(256).optional() }) },
+    responses: htmlResponses,
+    handler: async ({ ctx, query }) => {
+      if (query.token === undefined) return invalidLink(ctx);
+      return guardianApproveForm(ctx, query.token);
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: GUARDIAN_APPROVE_PAGE,
+    operation_id: 'guardianApprovePageSubmit',
+    summary: 'Approve a child account from the emailed link',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    responses: htmlResponses,
+    handler: async ({ ctx, request, log, identity }) => {
+      const form = await readForm(request);
+      const token = form['token'] ?? '';
+      const dateOfBirth = form['date_of_birth'] ?? '';
+      if (!isValidDateOfBirth(dateOfBirth, new Date())) {
+        return guardianApproveForm(ctx, token, 'Enter your real date of birth.');
+      }
+      const result = await grantParentalConsent(
+        { ctx, request, log, identity },
+        { token, dateOfBirth },
+      );
+      if (result.status === 'not_adult') {
+        return guardianApproveForm(
+          ctx,
+          token,
+          `You need to be at least ${String(ctx.config.age.bands.adult)} to approve this account.`,
+        );
+      }
+      if (result.status !== 'ok') return invalidLink(ctx);
+      return page(ctx, {
+        title: 'Account approved',
+        body: paragraph('The account is ready to use.'),
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: GUARDIAN_DECLINE_PAGE,
+    operation_id: 'guardianDeclinePage',
+    summary: 'Ask a parent or guardian to decline a child account',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { query: z.object({ token: z.string().max(256).optional() }) },
+    responses: htmlResponses,
+    handler: ({ ctx, query }) => {
+      if (query.token === undefined) return Promise.resolve(invalidLink(ctx));
+      return Promise.resolve(
+        page(ctx, {
+          title: 'Decline this account',
+          body: `<form method="post" action="decline">
+${hiddenInput('token', query.token)}
+<p><button type="submit">Decline and delete the account</button></p>
+</form>`,
+        }),
+      );
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: GUARDIAN_DECLINE_PAGE,
+    operation_id: 'guardianDeclinePageSubmit',
+    summary: 'Decline a child account from the emailed link',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'auth_verify',
+    responses: htmlResponses,
+    handler: async ({ ctx, request, log, identity }) => {
+      const token = (await readForm(request))['token'] ?? '';
+      const result = await refuseParentalConsent({ ctx, request, log, identity }, { token });
+      if (result.status !== 'ok') return invalidLink(ctx);
+      return page(ctx, {
+        title: 'Account declined',
+        body: paragraph('The account has been deleted.'),
       });
     },
   });

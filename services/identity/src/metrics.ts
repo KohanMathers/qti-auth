@@ -15,6 +15,7 @@ export type AdminUserAction =
   'ban' | 'unban' | 'lock' | 'unlock' | 'force_reauth' | 'revoke_sessions' | 'force_username_reset';
 export type DeletionEvent = 'requested' | 'cancelled' | 'completed';
 export type DataExportResult = 'ready' | 'failed' | 'unavailable';
+export type ParentalConsentResult = 'requested' | 'granted' | 'declined' | 'expired';
 
 export interface IdentityMetrics {
   magicLink: (event: MagicLinkEvent) => void;
@@ -34,6 +35,7 @@ export interface IdentityMetrics {
   adminUserAction: (action: AdminUserAction) => void;
   deletion: (event: DeletionEvent, count?: number) => void;
   dataExport: (status: DataExportResult) => void;
+  parentalConsent: (result: ParentalConsentResult, count?: number) => void;
   ageBandChanged: (count: number) => void;
   auditRecorded: () => void;
   legalAcceptancePending: (count: number) => void;
@@ -135,6 +137,11 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     help: 'Account data exports, by status: ready, failed or unavailable.',
     labelNames: ['status'],
   });
+  const parentalConsents = metrics.counter({
+    name: 'qtiauth_parental_consent_total',
+    help: 'Parental consent outcomes, by result: requested, granted, declined or expired.',
+    labelNames: ['result'],
+  });
   const ageBandChanges = metrics.counter({
     name: 'qtiauth_age_band_changes_total',
     help: 'Age-band changes from the daily recompute or a staff date-of-birth edit.',
@@ -210,6 +217,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     dataExport: (status) => {
       dataExports.inc({ status });
+    },
+    parentalConsent: (result, count = 1) => {
+      if (count > 0) parentalConsents.inc({ result }, count);
     },
     ageBandChanged: (count) => {
       if (count > 0) ageBandChanges.inc(count);

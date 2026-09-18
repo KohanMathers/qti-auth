@@ -1,0 +1,73 @@
+<mjml lang="en-GB">
+  <mj-head>
+    <mj-title>A child needs your approval for {{ brand.product_name }}</mj-title>
+    <mj-preview>Approve or decline this account within {{ expires_in_days }} days</mj-preview>
+    <mj-attributes>
+      <mj-all
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      />
+      <mj-text font-size="16px" line-height="24px" color="#1f2937" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <mj-section padding="32px 16px 0">
+      <mj-column background-color="#ffffff" border-radius="8px" padding="24px">
+        <mj-text font-size="22px" line-height="30px" font-weight="600">
+          A child wants to use {{ brand.product_name }}
+        </mj-text>
+        <mj-text>
+          {{ brand.company_name }} runs {{ brand.product_name }}. Someone under the age where they
+          can agree to an account on their own has named this address as their parent or guardian.
+        </mj-text>
+        <mj-text>
+          If you approve, you confirm that you are an adult and accept the terms on their behalf. We
+          keep the child's email address and date of birth so we can run the account. A short
+          summary written for children is
+          <a href="{{ children_summary_link }}">here</a>.
+        </mj-text>
+        <mj-button
+          href="{{ approve_link }}"
+          background-color="{{ brand.primary_color }}"
+          color="#ffffff"
+          font-size="16px"
+          font-weight="600"
+          border-radius="6px"
+          align="left"
+        >
+          Approve this account
+        </mj-button>
+        <mj-text font-size="14px" line-height="20px" color="#4b5563">
+          You will confirm your date of birth and accept the terms. If the button doesn't work, copy
+          this link into your browser:<br />
+          <a href="{{ approve_link }}" style="color: #4b5563; word-break: break-all"
+            >{{ approve_link }}</a
+          >
+        </mj-text>
+        <mj-button
+          href="{{ decline_link }}"
+          background-color="#ffffff"
+          color="#1f2937"
+          font-size="16px"
+          font-weight="600"
+          border-radius="6px"
+          border="1px solid #d1d5db"
+          align="left"
+        >
+          Decline and delete the account
+        </mj-button>
+        <mj-text font-size="14px" line-height="20px" color="#4b5563">
+          These links expire in {{ expires_in_days }} days. If nobody responds by then, the account
+          is deleted. If you did not expect this, you can ignore the email or use Decline.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+    <mj-section padding="16px">
+      <mj-column>
+        <mj-text font-size="12px" line-height="18px" color="#6b7280" align="center">
+          Need help? Contact {{ brand.support_email }}.<br />
+          {{ brand.company_name }}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

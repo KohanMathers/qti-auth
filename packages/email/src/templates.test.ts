@@ -97,5 +97,9 @@ describe('defineEmailTemplates', () => {
       category: 'security',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.parental_consent).toMatchObject({
+      category: 'auth',
+      priority: 'high',
+    });
   });
 });

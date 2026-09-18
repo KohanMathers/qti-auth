@@ -22,6 +22,13 @@ import {
 } from './email-tokens.ts';
 import { type UserCreatedData, userCreatedEvent } from './events.ts';
 import { recordCurrentLegalAcceptances } from './legal.ts';
+import {
+  type ConsentLinks,
+  createPendingConsent,
+  guardianEmailProblem,
+  issueConsentLinks,
+  needsParentalConsent,
+} from './parental.ts';
 import { assignAdminIfFirst } from './roles.ts';
 import {
   type CreatedSession,
@@ -39,6 +46,7 @@ export interface MagicLinkSettings {
   signupTtl: number;
   maxPerEmail: number;
   consentAge: number;
+  pendingTtl: number;
   bands: AgeBands;
   defaultProvider: string;
   requiredFor: readonly string[];
@@ -56,12 +64,15 @@ export type SignupResult =
   | { status: 'invalid'; reason: TokenFailure }
   | { status: 'account_limit' }
   | { status: 'parental_consent_required' }
+  | { status: 'guardian_email_required' }
+  | { status: 'guardian_email_invalid' }
   | {
       status: 'signed_in';
       userId: string;
       ageBand: AgeBand;
       session: CreatedSession;
       returnTo: string | null;
+      consent: ConsentLinks | null;
     };
 
 export async function issueMagicLink(
@@ -151,6 +162,7 @@ export function completeSignup(
   options: {
     signupToken: string;
     dateOfBirth: string;
+    guardianEmail: string | undefined;
     client: SessionClient;
     settings: MagicLinkSettings;
     now: Date;
@@ -164,15 +176,26 @@ export function completeSignup(
     const adminInvite = row.purpose === 'admin_signup';
 
     const age = ageOn(options.dateOfBirth, now);
+    const needsGuardian = needsParentalConsent(age, settings.consentAge);
+    if (needsGuardian && adminInvite) {
+      await useEmailToken(trx, row.id, now);
+      return { status: 'parental_consent_required' };
+    }
+    if (needsGuardian) {
+      const problem = guardianEmailProblem(
+        options.guardianEmail,
+        row.email_normalized,
+        settings.normalizeEmail,
+      );
+      if (problem === 'required') return { status: 'guardian_email_required' };
+      if (problem !== undefined) return { status: 'guardian_email_invalid' };
+    }
+
     const state = initialAccountState({
       emailVerified: true,
       age,
       consentAge: settings.consentAge,
     });
-    if (state === 'pending_parental_consent') {
-      await useEmailToken(trx, row.id, now);
-      return { status: 'parental_consent_required' };
-    }
 
     await lockEmail(trx, row.email_normalized);
     const existing = await accountsWithEmail(trx, row.email_normalized);
@@ -199,12 +222,30 @@ export function completeSignup(
       requiredFor: settings.requiredFor,
       now,
     });
-    await recordCurrentLegalAcceptances(trx, {
-      userId,
-      ip: options.client.ip || null,
-      method: 'signup',
-      now,
-    });
+    if (!needsGuardian) {
+      await recordCurrentLegalAcceptances(trx, {
+        userId,
+        ip: options.client.ip || null,
+        method: 'signup',
+        now,
+      });
+    }
+    let consent: ConsentLinks | null = null;
+    if (needsGuardian && options.guardianEmail !== undefined) {
+      await createPendingConsent(trx, {
+        userId,
+        email: options.guardianEmail,
+        emailNormalized: settings.normalizeEmail(options.guardianEmail),
+        now,
+      });
+      consent =
+        (await issueConsentLinks(trx, {
+          userId,
+          locale: row.locale,
+          pendingTtl: settings.pendingTtl,
+          now,
+        })) ?? null;
+    }
     await writeEvent<Database, UserCreatedData>(
       trx,
       userCreatedEvent(userId, {
@@ -222,6 +263,13 @@ export function completeSignup(
       settings: settings.sessions,
       now,
     });
-    return { status: 'signed_in', userId, ageBand: band, session, returnTo: row.return_to };
+    return {
+      status: 'signed_in',
+      userId,
+      ageBand: band,
+      session,
+      returnTo: row.return_to,
+      consent,
+    };
   });
 }

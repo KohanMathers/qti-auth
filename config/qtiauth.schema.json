@@ -2532,6 +2532,12 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 18
+        },
+        "pending_ttl": {
+          "default": "14d",
+          "description": "How long an unapproved child account waits for a parent or guardian. After this the account is deleted. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }
       },
       "additionalProperties": false

@@ -43,6 +43,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.ts';
 import { GET_LEGAL_HOLD_METHOD, PLACE_LEGAL_HOLD_METHOD } from './legal-holds.ts';
 import { PURGE_JOB } from './lifecycle.ts';
+import { EXPIRE_PENDING_JOB } from './parental.ts';
 import { softwarePasskey } from './passkey-testing.ts';
 import { definition } from './service.ts';
 import { identityService } from './start.ts';
@@ -318,7 +319,7 @@ describe('signing up and signing in', () => {
     );
   });
 
-  it('refuses accounts under the parental consent age without keeping them', async () => {
+  it('asks for a parent or guardian email below the consent age, and keeps nothing without one', async () => {
     const verify = await post('/api/v1/auth/magic-link/verify', {
       token: await linkToken('child@example.com'),
     });
@@ -327,7 +328,13 @@ describe('signing up and signing in', () => {
       signup_token: signupToken,
       date_of_birth: `${String(new Date().getUTCFullYear() - 10)}-01-01`,
     });
-    expect(await refused.json()).toMatchObject({ code: 'PARENTAL_CONSENT_UNAVAILABLE' });
+    expect(await refused.json()).toMatchObject({ code: 'GUARDIAN_EMAIL_REQUIRED' });
+    const same = await post('/api/v1/auth/magic-link/signup', {
+      signup_token: signupToken,
+      date_of_birth: `${String(new Date().getUTCFullYear() - 10)}-01-01`,
+      guardian_email: 'child@example.com',
+    });
+    expect(await same.json()).toMatchObject({ code: 'GUARDIAN_EMAIL_INVALID' });
     const users = await identity.context.db
       .selectFrom('users')
       .select('id')
@@ -1167,7 +1174,189 @@ describe('events, retention and data rights', () => {
       expect(metrics).toContain('qtiauth_legal_acceptance_pending{service="identity"}');
     });
   });
+});
 
+describe('parental consent', () => {
+  const childDob = `${String(new Date().getUTCFullYear() - 10)}-01-01`;
+
+  function asChild(userId: string, sessionId: string): Partial<Identity> {
+    return {
+      ...signedInAs(userId, sessionId),
+      account_state: 'pending_parental_consent',
+      age_band: 'under_13',
+    };
+  }
+
+  async function signUpChild(email: string, guardianEmail: string): Promise<SignedIn> {
+    const verify = await post('/api/v1/auth/magic-link/verify', { token: await linkToken(email) });
+    const next = (await verify.json()) as { signup_token: string };
+    secrets.push(next.signup_token);
+    const signup = await post('/api/v1/auth/magic-link/signup', {
+      signup_token: next.signup_token,
+      date_of_birth: childDob,
+      guardian_email: guardianEmail,
+    });
+    expect(signup.status).toBe(201);
+    return finish(signup);
+  }
+
+  async function consentJob(address: string) {
+    const job = await emails.nextJob(address, 'parental_consent');
+    const approve = new URL(String(job.variables['approve_link']));
+    const decline = new URL(String(job.variables['decline_link']));
+    const approveToken = approve.searchParams.get('token') ?? '';
+    const declineToken = decline.searchParams.get('token') ?? '';
+    secrets.push(approveToken, declineToken);
+    return { job, approveToken, declineToken };
+  }
+
+  async function waitErased(userId: string): Promise<void> {
+    await vi.waitFor(async () => {
+      const rows = await identity.context.db
+        .selectFrom('users')
+        .select('id')
+        .where('id', '=', userId)
+        .execute();
+      expect(rows).toEqual([]);
+      const ledger = JSON.parse(
+        await readFile(join(backupDir, 'deletion-ledger', `${userId}.json`), 'utf8'),
+      ) as { user_id: string };
+      expect(ledger).toMatchObject({ user_id: userId });
+    });
+  }
+
+  it('creates a waiting child account, lets them resend and change the guardian email, then activates on approve', async () => {
+    const user = await signUpChild('consent-child@example.com', 'consent-parent@example.com');
+    const me = await call('/api/v1/me', { as: asChild(user.userId, user.sessionId) });
+    const waiting = (await me.json()) as {
+      account_state: string;
+      parental_consent: {
+        guardian_email: string;
+        email_changes_remaining: number;
+        expires_at: string;
+      };
+    };
+    expect(waiting).toMatchObject({
+      account_state: 'pending_parental_consent',
+      parental_consent: {
+        guardian_email: 'consent-parent@example.com',
+        email_changes_remaining: 3,
+      },
+    });
+    const first = await consentJob('consent-parent@example.com');
+    expect(first.job.variables['expires_in_days']).toBe(14);
+
+    const resent = await post(
+      '/api/v1/me/parental-consent/resend',
+      {},
+      asChild(user.userId, user.sessionId),
+    );
+    expect(resent.status).toBe(202);
+    expect(await resent.json()).toMatchObject({ expires_at: waiting.parental_consent.expires_at });
+    await consentJob('consent-parent@example.com');
+
+    const changed = await post(
+      '/api/v1/me/parental-consent/email',
+      { email: 'consent-parent-2@example.com' },
+      asChild(user.userId, user.sessionId),
+    );
+    expect(changed.status).toBe(202);
+    expect(await changed.json()).toMatchObject({
+      guardian_email: 'consent-parent-2@example.com',
+      email_changes_remaining: 2,
+    });
+    await consentJob('consent-parent-2@example.com');
+
+    for (const n of [3, 4]) {
+      const response = await post(
+        '/api/v1/me/parental-consent/email',
+        { email: `consent-parent-${String(n)}@example.com` },
+        asChild(user.userId, user.sessionId),
+      );
+      expect(response.status).toBe(202);
+      await consentJob(`consent-parent-${String(n)}@example.com`);
+    }
+    const limited = await post(
+      '/api/v1/me/parental-consent/email',
+      { email: 'consent-parent-5@example.com' },
+      asChild(user.userId, user.sessionId),
+    );
+    expect(await limited.json()).toMatchObject({ code: 'GUARDIAN_EMAIL_CHANGE_LIMIT' });
+
+    const last = await post(
+      '/api/v1/me/parental-consent/resend',
+      {},
+      asChild(user.userId, user.sessionId),
+    );
+    expect(last.status).toBe(202);
+    const { approveToken } = await consentJob('consent-parent-4@example.com');
+    const young = await post('/api/v1/auth/parental-consent/approve', {
+      token: approveToken,
+      date_of_birth: childDob,
+    });
+    expect(await young.json()).toMatchObject({ code: 'GUARDIAN_NOT_ADULT' });
+    const approved = await post('/api/v1/auth/parental-consent/approve', {
+      token: approveToken,
+      date_of_birth: '1980-01-01',
+    });
+    expect(approved.status).toBe(204);
+
+    const active = await call('/api/v1/me', { as: signedInAs(user.userId, user.sessionId) });
+    expect(await active.json()).toMatchObject({
+      account_state: 'active',
+      parental_consent: null,
+    });
+    const legal = await identity.context.db
+      .selectFrom('legal_acceptances')
+      .select('method')
+      .where('user_id', '=', user.userId)
+      .execute();
+    expect(legal.length).toBeGreaterThan(0);
+    expect(legal.every((row) => row.method === 'guardian')).toBe(true);
+  });
+
+  it('deletes an unapproved account when the guardian declines, including a ledger entry', async () => {
+    const user = await signUpChild('decline-child@example.com', 'decline-parent@example.com');
+    const { declineToken } = await consentJob('decline-parent@example.com');
+    const declined = await post('/api/v1/auth/parental-consent/decline', { token: declineToken });
+    expect(declined.status).toBe(204);
+    await waitErased(user.userId);
+  });
+
+  it('erases unapproved accounts after parental.pending_ttl, including a ledger entry', async () => {
+    const user = await signUpChild('expire-child@example.com', 'expire-parent@example.com');
+    await consentJob('expire-parent@example.com');
+    await identity.context.db
+      .updateTable('parental_consents')
+      .set({ requested_at: new Date(Date.now() - 15 * 86_400_000) })
+      .where('user_id', '=', user.userId)
+      .execute();
+    await publishCronTick(gateway.js, EXPIRE_PENDING_JOB, new Date());
+    await waitErased(user.userId);
+    const metrics = await (await fetch(`${identity.url}/metrics`)).text();
+    expect(metrics).toContain(
+      'qtiauth_parental_consent_total{result="expired",service="identity"}',
+    );
+  });
+
+  it('emails the guardian only after a password child’s address is confirmed', async () => {
+    const signup = await post('/api/v1/auth/password/signup', {
+      email: 'pwd-child@example.com',
+      password: PASSWORD,
+      date_of_birth: childDob,
+      guardian_email: 'pwd-parent@example.com',
+    });
+    expect(signup.status).toBe(201);
+    const verifyToken =
+      (await emails.nextLink('pwd-child@example.com')).searchParams.get('token') ?? '';
+    secrets.push(verifyToken);
+    expect(emails.jobs.filter((job) => job.to.address === 'pwd-parent@example.com')).toEqual([]);
+    await verifyPasswordEmail(verifyToken);
+    await consentJob('pwd-parent@example.com');
+  });
+});
+
+describe('log scrubbing', () => {
   it('keeps tokens, addresses and dates of birth out of the logs', () => {
     expect(logs.lines.length).toBeGreaterThan(0);
     assertLogsScrubbed(logs.lines, [
@@ -1175,6 +1364,20 @@ describe('events, retention and data rights', () => {
       ...secrets.map((secret) => hashToken(secret)),
       'rights@example.com',
       'pwd-new@example.com',
+      'child@example.com',
+      'parent@example.com',
+      'consent-child@example.com',
+      'consent-parent@example.com',
+      'consent-parent-2@example.com',
+      'consent-parent-3@example.com',
+      'consent-parent-4@example.com',
+      'consent-parent-5@example.com',
+      'decline-child@example.com',
+      'decline-parent@example.com',
+      'expire-child@example.com',
+      'expire-parent@example.com',
+      'pwd-child@example.com',
+      'pwd-parent@example.com',
       '1985-07-04',
       PASSWORD,
       postgres.getPassword(),

@@ -12,6 +12,8 @@ export const EMAIL_TOKEN_PURPOSES = [
   'email_change',
   'email_revert',
   'admin_signup',
+  'parental_approve',
+  'parental_decline',
 ] as const;
 export type EmailTokenPurpose = (typeof EMAIL_TOKEN_PURPOSES)[number];
 
@@ -101,6 +103,23 @@ export interface AuditLogTable {
 
 export const LEGAL_ACCEPTANCE_METHODS = ['signup', 'self', 'guardian'] as const;
 export type LegalAcceptanceMethod = (typeof LEGAL_ACCEPTANCE_METHODS)[number];
+
+export const PARENTAL_CONSENT_STATUSES = ['pending', 'granted', 'declined', 'expired'] as const;
+export type ParentalConsentStatus = (typeof PARENTAL_CONSENT_STATUSES)[number];
+
+export interface ParentalConsentsTable {
+  id: string;
+  user_id: string;
+  guardian_email: string;
+  guardian_email_normalized: string;
+  guardian_date_of_birth: ColumnType<Date | null, string | null, string | null>;
+  email_changes: Generated<number>;
+  status: ParentalConsentStatus;
+  requested_at: Date;
+  decided_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
 
 export interface LegalVersionsTable {
   id: string;
@@ -366,6 +385,7 @@ export interface Database {
   audit_log: AuditLogTable;
   legal_versions: LegalVersionsTable;
   legal_acceptances: LegalAcceptancesTable;
+  parental_consents: ParentalConsentsTable;
   data_exports: DataExportsTable;
   legal_holds: LegalHoldsTable;
   deletion_ledger_outbox: DeletionLedgerOutboxTable;

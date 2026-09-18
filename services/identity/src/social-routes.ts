@@ -8,6 +8,7 @@ import { completeSocialSignup, finishSocial, socialProviderEnabled, startSocial 
 import { NO_STORE, sessionHeaders } from './headers.ts';
 import { iso } from './iso.ts';
 import { isCanonicalLocale, preferredLocale } from './locale.ts';
+import { throwGuardianSignup } from './parental-routes.ts';
 import { enabledSocialProviders, findSocialProvider } from './providers.ts';
 import type { Context } from './service.ts';
 import { signedIn } from './session-routes.ts';
@@ -112,6 +113,9 @@ function completeResponse(
       throw new ProblemError('ACCOUNT_LIMIT_REACHED');
     case 'parental_consent_required':
       throw new ProblemError('PARENTAL_CONSENT_UNAVAILABLE');
+    case 'guardian_email_required':
+    case 'guardian_email_invalid':
+      return throwGuardianSignup(result.status);
     case 'linked':
       return {
         status: 200,
@@ -292,6 +296,11 @@ export function socialRoutes(router: Router<Context>): void {
           .refine((value) => isValidDateOfBirth(value, new Date()), 'Must be a real date of birth')
           .optional(),
         email: z.email().max(254).optional(),
+        guardian_email: z
+          .email()
+          .max(254)
+          .optional()
+          .describe('Parent or guardian email. Required below parental.consent_age.'),
       }),
     },
     responses: {
@@ -304,11 +313,22 @@ export function socialRoutes(router: Router<Context>): void {
         }),
       },
     },
-    errors: ['OAUTH_FAILED', 'ACCOUNT_LIMIT_REACHED', 'PARENTAL_CONSENT_UNAVAILABLE'],
+    errors: [
+      'OAUTH_FAILED',
+      'ACCOUNT_LIMIT_REACHED',
+      'PARENTAL_CONSENT_UNAVAILABLE',
+      'GUARDIAN_EMAIL_REQUIRED',
+      'GUARDIAN_EMAIL_INVALID',
+    ],
     handler: async ({ ctx, body, request, log }) => {
       const result = await completeSocialSignup(
         { ctx, request, log },
-        { challenge: body.challenge, dateOfBirth: body.date_of_birth, email: body.email },
+        {
+          challenge: body.challenge,
+          dateOfBirth: body.date_of_birth,
+          email: body.email,
+          guardianEmail: body.guardian_email,
+        },
       );
       switch (result.status) {
         case 'invalid':
@@ -317,6 +337,9 @@ export function socialRoutes(router: Router<Context>): void {
           throw new ProblemError('ACCOUNT_LIMIT_REACHED');
         case 'parental_consent_required':
           throw new ProblemError('PARENTAL_CONSENT_UNAVAILABLE');
+        case 'guardian_email_required':
+        case 'guardian_email_invalid':
+          return throwGuardianSignup(result.status);
         case 'signed_in':
           return {
             status: 201,

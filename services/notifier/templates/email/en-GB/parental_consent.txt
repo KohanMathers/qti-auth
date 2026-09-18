@@ -1,0 +1,23 @@
+A child wants to use {{ brand.product_name }}
+
+{{ brand.company_name }} runs {{ brand.product_name }}. Someone under the age where they can agree to an account on their own has named this address as their parent or guardian.
+
+If you approve, you confirm that you are an adult and accept the terms on their behalf. We keep the child's email address and date of birth so we can run the account. A short summary written for children is here:
+
+{{ children_summary_link }}
+
+Approve this account (you will confirm your date of birth and accept the terms):
+
+{{ approve_link }}
+
+Decline, and we will delete the account:
+
+{{ decline_link }}
+
+These links expire in {{ expires_in_days }} days. If nobody responds by then, the account is deleted.
+
+If you did not expect this, you can ignore the email or use Decline.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

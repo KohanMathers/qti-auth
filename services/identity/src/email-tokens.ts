@@ -66,6 +66,24 @@ export async function useEmailToken(trx: Kysely<Database>, id: string, now: Date
   await trx.updateTable('email_tokens').set({ used_at: now }).where('id', '=', id).execute();
 }
 
+export async function invalidateEmailTokens(
+  trx: Kysely<Database>,
+  options: {
+    userId: string;
+    purposes: readonly EmailTokenPurpose[];
+    now: Date;
+  },
+): Promise<void> {
+  if (options.purposes.length === 0) return;
+  await trx
+    .updateTable('email_tokens')
+    .set({ used_at: options.now })
+    .where('user_id', '=', options.userId)
+    .where('purpose', 'in', [...options.purposes])
+    .where('used_at', 'is', null)
+    .execute();
+}
+
 export async function sweepTokens(
   db: Kysely<Database>,
   options: { retention: number; now: Date },

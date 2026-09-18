@@ -22,6 +22,7 @@ import {
   surfaces,
   usernames,
   legal,
+  parental,
   storage,
   backups,
   webhooks,
@@ -581,6 +582,12 @@ describe('usernames', () => {
     expect(messages(usernames.safeParse({ charset: 'A-Za-z0-9_' }))).toEqual([
       'charset: Must be a character class like [A-Za-z0-9_]',
     ]);
+  });
+});
+
+describe('parental', () => {
+  it('needs consent under 13 and deletes unapproved accounts after 14 days', () => {
+    expect(parental.parse({})).toEqual({ consent_age: 13, pending_ttl: 1_209_600_000 });
   });
 });
 

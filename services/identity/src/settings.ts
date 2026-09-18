@@ -12,6 +12,7 @@ import type { EmailChangeSettings } from './email-change.ts';
 import { parseEncryptionKey } from './encrypt.ts';
 import { geoIpOf } from './geoip-state.ts';
 import type { MagicLinkSettings } from './magic-links.ts';
+import type { ParentalSettings } from './parental.ts';
 import type { RelyingParty } from './passkeys.ts';
 import type { PasswordSettings } from './password-auth.ts';
 import type { SessionSecuritySettings } from './security.ts';
@@ -44,6 +45,9 @@ export const BIND_CALLBACK_PAGE = '/auth/bind/callback';
 export const USERNAME_PAGE = '/auth/username';
 export const DELETE_PAGE = '/auth/delete';
 export const EXPORT_PAGE = '/auth/export';
+export const WAITING_PAGE = '/auth/waiting';
+export const GUARDIAN_APPROVE_PAGE = '/auth/guardian/approve';
+export const GUARDIAN_DECLINE_PAGE = '/auth/guardian/decline';
 export const LEGAL_INDEX_PAGE = '/legal';
 export const LEGAL_ACCEPT_PAGE = '/legal/accept';
 export const LEGAL_DOCUMENT_PAGE = '/legal/:id';
@@ -79,6 +83,7 @@ export function magicLinkSettings(config: IdentityConfig): MagicLinkSettings {
     signupTtl: config.magic_link.signup_ttl,
     maxPerEmail: config.accounts.max_per_email,
     consentAge: config.parental.consent_age,
+    pendingTtl: config.parental.pending_ttl,
     bands: config.age.bands,
     defaultProvider: config.age.assurance.default_provider,
     requiredFor: config.age.assurance.required_for,
@@ -232,6 +237,7 @@ export function passwordSettings(config: IdentityConfig): PasswordSettings {
     },
     maxPerEmail: config.accounts.max_per_email,
     consentAge: config.parental.consent_age,
+    pendingTtl: config.parental.pending_ttl,
     bands: config.age.bands,
     defaultProvider: config.age.assurance.default_provider,
     requiredFor: config.age.assurance.required_for,
@@ -273,6 +279,10 @@ export function emailLinkUrl(
   return url.toString();
 }
 
+export function legalDocumentUrl(config: Pick<IdentityConfig, 'surfaces'>, id: string): string {
+  return new URL(accountPath(config, `/legal/${id}`), accountOrigin(config)).toString();
+}
+
 export function emailChangeSettings(config: IdentityConfig): EmailChangeSettings {
   return {
     changeTtl: config.accounts.email_change_ttl,
@@ -282,11 +292,22 @@ export function emailChangeSettings(config: IdentityConfig): EmailChangeSettings
   };
 }
 
+export function parentalSettings(config: IdentityConfig): ParentalSettings {
+  const magic = magicLinkSettings(config);
+  return {
+    consentAge: magic.consentAge,
+    pendingTtl: magic.pendingTtl,
+    bands: magic.bands,
+    normalizeEmail: magic.normalizeEmail,
+  };
+}
+
 export function socialSettings(config: IdentityConfig): SocialSettings {
   const magic = magicLinkSettings(config);
   return {
     maxPerEmail: magic.maxPerEmail,
     consentAge: magic.consentAge,
+    pendingTtl: magic.pendingTtl,
     bands: magic.bands,
     defaultProvider: magic.defaultProvider,
     requiredFor: magic.requiredFor,

@@ -31,6 +31,7 @@ describe('identity service', () => {
       '0020_pre_deletion_state',
       '0021_export_claims',
       '0022_legal_notices',
+      '0023_parental_consent',
     ]);
   });
 
@@ -73,6 +74,8 @@ describe('identity service', () => {
       'GET /auth/delete',
       'GET /auth/export',
       'GET /auth/forgot-password',
+      'GET /auth/guardian/approve',
+      'GET /auth/guardian/decline',
       'GET /auth/identities',
       'GET /auth/identities/:provider/connect',
       'GET /auth/login',
@@ -91,6 +94,7 @@ describe('identity service', () => {
       'GET /auth/two-factor',
       'GET /auth/username',
       'GET /auth/verify-email',
+      'GET /auth/waiting',
       'GET /legal',
       'GET /legal/:id',
       'GET /legal/:id/:version',
@@ -117,6 +121,8 @@ describe('identity service', () => {
       'POST /api/v1/auth/magic-link/signup',
       'POST /api/v1/auth/magic-link/start',
       'POST /api/v1/auth/magic-link/verify',
+      'POST /api/v1/auth/parental-consent/approve',
+      'POST /api/v1/auth/parental-consent/decline',
       'POST /api/v1/auth/passkey/authenticate',
       'POST /api/v1/auth/passkey/authenticate/start',
       'POST /api/v1/auth/password/forgot',
@@ -131,6 +137,8 @@ describe('identity service', () => {
       'POST /api/v1/me/export',
       'POST /api/v1/me/identities/:provider/connect',
       'POST /api/v1/me/legal/accept',
+      'POST /api/v1/me/parental-consent/email',
+      'POST /api/v1/me/parental-consent/resend',
       'POST /api/v1/me/passkeys/:passkey_id',
       'POST /api/v1/me/passkeys/register',
       'POST /api/v1/me/passkeys/register/start',
@@ -149,6 +157,8 @@ describe('identity service', () => {
       'POST /auth/delete',
       'POST /auth/export',
       'POST /auth/forgot-password',
+      'POST /auth/guardian/approve',
+      'POST /auth/guardian/decline',
       'POST /auth/login',
       'POST /auth/magic-link',
       'POST /auth/magic-link/start',
@@ -161,6 +171,7 @@ describe('identity service', () => {
       'POST /auth/two-factor',
       'POST /auth/username',
       'POST /auth/verify-email',
+      'POST /auth/waiting',
       'POST /legal/accept',
       'PUT /api/v1/admin/users/:user_id/roles',
     ]);
@@ -188,6 +199,16 @@ describe('identity service', () => {
       allow_pending_2fa_enrolment: true,
       allow_aal0: true,
       allow_account_states: expect.arrayContaining(['active', 'banned', 'locked']) as unknown,
+    });
+    expect(route('POST', '/api/v1/me/parental-consent/resend')).toMatchObject({
+      auth: 'session',
+      allow_account_states: ['pending_parental_consent'],
+      allow_pending_parental_consent: true,
+      rate_limit: 'magic_link',
+    });
+    expect(route('POST', '/api/v1/auth/parental-consent/approve')).toMatchObject({
+      auth: 'none',
+      rate_limit: 'auth_verify',
     });
     expect(route('POST', '/api/v1/auth/password/login')).toMatchObject({
       auth: 'none',
@@ -373,6 +394,12 @@ describe('identity service', () => {
         'DELETION_NOT_PENDING',
         'NOTIFICATION_REQUIRED',
         'NOTIFICATION_CATEGORY_NOT_FOUND',
+        'GUARDIAN_EMAIL_REQUIRED',
+        'GUARDIAN_EMAIL_INVALID',
+        'GUARDIAN_EMAIL_UNCHANGED',
+        'GUARDIAN_EMAIL_CHANGE_LIMIT',
+        'GUARDIAN_CONSENT_INVALID',
+        'GUARDIAN_NOT_ADULT',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

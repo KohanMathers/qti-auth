@@ -41,6 +41,13 @@ import {
   type OauthStateStore,
   type SocialIntent,
 } from './oauth-state.ts';
+import {
+  type ConsentLinks,
+  createPendingConsent,
+  guardianEmailProblem,
+  issueConsentLinks,
+  needsParentalConsent,
+} from './parental.ts';
 import { PASSKEY_METHOD } from './passkeys.ts';
 import {
   findSocialProvider,
@@ -63,6 +70,7 @@ export const SOCIAL_SIGNUP_TTL = 30 * 60_000;
 export interface SocialSettings {
   maxPerEmail: number;
   consentAge: number;
+  pendingTtl: number;
   bands: AgeBands;
   defaultProvider: string;
   requiredFor: readonly string[];
@@ -98,6 +106,8 @@ export type CompleteSocialResult =
   | { status: 'identity_in_use' }
   | { status: 'account_limit' }
   | { status: 'parental_consent_required' }
+  | { status: 'guardian_email_required' }
+  | { status: 'guardian_email_invalid' }
   | { status: 'linked'; identityId: string; userId: string }
   | {
       status: 'signup_required';
@@ -122,6 +132,8 @@ export type FinishSocialSignupResult =
   | { status: 'invalid' }
   | { status: 'account_limit' }
   | { status: 'parental_consent_required' }
+  | { status: 'guardian_email_required' }
+  | { status: 'guardian_email_invalid' }
   | {
       status: 'signed_in';
       userId: string;
@@ -130,6 +142,7 @@ export type FinishSocialSignupResult =
       ageBand: AgeBand;
       method: string;
       verifyEmail: { address: string; locale: string | null } | null;
+      consent: ConsentLinks | null;
     };
 
 export async function beginSocial(
@@ -297,7 +310,13 @@ export async function completeSocial(
     profile.birthdate !== null && isValidDateOfBirth(profile.birthdate, options.now)
       ? profile.birthdate
       : null;
-  if (profile.email !== null && profile.emailVerified && birthdate !== null) {
+  const ageKnown = birthdate !== null ? ageOn(birthdate, options.now) : Number.POSITIVE_INFINITY;
+  if (
+    profile.email !== null &&
+    profile.emailVerified &&
+    birthdate !== null &&
+    !needsParentalConsent(ageKnown, options.settings.consentAge)
+  ) {
     return createSocialAccount(db, {
       type: provider.type,
       subject: profile.subject,
@@ -400,6 +419,7 @@ export function finishSocialSignup(
     challenge: string;
     dateOfBirth: string | undefined;
     email: string | undefined;
+    guardianEmail: string | undefined;
     client: SessionClient;
     settings: SocialSettings;
     now: Date;
@@ -424,6 +444,7 @@ export function finishSocialSignup(
       email,
       emailVerified: payload.emailVerified && payload.email === email,
       dateOfBirth,
+      guardianEmail: options.guardianEmail,
       locale: payload.locale,
       returnTo: payload.returnTo,
       client: options.client,
@@ -431,7 +452,9 @@ export function finishSocialSignup(
       now: options.now,
     });
     if (created.status !== 'signed_in') {
-      await useChallenge(trx, taken.row.id, options.now);
+      if (created.status === 'account_limit') {
+        await useChallenge(trx, taken.row.id, options.now);
+      }
       return created;
     }
     await useChallenge(trx, taken.row.id, options.now);
@@ -446,6 +469,7 @@ export function finishSocialSignup(
         payload.emailVerified && payload.email === email
           ? null
           : { address: email.trim(), locale: payload.locale },
+      consent: created.consent ?? null,
     };
   });
 }
@@ -458,6 +482,7 @@ async function createSocialAccount(
     email: string;
     emailVerified: boolean;
     dateOfBirth: string;
+    guardianEmail?: string | undefined;
     locale: string | null;
     returnTo: string | null;
     client: SessionClient;
@@ -465,20 +490,37 @@ async function createSocialAccount(
     now: Date;
   },
 ): Promise<
-  Extract<
-    CompleteSocialResult,
-    { status: 'signed_in' | 'account_limit' | 'parental_consent_required' }
-  >
+  | { status: 'account_limit' }
+  | { status: 'guardian_email_required' }
+  | { status: 'guardian_email_invalid' }
+  | {
+      status: 'signed_in';
+      userId: string;
+      session: CreatedSession;
+      returnTo: string | null;
+      created: boolean;
+      ageBand?: AgeBand;
+      consent?: ConsentLinks | null;
+    }
 > {
   const { settings, now } = options;
   const emailNormalized = settings.normalizeEmail(options.email);
   const age = ageOn(options.dateOfBirth, now);
+  const needsGuardian = needsParentalConsent(age, settings.consentAge);
+  if (needsGuardian) {
+    const problem = guardianEmailProblem(
+      options.guardianEmail,
+      emailNormalized,
+      settings.normalizeEmail,
+    );
+    if (problem === 'required') return { status: 'guardian_email_required' };
+    if (problem !== undefined) return { status: 'guardian_email_invalid' };
+  }
   const state = initialAccountState({
     emailVerified: options.emailVerified,
     age,
     consentAge: settings.consentAge,
   });
-  if (state === 'pending_parental_consent') return { status: 'parental_consent_required' };
 
   return db.transaction().execute(async (trx) => {
     const taken = await findIdentity(trx, options.type, options.subject);
@@ -528,12 +570,32 @@ async function createSocialAccount(
       requiredFor: settings.requiredFor,
       now,
     });
-    await recordCurrentLegalAcceptances(trx, {
-      userId,
-      ip: options.client.ip || null,
-      method: 'signup',
-      now,
-    });
+    if (!needsGuardian) {
+      await recordCurrentLegalAcceptances(trx, {
+        userId,
+        ip: options.client.ip || null,
+        method: 'signup',
+        now,
+      });
+    }
+    let consent: ConsentLinks | null = null;
+    if (needsGuardian && options.guardianEmail !== undefined) {
+      await createPendingConsent(trx, {
+        userId,
+        email: options.guardianEmail,
+        emailNormalized: settings.normalizeEmail(options.guardianEmail),
+        now,
+      });
+      if (options.emailVerified) {
+        consent =
+          (await issueConsentLinks(trx, {
+            userId,
+            locale: options.locale,
+            pendingTtl: settings.pendingTtl,
+            now,
+          })) ?? null;
+      }
+    }
     await writeEvent<Database, UserCreatedData>(
       trx,
       userCreatedEvent(userId, {
@@ -558,6 +620,7 @@ async function createSocialAccount(
       returnTo: options.returnTo,
       created: true,
       ageBand: band,
+      consent,
     };
   });
 }

@@ -83,6 +83,30 @@ export const IDENTITY_ERRORS = defineErrors({
     status: 403,
     title: 'Accounts that need parental consent cannot be created yet',
   },
+  GUARDIAN_EMAIL_REQUIRED: {
+    status: 400,
+    title: 'A parent or guardian email address is required',
+  },
+  GUARDIAN_EMAIL_INVALID: {
+    status: 400,
+    title: 'This parent or guardian email address cannot be used',
+  },
+  GUARDIAN_EMAIL_UNCHANGED: {
+    status: 400,
+    title: 'That is already the parent or guardian email address',
+  },
+  GUARDIAN_EMAIL_CHANGE_LIMIT: {
+    status: 409,
+    title: 'The parent or guardian email cannot be changed again',
+  },
+  GUARDIAN_CONSENT_INVALID: {
+    status: 400,
+    title: 'The consent link is unknown, has expired or has already been used',
+  },
+  GUARDIAN_NOT_ADULT: {
+    status: 400,
+    title: 'A parent or guardian must be an adult',
+  },
   ACCOUNT_NOT_FOUND: { status: 404, title: 'The account does not exist' },
   ACCOUNT_SELF: { status: 409, title: 'You cannot perform this action on your own account' },
   ACCOUNT_STATE_CONFLICT: {

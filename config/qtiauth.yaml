@@ -261,6 +261,7 @@ age:
 
 parental:
   consent_age: 13
+  pending_ttl: 14d
 
 usernames:
   min_length: 8

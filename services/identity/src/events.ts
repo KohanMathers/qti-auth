@@ -69,6 +69,10 @@ export interface LegalVersionPublishedData {
   summary: string;
 }
 
+export interface ParentalConsentRequestedData {
+  expires_at: string;
+}
+
 export interface AuditRecordedData {
   action: string;
   target_type: string;
@@ -213,6 +217,27 @@ export function legalVersionPublishedEvent(
     actor: { type: 'system', id: 'identity' },
     subject: { type: 'legal_document', id: data.id },
     data,
+  };
+}
+
+export function parentalConsentRequestedEvent(
+  userId: string,
+  data: ParentalConsentRequestedData,
+): NewEvent<ParentalConsentRequestedData> {
+  return {
+    type: IDENTITY_EVENTS.parentalConsentRequested,
+    actor: { type: 'system', id: 'identity' },
+    subject: { type: 'user', id: userId },
+    data,
+  };
+}
+
+export function parentalConsentGrantedEvent(userId: string): NewEvent<Record<string, never>> {
+  return {
+    type: IDENTITY_EVENTS.parentalConsentGranted,
+    actor: { type: 'system', id: 'identity' },
+    subject: { type: 'user', id: userId },
+    data: {},
   };
 }
 

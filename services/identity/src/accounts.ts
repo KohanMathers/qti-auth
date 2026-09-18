@@ -229,19 +229,28 @@ export async function activateVerifiedEmail(
   db: Kysely<Database>,
   id: string,
   at: Date,
+  options?: { age: number; consentAge: number },
 ): Promise<Account | undefined> {
   await markEmailVerified(db, id, at);
   const account = await findAccount(db, id);
   if (!account) return undefined;
   if (account.state === 'pending_email_verification') {
-    assertTransition(account.state, 'active');
+    const next =
+      options === undefined
+        ? 'active'
+        : initialAccountState({
+            emailVerified: true,
+            age: options.age,
+            consentAge: options.consentAge,
+          });
+    assertTransition(account.state, next);
     await db
       .updateTable('users')
-      .set({ state: 'active', updated_at: at })
+      .set({ state: next, updated_at: at })
       .where('id', '=', id)
       .where('state', '=', 'pending_email_verification')
       .execute();
-    return { ...account, state: 'active', email_verified_at: account.email_verified_at ?? at };
+    return { ...account, state: next, email_verified_at: account.email_verified_at ?? at };
   }
   return account;
 }
