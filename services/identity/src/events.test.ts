@@ -3,6 +3,7 @@ import { loadEventCatalog } from '@qtiauth/events';
 import { describe, expect, it } from 'vitest';
 
 import {
+  auditRecordedEvent,
   sessionCreatedEvent,
   sessionFlaggedEvent,
   sessionRevokedEvent,
@@ -51,6 +52,12 @@ describe('identity events', () => {
           previous_age_band: '16_to_17',
           age_band: 'adult',
         }),
+      ),
+      createEvent(
+        auditRecordedEvent(
+          { type: 'user', id: USER_ID },
+          { action: 'role.updated', target_type: 'role', target_id: USER_ID },
+        ),
       ),
     ];
     for (const event of events) {

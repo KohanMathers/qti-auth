@@ -481,6 +481,9 @@ importers:
       '@qtiauth/captcha':
         specifier: workspace:*
         version: link:../../packages/captcha
+      '@qtiauth/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@qtiauth/config':
         specifier: workspace:*
         version: link:../../packages/config

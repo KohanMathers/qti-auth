@@ -9,6 +9,15 @@ export {
 } from './announce.ts';
 export { runServiceCli, serviceCommands } from './cli.ts';
 export {
+  createServiceRegistry,
+  type DiscoveredService,
+  type Discovery,
+  type DiscoveryOptions,
+  type RegistryOptions,
+  type ServiceRegistry,
+  startDiscovery,
+} from './discovery.ts';
+export {
   type DataRights,
   type DataRightsHandlers,
   type DataRightsOptions,
@@ -89,11 +98,15 @@ export {
 export {
   type DeclaredPermission,
   definePermissions,
+  effectivePermissions,
   grantMatches,
+  grantsOverlap,
+  isPermissionGrant,
   isPermissionName,
   missingPermissions,
   type PermissionDefinition,
   PermissionDefinitionError,
+  PERMISSION_GRANT,
   type PermissionRegistry,
 } from './permissions.ts';
 export {

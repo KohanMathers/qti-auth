@@ -42,6 +42,7 @@ export async function exportUser(
     usernameHistory,
     ageAssurance,
     dateOfBirthChanges,
+    roles,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -118,6 +119,13 @@ export async function exportUser(
       .where('user_id', '=', userId)
       .orderBy('created_at')
       .execute(),
+    db
+      .selectFrom('user_roles')
+      .innerJoin('roles', 'roles.id', 'user_roles.role_id')
+      .select(['roles.slug as slug', 'roles.name as name'])
+      .where('user_roles.user_id', '=', userId)
+      .orderBy('roles.slug')
+      .execute(),
   ]);
 
   return {
@@ -178,6 +186,7 @@ export async function exportUser(
       date_of_birth: row.date_of_birth,
       created_at: iso(row.created_at),
     })),
+    roles: roles.map((row) => ({ slug: row.slug, name: row.name })),
   };
 }
 

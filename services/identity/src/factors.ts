@@ -1,6 +1,6 @@
 import { randomUUIDv7 } from 'node:crypto';
 
-import { ProblemError } from '@qtiauth/service-kit';
+import { ProblemError, grantsOverlap } from '@qtiauth/service-kit';
 import type { Kysely } from 'kysely';
 
 import type { Database } from './database.ts';
@@ -12,14 +12,13 @@ import { unusedRecoveryCount } from './recovery.ts';
 import { socialIdentityCount } from './social.ts';
 import { TOTP_METHOD } from './totp.ts';
 
+export { loadPermissions } from './roles.ts';
+
 export const SECOND_FACTOR_METHODS = ['totp', 'passkey', 'recovery'] as const;
 export type SecondFactorMethod = (typeof SECOND_FACTOR_METHODS)[number];
 
 export function permissionNeeds2fa(permission: string, patterns: readonly string[]): boolean {
-  return patterns.some((pattern) => {
-    if (pattern === '*' || pattern === permission) return true;
-    return pattern.endsWith('.*') && permission.startsWith(pattern.slice(0, -1));
-  });
+  return patterns.some((pattern) => grantsOverlap(permission, pattern));
 }
 
 export function staffNeeds2fa(
@@ -27,16 +26,6 @@ export function staffNeeds2fa(
   patterns: readonly string[],
 ): boolean {
   return permissions.some((permission) => permissionNeeds2fa(permission, patterns));
-}
-
-export async function loadPermissions(db: Kysely<Database>, userId: string): Promise<string[]> {
-  const rows = await db
-    .selectFrom('user_permissions')
-    .select('permission')
-    .where('user_id', '=', userId)
-    .orderBy('permission')
-    .execute();
-  return rows.map((row) => row.permission);
 }
 
 export function findTotpIdentity(

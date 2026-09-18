@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './database.ts';
 import { softwarePasskey } from './passkey-testing.ts';
+import { grantUser } from './roles.ts';
 import { definition } from './service.ts';
 import { startMockOidc } from './social-testing.ts';
 import { identityService } from './start.ts';
@@ -445,10 +446,7 @@ describe('identity through the gateway', () => {
     const client = browser();
     await signUpInBrowser(client, 'staff-walker@example.com');
     const me = (await (await client.request('/api/v1/me')).json()) as { id: string };
-    await identity.context.db
-      .insertInto('user_permissions')
-      .values({ user_id: me.id, permission: 'users.read' })
-      .execute();
+    await grantUser(identity.context.db, me.id, ['users.read']);
     await client.request('/api/v1/auth/logout', { method: 'POST' });
     const token = await openLink(client, 'staff-walker@example.com');
     const confirm = await client.request('/auth/magic-link', form({ token }));

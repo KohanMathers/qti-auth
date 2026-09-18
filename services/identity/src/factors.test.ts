@@ -12,5 +12,6 @@ describe('staffNeeds2fa', () => {
     expect(permissionNeeds2fa('oidc.clients.verify', patterns)).toBe(false);
     expect(staffNeeds2fa(['profile.read'], patterns)).toBe(false);
     expect(staffNeeds2fa(['users.read', 'profile.read'], patterns)).toBe(true);
+    expect(staffNeeds2fa(['*'], patterns)).toBe(true);
   });
 });

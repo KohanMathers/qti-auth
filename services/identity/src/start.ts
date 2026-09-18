@@ -26,9 +26,11 @@ import { attachTextFilter } from './filter-state.ts';
 import { attachGeoIp } from './geoip-state.ts';
 import { identityMetrics } from './metrics.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
+import { openPermissionCatalog } from './permission-registry.ts';
 import { anySocialEnabled } from './providers.ts';
+import { seedRoles } from './roles.ts';
 import { sweepSecurityEvents } from './security.ts';
-import { type Context, type definition, router } from './service.ts';
+import { type Context, definition, router } from './service.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
 import { accountOrigin, encryptionKey, sessionSecuritySettings } from './settings.ts';
 
@@ -87,6 +89,9 @@ export function identityService(options: IdentityOptions = {}) {
           return Promise.resolve();
         },
       });
+      await seedRoles(db, config.roles);
+      const permissions = openPermissionCatalog(ctx, definition.permissions);
+      stack.push({ stop: permissions.stop });
       const textFilter = await openTextFilter(
         resolveListsDir(ctx.config_path, config.text_filter.lists_dir),
       );

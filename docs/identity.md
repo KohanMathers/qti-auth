@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, and computes age bands with self-declared age assurance. Roles, legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, and assigns staff roles. Legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -89,6 +89,36 @@ security:
     - roles.manage
     - filter.*
 
+roles:
+  admin:
+    name: Admin
+    description: Full access, except permissions that must be granted by name.
+    permissions: ['*']
+  moderator:
+    name: Moderator
+    description: Moderate users, reports and the text filter.
+    permissions:
+      - users.read
+      - users.ban
+      - users.lock
+      - users.edit_dob
+      - safety.reports.read
+      - safety.actions.apply
+      - filter.read
+      - filter.manage
+  support_agent:
+    name: Support agent
+    description: Handle support tickets.
+    permissions: [users.read, support.tickets.staff]
+  kb_editor:
+    name: Knowledge-base editor
+    description: Edit knowledge-base articles.
+    permissions: [support.kb.edit]
+  game_manager:
+    name: Game manager
+    description: Manage games, entitlements and keys.
+    permissions: [games.catalog.edit, games.entitlements.grant, games.keys.manage]
+
 retention:
   sessions: 30d
   tokens: 24h
@@ -113,7 +143,8 @@ retention:
 - `usernames.min_length` and `usernames.max_length` bound a username. `usernames.charset` is the regex character class of allowed characters. Uniqueness is case-insensitive. `usernames.reserved` and `usernames.reserved_prefixes` are names and prefixes nobody can claim; both are empty by default and compared without regard to case. `usernames.change_cooldown` is how long after a claim or change the user must wait before changing again. `usernames.changes_per_year` is how many changes are allowed inside `usernames.change_window` after the first claim. `usernames.release_hold` is how long a released name is held for the previous owner.
 - `security.encryption_key` is a base64 32-byte key (`openssl rand -base64 32`) that encrypts TOTP secrets at rest. Identity will not start without it. Set `APP_ENCRYPTION_KEY` in `.env`.
 - `security.step_up_window` is how recently a session must have reached `aal2` for a route that needs step-up, and for adding a password after a magic-link sign-in.
-- `security.require_2fa_for_permissions` is the staff permissions that require a passkey or TOTP. Matching accounts can sign in but only reach enrolment until they set one up. Permissions themselves arrive in a later release; until then this is tested with a stub grant.
+- `security.require_2fa_for_permissions` is the staff permissions that require a passkey or TOTP. Matching accounts can sign in but only reach enrolment until they set one up. A grant of `*` counts.
+- `roles` are the built-in staff roles, keyed by slug. Identity seeds any missing slug on startup; after that they are edited in the admin API with `roles.manage`. `*` never matches permissions that must be granted by name, such as `safety.csea.access`.
 - `retention.sessions` is how long ended sessions are kept, `retention.tokens` how long used or expired emailed tokens are kept after they expire, `retention.session_security_events` how long session security log rows are kept, and `retention.filter_decisions` how long text-filter decisions (including the raw input) are kept.
 - `features.auth.magic_link.enabled: false` turns magic links off. `features.auth.password.enabled: false` turns passwords off. `features.auth.passkeys.enabled: false` turns passkeys off. `features.auth.totp.enabled: false` turns authenticator-app sign-in off.
 - `features.session_security.enabled: false` turns session security checks off.
@@ -221,7 +252,7 @@ Passkeys (WebAuthn) work as a primary sign-in or as a second factor. Several can
 
 TOTP is RFC 6238 (SHA-1, 6 digits, 30-second step, ±1 window). The secret is encrypted at rest with `security.encryption_key`. Confirming enrolment issues 10 hashed single-use recovery codes, which can be replaced at `POST /api/v1/me/recovery-codes` after a recent step-up.
 
-Staff whose permissions match `security.require_2fa_for_permissions` can sign in without a second factor, but the gateway only lets them hit routes with `allow_pending_2fa_enrolment: true` (enrolment and sign-out) until they register a passkey or TOTP.
+Staff whose permissions match `security.require_2fa_for_permissions` can sign in without a second factor, but the gateway only lets them hit routes with `allow_pending_2fa_enrolment: true` (enrolment and sign-out) until they register a passkey or TOTP. A grant of `*` matches those patterns.
 
 | Endpoint                                       | Does                                                                                       |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
@@ -338,6 +369,27 @@ Staff change a date of birth at `POST /api/v1/admin/users/:user_id/date-of-birth
 | ------------------------------------------------- | ---------------------------------------------- |
 | `POST /api/v1/admin/users/:user_id/date-of-birth` | Staff-only date-of-birth change, with a reason |
 
+## Roles
+
+Permissions are declared by each running service in its route manifest. Identity listens for those announcements and serves the current registry at `GET /api/v1/admin/permissions`. A service that is not running has no permissions. `safety.csea.access` is declared with `wildcard: false`, so a grant of `*` or `safety.*` does not cover it.
+
+Roles are seeded from `roles` in config on startup (`admin`, `moderator`, `support_agent`, `kb_editor`, `game_manager`). After that they live in the database and are edited with `roles.manage`. Built-in roles cannot be deleted. Users are assigned roles; the session and internal identity token carry the union of those grants.
+
+The first admin is created with `docker compose run --rm identity qtiauth admin create --email …`. That prints a one-time magic-link URL. It refuses if anyone already has the admin role. There are no default credentials.
+
+`GET /api/v1/me` includes `roles` and `permissions` (the grants, including wildcards). Role and membership changes publish `qtiauth.audit.recorded.v1`.
+
+| Endpoint                                 | Does                                                            |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| `GET /api/v1/admin/permissions`          | Permissions declared by running services                        |
+| `GET /api/v1/admin/roles`                | All roles, with stored grants and current effective permissions |
+| `POST /api/v1/admin/roles`               | Create a custom role. Needs step-up                             |
+| `GET /api/v1/admin/roles/:role_id`       | One role                                                        |
+| `PATCH /api/v1/admin/roles/:role_id`     | Edit name, description or grants. Needs step-up                 |
+| `DELETE /api/v1/admin/roles/:role_id`    | Delete a custom role. Needs step-up                             |
+| `GET /api/v1/admin/users/:user_id/roles` | Roles assigned to a user                                        |
+| `PUT /api/v1/admin/users/:user_id/roles` | Replace a user’s roles. Needs step-up                           |
+
 Errors, on top of the [codes every service can return](services.md#errors):
 
 | Code                           | Status | When                                                                                   |
@@ -373,6 +425,7 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `PASSKEY_NOT_FOUND`            | 404    | No passkey with that ID belongs to the user                                            |
 | `IDENTITY_NOT_FOUND`           | 404    | No connected social identity with that ID belongs to the user                          |
 | `FILTER_ENTRY_NOT_FOUND`       | 404    | No admin-added allowlist or extra-block word with that value                           |
+| `ROLE_NOT_FOUND`               | 404    | No role with that ID                                                                   |
 | `USERNAME_UNAVAILABLE`         | 409    | The username is taken, reserved, held or blocked by the text filter                    |
 | `USERNAME_COOLDOWN`            | 409    | `usernames.change_cooldown` has not elapsed since the last claim or change             |
 | `USERNAME_CHANGE_LIMIT`        | 409    | `usernames.changes_per_year` changes have already been used in `change_window`         |
@@ -380,6 +433,8 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `TOTP_ALREADY_ENABLED`         | 409    | Authenticator-app sign-in is already set up                                            |
 | `IDENTITY_IN_USE`              | 409    | That provider identity is already connected to another account                         |
 | `LAST_SIGN_IN_METHOD`          | 409    | Removing this method would leave the account with no sign-in method                    |
+| `ROLE_SLUG_TAKEN`              | 409    | A role with this slug already exists                                                   |
+| `ROLE_BUILTIN`                 | 409    | Built-in roles cannot be deleted                                                       |
 | `PROVIDER_UNAVAILABLE`         | 502    | The upstream provider did not complete token exchange or userinfo                      |
 
 ## Events
@@ -387,7 +442,7 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | Event                                       | When                                                                                                                                      |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `qtiauth.identity.user.created.v1`          | An account was created                                                                                                                    |
-| `qtiauth.identity.user.updated.v1`          | An account field changed. `fields` names what changed (`username`, `date_of_birth`)                                                       |
+| `qtiauth.identity.user.updated.v1`          | An account field changed. `fields` names what changed (`username`, `date_of_birth`, `roles`)                                              |
 | `qtiauth.identity.user.age_band_changed.v1` | The computed age band changed, usually because they had a birthday                                                                        |
 | `qtiauth.identity.session.created.v1`       | Someone signed in                                                                                                                         |
 | `qtiauth.identity.session.revoked.v1`       | A session was ended by signing out (`logout`), by the user (`revoked`), by a newer sign-in (`evicted`) or by session security (`blocked`) |
@@ -399,7 +454,7 @@ The gateway clears cached sessions when it sees `session.revoked`, `session.flag
 
 `retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, and text-filter decisions `retention.filter_decisions` after they were recorded.
 
-A user's export has their account (including username, public profile, leaderboard visibility and security-notification flag), username history, age-assurance results, staff date-of-birth changes, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address.
+A user's export has their account (including username, public profile, leaderboard visibility and security-notification flag), username history, age-assurance results, staff date-of-birth changes, assigned roles, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address.
 
 ## Metrics
 

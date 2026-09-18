@@ -39,6 +39,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './database.ts';
 import { softwarePasskey } from './passkey-testing.ts';
+import { grantUser } from './roles.ts';
 import { definition } from './service.ts';
 import { identityService } from './start.ts';
 import { type CapturedEmails, captureEmails } from './testing.ts';
@@ -782,10 +783,7 @@ describe('passkeys and two-factor', () => {
 
   it('marks staff without a second factor as needing enrolment', async () => {
     const user = await signUp('staff-2fa@example.com');
-    await identity.context.db
-      .insertInto('user_permissions')
-      .values({ user_id: user.userId, permission: 'users.read' })
-      .execute();
+    await grantUser(identity.context.db, user.userId, ['users.read']);
     expect(await resolve(user.token)).toMatchObject({
       two_factor_enrolment_required: true,
       permissions: ['users.read'],

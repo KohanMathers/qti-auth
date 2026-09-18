@@ -711,6 +711,7 @@ export const rateLimits = z
   );
 
 const PERMISSION_GRANT = /^(?:\*|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*(?:\.\*)?)$/;
+const ROLE_SLUG = /^[a-z][a-z0-9_]{0,62}$/;
 
 export const DEFAULT_REQUIRE_2FA_PERMISSIONS = [
   'users.*',
@@ -750,6 +751,76 @@ export const security = z
   })
   .prefault({})
   .describe('Account security.');
+
+export const ADMIN_ROLE = 'admin';
+
+const roleDefinition = z
+  .strictObject({
+    name: z.string().trim().min(1).max(80).describe('Display name.'),
+    description: z.string().trim().min(1).max(500).describe('What this role is for.'),
+    permissions: z
+      .array(
+        z
+          .string()
+          .regex(PERMISSION_GRANT, 'Must be a permission, a prefix like users.*, or *')
+          .describe('A permission, a prefix ending in .*, or *.'),
+      )
+      .refine((grants) => new Set(grants).size === grants.length, {
+        message: 'Permissions must be unique',
+      })
+      .describe(
+        'Permission grants this role confers. * does not include permissions that must be granted by name.',
+      ),
+  })
+  .describe('A staff role.');
+
+export const DEFAULT_ROLES = {
+  admin: {
+    name: 'Admin',
+    description: 'Full access, except permissions that must be granted by name.',
+    permissions: ['*'],
+  },
+  moderator: {
+    name: 'Moderator',
+    description: 'Moderate users, reports and the text filter.',
+    permissions: [
+      'users.read',
+      'users.ban',
+      'users.lock',
+      'users.edit_dob',
+      'safety.reports.read',
+      'safety.actions.apply',
+      'filter.read',
+      'filter.manage',
+    ],
+  },
+  support_agent: {
+    name: 'Support agent',
+    description: 'Handle support tickets.',
+    permissions: ['users.read', 'support.tickets.staff'],
+  },
+  kb_editor: {
+    name: 'Knowledge-base editor',
+    description: 'Edit knowledge-base articles.',
+    permissions: ['support.kb.edit'],
+  },
+  game_manager: {
+    name: 'Game manager',
+    description: 'Manage games, entitlements and keys.',
+    permissions: ['games.catalog.edit', 'games.entitlements.grant', 'games.keys.manage'],
+  },
+};
+
+export const roles = z
+  .record(
+    z.string().regex(ROLE_SLUG, 'Must be a lowercase slug like support_agent'),
+    roleDefinition,
+  )
+  .refine((value) => Object.hasOwn(value, ADMIN_ROLE), { message: 'Must include an admin role' })
+  .default(DEFAULT_ROLES)
+  .describe(
+    'Staff roles, keyed by slug. Built-ins are seeded on startup and can then be edited with roles.manage. * never matches permissions that must be granted by name.',
+  );
 
 const emailDomainRule = z
   .strictObject({
@@ -1491,6 +1562,7 @@ export const sections = {
   captcha,
   email: emailSection,
   security,
+  roles,
   accounts,
   magic_link: magicLink,
   password,

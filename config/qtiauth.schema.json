@@ -1930,6 +1930,94 @@
       },
       "additionalProperties": false
     },
+    "roles": {
+      "default": {
+        "admin": {
+          "name": "Admin",
+          "description": "Full access, except permissions that must be granted by name.",
+          "permissions": [
+            "*"
+          ]
+        },
+        "moderator": {
+          "name": "Moderator",
+          "description": "Moderate users, reports and the text filter.",
+          "permissions": [
+            "users.read",
+            "users.ban",
+            "users.lock",
+            "users.edit_dob",
+            "safety.reports.read",
+            "safety.actions.apply",
+            "filter.read",
+            "filter.manage"
+          ]
+        },
+        "support_agent": {
+          "name": "Support agent",
+          "description": "Handle support tickets.",
+          "permissions": [
+            "users.read",
+            "support.tickets.staff"
+          ]
+        },
+        "kb_editor": {
+          "name": "Knowledge-base editor",
+          "description": "Edit knowledge-base articles.",
+          "permissions": [
+            "support.kb.edit"
+          ]
+        },
+        "game_manager": {
+          "name": "Game manager",
+          "description": "Manage games, entitlements and keys.",
+          "permissions": [
+            "games.catalog.edit",
+            "games.entitlements.grant",
+            "games.keys.manage"
+          ]
+        }
+      },
+      "description": "Staff roles, keyed by slug. Built-ins are seeded on startup and can then be edited with roles.manage. * never matches permissions that must be granted by name.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,62}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "Display name."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "What this role is for."
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(?:\\*|[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*(?:\\.\\*)?)$",
+              "description": "A permission, a prefix ending in .*, or *."
+            },
+            "description": "Permission grants this role confers. * does not include permissions that must be granted by name."
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "permissions"
+        ],
+        "additionalProperties": false,
+        "description": "A staff role."
+      }
+    },
     "accounts": {
       "description": "Accounts.",
       "default": {},

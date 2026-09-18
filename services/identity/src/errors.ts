@@ -85,6 +85,9 @@ export const IDENTITY_ERRORS = defineErrors({
   },
   ACCOUNT_NOT_FOUND: { status: 404, title: 'The account does not exist' },
   SESSION_NOT_FOUND: { status: 404, title: 'No such session' },
+  ROLE_NOT_FOUND: { status: 404, title: 'No such role' },
+  ROLE_SLUG_TAKEN: { status: 409, title: 'A role with this slug already exists' },
+  ROLE_BUILTIN: { status: 409, title: 'Built-in roles cannot be deleted' },
 });
 
 export type IdentityErrorCode = keyof typeof IDENTITY_ERRORS;

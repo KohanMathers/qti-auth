@@ -345,8 +345,7 @@ Spec: §4.5
 - [x] TOTP with encrypted secrets (`APP_ENCRYPTION_KEY`).
 - [x] 10 hashed single-use recovery codes, regenerable.
 - [x] `aal1`/`aal2` on sessions, step-up window, `STEP_UP_REQUIRED` errors, route policy `step_up`.
-- [x] Staff 2FA enforcement by permission (enrolment-only access until enrolled). Permissions arrive
-      in P2b.4, so this is tested with a stub permission until then.
+- [x] Staff 2FA enforcement by permission (enrolment-only access until enrolled).
 
 **Done when:** passkey-only accounts reach `aal2`, and a route with `step_up: true` rejects an `aal1`
 session.
@@ -440,13 +439,13 @@ Spec: §4.6
 
 **Done when:** a user crossing 18 overnight emits the event and changes band without logging in.
 
-### P2b.4 RBAC and admin bootstrap — M
+### P2b.4 RBAC and admin bootstrap — M ✅
 Spec: §4.14
 
-- [ ] Permission registry built from service manifests. Roles in config and editable in the UI.
-- [ ] `safety.csea.access` excluded from wildcard matching.
-- [ ] Permissions carried in the internal identity token.
-- [ ] `qtiauth admin create` one-time signup link.
+- [x] Permission registry built from service manifests. Roles in config and editable in the UI.
+- [x] `safety.csea.access` excluded from wildcard matching.
+- [x] Permissions carried in the internal identity token.
+- [x] `qtiauth admin create` one-time signup link.
 
 **Done when:** a role with `*` can't access anything requiring `safety.csea.access` (tested).
 

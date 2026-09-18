@@ -11,6 +11,7 @@ export const EMAIL_TOKEN_PURPOSES = [
   'password_reset',
   'email_change',
   'email_revert',
+  'admin_signup',
 ] as const;
 export type EmailTokenPurpose = (typeof EMAIL_TOKEN_PURPOSES)[number];
 
@@ -164,9 +165,24 @@ export interface RecoveryCodesTable {
   used_at: Date | null;
 }
 
-export interface UserPermissionsTable {
+export interface RolesTable {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  builtin: boolean;
+  created_at: Generated<Date>;
+  updated_at: Date;
+}
+
+export interface RolePermissionsTable {
+  role_id: string;
+  grant: string;
+}
+
+export interface UserRolesTable {
   user_id: string;
-  permission: string;
+  role_id: string;
 }
 
 export interface SessionSecurityEventsTable {
@@ -224,7 +240,9 @@ export interface Database {
   auth_failures: AuthFailuresTable;
   auth_challenges: AuthChallengesTable;
   recovery_codes: RecoveryCodesTable;
-  user_permissions: UserPermissionsTable;
+  roles: RolesTable;
+  role_permissions: RolePermissionsTable;
+  user_roles: UserRolesTable;
   session_security_events: SessionSecurityEventsTable;
   filter_decisions: FilterDecisionsTable;
   filter_list_entries: FilterListEntriesTable;

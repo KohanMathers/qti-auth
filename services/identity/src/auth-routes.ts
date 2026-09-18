@@ -4,7 +4,8 @@ import * as z from 'zod';
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
 import { CAPTCHA_ACTIONS, inspectCaptcha, noteCaptchaAttempt, requireCaptcha } from './captcha.ts';
-import { SECOND_FACTOR_METHODS } from './factors.ts';
+import { loadPermissions, SECOND_FACTOR_METHODS } from './factors.ts';
+import { loadUserRoles } from './roles.ts';
 import { RETURN_TO } from './settings.ts';
 import {
   completeEmailVerification,
@@ -70,6 +71,8 @@ const meSchema = z.object({
   leaderboard_visible: z.boolean(),
   locale: z.string().nullable(),
   created_at: z.iso.datetime(),
+  roles: z.array(z.object({ id: z.uuid(), slug: z.string(), name: z.string() })),
+  permissions: z.array(z.string()),
   session: z.object({ id: z.uuid(), amr: z.array(z.string()), acr: z.string().nullable() }),
 });
 
@@ -738,7 +741,11 @@ export function authRoutes(router: Router<Context>): void {
     errors: ['ACCOUNT_NOT_FOUND'],
     handler: async ({ ctx, identity }) => {
       const { userId, sessionId } = signedIn(identity);
-      const account = await findAccount(ctx.db, userId);
+      const [account, roles, permissions] = await Promise.all([
+        findAccount(ctx.db, userId),
+        loadUserRoles(ctx.db, userId),
+        loadPermissions(ctx.db, userId),
+      ]);
       if (!account || account.state === 'deleted') {
         throw new ProblemError('ACCOUNT_NOT_FOUND');
       }
@@ -757,6 +764,8 @@ export function authRoutes(router: Router<Context>): void {
           leaderboard_visible: account.leaderboard_visible,
           locale: account.locale,
           created_at: account.created_at.toISOString(),
+          roles: roles.map((role) => ({ id: role.id, slug: role.slug, name: role.name })),
+          permissions,
           session: { id: sessionId, amr: identity.amr, acr: identity.acr },
         },
       };

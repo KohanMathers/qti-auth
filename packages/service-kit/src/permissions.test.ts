@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { definePermissions, grantMatches, missingPermissions } from './permissions.ts';
+import {
+  definePermissions,
+  effectivePermissions,
+  grantMatches,
+  grantsOverlap,
+  isPermissionGrant,
+  missingPermissions,
+} from './permissions.ts';
 
 const permissions = definePermissions({
   'users.read': { description: 'Read users' },
@@ -43,6 +50,35 @@ describe('grantMatches', () => {
     expect(grantMatches('safety.*', csea)).toBe(false);
     expect(grantMatches('safety.csea.*', csea)).toBe(false);
     expect(grantMatches('safety.csea.access', csea)).toBe(true);
+  });
+});
+
+describe('grantsOverlap', () => {
+  it('treats * as covering every other grant', () => {
+    expect(grantsOverlap('*', 'users.*')).toBe(true);
+    expect(grantsOverlap('roles.manage', '*')).toBe(true);
+    expect(grantsOverlap('users.read', 'users.read')).toBe(true);
+    expect(grantsOverlap('users.read', 'users.*')).toBe(true);
+    expect(grantsOverlap('users.*', 'users.ban')).toBe(true);
+    expect(grantsOverlap('users.read', 'safety.*')).toBe(false);
+    expect(grantsOverlap('Users', 'users.*')).toBe(false);
+  });
+});
+
+describe('effectivePermissions', () => {
+  it('expands grants against declared permissions and never includes wildcard: false from *', () => {
+    expect(
+      effectivePermissions(['*'], Object.values(permissions)).map((item) => item.name),
+    ).toEqual(['users.read', 'users.ban', 'safety.reports.read']);
+    expect(
+      effectivePermissions(['*', 'safety.csea.access'], Object.values(permissions)).map(
+        (item) => item.name,
+      ),
+    ).toEqual(['users.read', 'users.ban', 'safety.reports.read', 'safety.csea.access']);
+    expect(isPermissionGrant('*')).toBe(true);
+    expect(isPermissionGrant('users.*')).toBe(true);
+    expect(isPermissionGrant('users.read')).toBe(true);
+    expect(isPermissionGrant('Users')).toBe(false);
   });
 });
 

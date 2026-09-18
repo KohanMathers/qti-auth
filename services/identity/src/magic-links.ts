@@ -21,6 +21,7 @@ import {
   useEmailToken,
 } from './email-tokens.ts';
 import { type UserCreatedData, userCreatedEvent } from './events.ts';
+import { assignAdminIfFirst } from './roles.ts';
 import {
   type CreatedSession,
   createSession,
@@ -99,16 +100,17 @@ export function verifyMagicLink(
 ): Promise<VerifyResult> {
   const { settings, now } = options;
   return db.transaction().execute(async (trx): Promise<VerifyResult> => {
-    const taken = await takeEmailToken(trx, options.token, 'magic_link', now);
+    const taken = await takeEmailToken(trx, options.token, ['magic_link', 'admin_signup'], now);
     if (taken.status === 'invalid') return taken;
     const { row } = taken;
+    const adminInvite = row.purpose === 'admin_signup';
 
     const accounts = await accountsWithEmail(trx, row.email_normalized);
     if (accounts.length === 0) {
       await useEmailToken(trx, row.id, now);
       const expiresAt = new Date(now.getTime() + settings.signupTtl);
       const signupToken = await insertEmailToken(trx, {
-        purpose: 'signup',
+        purpose: adminInvite ? 'admin_signup' : 'signup',
         email: row.email,
         emailNormalized: row.email_normalized,
         locale: row.locale,
@@ -129,6 +131,7 @@ export function verifyMagicLink(
     await useEmailToken(trx, row.id, now);
     await markEmailVerified(trx, account.id, now);
     await recordIdentityUse(trx, account.id, MAGIC_LINK_METHOD, now);
+    if (adminInvite) await assignAdminIfFirst(trx, account.id);
     const session = await createSession(trx, {
       userId: account.id,
       authMethod: MAGIC_LINK_METHOD,
@@ -154,9 +157,10 @@ export function completeSignup(
 ): Promise<SignupResult> {
   const { settings, now } = options;
   return db.transaction().execute(async (trx): Promise<SignupResult> => {
-    const taken = await takeEmailToken(trx, options.signupToken, 'signup', now);
+    const taken = await takeEmailToken(trx, options.signupToken, ['signup', 'admin_signup'], now);
     if (taken.status === 'invalid') return taken;
     const { row } = taken;
+    const adminInvite = row.purpose === 'admin_signup';
 
     const age = ageOn(options.dateOfBirth, now);
     const state = initialAccountState({
@@ -185,6 +189,7 @@ export function completeSignup(
       ...privacy,
     });
     await recordIdentityUse(trx, userId, MAGIC_LINK_METHOD, now);
+    if (adminInvite) await assignAdminIfFirst(trx, userId);
     const band = ageBand(age, settings.bands);
     await recordSignupAgeAssurance(trx, {
       userId,

@@ -16,6 +16,7 @@ import { IDENTITY_ERRORS } from './errors.ts';
 import { factorRoutes } from './factor-routes.ts';
 import { filterRoutes } from './filter-routes.ts';
 import { pageRoutes } from './pages.ts';
+import { roleRoutes } from './role-routes.ts';
 import { sessionRoutes } from './session-routes.ts';
 import { socialRoutes } from './social-routes.ts';
 import { usernameRoutes } from './username-routes.ts';
@@ -44,6 +45,7 @@ export const definition = defineService({
     'parental',
     'usernames',
     'security',
+    'roles',
     'retention',
     'valkey',
   ],
@@ -54,6 +56,7 @@ export const definition = defineService({
     },
     'filter.manage': { description: 'Change the text-filter allowlist and extra blocklist' },
     'users.edit_dob': { description: 'Change a user’s date of birth' },
+    'roles.manage': { description: 'Create, edit and assign roles' },
   }),
   errors: IDENTITY_ERRORS,
 });
@@ -70,4 +73,5 @@ sessionRoutes(router);
 filterRoutes(router);
 usernameRoutes(router);
 ageRoutes(router);
+roleRoutes(router);
 pageRoutes(router);

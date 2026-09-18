@@ -44,15 +44,16 @@ export async function insertEmailToken(
 export async function takeEmailToken(
   trx: Kysely<Database>,
   token: string,
-  purpose: EmailTokenPurpose,
+  purpose: EmailTokenPurpose | readonly EmailTokenPurpose[],
   now: Date,
 ): Promise<{ status: 'ok'; row: TokenRow } | { status: 'invalid'; reason: TokenFailure }> {
   if (!isToken(token)) return { status: 'invalid', reason: 'unknown' };
+  const purposes = typeof purpose === 'string' ? [purpose] : purpose;
   const row = await trx
     .selectFrom('email_tokens')
     .selectAll()
     .where('token_hash', '=', hashToken(token))
-    .where('purpose', '=', purpose)
+    .where('purpose', 'in', purposes)
     .forUpdate()
     .executeTakeFirst();
   if (!row) return { status: 'invalid', reason: 'unknown' };

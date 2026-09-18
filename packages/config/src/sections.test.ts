@@ -15,6 +15,7 @@ import {
   password,
   rateLimits,
   retention,
+  roles,
   scheduler,
   security,
   sessionSecurity,
@@ -347,6 +348,46 @@ describe('security', () => {
   it('rejects a permission that is not dotted lowercase words', () => {
     expect(messages(security.safeParse({ require_2fa_for_permissions: ['Users'] }))).toEqual([
       'require_2fa_for_permissions.0: Must be a permission, a prefix like users.*, or *',
+    ]);
+  });
+});
+
+describe('roles', () => {
+  it('ships admin, moderator, support, knowledge-base and game-manager roles', () => {
+    const parsed = roles.parse(undefined);
+    expect(Object.keys(parsed)).toEqual([
+      'admin',
+      'moderator',
+      'support_agent',
+      'kb_editor',
+      'game_manager',
+    ]);
+    expect(parsed['admin']).toEqual({
+      name: 'Admin',
+      description: 'Full access, except permissions that must be granted by name.',
+      permissions: ['*'],
+    });
+  });
+
+  it('requires an admin role and unique well-formed grants', () => {
+    expect(messages(roles.safeParse({}))).toEqual([': Must include an admin role']);
+    expect(
+      messages(
+        roles.safeParse({
+          admin: { name: 'Admin', description: 'All of it', permissions: ['*', '*'] },
+        }),
+      ),
+    ).toEqual(['admin.permissions: Permissions must be unique']);
+    expect(
+      messages(
+        roles.safeParse({
+          'Support Agent': { name: 'Support', description: 'Tickets', permissions: [] },
+          admin: { name: 'Admin', description: 'All of it', permissions: ['Users'] },
+        }),
+      ),
+    ).toEqual([
+      expect.stringMatching(/^Support Agent: /),
+      'admin.permissions.0: Must be a permission, a prefix like users.*, or *',
     ]);
   });
 });

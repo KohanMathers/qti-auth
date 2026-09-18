@@ -1,5 +1,5 @@
 const PERMISSION = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
-const GRANT = /^(?:\*|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*(?:\.\*)?)$/;
+export const PERMISSION_GRANT = /^(?:\*|[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*(?:\.\*)?)$/;
 
 export interface PermissionDefinition {
   description: string;
@@ -23,6 +23,10 @@ export class PermissionDefinitionError extends Error {
 
 export function isPermissionName(name: string): boolean {
   return PERMISSION.test(name);
+}
+
+export function isPermissionGrant(grant: string): boolean {
+  return PERMISSION_GRANT.test(grant);
 }
 
 export function definePermissions<const P extends string>(
@@ -49,9 +53,24 @@ export function definePermissions<const P extends string>(
 
 export function grantMatches(grant: string, permission: DeclaredPermission): boolean {
   if (grant === permission.name) return true;
-  if (!permission.wildcard || !GRANT.test(grant)) return false;
+  if (!permission.wildcard || !PERMISSION_GRANT.test(grant)) return false;
   if (grant === '*') return true;
   return grant.endsWith('.*') && permission.name.startsWith(grant.slice(0, -1));
+}
+
+export function grantsOverlap(left: string, right: string): boolean {
+  if (!PERMISSION_GRANT.test(left) || !PERMISSION_GRANT.test(right)) return false;
+  if (left === right || left === '*' || right === '*') return true;
+  if (left.endsWith('.*') && right.startsWith(left.slice(0, -1))) return true;
+  if (right.endsWith('.*') && left.startsWith(right.slice(0, -1))) return true;
+  return false;
+}
+
+export function effectivePermissions<T extends DeclaredPermission>(
+  grants: readonly string[],
+  declared: readonly T[],
+): T[] {
+  return declared.filter((permission) => grants.some((grant) => grantMatches(grant, permission)));
 }
 
 export function missingPermissions(

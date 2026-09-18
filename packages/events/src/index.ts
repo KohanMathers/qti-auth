@@ -11,6 +11,7 @@ export {
   validateEnvelope,
 } from './catalog.ts';
 export type { ActorType, EventActor, EventEnvelope, EventSubject } from './envelope.ts';
+export { AUDIT_EVENTS, type AuditEventType } from './audit.ts';
 export { newEventId } from './event-id.ts';
 export { IDENTITY_EVENTS, type IdentityEventType } from './identity.ts';
 export {

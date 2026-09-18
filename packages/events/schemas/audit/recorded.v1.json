@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.audit.recorded.v1",
+  "title": "Audit recorded",
+  "description": "A staff or security-sensitive action.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "target_type", "target_id"],
+  "properties": {
+    "action": {
+      "description": "What happened, such as role.updated.",
+      "type": "string",
+      "minLength": 1
+    },
+    "target_type": {
+      "description": "Kind of thing acted on, such as role or user.",
+      "type": "string",
+      "minLength": 1
+    },
+    "target_id": {
+      "description": "The target's id.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -22,6 +22,7 @@ describe('identity service', () => {
       '0011_text_filter',
       '0012_usernames',
       '0013_age',
+      '0014_roles',
     ]);
   });
 
@@ -31,6 +32,7 @@ describe('identity service', () => {
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
       'DELETE /api/v1/admin/filter/allowlist/:word',
       'DELETE /api/v1/admin/filter/blocklist/:word',
+      'DELETE /api/v1/admin/roles/:role_id',
       'DELETE /api/v1/me/identities/:identity_id',
       'DELETE /api/v1/me/passkeys/:passkey_id',
       'DELETE /api/v1/sessions/:session_id',
@@ -38,6 +40,10 @@ describe('identity service', () => {
       'GET /api/v1/admin/filter/blocklist',
       'GET /api/v1/admin/filter/blocks',
       'GET /api/v1/admin/filter/unknowns',
+      'GET /api/v1/admin/permissions',
+      'GET /api/v1/admin/roles',
+      'GET /api/v1/admin/roles/:role_id',
+      'GET /api/v1/admin/users/:user_id/roles',
       'GET /api/v1/captcha',
       'GET /api/v1/me',
       'GET /api/v1/me/factors',
@@ -66,8 +72,10 @@ describe('identity service', () => {
       'GET /auth/two-factor',
       'GET /auth/username',
       'GET /auth/verify-email',
+      'PATCH /api/v1/admin/roles/:role_id',
       'POST /api/v1/admin/filter/allowlist',
       'POST /api/v1/admin/filter/blocklist',
+      'POST /api/v1/admin/roles',
       'POST /api/v1/admin/users/:user_id/date-of-birth',
       'POST /api/v1/auth/2fa',
       'POST /api/v1/auth/email/change',
@@ -117,6 +125,7 @@ describe('identity service', () => {
       'POST /auth/two-factor',
       'POST /auth/username',
       'POST /auth/verify-email',
+      'PUT /api/v1/admin/users/:user_id/roles',
     ]);
     for (const route of routes) {
       expect(policies, `${route.method} ${route.path}`).toContain(route.rate_limit);
@@ -171,6 +180,15 @@ describe('identity service', () => {
       permissions: ['users.edit_dob'],
       step_up: true,
     });
+    expect(route('GET', '/api/v1/admin/permissions')).toMatchObject({
+      auth: 'session',
+      permissions: ['roles.manage'],
+    });
+    expect(route('POST', '/api/v1/admin/roles')).toMatchObject({
+      auth: 'session',
+      permissions: ['roles.manage'],
+      step_up: true,
+    });
     expect(route('POST', '/api/v1/auth/social/:provider/start')).toMatchObject({
       auth: 'none',
       rate_limit: 'auth_password',
@@ -220,6 +238,9 @@ describe('identity service', () => {
         'EMAIL_REVERT_INVALID',
         'USERNAME_UNAVAILABLE',
         'DATE_OF_BIRTH_UNCHANGED',
+        'ROLE_NOT_FOUND',
+        'ROLE_SLUG_TAKEN',
+        'ROLE_BUILTIN',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(
