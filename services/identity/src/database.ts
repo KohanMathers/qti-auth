@@ -93,6 +93,30 @@ export interface AuditLogTable {
   row_hash: string;
 }
 
+export const LEGAL_ACCEPTANCE_METHODS = ['signup', 'self', 'guardian'] as const;
+export type LegalAcceptanceMethod = (typeof LEGAL_ACCEPTANCE_METHODS)[number];
+
+export interface LegalVersionsTable {
+  id: string;
+  version: string;
+  effective_at: Date;
+  material: boolean;
+  summary: string;
+  body: string;
+  body_hash: string;
+  published_at: Date | null;
+  created_at: Generated<Date>;
+}
+
+export interface LegalAcceptancesTable {
+  user_id: string;
+  document_id: string;
+  version: string;
+  accepted_at: Date;
+  ip: string | null;
+  method: LegalAcceptanceMethod;
+}
+
 export interface IdentitiesTable {
   id: string;
   user_id: string;
@@ -263,4 +287,6 @@ export interface Database {
   age_assurance_results: AgeAssuranceResultsTable;
   date_of_birth_changes: DateOfBirthChangesTable;
   audit_log: AuditLogTable;
+  legal_versions: LegalVersionsTable;
+  legal_acceptances: LegalAcceptancesTable;
 }

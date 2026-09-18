@@ -11,6 +11,7 @@ import type { Database, RevocationReason, SecurityEventKind } from './database.t
 import { countryName, describePlace, deviceKey, parseDevice } from './device.ts';
 import { sessionCreatedEvent, sessionRevokedEvent } from './events.ts';
 import { loadPermissions, twoFactorEnrolmentRequired } from './factors.ts';
+import { legalAcceptanceRequired } from './legal.ts';
 import {
   applyResolvedSecurity,
   baselineFromSession,
@@ -496,7 +497,7 @@ export async function resolveSession(
       amr: row.amr,
       acr,
       step_up_at: acr === 'aal0' ? null : (row.step_up_at?.toISOString() ?? null),
-      legal_acceptance_required: false,
+      legal_acceptance_required: await legalAcceptanceRequired(db, row.user_id, now),
       two_factor_enrolment_required: await twoFactorEnrolmentRequired(db, {
         userId: row.user_id,
         permissions,

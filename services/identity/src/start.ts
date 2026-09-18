@@ -27,6 +27,14 @@ import { sweepAuthFailures } from './failures.ts';
 import { loadFilterOverlay, sweepFilterDecisions } from './filter.ts';
 import { attachTextFilter } from './filter-state.ts';
 import { attachGeoIp } from './geoip-state.ts';
+import {
+  countPendingLegalAcceptances,
+  LEGAL_PUBLISH_JOB,
+  loadAndSyncLegalDocuments,
+  publishLegalVersions,
+  queueLegalUpdateNotices,
+} from './legal.ts';
+import { resolveDocumentsDir } from './legal-documents.ts';
 import { identityMetrics } from './metrics.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
 import { openPermissionCatalog } from './permission-registry.ts';
@@ -48,12 +56,14 @@ function startStats(ctx: Context, interval: number): Stoppable {
   const metrics = identityMetrics(ctx.metrics);
   const refresh = () =>
     untraced(async () => {
-      const [accounts, sessions] = await Promise.all([
+      const [accounts, sessions, legalPending] = await Promise.all([
         countAccountsByState(ctx.db),
         countActiveSessions(ctx.db, new Date(), ctx.config.cookies.idle_timeout),
+        countPendingLegalAcceptances(ctx.db, new Date()),
       ]);
       metrics.accounts(accounts);
       metrics.activeSessions(sessions);
+      metrics.legalAcceptancePending(legalPending);
     }).catch((error: unknown) => {
       ctx.log.warn('account metrics refresh failed', { error });
     });
@@ -106,6 +116,25 @@ export function identityService(options: IdentityOptions = {}) {
         blocked: textFilter.lists.blockExact.size + textFilter.lists.blockLoose.size,
         extra_block: textFilter.lists.blockExtra.size,
         allow: textFilter.lists.allow.size,
+      });
+      const legalDir = resolveDocumentsDir(ctx.config_path, config.legal.documents_dir);
+      const synced = await loadAndSyncLegalDocuments(db, legalDir);
+      const published = await publishLegalVersions(db, {
+        now: new Date(),
+        queueNotice: async (version) => {
+          await queueLegalUpdateNotices(db, {
+            version,
+            config,
+            bus,
+            brand: config.branding,
+          });
+        },
+      });
+      if (published.length > 0) ctx.outbox.wake();
+      log.info('legal documents synced', {
+        documents: synced.documents,
+        inserted: synced.inserted,
+        published: published.length,
       });
       const valkey = connectValkey(config.valkey, 'identity', (error) => {
         log.warn('valkey client error', { error });
@@ -255,6 +284,33 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('audit store failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: LEGAL_PUBLISH_JOB,
+            metrics: ctx.busMetrics,
+            handler: async () => {
+              const published = await publishLegalVersions(db, {
+                now: new Date(),
+                queueNotice: async (version) => {
+                  await queueLegalUpdateNotices(db, {
+                    version,
+                    config,
+                    bus,
+                    brand: config.branding,
+                  });
+                },
+              });
+              if (published.length > 0) {
+                ctx.outbox.wake();
+                log.info('legal versions published', { published: published.length });
+              }
+            },
+            onError: (error) => {
+              log.error('legal publish failed', { error });
             },
           }),
         );

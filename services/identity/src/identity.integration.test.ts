@@ -962,6 +962,9 @@ describe('events, retention and data rights', () => {
           account: { email: 'rights@example.com', date_of_birth: '1985-07-04' },
           sign_in_methods: [{ type: 'magic_link' }],
           sessions: [{ id: user.sessionId, auth_method: 'magic_link' }],
+          legal_acceptances: expect.arrayContaining([
+            expect.objectContaining({ document_id: 'terms', method: 'signup' }),
+          ]) as unknown,
         },
       },
     });
@@ -993,6 +996,7 @@ describe('events, retention and data rights', () => {
       expect(metrics).toMatch(/qtiauth_sessions_active\{service="identity"\} [1-9]/);
       expect(metrics).toContain('qtiauth_auth_signups_total{method="magic_link",age_band="adult"');
       expect(metrics).toContain('qtiauth_auth_signups_total{method="password",age_band="adult"');
+      expect(metrics).toContain('qtiauth_legal_acceptance_pending{service="identity"}');
     });
   });
 

@@ -459,15 +459,15 @@ Spec: §4.15
 
 **Done when:** editing any audit row directly in Postgres makes `audit verify` fail and name the row.
 
-### P2b.6 Legal documents — M
+### P2b.6 Legal documents — M ✅
 Spec: §4.9
 
-- [ ] Front-matter parsing, sync on startup, immutable versions (error on edited body without version
+- [x] Front-matter parsing, sync on startup, immutable versions (error on edited body without version
       bump).
-- [ ] Acceptance records.
-- [ ] Material change gate via route policy, with the non-material notification.
-- [ ] Public version history toggle.
-- [ ] Guardian acceptance path stubbed until Phase 3.
+- [x] Acceptance records.
+- [x] Material change gate via route policy, with the non-material notification.
+- [x] Public version history toggle.
+- [x] Guardian acceptance path stubbed until Phase 3.
 
 **Done when:** publishing a material version gates every non-exempt route after `effective_at`, and
 accepting lifts the gate on every surface.

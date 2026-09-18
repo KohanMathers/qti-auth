@@ -45,6 +45,7 @@ export async function exportUser(
     dateOfBirthChanges,
     roles,
     audit,
+    legal,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -129,6 +130,12 @@ export async function exportUser(
       .orderBy('roles.slug')
       .execute(),
     exportAuditRecords(db, userId),
+    db
+      .selectFrom('legal_acceptances')
+      .select(['document_id', 'version', 'accepted_at', 'ip', 'method'])
+      .where('user_id', '=', userId)
+      .orderBy('accepted_at')
+      .execute(),
   ]);
 
   return {
@@ -197,6 +204,13 @@ export async function exportUser(
       action: row.action,
       target_type: row.target_type,
       target_id: row.target_id,
+    })),
+    legal_acceptances: legal.map((row) => ({
+      document_id: row.document_id,
+      version: row.version,
+      accepted_at: iso(row.accepted_at),
+      ip: row.ip,
+      method: row.method,
     })),
   };
 }

@@ -16,6 +16,7 @@ import type { Database } from './database.ts';
 import { IDENTITY_ERRORS } from './errors.ts';
 import { factorRoutes } from './factor-routes.ts';
 import { filterRoutes } from './filter-routes.ts';
+import { legalRoutes } from './legal-routes.ts';
 import { pageRoutes } from './pages.ts';
 import { roleRoutes } from './role-routes.ts';
 import { sessionRoutes } from './session-routes.ts';
@@ -45,6 +46,7 @@ export const definition = defineService({
     'age',
     'parental',
     'usernames',
+    'legal',
     'security',
     'roles',
     'retention',
@@ -77,4 +79,5 @@ usernameRoutes(router);
 ageRoutes(router);
 roleRoutes(router);
 auditRoutes(router);
+legalRoutes(router);
 pageRoutes(router);

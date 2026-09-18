@@ -259,6 +259,10 @@ usernames:
   change_window: 365d
   release_hold: 90d
 
+legal:
+  public_history: true
+  documents_dir: legal
+
 rate_limits: # per: ip | user | client | email | account, or a list counted as one combination
   global: { per: ip, limit: 300, window: 1m }
   auth_password: { per: [ip, account], limit: 10, window: 15m, on_store_failure: closed }
@@ -279,6 +283,7 @@ scheduler:
     parental.expire_pending: { schedule: '0 * * * *', enabled: true }
     accounts.purge_deleted: { schedule: '30 3 * * *', enabled: true }
     age.recompute_bands: { schedule: '5 0 * * *', enabled: true }
+    legal.publish: { schedule: '* * * * *', enabled: true }
     deletion_ledger.prune: { schedule: '0 4 * * *', enabled: true }
     keys.rotate: { schedule: '0 0 * * *', enabled: true }
     webhooks.retry: { schedule: '* * * * *', enabled: true }

@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, and stores the audit log. Legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, stores the audit log, and syncs legal documents that users accept at signup and again when a material version takes effect. Parental consent comes in a later release (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -75,6 +75,10 @@ usernames:
   change_window: 365d
   release_hold: 90d
 
+legal:
+  public_history: true
+  documents_dir: legal
+
 security:
   step_up_window: 10m
   encryption_key: '${env:APP_ENCRYPTION_KEY}'
@@ -142,6 +146,7 @@ retention:
 - `age.assurance.default_provider` is the provider used when a trigger in `age.assurance.required_for` applies. Only `self_declared` ships. `required_for` is empty by default; `claim_adult_band` records a second result when someone signs up in the adult band.
 - `parental.consent_age` is the age below which an account needs a parent or guardian's approval.
 - `usernames.min_length` and `usernames.max_length` bound a username. `usernames.charset` is the regex character class of allowed characters. Uniqueness is case-insensitive. `usernames.reserved` and `usernames.reserved_prefixes` are names and prefixes nobody can claim; both are empty by default and compared without regard to case. `usernames.change_cooldown` is how long after a claim or change the user must wait before changing again. `usernames.changes_per_year` is how many changes are allowed inside `usernames.change_window` after the first claim. `usernames.release_hold` is how long a released name is held for the previous owner.
+- `legal.public_history` is whether previous versions are publicly viewable at `/legal/<id>/<version>`. The currently effective version is always public. `legal.documents_dir` is the markdown directory, relative to the config file. Identity syncs those files into the database on startup.
 - `security.encryption_key` is a base64 32-byte key (`openssl rand -base64 32`) that encrypts TOTP secrets at rest. Identity will not start without it. Set `APP_ENCRYPTION_KEY` in `.env`.
 - `security.step_up_window` is how recently a session must have reached `aal2` for a route that needs step-up, and for adding a password after a magic-link sign-in.
 - `security.require_2fa_for_permissions` is the staff permissions that require a passkey or TOTP. Matching accounts can sign in but only reach enrolment until they set one up. A grant of `*` counts.
@@ -401,6 +406,24 @@ Services publish `qtiauth.audit.recorded.v1` for staff actions, security-sensiti
 | ------------------------- | ------------------------------------------------------ |
 | `GET /api/v1/admin/audit` | Filter the audit log by actor, action, target and date |
 
+## Legal documents
+
+Terms, privacy and any other documents live in `config/legal/*.md` with YAML front-matter (`id`, `version`, `effective_at`, `material`, `summary`) and a markdown body. `{{ brand.product_name }}`, `{{ brand.company_name }}` and `{{ brand.support_email }}` are filled in when a document is shown. The stored hash is of the raw body.
+
+On startup identity syncs each file into `legal_versions`. Versions are immutable: changing a body, summary, `material` flag or `effective_at` without bumping `version` is a startup error. `legal.publish` (every minute) marks versions whose `effective_at` has passed, publishes `identity.legal.version_published`, and for a non-material change queues a `legal_update` email. Signup records acceptance of every currently effective version (`method: signup`), so a new account is not gated. A later material version sets `legal_acceptance_required` on the session; the gateway answers `403 LEGAL_ACCEPTANCE_REQUIRED` on every route except those with `allow_pending_legal: true`. `POST /api/v1/me/legal/accept` and `POST /legal/accept` record `method: self` and lift the gate. Under-18 accounts accept themselves until guardian acceptance in Phase 3. `children-summary` is a normal document.
+
+| Endpoint                         | Does                                                                                    |
+| -------------------------------- | --------------------------------------------------------------------------------------- |
+| `GET /api/v1/legal`              | Currently effective documents, without bodies                                           |
+| `GET /api/v1/legal/:id`          | The currently effective version of one document                                         |
+| `GET /api/v1/legal/:id/:version` | A specific version. Previous versions need `legal.public_history`                       |
+| `GET /api/v1/me/legal`           | Pending material versions and this account’s acceptances. Allowed during the legal gate |
+| `POST /api/v1/me/legal/accept`   | Accept versions. Allowed during the legal gate                                          |
+| `GET /legal`                     | HTML index of current documents                                                         |
+| `GET /legal/:id`                 | HTML for the current version                                                            |
+| `GET /legal/:id/:version`        | HTML for a specific version                                                             |
+| `GET`/`POST /legal/accept`       | HTML form that accepts every pending material version                                   |
+
 Errors, on top of the [codes every service can return](services.md#errors):
 
 | Code                           | Status | When                                                                                   |
@@ -437,6 +460,7 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `IDENTITY_NOT_FOUND`           | 404    | No connected social identity with that ID belongs to the user                          |
 | `FILTER_ENTRY_NOT_FOUND`       | 404    | No admin-added allowlist or extra-block word with that value                           |
 | `ROLE_NOT_FOUND`               | 404    | No role with that ID                                                                   |
+| `LEGAL_DOCUMENT_NOT_FOUND`     | 404    | No such legal document, or that version is not public                                  |
 | `USERNAME_UNAVAILABLE`         | 409    | The username is taken, reserved, held or blocked by the text filter                    |
 | `USERNAME_COOLDOWN`            | 409    | `usernames.change_cooldown` has not elapsed since the last claim or change             |
 | `USERNAME_CHANGE_LIMIT`        | 409    | `usernames.changes_per_year` changes have already been used in `change_window`         |
@@ -450,23 +474,24 @@ Errors, on top of the [codes every service can return](services.md#errors):
 
 ## Events
 
-| Event                                       | When                                                                                                                                      |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `qtiauth.identity.user.created.v1`          | An account was created                                                                                                                    |
-| `qtiauth.identity.user.updated.v1`          | An account field changed. `fields` names what changed (`username`, `date_of_birth`, `roles`)                                              |
-| `qtiauth.identity.user.age_band_changed.v1` | The computed age band changed, usually because they had a birthday                                                                        |
-| `qtiauth.identity.session.created.v1`       | Someone signed in                                                                                                                         |
-| `qtiauth.identity.session.revoked.v1`       | A session was ended by signing out (`logout`), by the user (`revoked`), by a newer sign-in (`evicted`) or by session security (`blocked`) |
-| `qtiauth.identity.session.flagged.v1`       | Session security challenged or blocked a session                                                                                          |
-| `qtiauth.audit.recorded.v1`                 | A staff or security-sensitive action. Identity stores these in the audit log                                                              |
+| Event                                         | When                                                                                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `qtiauth.identity.user.created.v1`            | An account was created                                                                                                                    |
+| `qtiauth.identity.user.updated.v1`            | An account field changed. `fields` names what changed (`username`, `date_of_birth`, `roles`, `legal`)                                     |
+| `qtiauth.identity.user.age_band_changed.v1`   | The computed age band changed, usually because they had a birthday                                                                        |
+| `qtiauth.identity.session.created.v1`         | Someone signed in                                                                                                                         |
+| `qtiauth.identity.session.revoked.v1`         | A session was ended by signing out (`logout`), by the user (`revoked`), by a newer sign-in (`evicted`) or by session security (`blocked`) |
+| `qtiauth.identity.session.flagged.v1`         | Session security challenged or blocked a session                                                                                          |
+| `qtiauth.identity.legal.version_published.v1` | A legal document version took effect. The gateway drops every cached session. Non-material versions also queue a `legal_update` email     |
+| `qtiauth.audit.recorded.v1`                   | A staff or security-sensitive action. Identity stores these in the audit log                                                              |
 
-The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated` or `user.age_band_changed`. Schemas are in `packages/events/schemas/identity/` and `packages/events/schemas/audit/`.
+The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated` or `user.age_band_changed`, and every cached session when it sees `legal.version_published`. Accepting a legal version publishes `user.updated` with `fields: ["legal"]` so the gate lifts without waiting for the cache TTL. Schemas are in `packages/events/schemas/identity/` and `packages/events/schemas/audit/`.
 
 ## Retention and data rights
 
 `retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, text-filter decisions `retention.filter_decisions` after they were recorded, and the oldest audit log rows `retention.audit` after they were recorded.
 
-A user's export has their account (including username, public profile, leaderboard visibility and security-notification flag), username history, age-assurance results, staff date-of-birth changes, assigned roles, audit rows where they are the actor or the target, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address. Audit rows stay, so the hash chain remains intact.
+A user's export has their account (including username, public profile, leaderboard visibility and security-notification flag), username history, age-assurance results, staff date-of-birth changes, assigned roles, audit rows where they are the actor or the target, legal acceptances, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address. Legal acceptances go with the account. Audit rows stay, so the hash chain remains intact.
 
 ## Metrics
 
@@ -490,8 +515,9 @@ A user's export has their account (including username, public profile, leaderboa
 | `qtiauth_usernames_claimed_total`          | `action`             |
 | `qtiauth_age_band_changes_total`           |                      |
 | `qtiauth_audit_recorded_total`             |                      |
+| `qtiauth_legal_acceptance_pending`         |                      |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. `qtiauth_audit_recorded_total` counts rows stored from `audit.recorded`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. `qtiauth_audit_recorded_total` counts rows stored from `audit.recorded`. `qtiauth_legal_acceptance_pending` is how many accounts have not accepted a currently effective material version, counted every minute. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 
@@ -515,4 +541,4 @@ The gateway sends the flow cookie's value back to identity, and only to identity
 
 ### Tests
 
-`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit.
+`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session, and a material legal version that gates `/api/v1/me/identities` until it is accepted. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit. `legal.integration.test.ts` syncs the shipped documents, rejects an edited body without a version bump, and covers material re-acceptance, the HTML form, and a non-material email.

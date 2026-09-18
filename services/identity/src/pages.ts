@@ -1,3 +1,4 @@
+import { writeEvent } from '@qtiauth/bus';
 import type { CaptchaWidget } from '@qtiauth/captcha';
 import { FLOW_BINDING_HEADER, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
@@ -13,6 +14,13 @@ import {
   checkCaptcha,
   noteCaptchaAttempt,
 } from './captcha.ts';
+import type { Database } from './database.ts';
+import {
+  type AuditRecordedData,
+  type UserUpdatedData,
+  auditRecordedEvent,
+  userUpdatedEvent,
+} from './events.ts';
 import { type SecondFactorMethod, totpEnrolled } from './factors.ts';
 import {
   completeEmailVerification,
@@ -39,6 +47,14 @@ import {
 } from './flows.ts';
 import { NO_STORE, revokedHeaders, sessionHeaders } from './headers.ts';
 import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts';
+import {
+  acceptLegalVersions,
+  currentLegalVersions,
+  findCurrentLegalVersion,
+  findLegalVersion,
+  pendingMaterialVersions,
+} from './legal.ts';
+import { interpolateLegal, LEGAL_DOCUMENT_ID, LEGAL_VERSION } from './legal-documents.ts';
 import { preferredLocale } from './locale.ts';
 import { identityMetrics } from './metrics.ts';
 import { listPasskeys } from './passkeys.ts';
@@ -78,6 +94,10 @@ import {
   TWO_FACTOR_PAGE,
   USERNAME_PAGE,
   VERIFY_EMAIL_PAGE,
+  LEGAL_INDEX_PAGE,
+  LEGAL_ACCEPT_PAGE,
+  LEGAL_DOCUMENT_PAGE,
+  LEGAL_VERSION_PAGE,
 } from './settings.ts';
 import { listSocialIdentities } from './social.ts';
 import { beginTotpEnrol, confirmTotpEnrol, disableTotp } from './two-factor.ts';
@@ -100,6 +120,30 @@ function page(ctx: Context, content: Page): Response {
 
 function paragraph(text: string): string {
   return `<p>${escapeHtml(text)}</p>`;
+}
+
+function legalBodyHtml(body: string): string {
+  return body
+    .split(/\n{2,}/)
+    .map((block) => {
+      const trimmed = block.trim();
+      if (trimmed.startsWith('## ')) {
+        return `<h2>${escapeHtml(trimmed.slice(3))}</h2>`;
+      }
+      if (trimmed.startsWith('# ')) {
+        return `<h1>${escapeHtml(trimmed.slice(2))}</h1>`;
+      }
+      return `<p>${escapeHtml(trimmed).replaceAll('\n', '<br>')}</p>`;
+    })
+    .join('\n');
+}
+
+function legalNotFound(ctx: Context): Response {
+  return page(ctx, {
+    status: 404,
+    title: 'Document not found',
+    body: paragraph('That legal document is not available.'),
+  });
 }
 
 function alert(text: string): string {
@@ -1799,6 +1843,187 @@ ${hiddenInput('token', query.token)}
           evicted: [],
         }),
       );
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: LEGAL_INDEX_PAGE,
+    operation_id: 'legalIndexPage',
+    summary: 'Current legal documents',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx }) => {
+      const documents = await currentLegalVersions(ctx.db, new Date());
+      const items = documents
+        .map((document) => {
+          const summary = interpolateLegal(document.summary, ctx.config.branding);
+          return `<li><a href="${escapeHtml(accountPath(ctx.config, `/legal/${document.id}`))}">${escapeHtml(document.id)}</a> — ${escapeHtml(summary)}</li>`;
+        })
+        .join('\n');
+      return page(ctx, {
+        title: 'Legal documents',
+        body:
+          documents.length === 0
+            ? paragraph('No legal documents are published.')
+            : `<ul>${items}</ul>`,
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: LEGAL_ACCEPT_PAGE,
+    operation_id: 'legalAcceptPage',
+    summary: 'Accept updated legal documents',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    allow_pending_legal: true,
+    allow_pending_parental_consent: true,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity }) => {
+      const { userId } = sessionUser(identity);
+      const pending = await pendingMaterialVersions(ctx.db, userId, new Date());
+      if (pending.length === 0) {
+        return page(ctx, {
+          title: 'Legal documents',
+          body: paragraph('There is nothing you need to accept right now.'),
+        });
+      }
+      const items = pending
+        .map(
+          (document) =>
+            `<li><a href="${escapeHtml(accountPath(ctx.config, `/legal/${document.id}/${document.version}`))}">${escapeHtml(document.id)}</a> — ${escapeHtml(interpolateLegal(document.summary, ctx.config.branding))}</li>`,
+        )
+        .join('\n');
+      return page(ctx, {
+        title: 'Please accept these documents',
+        body: `<ul>${items}</ul>
+<form method="post" action="accept">
+<p><button type="submit">Accept</button></p>
+</form>`,
+      });
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: LEGAL_ACCEPT_PAGE,
+    operation_id: 'legalAcceptPageSubmit',
+    summary: 'Accept updated legal documents from the form',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    allow_pending_legal: true,
+    allow_pending_parental_consent: true,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity, request, log }) => {
+      const { userId } = sessionUser(identity);
+      const now = new Date();
+      const pending = await pendingMaterialVersions(ctx.db, userId, now);
+      const result = await ctx.db.transaction().execute(async (trx) => {
+        const accepted = await acceptLegalVersions(trx, {
+          userId,
+          documents: pending.map((document) => ({ id: document.id, version: document.version })),
+          ip: sessionClient(ctx.config, request).ip || null,
+          method: 'self',
+          now,
+        });
+        for (const document of pending) {
+          await writeEvent<Database, AuditRecordedData>(
+            trx,
+            auditRecordedEvent(
+              { type: 'user', id: userId },
+              {
+                action: 'legal.accepted',
+                target_type: 'legal_version',
+                target_id: `${document.id}:${document.version}`,
+              },
+            ),
+          );
+        }
+        if (accepted.accepted > 0) {
+          await writeEvent<Database, UserUpdatedData>(
+            trx,
+            userUpdatedEvent(userId, { fields: ['legal'] }),
+          );
+        }
+        return accepted;
+      });
+      ctx.outbox.wake();
+      log.info('legal documents accepted', { user_id: userId, accepted: result.accepted });
+      const remaining = await pendingMaterialVersions(ctx.db, userId, new Date());
+      if (remaining.length > 0) {
+        return page(ctx, {
+          title: 'Please accept these documents',
+          body:
+            paragraph('Some documents still need to be accepted.') +
+            paragraph('Open the legal documents page to continue.'),
+        });
+      }
+      return page(ctx, {
+        title: 'Thank you',
+        body: paragraph('You have accepted the updated documents.'),
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: LEGAL_DOCUMENT_PAGE,
+    operation_id: 'legalDocumentPage',
+    summary: 'The currently effective version of a legal document',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { params: z.object({ id: z.string().regex(LEGAL_DOCUMENT_ID) }) },
+    responses: htmlResponses,
+    handler: async ({ ctx, params }) => {
+      const document = await findCurrentLegalVersion(ctx.db, params.id, new Date());
+      if (!document) return legalNotFound(ctx);
+      const brand = ctx.config.branding;
+      return page(ctx, {
+        title: interpolateLegal(document.summary, brand),
+        body: legalBodyHtml(interpolateLegal(document.body, brand)),
+      });
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: LEGAL_VERSION_PAGE,
+    operation_id: 'legalVersionPage',
+    summary: 'A specific version of a legal document',
+    tags: ['pages'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: {
+      params: z.object({
+        id: z.string().regex(LEGAL_DOCUMENT_ID),
+        version: z.string().regex(LEGAL_VERSION),
+      }),
+    },
+    responses: htmlResponses,
+    handler: async ({ ctx, params }) => {
+      const now = new Date();
+      const [document, current] = await Promise.all([
+        findLegalVersion(ctx.db, params.id, params.version),
+        findCurrentLegalVersion(ctx.db, params.id, now),
+      ]);
+      if (!document || document.effective_at.getTime() > now.getTime()) return legalNotFound(ctx);
+      if (!ctx.config.legal.public_history && current?.version !== document.version) {
+        return legalNotFound(ctx);
+      }
+      const brand = ctx.config.branding;
+      return page(ctx, {
+        title: interpolateLegal(document.summary, brand),
+        body: legalBodyHtml(interpolateLegal(document.body, brand)),
+      });
     },
   });
 }

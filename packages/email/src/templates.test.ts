@@ -81,5 +81,9 @@ describe('defineEmailTemplates', () => {
       category: 'security',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.legal_update).toMatchObject({
+      category: 'security',
+      priority: 'normal',
+    });
   });
 });

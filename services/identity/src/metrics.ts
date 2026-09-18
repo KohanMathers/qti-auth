@@ -29,6 +29,7 @@ export interface IdentityMetrics {
   username: (action: UsernameAction) => void;
   ageBandChanged: (count: number) => void;
   auditRecorded: () => void;
+  legalAcceptancePending: (count: number) => void;
   accounts: (counts: Partial<Record<AccountState, number>>) => void;
   activeSessions: (count: number) => void;
 }
@@ -120,6 +121,10 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     name: 'qtiauth_audit_recorded_total',
     help: 'Audit log rows stored from audit.recorded events.',
   });
+  const legalPending = metrics.gauge({
+    name: 'qtiauth_legal_acceptance_pending',
+    help: 'Accounts that have not accepted a currently effective material legal document version, refreshed every minute.',
+  });
   const accounts = metrics.gauge({
     name: 'qtiauth_accounts',
     help: 'Accounts by state, refreshed every minute.',
@@ -180,6 +185,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     auditRecorded: () => {
       auditRecords.inc();
+    },
+    legalAcceptancePending: (count) => {
+      legalPending.set(count);
     },
     accounts: (counts) => {
       for (const state of ACCOUNT_STATES) accounts.set({ state }, counts[state] ?? 0);

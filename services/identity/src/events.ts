@@ -40,6 +40,14 @@ export interface UserAgeBandChangedData {
   age_band: AgeBand;
 }
 
+export interface LegalVersionPublishedData {
+  id: string;
+  version: string;
+  effective_at: string;
+  material: boolean;
+  summary: string;
+}
+
 export interface AuditRecordedData {
   action: string;
   target_type: string;
@@ -107,6 +115,17 @@ export function userAgeBandChangedEvent(
     type: IDENTITY_EVENTS.userAgeBandChanged,
     actor,
     subject: { type: 'user', id: userId },
+    data,
+  };
+}
+
+export function legalVersionPublishedEvent(
+  data: LegalVersionPublishedData,
+): NewEvent<LegalVersionPublishedData> {
+  return {
+    type: IDENTITY_EVENTS.legalVersionPublished,
+    actor: { type: 'system', id: 'identity' },
+    subject: { type: 'legal_document', id: data.id },
     data,
   };
 }

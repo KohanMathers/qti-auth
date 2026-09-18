@@ -70,6 +70,7 @@ describe('qtiauth templates check', () => {
         { name: 'email_change_notice', locales: ['en-GB'] },
         { name: 'new_device', locales: ['en-GB'] },
         { name: 'security_alert', locales: ['en-GB'] },
+        { name: 'legal_update', locales: ['en-GB'] },
       ],
     });
   });

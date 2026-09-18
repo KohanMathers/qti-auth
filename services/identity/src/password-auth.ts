@@ -17,6 +17,7 @@ import { type AgeBands, ageBand, ageOn, agePrivacyDefaults, under18 } from './ag
 import { recordSignupAgeAssurance } from './age-assurance.ts';
 import { insertChallenge } from './challenges.ts';
 import type { Database } from './database.ts';
+import { recordCurrentLegalAcceptances } from './legal.ts';
 import {
   insertEmailToken,
   takeEmailToken,
@@ -221,6 +222,12 @@ export async function completePasswordSignup(
       adult: band === 'adult',
       defaultProvider: settings.defaultProvider,
       requiredFor: settings.requiredFor,
+      now,
+    });
+    await recordCurrentLegalAcceptances(trx, {
+      userId,
+      ip: null,
+      method: 'signup',
       now,
     });
     await writeEvent<Database, UserCreatedData>(

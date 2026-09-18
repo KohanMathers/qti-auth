@@ -42,6 +42,10 @@ export const REVERT_EMAIL_PAGE = '/auth/revert-email';
 export const BIND_PAGE = '/auth/bind';
 export const BIND_CALLBACK_PAGE = '/auth/bind/callback';
 export const USERNAME_PAGE = '/auth/username';
+export const LEGAL_INDEX_PAGE = '/legal';
+export const LEGAL_ACCEPT_PAGE = '/legal/accept';
+export const LEGAL_DOCUMENT_PAGE = '/legal/:id';
+export const LEGAL_VERSION_PAGE = '/legal/:id/:version';
 
 export class IdentityConfigError extends Error {
   constructor(message: string) {

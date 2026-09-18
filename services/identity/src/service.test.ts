@@ -24,6 +24,7 @@ describe('identity service', () => {
       '0013_age',
       '0014_roles',
       '0015_audit',
+      '0016_legal',
     ]);
   });
 
@@ -47,9 +48,13 @@ describe('identity service', () => {
       'GET /api/v1/admin/roles/:role_id',
       'GET /api/v1/admin/users/:user_id/roles',
       'GET /api/v1/captcha',
+      'GET /api/v1/legal',
+      'GET /api/v1/legal/:id',
+      'GET /api/v1/legal/:id/:version',
       'GET /api/v1/me',
       'GET /api/v1/me/factors',
       'GET /api/v1/me/identities',
+      'GET /api/v1/me/legal',
       'GET /api/v1/me/passkeys',
       'GET /api/v1/sessions',
       'GET /auth/bind',
@@ -74,6 +79,10 @@ describe('identity service', () => {
       'GET /auth/two-factor',
       'GET /auth/username',
       'GET /auth/verify-email',
+      'GET /legal',
+      'GET /legal/:id',
+      'GET /legal/:id/:version',
+      'GET /legal/accept',
       'PATCH /api/v1/admin/roles/:role_id',
       'POST /api/v1/admin/filter/allowlist',
       'POST /api/v1/admin/filter/blocklist',
@@ -99,6 +108,7 @@ describe('identity service', () => {
       'POST /api/v1/auth/social/signup',
       'POST /api/v1/me/email',
       'POST /api/v1/me/identities/:provider/connect',
+      'POST /api/v1/me/legal/accept',
       'POST /api/v1/me/passkeys/:passkey_id',
       'POST /api/v1/me/passkeys/register',
       'POST /api/v1/me/passkeys/register/start',
@@ -127,6 +137,7 @@ describe('identity service', () => {
       'POST /auth/two-factor',
       'POST /auth/username',
       'POST /auth/verify-email',
+      'POST /legal/accept',
       'PUT /api/v1/admin/users/:user_id/roles',
     ]);
     for (const route of routes) {
@@ -195,6 +206,14 @@ describe('identity service', () => {
       auth: 'session',
       permissions: ['audit.read'],
     });
+    expect(route('GET', '/api/v1/legal')).toMatchObject({
+      auth: 'none',
+      rate_limit: 'global',
+    });
+    expect(route('POST', '/api/v1/me/legal/accept')).toMatchObject({
+      auth: 'session',
+      allow_pending_legal: true,
+    });
     expect(route('POST', '/api/v1/auth/social/:provider/start')).toMatchObject({
       auth: 'none',
       rate_limit: 'auth_password',
@@ -247,6 +266,7 @@ describe('identity service', () => {
         'ROLE_NOT_FOUND',
         'ROLE_SLUG_TAKEN',
         'ROLE_BUILTIN',
+        'LEGAL_DOCUMENT_NOT_FOUND',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

@@ -21,6 +21,7 @@ import {
   sessionSecurity,
   surfaces,
   usernames,
+  legal,
 } from './sections.ts';
 
 function messages(result: { error?: { issues: { path: PropertyKey[]; message: string }[] } }) {
@@ -505,6 +506,12 @@ describe('usernames', () => {
     expect(messages(usernames.safeParse({ charset: 'A-Za-z0-9_' }))).toEqual([
       'charset: Must be a character class like [A-Za-z0-9_]',
     ]);
+  });
+});
+
+describe('legal', () => {
+  it('publishes version history and reads documents from legal/ by default', () => {
+    expect(legal.parse({})).toEqual({ public_history: true, documents_dir: 'legal' });
   });
 });
 

@@ -134,6 +134,17 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       place: z.string().min(1),
     }),
   },
+  legal_update: {
+    description: 'A notice that a non-material legal document version has taken effect',
+    category: 'security',
+    priority: 'normal',
+    variables: z.object({
+      document_id: z.string().min(1),
+      version: z.string().min(1),
+      summary: z.string().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

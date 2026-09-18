@@ -2478,6 +2478,25 @@
       },
       "additionalProperties": false
     },
+    "legal": {
+      "description": "Legal documents and re-acceptance.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "public_history": {
+          "default": true,
+          "description": "Previous versions are publicly viewable at /legal/<id>/<version>.",
+          "type": "boolean"
+        },
+        "documents_dir": {
+          "default": "legal",
+          "description": "Markdown documents with YAML front-matter, relative to the config file. Identity syncs them into the database on startup.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
     "rate_limits": {
       "description": "Named rate-limit policies, referenced by routes. Policies you set replace the built-in policy of the same name.",
       "type": "object",

@@ -1146,6 +1146,23 @@ export const usernames = z
   .prefault({})
   .describe('Usernames.');
 
+export const legal = z
+  .strictObject({
+    public_history: z
+      .boolean()
+      .default(true)
+      .describe('Previous versions are publicly viewable at /legal/<id>/<version>.'),
+    documents_dir: z
+      .string()
+      .min(1)
+      .default('legal')
+      .describe(
+        'Markdown documents with YAML front-matter, relative to the config file. Identity syncs them into the database on startup.',
+      ),
+  })
+  .prefault({})
+  .describe('Legal documents and re-acceptance.');
+
 const CRON_JOB_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
 
 function isCronPattern(value: string): boolean {
@@ -1189,6 +1206,7 @@ const DEFAULT_CRON_JOBS: Record<string, CronJob> = {
   'parental.expire_pending': { schedule: '0 * * * *', enabled: true },
   'accounts.purge_deleted': { schedule: '30 3 * * *', enabled: true },
   'age.recompute_bands': { schedule: '5 0 * * *', enabled: true },
+  'legal.publish': { schedule: '* * * * *', enabled: true },
   'deletion_ledger.prune': { schedule: '0 4 * * *', enabled: true },
   'keys.rotate': { schedule: '0 0 * * *', enabled: true },
   'webhooks.retry': { schedule: '* * * * *', enabled: true },
@@ -1575,6 +1593,7 @@ export const sections = {
   age,
   parental,
   usernames,
+  legal,
   rate_limits: rateLimits,
   scheduler,
   retention,

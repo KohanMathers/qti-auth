@@ -1,0 +1,11 @@
+An update to {{ brand.product_name }}
+
+{{ summary }}
+
+This does not need you to accept anything again. You can read the document here:
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

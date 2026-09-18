@@ -23,6 +23,7 @@ import { recordSignupAgeAssurance } from './age-assurance.ts';
 import { challengePayload, insertChallenge, takeChallenge, useChallenge } from './challenges.ts';
 import type { Database } from './database.ts';
 import { type UserCreatedData, userCreatedEvent } from './events.ts';
+import { recordCurrentLegalAcceptances } from './legal.ts';
 import { hashToken, newToken } from './tokens.ts';
 import {
   authorizationUrl,
@@ -524,6 +525,12 @@ async function createSocialAccount(
       adult: band === 'adult',
       defaultProvider: settings.defaultProvider,
       requiredFor: settings.requiredFor,
+      now,
+    });
+    await recordCurrentLegalAcceptances(trx, {
+      userId,
+      ip: options.client.ip || null,
+      method: 'signup',
       now,
     });
     await writeEvent<Database, UserCreatedData>(

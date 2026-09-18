@@ -10,6 +10,7 @@ import {
   userAgeBandChangedEvent,
   userCreatedEvent,
   userUpdatedEvent,
+  legalVersionPublishedEvent,
 } from './events.ts';
 
 const USER_ID = '0199a0e0-0000-7000-8000-000000000001';
@@ -51,6 +52,15 @@ describe('identity events', () => {
         userAgeBandChangedEvent(USER_ID, {
           previous_age_band: '16_to_17',
           age_band: 'adult',
+        }),
+      ),
+      createEvent(
+        legalVersionPublishedEvent({
+          id: 'terms',
+          version: '2026-10-01',
+          effective_at: '2026-10-01T00:00:00.000Z',
+          material: true,
+          summary: 'We added passkeys.',
         }),
       ),
       createEvent(

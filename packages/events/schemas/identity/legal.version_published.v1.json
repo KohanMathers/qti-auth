@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.legal.version_published.v1",
+  "title": "Legal version published",
+  "description": "A legal document version has taken effect. The gateway drops every cached session. The subject is the document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "effective_at", "material", "summary"],
+  "properties": {
+    "id": {
+      "description": "Document id, such as terms or privacy.",
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "description": "Version label from the document front-matter.",
+      "type": "string",
+      "minLength": 1
+    },
+    "effective_at": {
+      "description": "When this version took effect.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "material": {
+      "description": "Whether users must re-accept this version.",
+      "type": "boolean"
+    },
+    "summary": {
+      "description": "Short description of what changed.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

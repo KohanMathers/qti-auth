@@ -1,5 +1,5 @@
 import { solveAltcha } from '@qtiauth/captcha';
-import { type Bus, connectBus } from '@qtiauth/bus';
+import { type Bus, connectBus, publishCronTick } from '@qtiauth/bus';
 import { sections } from '@qtiauth/config';
 import {
   definition as gatewayDefinition,
@@ -12,6 +12,8 @@ import { natsUrl, startNats, startPostgres, startValkey } from '@qtiauth/testing
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './database.ts';
+import { LEGAL_PUBLISH_JOB } from './legal.ts';
+import { hashLegalBody } from './legal-documents.ts';
 import { softwarePasskey } from './passkey-testing.ts';
 import { grantUser } from './roles.ts';
 import { definition } from './service.ts';
@@ -539,6 +541,47 @@ describe('identity through the gateway', () => {
       session: { id: string; acr: string };
     };
     expect(after.session).toMatchObject({ id: before.session.id, acr: 'aal1' });
+  });
+
+  it('gates non-exempt routes after a material legal version, then lifts the gate on every surface', async () => {
+    const client = browser();
+    await signUpInBrowser(client, 'legal-gate@example.com');
+    expect((await client.request('/api/v1/me/identities')).status).toBe(200);
+
+    const body = 'Updated terms for this test.';
+    await identity.context.db
+      .insertInto('legal_versions')
+      .values({
+        id: 'terms',
+        version: '2026-10-01',
+        effective_at: new Date(),
+        material: true,
+        summary: 'We added passkeys.',
+        body,
+        body_hash: hashLegalBody(body),
+        published_at: null,
+      })
+      .execute();
+    await publishCronTick(notifier.js, LEGAL_PUBLISH_JOB, new Date());
+
+    await vi.waitFor(async () => {
+      const blocked = await client.request('/api/v1/me/identities');
+      expect(blocked.status).toBe(403);
+      expect(await blocked.json()).toMatchObject({ code: 'LEGAL_ACCEPTANCE_REQUIRED' });
+    });
+    expect((await client.request('/api/v1/me/legal')).status).toBe(200);
+    expect((await client.request('/support/api/v1/sessions')).status).toBe(403);
+
+    const accept = await client.request(
+      '/api/v1/me/legal/accept',
+      json({ documents: [{ id: 'terms', version: '2026-10-01' }] }),
+    );
+    expect(accept.status).toBe(200);
+
+    await vi.waitFor(async () => {
+      expect((await client.request('/api/v1/me/identities')).status).toBe(200);
+    });
+    expect((await client.request('/support/api/v1/sessions')).status).toBe(200);
   });
 
   it('keeps session tokens and links out of every log', () => {
