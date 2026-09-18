@@ -9,6 +9,7 @@ import {
   type AuthMode,
   type Identity,
 } from './identity.ts';
+import { declaredNotificationSchema, type NotificationRegistry } from './notifications.ts';
 import type { PermissionRegistry } from './permissions.ts';
 import { type ErrorRegistry, KIT_ERRORS, type KitErrorCode, mergeErrors } from './problems.ts';
 
@@ -147,6 +148,7 @@ export const routeManifestSchema = z.strictObject({
   permissions: z.array(
     z.strictObject({ name: z.string(), description: z.string(), wildcard: z.boolean() }),
   ),
+  notifications: z.array(declaredNotificationSchema).default([]),
 });
 
 export type ManifestRoute = z.output<typeof manifestRouteSchema>;
@@ -157,6 +159,7 @@ export interface RouterOptions {
   version: string;
   module: RouteModule;
   permissions?: PermissionRegistry;
+  notifications?: NotificationRegistry;
   errors?: ErrorRegistry;
 }
 
@@ -165,6 +168,7 @@ export interface Router<Ctx> {
   version: string;
   module: RouteModule;
   permissions: PermissionRegistry;
+  notifications: NotificationRegistry;
   errors: ErrorRegistry;
   routes: readonly RegisteredRoute<Ctx>[];
   route: <
@@ -318,6 +322,7 @@ export function createRouter<Ctx>(options: RouterOptions): Router<Ctx> {
   const resolved: Required<RouterOptions> = {
     ...options,
     permissions: options.permissions ?? {},
+    notifications: options.notifications ?? {},
     errors: mergeErrors(KIT_ERRORS, options.errors ?? {}),
   };
   const routes: RegisteredRoute<Ctx>[] = [];
@@ -327,6 +332,7 @@ export function createRouter<Ctx>(options: RouterOptions): Router<Ctx> {
     version: resolved.version,
     module: resolved.module,
     permissions: resolved.permissions,
+    notifications: resolved.notifications,
     errors: resolved.errors,
     routes,
     route: (definition) => {
@@ -361,6 +367,7 @@ export function createRouter<Ctx>(options: RouterOptions): Router<Ctx> {
       version: resolved.version,
       routes: routes.map((route) => manifestRoute(route)),
       permissions: Object.values(resolved.permissions).map((permission) => ({ ...permission })),
+      notifications: Object.values(resolved.notifications).map((category) => ({ ...category })),
     }),
   };
 }

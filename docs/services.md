@@ -54,7 +54,7 @@ As well as the gateway's checks, each service checks the route's auth mode, perm
 
 ## Route manifests and discovery
 
-A service announces itself on `qtiauth.sys.announce` when it starts, and again whenever anything publishes `qtiauth.sys.discover`. The announcement carries the service name, version, a per-process `instance_id` and its route manifest: every route's method, path, module and policy, plus the permissions the service defines. The gateway builds its route table from these, so a service that isn't running has no routes (see [gateway.md](gateway.md#surfaces-and-route-tables)).
+A service announces itself on `qtiauth.sys.announce` when it starts, and again whenever anything publishes `qtiauth.sys.discover`. The announcement carries the service name, version, a per-process `instance_id` and its route manifest: every route's method, path, module and policy, plus the permissions the service defines and the notification categories it registers. The gateway builds its route table from these, so a service that isn't running has no routes (see [gateway.md](gateway.md#surfaces-and-route-tables)).
 
 Print a service's manifest or OpenAPI document without starting it:
 
@@ -123,6 +123,7 @@ Every service that stores personal data answers `qtiauth.rpc.<service>.export_us
 import {
   createServiceRouter,
   defineErrors,
+  defineNotificationCategories,
   definePermissions,
   defineService,
   ProblemError,
@@ -138,6 +139,10 @@ export const definition = defineService({
   database: { schema: 'support', migrations: () => loadMigrations(migrationsDir) },
   permissions: definePermissions({
     'support.tickets.staff': { description: 'Read and answer every ticket' },
+  }),
+  notifications: defineNotificationCategories({
+    'support.ticket_updates': { description: 'Replies and status changes on your tickets' },
+    'support.new_tickets': { description: 'A new ticket was opened', audience: 'staff' },
   }),
   errors: defineErrors({
     TICKET_NOT_FOUND: { status: 404, title: 'Ticket not found' },

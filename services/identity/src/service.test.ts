@@ -27,6 +27,7 @@ describe('identity service', () => {
       '0016_legal',
       '0017_admin_users',
       '0018_account_lifecycle',
+      '0019_notification_preferences',
     ]);
   });
 
@@ -60,6 +61,7 @@ describe('identity service', () => {
       'GET /api/v1/me/factors',
       'GET /api/v1/me/identities',
       'GET /api/v1/me/legal',
+      'GET /api/v1/me/notifications',
       'GET /api/v1/me/passkeys',
       'GET /api/v1/sessions',
       'GET /auth/bind',
@@ -91,6 +93,7 @@ describe('identity service', () => {
       'GET /legal/:id/:version',
       'GET /legal/accept',
       'PATCH /api/v1/admin/roles/:role_id',
+      'PATCH /api/v1/me/notifications',
       'POST /api/v1/admin/filter/allowlist',
       'POST /api/v1/admin/filter/blocklist',
       'POST /api/v1/admin/roles',
@@ -267,6 +270,14 @@ describe('identity service', () => {
       auth: 'session',
       allow_pending_legal: true,
     });
+    expect(route('GET', '/api/v1/me/notifications')).toMatchObject({
+      auth: 'session',
+      allow_account_states: expect.arrayContaining(['active', 'banned', 'locked']) as unknown,
+    });
+    expect(route('PATCH', '/api/v1/me/notifications')).toMatchObject({
+      auth: 'session',
+      allow_account_states: expect.arrayContaining(['active', 'banned', 'locked']) as unknown,
+    });
     expect(route('POST', '/api/v1/auth/social/:provider/start')).toMatchObject({
       auth: 'none',
       rate_limit: 'auth_password',
@@ -307,6 +318,26 @@ describe('identity service', () => {
     });
   });
 
+  it('registers notification categories, with security and legal not disableable', () => {
+    expect(router.manifest().notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'identity.security',
+          disableable: false,
+          audience: 'user',
+        }),
+        expect.objectContaining({ name: 'identity.legal', disableable: false, audience: 'user' }),
+        expect.objectContaining({
+          name: 'support.ticket_updates',
+          disableable: true,
+          audience: 'user',
+        }),
+        expect.objectContaining({ name: 'support.new_tickets', audience: 'staff' }),
+        expect.objectContaining({ name: 'safety.high_priority_reports', audience: 'staff' }),
+      ]),
+    );
+  });
+
   it('lists its error codes in OpenAPI', () => {
     const document = openApiDocument(router) as {
       'x-qtiauth-errors': { code: string }[];
@@ -337,6 +368,8 @@ describe('identity service', () => {
         'LOCK_EXPIRY_INVALID',
         'EXPORT_NOT_FOUND',
         'DELETION_NOT_PENDING',
+        'NOTIFICATION_REQUIRED',
+        'NOTIFICATION_CATEGORY_NOT_FOUND',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

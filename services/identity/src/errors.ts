@@ -104,6 +104,8 @@ export const IDENTITY_ERRORS = defineErrors({
     title: 'A data export cannot be delivered without object storage',
   },
   EXPORT_NOT_FOUND: { status: 404, title: 'No data export is available' },
+  NOTIFICATION_CATEGORY_NOT_FOUND: { status: 404, title: 'No such notification category' },
+  NOTIFICATION_REQUIRED: { status: 403, title: 'This notification cannot be turned off' },
 });
 
 export type IdentityErrorCode = keyof typeof IDENTITY_ERRORS;

@@ -65,6 +65,7 @@ const identityManifest: RouteManifest = {
   service: 'identity',
   version: '1.0.0',
   permissions: [],
+  notifications: [],
   routes: [
     route({}),
     route({
@@ -504,7 +505,7 @@ describe('gateway handler', () => {
       ),
     );
     const manifests: RouteManifest[] = [
-      { service: 'identity', version: '1.0.0', permissions: [], routes },
+      { service: 'identity', version: '1.0.0', permissions: [], notifications: [], routes },
     ];
     const { request, table } = await setup({
       manifests,
@@ -666,7 +667,13 @@ describe('gateway handler', () => {
   it('does not hand the flow binding to other services', async () => {
     const binding = randomBytes(32).toString('base64url');
     const manifests: RouteManifest[] = [
-      { service: 'notes', version: '1.0.0', permissions: [], routes: [route({ auth: 'none' })] },
+      {
+        service: 'notes',
+        version: '1.0.0',
+        permissions: [],
+        notifications: [],
+        routes: [route({ auth: 'none' })],
+      },
     ];
     const { request, forwarded } = await setup({ manifests });
     await request('/api/v1/me', {
@@ -677,7 +684,13 @@ describe('gateway handler', () => {
 
   it('ignores session headers from services other than identity', async () => {
     const manifests: RouteManifest[] = [
-      { service: 'notes', version: '1.0.0', permissions: [], routes: [route({ auth: 'none' })] },
+      {
+        service: 'notes',
+        version: '1.0.0',
+        permissions: [],
+        notifications: [],
+        routes: [route({ auth: 'none' })],
+      },
     ];
     const { request, logs } = await setup({
       manifests,

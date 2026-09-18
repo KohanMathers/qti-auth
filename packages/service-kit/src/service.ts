@@ -46,6 +46,7 @@ import { type DataRightsHandlers, registerDataRights } from './data-rights.ts';
 import { createHttpApp } from './http.ts';
 import type { IdentityKeySource } from './identity.ts';
 import { busIdentityKeys } from './keys.ts';
+import type { NotificationRegistry } from './notifications.ts';
 import { openApiDocument } from './openapi.ts';
 import type { PermissionRegistry } from './permissions.ts';
 import type { ErrorRegistry } from './problems.ts';
@@ -71,6 +72,7 @@ export interface ServiceDefinition {
   sections?: readonly SectionName[];
   database?: DatabaseDefinition;
   permissions?: PermissionRegistry;
+  notifications?: NotificationRegistry;
   errors?: ErrorRegistry;
 }
 
@@ -157,6 +159,7 @@ export function createServiceRouter<Ctx>(definition: ServiceDefinition): Router<
     version: definition.version,
     module: definition.module,
     ...(definition.permissions === undefined ? {} : { permissions: definition.permissions }),
+    ...(definition.notifications === undefined ? {} : { notifications: definition.notifications }),
     ...(definition.errors === undefined ? {} : { errors: definition.errors }),
   });
 }

@@ -6,6 +6,7 @@ import { dateOfBirthColumn } from './accounts.ts';
 import { exportAuditRecords } from './audit.ts';
 import type { Database } from './database.ts';
 import { enqueueLedgerEntry, flushLedgerOutbox, type LedgerDestination } from './ledger.ts';
+import { listStoredPreferences } from './notifications.ts';
 
 function iso(date: Date | null): string | null {
   return date?.toISOString() ?? null;
@@ -55,6 +56,7 @@ export async function exportUser(
     staffActions,
     holds,
     exports,
+    notifications,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -172,6 +174,7 @@ export async function exportUser(
       .where('user_id', '=', userId)
       .orderBy('created_at')
       .execute(),
+    listStoredPreferences(db, userId),
   ]);
 
   return {
@@ -273,6 +276,11 @@ export async function exportUser(
       created_at: iso(row.created_at),
       completed_at: iso(row.completed_at),
       download_expires_at: iso(row.download_expires_at),
+    })),
+    notification_preferences: notifications.map((row) => ({
+      category: row.category,
+      enabled: row.enabled,
+      updated_at: iso(row.updated_at),
     })),
   };
 }

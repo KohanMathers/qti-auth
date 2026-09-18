@@ -96,6 +96,23 @@ export {
   type PaginationLimits,
 } from './pagination.ts';
 export {
+  type DeclaredNotification,
+  declaredNotificationSchema,
+  defineNotificationCategories,
+  isNotificationCategory,
+  NOTIFICATION_ALLOWED_METHOD,
+  NOTIFICATION_ALLOWED_SERVICE,
+  NOTIFICATION_AUDIENCES,
+  type NotificationAllowedRequest,
+  notificationAllowedRequestSchema,
+  type NotificationAllowedResponse,
+  notificationAllowedResponseSchema,
+  type NotificationAudience,
+  type NotificationCategoryDefinition,
+  NotificationDefinitionError,
+  type NotificationRegistry,
+} from './notifications.ts';
+export {
   type DeclaredPermission,
   definePermissions,
   effectivePermissions,

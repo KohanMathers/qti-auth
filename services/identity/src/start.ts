@@ -7,6 +7,8 @@ import { untraced } from '@qtiauth/observability';
 import {
   heldObjectKey,
   heldObjectPrefix,
+  NOTIFICATION_ALLOWED_METHOD,
+  notificationAllowedRequestSchema,
   RESOLVE_SESSION_METHOD,
   resolveSessionRequestSchema,
   type ResolveSessionResponse,
@@ -62,6 +64,8 @@ import {
 } from './ledger.ts';
 import { PURGE_JOB, purgeExpiredDeletions } from './lifecycle.ts';
 import { identityMetrics } from './metrics.ts';
+import { listedNotifications, openNotificationCatalog } from './notification-registry.ts';
+import { IDENTITY_NOTIFICATIONS, notificationAllowed } from './notifications.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
 import { openPermissionCatalog } from './permission-registry.ts';
 import { anySocialEnabled } from './providers.ts';
@@ -153,6 +157,7 @@ export function identityService(options: IdentityOptions = {}) {
       await seedRoles(db, config.roles);
       await applyAuditLogPrivileges(db, config.database);
       const permissions = openPermissionCatalog(ctx, definition.permissions);
+      openNotificationCatalog(ctx, IDENTITY_NOTIFICATIONS, permissions.registry);
       stack.push({ stop: permissions.stop });
       const textFilter = await openTextFilter(
         resolveListsDir(ctx.config_path, config.text_filter.lists_dir),
@@ -516,6 +521,27 @@ export function identityService(options: IdentityOptions = {}) {
               };
             },
             onError: onHoldError,
+          }),
+        );
+        stack.push(
+          serveRpc(bus, {
+            method: NOTIFICATION_ALLOWED_METHOD,
+            handler: async (request) => {
+              const parsed = notificationAllowedRequestSchema.safeParse(request);
+              if (!parsed.success) {
+                throw new RpcError('bad_request', 'user_id and category are required');
+              }
+              return {
+                allowed: await notificationAllowed(db, {
+                  userId: parsed.data.user_id,
+                  category: parsed.data.category,
+                  catalog: listedNotifications(ctx),
+                }),
+              };
+            },
+            onError: (error) => {
+              log.error('notification preference rpc failed', { error });
+            },
           }),
         );
 

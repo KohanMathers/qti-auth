@@ -10,7 +10,7 @@ function running(...names: string[]): RunningService[] {
     name,
     version: '1.0.0',
     instances: 1,
-    manifest: { service: name, version: '1.0.0', routes: [], permissions: [] },
+    manifest: { service: name, version: '1.0.0', routes: [], permissions: [], notifications: [] },
   }));
 }
 

@@ -22,6 +22,7 @@ describe('mergeDeclaredPermissions', () => {
             { name: 'safety.reports.read', description: 'Reports', wildcard: true },
             { name: 'safety.csea.access', description: 'CSEA', wildcard: false },
           ],
+          notifications: [],
         },
       },
     ]);

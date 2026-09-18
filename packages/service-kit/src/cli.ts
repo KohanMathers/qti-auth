@@ -16,7 +16,7 @@ import type { ServiceDefinition } from './service.ts';
 
 const manifestUsage = `Usage: qtiauth routes manifest
 
-Prints the route manifest this service announces to the gateway: every route's method, path and policy, and the permissions the service defines.
+Prints the route manifest this service announces to the gateway: every route's method, path and policy, the permissions the service defines, and the notification categories it registers.
 `;
 
 const openapiUsage = `Usage: qtiauth routes openapi

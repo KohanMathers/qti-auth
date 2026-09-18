@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, stores the audit log, syncs legal documents that users accept at signup and again when a material version takes effect, lets staff search and act on accounts, and handles account deletion, data export, legal holds and the deletion ledger. Parental consent comes in a later release (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, stores the audit log, syncs legal documents that users accept at signup and again when a material version takes effect, lets staff search and act on accounts, handles account deletion, data export, legal holds and the deletion ledger, and stores per-category notification preferences. Parental consent comes in a later release (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -479,66 +479,81 @@ On startup identity syncs each file into `legal_versions`. Versions are immutabl
 | `GET /legal/:id/:version`        | HTML for a specific version                                                             |
 | `GET`/`POST /legal/accept`       | HTML form that accepts every pending material version                                   |
 
+## Notification preferences
+
+Each running service can declare notification categories on its route manifest (`defineNotificationCategories` in `@qtiauth/service-kit`). Identity merges those announcements with its own catalog and stores per-user toggles. Categories default to on. `identity.security` and `identity.legal` are listed so the UI can show them, but they cannot be turned off. The new-device email is the only security mail that can be silenced, and that is app-wide (`session_security.new_device_email`), not per user.
+
+Staff who have any permission also see staff alert categories: `support.new_tickets` and `safety.high_priority_reports`. Ordinary accounts do not. Support and Safety will honour these when they send mail.
+
+Other services ask `qtiauth.rpc.identity.notification_allowed` with `{ user_id, category }` and get `{ allowed }`. Unknown categories and required ones are always allowed.
+
+| Endpoint                         | Does                                                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/me/notifications`   | Categories this account can see, with `enabled`, `disableable` and `audience`                    |
+| `PATCH /api/v1/me/notifications` | `{ categories: [{ id, enabled }] }`. `403 NOTIFICATION_REQUIRED` if a required one is turned off |
+
 Errors, on top of the [codes every service can return](services.md#errors):
 
-| Code                           | Status | When                                                                                   |
-| ------------------------------ | ------ | -------------------------------------------------------------------------------------- |
-| `MAGIC_LINK_INVALID`           | 400    | The link is unknown, has expired or has already been used                              |
-| `SIGNUP_TOKEN_INVALID`         | 400    | The signup token is unknown, has expired or has already been used                      |
-| `PASSWORD_REJECTED`            | 400    | The password fails length, composition, containment or HIBP                            |
-| `RESET_TOKEN_INVALID`          | 400    | The reset link is unknown, has expired or has already been used                        |
-| `EMAIL_VERIFICATION_INVALID`   | 400    | The confirmation link is unknown, has expired or has already been used                 |
-| `CURRENT_PASSWORD_REQUIRED`    | 400    | Changing a password without the current one                                            |
-| `CURRENT_PASSWORD_INCORRECT`   | 400    | The current password does not match                                                    |
-| `CHALLENGE_INVALID`            | 400    | The challenge is unknown, has expired or has already been used                         |
-| `PASSKEY_INVALID`              | 400    | The passkey could not be verified                                                      |
-| `TOTP_INVALID`                 | 400    | The authenticator code is incorrect                                                    |
-| `TOTP_NOT_ENABLED`             | 400    | Authenticator-app sign-in is not set up                                                |
-| `RECOVERY_CODE_INVALID`        | 400    | The recovery code is incorrect or has been used                                        |
-| `OAUTH_FAILED`                 | 400    | The upstream callback was missing, denied, expired or already used                     |
-| `EMAIL_UNCHANGED`              | 400    | The new address is already this account’s email                                        |
-| `EMAIL_CHANGE_INVALID`         | 400    | The email change link is unknown, has expired or has already been used                 |
-| `EMAIL_REVERT_INVALID`         | 400    | The email revert link is unknown, has expired or has already been used                 |
-| `CAPTCHA_INVALID`              | 400    | A CAPTCHA was required and the solution was wrong                                      |
-| `USERNAME_INVALID`             | 400    | The username fails length or character-set rules                                       |
-| `USERNAME_UNCHANGED`           | 400    | The username is already this account’s                                                 |
-| `DATE_OF_BIRTH_INVALID`        | 400    | The date of birth is not a real past date                                              |
-| `DATE_OF_BIRTH_UNCHANGED`      | 400    | The date of birth is already this account’s                                            |
-| `LOCK_EXPIRY_INVALID`          | 400    | The lock expiry must be in the future                                                  |
-| `CREDENTIALS_INCORRECT`        | 401    | Email or password incorrect                                                            |
-| `AUTH_METHOD_DISABLED`         | 403    | `features.auth.magic_link`, `password`, `passkeys`, `totp` or a social provider is off |
-| `STEP_UP_REQUIRED`             | 403    | A route that needs a recent `aal2` session, or adding a password without one           |
-| `CAPTCHA_REQUIRED`             | 403    | This IP is over the CAPTCHA threshold and no valid solution was sent                   |
-| `PARENTAL_CONSENT_UNAVAILABLE` | 403    | The user is younger than `parental.consent_age`                                        |
-| `ACCOUNT_NOT_FOUND`            | 404    | The signed-in account no longer exists, or staff asked for an account that does not    |
-| `SESSION_NOT_FOUND`            | 404    | No active session with that ID belongs to the user                                     |
-| `PASSKEY_NOT_FOUND`            | 404    | No passkey with that ID belongs to the user                                            |
-| `IDENTITY_NOT_FOUND`           | 404    | No connected social identity with that ID belongs to the user                          |
-| `FILTER_ENTRY_NOT_FOUND`       | 404    | No admin-added allowlist or extra-block word with that value                           |
-| `ROLE_NOT_FOUND`               | 404    | No role with that ID                                                                   |
-| `LEGAL_DOCUMENT_NOT_FOUND`     | 404    | No such legal document, or that version is not public                                  |
-| `EXPORT_NOT_FOUND`             | 404    | No data export with that id belongs to the user                                        |
-| `USERNAME_UNAVAILABLE`         | 409    | The username is taken, reserved, held or blocked by the text filter                    |
-| `USERNAME_COOLDOWN`            | 409    | `usernames.change_cooldown` has not elapsed since the last claim or change             |
-| `USERNAME_CHANGE_LIMIT`        | 409    | `usernames.changes_per_year` changes have already been used in `change_window`         |
-| `ACCOUNT_LIMIT_REACHED`        | 409    | The address already has `accounts.max_per_email` accounts                              |
-| `ACCOUNT_SELF`                 | 409    | Staff tried to ban, lock, or otherwise act on their own account                        |
-| `ACCOUNT_STATE_CONFLICT`       | 409    | The account is not in a state that allows that staff action                            |
-| `DELETION_NOT_PENDING`         | 409    | The account is not waiting to be deleted                                               |
-| `TOTP_ALREADY_ENABLED`         | 409    | Authenticator-app sign-in is already set up                                            |
-| `IDENTITY_IN_USE`              | 409    | That provider identity is already connected to another account                         |
-| `LAST_SIGN_IN_METHOD`          | 409    | Removing this method would leave the account with no sign-in method                    |
-| `ROLE_SLUG_TAKEN`              | 409    | A role with this slug already exists                                                   |
-| `ROLE_BUILTIN`                 | 409    | Built-in roles cannot be deleted                                                       |
-| `PROVIDER_UNAVAILABLE`         | 502    | The upstream provider did not complete token exchange or userinfo                      |
-| `EXPORT_UNAVAILABLE`           | 503    | A data export cannot be delivered without object storage                               |
+| Code                              | Status | When                                                                                   |
+| --------------------------------- | ------ | -------------------------------------------------------------------------------------- |
+| `MAGIC_LINK_INVALID`              | 400    | The link is unknown, has expired or has already been used                              |
+| `SIGNUP_TOKEN_INVALID`            | 400    | The signup token is unknown, has expired or has already been used                      |
+| `PASSWORD_REJECTED`               | 400    | The password fails length, composition, containment or HIBP                            |
+| `RESET_TOKEN_INVALID`             | 400    | The reset link is unknown, has expired or has already been used                        |
+| `EMAIL_VERIFICATION_INVALID`      | 400    | The confirmation link is unknown, has expired or has already been used                 |
+| `CURRENT_PASSWORD_REQUIRED`       | 400    | Changing a password without the current one                                            |
+| `CURRENT_PASSWORD_INCORRECT`      | 400    | The current password does not match                                                    |
+| `CHALLENGE_INVALID`               | 400    | The challenge is unknown, has expired or has already been used                         |
+| `PASSKEY_INVALID`                 | 400    | The passkey could not be verified                                                      |
+| `TOTP_INVALID`                    | 400    | The authenticator code is incorrect                                                    |
+| `TOTP_NOT_ENABLED`                | 400    | Authenticator-app sign-in is not set up                                                |
+| `RECOVERY_CODE_INVALID`           | 400    | The recovery code is incorrect or has been used                                        |
+| `OAUTH_FAILED`                    | 400    | The upstream callback was missing, denied, expired or already used                     |
+| `EMAIL_UNCHANGED`                 | 400    | The new address is already this account’s email                                        |
+| `EMAIL_CHANGE_INVALID`            | 400    | The email change link is unknown, has expired or has already been used                 |
+| `EMAIL_REVERT_INVALID`            | 400    | The email revert link is unknown, has expired or has already been used                 |
+| `CAPTCHA_INVALID`                 | 400    | A CAPTCHA was required and the solution was wrong                                      |
+| `USERNAME_INVALID`                | 400    | The username fails length or character-set rules                                       |
+| `USERNAME_UNCHANGED`              | 400    | The username is already this account’s                                                 |
+| `DATE_OF_BIRTH_INVALID`           | 400    | The date of birth is not a real past date                                              |
+| `DATE_OF_BIRTH_UNCHANGED`         | 400    | The date of birth is already this account’s                                            |
+| `LOCK_EXPIRY_INVALID`             | 400    | The lock expiry must be in the future                                                  |
+| `CREDENTIALS_INCORRECT`           | 401    | Email or password incorrect                                                            |
+| `AUTH_METHOD_DISABLED`            | 403    | `features.auth.magic_link`, `password`, `passkeys`, `totp` or a social provider is off |
+| `STEP_UP_REQUIRED`                | 403    | A route that needs a recent `aal2` session, or adding a password without one           |
+| `CAPTCHA_REQUIRED`                | 403    | This IP is over the CAPTCHA threshold and no valid solution was sent                   |
+| `PARENTAL_CONSENT_UNAVAILABLE`    | 403    | The user is younger than `parental.consent_age`                                        |
+| `NOTIFICATION_REQUIRED`           | 403    | A security or legal notification category was turned off                               |
+| `ACCOUNT_NOT_FOUND`               | 404    | The signed-in account no longer exists, or staff asked for an account that does not    |
+| `SESSION_NOT_FOUND`               | 404    | No active session with that ID belongs to the user                                     |
+| `PASSKEY_NOT_FOUND`               | 404    | No passkey with that ID belongs to the user                                            |
+| `IDENTITY_NOT_FOUND`              | 404    | No connected social identity with that ID belongs to the user                          |
+| `FILTER_ENTRY_NOT_FOUND`          | 404    | No admin-added allowlist or extra-block word with that value                           |
+| `ROLE_NOT_FOUND`                  | 404    | No role with that ID                                                                   |
+| `LEGAL_DOCUMENT_NOT_FOUND`        | 404    | No such legal document, or that version is not public                                  |
+| `EXPORT_NOT_FOUND`                | 404    | No data export with that id belongs to the user                                        |
+| `NOTIFICATION_CATEGORY_NOT_FOUND` | 404    | No such notification category, or it is a staff alert the caller cannot see            |
+| `USERNAME_UNAVAILABLE`            | 409    | The username is taken, reserved, held or blocked by the text filter                    |
+| `USERNAME_COOLDOWN`               | 409    | `usernames.change_cooldown` has not elapsed since the last claim or change             |
+| `USERNAME_CHANGE_LIMIT`           | 409    | `usernames.changes_per_year` changes have already been used in `change_window`         |
+| `ACCOUNT_LIMIT_REACHED`           | 409    | The address already has `accounts.max_per_email` accounts                              |
+| `ACCOUNT_SELF`                    | 409    | Staff tried to ban, lock, or otherwise act on their own account                        |
+| `ACCOUNT_STATE_CONFLICT`          | 409    | The account is not in a state that allows that staff action                            |
+| `DELETION_NOT_PENDING`            | 409    | The account is not waiting to be deleted                                               |
+| `TOTP_ALREADY_ENABLED`            | 409    | Authenticator-app sign-in is already set up                                            |
+| `IDENTITY_IN_USE`                 | 409    | That provider identity is already connected to another account                         |
+| `LAST_SIGN_IN_METHOD`             | 409    | Removing this method would leave the account with no sign-in method                    |
+| `ROLE_SLUG_TAKEN`                 | 409    | A role with this slug already exists                                                   |
+| `ROLE_BUILTIN`                    | 409    | Built-in roles cannot be deleted                                                       |
+| `PROVIDER_UNAVAILABLE`            | 502    | The upstream provider did not complete token exchange or userinfo                      |
+| `EXPORT_UNAVAILABLE`              | 503    | A data export cannot be delivered without object storage                               |
 
 ## Events
 
 | Event                                         | When                                                                                                                                      |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `qtiauth.identity.user.created.v1`            | An account was created                                                                                                                    |
-| `qtiauth.identity.user.updated.v1`            | An account field changed. `fields` names what changed (`username`, `date_of_birth`, `roles`, `legal`, `state`)                            |
+| `qtiauth.identity.user.updated.v1`            | An account field changed. `fields` names what changed (`username`, `date_of_birth`, `roles`, `legal`, `state`, `notifications`)           |
 | `qtiauth.identity.user.deleted.v1`            | The deletion grace period ended. Every service must erase this user. `held` is true when a legal hold kept isolated copies                |
 | `qtiauth.identity.user.banned.v1`             | Staff banned an account. Sessions stay. The gateway drops cached sessions for the user                                                    |
 | `qtiauth.identity.user.unbanned.v1`           | Staff lifted a ban                                                                                                                        |
@@ -557,7 +572,7 @@ The gateway clears cached sessions when it sees `session.revoked`, `session.flag
 
 `retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, text-filter decisions `retention.filter_decisions` after they were recorded, and the oldest audit log rows `retention.audit` after they were recorded.
 
-A user's export has their account (including username, public profile, leaderboard visibility, security-notification flag, lock expiry, whether a username reset is required and `deletion_requested_at`), username history, age-assurance results, staff date-of-birth changes, staff account actions, assigned roles, audit rows where they are the actor or the target, legal acceptances, legal holds, data-export requests, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, staff account actions, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address. Legal acceptances and data-export rows go with the account. Audit rows stay, so the hash chain remains intact. Objects under `users/` and `exports/` are deleted; objects under `legal-hold/` stay when `held` is true. A ledger entry `{ user_id, deleted_at }` is written to `backups.directory/deletion-ledger/` or the storage prefix `deletion-ledger/`.
+A user's export has their account (including username, public profile, leaderboard visibility, security-notification flag, lock expiry, whether a username reset is required and `deletion_requested_at`), username history, age-assurance results, staff date-of-birth changes, staff account actions, assigned roles, audit rows where they are the actor or the target, legal acceptances, legal holds, data-export requests, notification preferences, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, staff account actions, role assignments, sign-in methods, recovery codes, sessions, session security events, notification preferences, and the tokens and password-failure counters too unless another account uses the same address. Legal acceptances and data-export rows go with the account. Audit rows stay, so the hash chain remains intact. Objects under `users/` and `exports/` are deleted; objects under `legal-hold/` stay when `held` is true. A ledger entry `{ user_id, deleted_at }` is written to `backups.directory/deletion-ledger/` or the storage prefix `deletion-ledger/`.
 
 ## Metrics
 
@@ -610,4 +625,4 @@ The gateway sends the flow cookie's value back to identity, and only to identity
 
 ### Tests
 
-`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session, and a material legal version that gates `/api/v1/me/identities` until it is accepted. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit. `legal.integration.test.ts` syncs the shipped documents, rejects an edited body without a version bump, and covers material re-acceptance, the HTML form, and a non-material email. `admin-users.integration.test.ts` searches accounts, omits optional-service detail until those RPC methods answer, and covers ban, lock, force re-auth, session revoke and username reset. `identity.integration.test.ts` covers deletion, sign-in cancel, purge to a ledger file, an emailed export attachment, and a legal hold that outlives the account. `gateway.integration.test.ts` needs a passkey `aal2` session for `POST /api/v1/me/deletion`.
+`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session, a material legal version that gates `/api/v1/me/identities` until it is accepted, and a refused attempt to disable a security notification category. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit. `legal.integration.test.ts` syncs the shipped documents, rejects an edited body without a version bump, and covers material re-acceptance, the HTML form, and a non-material email. `admin-users.integration.test.ts` searches accounts, omits optional-service detail until those RPC methods answer, and covers ban, lock, force re-auth, session revoke and username reset. `identity.integration.test.ts` covers deletion, sign-in cancel, purge to a ledger file, an emailed export attachment, and a legal hold that outlives the account. `notifications.integration.test.ts` covers user and staff toggles, the required-category refusal, `notification_allowed` RPC, export and erasure. `gateway.integration.test.ts` needs a passkey `aal2` session for `POST /api/v1/me/deletion`.

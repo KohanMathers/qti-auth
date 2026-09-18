@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as z from 'zod';
 
+import { defineNotificationCategories } from './notifications.ts';
 import { definePermissions } from './permissions.ts';
 import { defineErrors } from './problems.ts';
 import { createRouter, impliedErrors, type Router, routeManifestSchema } from './routes.ts';
@@ -57,8 +58,35 @@ describe('createRouter', () => {
         },
       ],
       permissions: [{ name: 'users.read', description: 'Read users', wildcard: true }],
+      notifications: [],
     });
     expect(routeManifestSchema.safeParse(r.manifest()).success).toBe(true);
+  });
+
+  it('includes declared notification categories in the manifest', () => {
+    const r = createRouter<undefined>({
+      service: 'support',
+      version: '1.0.0',
+      module: 'support',
+      notifications: defineNotificationCategories({
+        'support.ticket_updates': { description: 'Ticket replies' },
+        'identity.security': { description: 'Security emails', disableable: false },
+      }),
+    });
+    expect(r.manifest().notifications).toEqual([
+      {
+        name: 'support.ticket_updates',
+        description: 'Ticket replies',
+        disableable: true,
+        audience: 'user',
+      },
+      {
+        name: 'identity.security',
+        description: 'Security emails',
+        disableable: false,
+        audience: 'user',
+      },
+    ]);
   });
 
   it('keeps a declared policy', () => {

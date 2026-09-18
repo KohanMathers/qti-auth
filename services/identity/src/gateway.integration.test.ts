@@ -643,6 +643,39 @@ describe('identity through the gateway', () => {
     expect((await client.request('/support/api/v1/sessions')).status).toBe(200);
   });
 
+  it('refuses to disable a security notification category through the API', async () => {
+    const client = browser();
+    await signUpInBrowser(client, 'notify-sec@example.com');
+    const listed = await client.request('/api/v1/me/notifications');
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({
+      categories: expect.arrayContaining([
+        expect.objectContaining({ id: 'identity.security', disableable: false, enabled: true }),
+        expect.objectContaining({ id: 'support.ticket_updates', disableable: true, enabled: true }),
+      ]) as unknown,
+    });
+
+    const refused = await client.request('/api/v1/me/notifications', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ categories: [{ id: 'identity.security', enabled: false }] }),
+    });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: 'NOTIFICATION_REQUIRED' });
+
+    const optional = await client.request('/api/v1/me/notifications', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ categories: [{ id: 'support.ticket_updates', enabled: false }] }),
+    });
+    expect(optional.status).toBe(200);
+    expect(await optional.json()).toMatchObject({
+      categories: expect.arrayContaining([
+        expect.objectContaining({ id: 'support.ticket_updates', enabled: false }),
+      ]) as unknown,
+    });
+  });
+
   it('keeps session tokens and links out of every log', () => {
     assertLogsScrubbed(
       logs.lines,

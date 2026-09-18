@@ -33,7 +33,7 @@ function route(overrides: Partial<ManifestRoute>): ManifestRoute {
 }
 
 function manifest(service: string, routes: ManifestRoute[]): RouteManifest {
-  return { service, version: '1.0.0', routes, permissions: [] };
+  return { service, version: '1.0.0', routes, permissions: [], notifications: [] };
 }
 
 const rateLimits = new Set(['global', 'ticket_create']);

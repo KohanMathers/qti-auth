@@ -13,7 +13,7 @@ function announcement(
     instance_id: instance,
     version: '1.0.0',
     started_at: '2026-09-17T12:00:00.000Z',
-    manifest: { service, version: '1.0.0', routes: [], permissions: [] },
+    manifest: { service, version: '1.0.0', routes: [], permissions: [], notifications: [] },
     ...overrides,
   };
 }
@@ -35,7 +35,13 @@ describe('createServiceRegistry', () => {
       announcement('identity', 'new', {
         version: '1.1.0',
         started_at: '2026-09-17T13:00:00.000Z',
-        manifest: { service: 'identity', version: '1.1.0', routes: [], permissions: [] },
+        manifest: {
+          service: 'identity',
+          version: '1.1.0',
+          routes: [],
+          permissions: [],
+          notifications: [],
+        },
       }),
     );
     registry.announce(announcement('identity', 'old'));

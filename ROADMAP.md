@@ -499,10 +499,10 @@ Spec: §4.12, §2.11
 **Done when:** deleting a user removes their data from every running service and object storage, and
 a ledger entry exists at the backup destination.
 
-### P2b.9 Notification preferences — S
+### P2b.9 Notification preferences — S ✅
 Spec: §4.16
 
-- [ ] Categories registered per service, user toggles, non-disableable security and legal categories,
+- [x] Categories registered per service, user toggles, non-disableable security and legal categories,
       staff alert preferences.
 
 **Done when:** a user can't disable a security category through the API.

@@ -333,6 +333,13 @@ export interface DeletionLedgerOutboxTable {
   sent_at: Date | null;
 }
 
+export interface NotificationPreferencesTable {
+  user_id: string;
+  category: string;
+  enabled: boolean;
+  updated_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   identities: IdentitiesTable;
@@ -358,4 +365,5 @@ export interface Database {
   data_exports: DataExportsTable;
   legal_holds: LegalHoldsTable;
   deletion_ledger_outbox: DeletionLedgerOutboxTable;
+  notification_preferences: NotificationPreferencesTable;
 }

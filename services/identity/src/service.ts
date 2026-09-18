@@ -19,6 +19,8 @@ import { factorRoutes } from './factor-routes.ts';
 import { filterRoutes } from './filter-routes.ts';
 import { legalRoutes } from './legal-routes.ts';
 import { lifecycleRoutes } from './lifecycle-routes.ts';
+import { notificationRoutes } from './notification-routes.ts';
+import { IDENTITY_NOTIFICATIONS } from './notifications.ts';
 import { pageRoutes } from './pages.ts';
 import { roleRoutes } from './role-routes.ts';
 import { sessionRoutes } from './session-routes.ts';
@@ -72,6 +74,7 @@ export const definition = defineService({
     'roles.manage': { description: 'Create, edit and assign roles' },
     'audit.read': { description: 'Read the audit log' },
   }),
+  notifications: IDENTITY_NOTIFICATIONS,
   errors: IDENTITY_ERRORS,
 });
 
@@ -92,4 +95,5 @@ roleRoutes(router);
 auditRoutes(router);
 legalRoutes(router);
 lifecycleRoutes(router);
+notificationRoutes(router);
 pageRoutes(router);
