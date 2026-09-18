@@ -1,0 +1,5 @@
+The parent or guardian link for {{ username }} on {{ brand.product_name }} has ended. You can no longer manage that account.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

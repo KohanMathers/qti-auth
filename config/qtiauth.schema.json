@@ -2545,6 +2545,12 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 8
+        },
+        "graduation_grace": {
+          "default": "30d",
+          "description": "How long parental controls stay in place after the young person reaches consent_age. After this they can ask to remove the guardian link. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }
       },
       "additionalProperties": false

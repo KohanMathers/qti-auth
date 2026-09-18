@@ -1,0 +1,1 @@
+The parent or guardian link for {{ username }} has ended on {{ brand.product_name }}

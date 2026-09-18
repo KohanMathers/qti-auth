@@ -147,6 +147,18 @@ export const IDENTITY_ERRORS = defineErrors({
     status: 409,
     title: 'A username change is already waiting for approval',
   },
+  GUARDIAN_REMOVAL_NOT_ALLOWED: {
+    status: 403,
+    title: 'The parent or guardian link cannot be removed yet',
+  },
+  GUARDIAN_REMOVAL_PENDING: {
+    status: 409,
+    title: 'A request to remove the parent or guardian link is already waiting',
+  },
+  GUARDIAN_REMOVAL_NOT_FOUND: {
+    status: 404,
+    title: 'No request to remove the parent or guardian link is waiting',
+  },
   ACCOUNT_NOT_FOUND: { status: 404, title: 'The account does not exist' },
   ACCOUNT_SELF: { status: 409, title: 'You cannot perform this action on your own account' },
   ACCOUNT_STATE_CONFLICT: {

@@ -33,8 +33,14 @@ import { sweepAuthFailures } from './failures.ts';
 import { ACTIVITY_SUMMARY_JOB, sweepFamilySessions } from './family.ts';
 import { loadFilterOverlay, sweepFilterDecisions } from './filter.ts';
 import { attachTextFilter } from './filter-state.ts';
-import { resumeDataExports, sendFamilyActivitySummaries } from './flows.ts';
+import {
+  resumeDataExports,
+  sendFamilyActivitySummaries,
+  sendGraduationNotices,
+  sendGuardianRemovalReminders,
+} from './flows.ts';
 import { attachGeoIp } from './geoip-state.ts';
+import { GRADUATION_JOB, REMOVAL_REMINDERS_JOB } from './graduation.ts';
 import { iso } from './iso.ts';
 import {
   LEDGER_PRUNE_JOB,
@@ -422,6 +428,44 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('family activity summary failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: GRADUATION_JOB,
+            metrics: ctx.busMetrics,
+            handler: async (tick) => {
+              const sent = await sendGraduationNotices(ctx, new Date(tick.data.scheduled_at));
+              if (sent > 0) {
+                identityMetrics(ctx.metrics).graduation('notified', sent);
+                ctx.outbox.wake();
+                log.info('graduation notices queued', { sent });
+              }
+            },
+            onError: (error) => {
+              log.error('graduation notices failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: REMOVAL_REMINDERS_JOB,
+            metrics: ctx.busMetrics,
+            handler: async (tick) => {
+              const sent = await sendGuardianRemovalReminders(
+                ctx,
+                new Date(tick.data.scheduled_at),
+              );
+              if (sent > 0) {
+                ctx.outbox.wake();
+                log.info('guardian removal reminders queued', { sent });
+              }
+            },
+            onError: (error) => {
+              log.error('guardian removal reminders failed', { error });
             },
           }),
         );

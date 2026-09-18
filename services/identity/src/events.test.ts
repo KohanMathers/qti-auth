@@ -17,7 +17,9 @@ import {
   userUpdatedEvent,
   legalVersionPublishedEvent,
   parentalConsentGrantedEvent,
+  parentalConsentRemovalRequestedEvent,
   parentalConsentRequestedEvent,
+  parentalConsentRevokedEvent,
 } from './events.ts';
 
 const USER_ID = '0199a0e0-0000-7000-8000-000000000001';
@@ -84,6 +86,8 @@ describe('identity events', () => {
         parentalConsentRequestedEvent(USER_ID, { expires_at: '2026-10-01T00:00:00.000Z' }),
       ),
       createEvent(parentalConsentGrantedEvent(USER_ID)),
+      createEvent(parentalConsentRevokedEvent(USER_ID)),
+      createEvent(parentalConsentRemovalRequestedEvent(USER_ID)),
       createEvent(
         userBannedEvent(USER_ID, { reason: 'Repeated abuse' }, { type: 'user', id: USER_ID }),
       ),

@@ -25,6 +25,8 @@ Schedules are cron patterns with five fields, `minute hour day-of-month month da
 | `retention.sweep`               | every service        | `0 3 * * *`      | daily 03:00      |
 | `parental.expire_pending`       | identity             | `0 * * * *`      | hourly           |
 | `parental.activity_summary`     | identity             | `0 8 * * 1`      | weekly Mon 08:00 |
+| `parental.graduation`           | identity             | `10 0 * * *`     | daily 00:10      |
+| `parental.removal_reminders`    | identity             | `0 9 * * 1`      | weekly Mon 09:00 |
 | `accounts.purge_deleted`        | identity             | `30 3 * * *`     | daily 03:30      |
 | `age.recompute_bands`           | identity             | `5 0 * * *`      | daily 00:05      |
 | `accounts.unlock_expired`       | identity             | `* * * * *`      | every minute     |

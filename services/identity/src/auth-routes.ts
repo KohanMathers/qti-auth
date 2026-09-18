@@ -5,7 +5,7 @@ import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
 import { CAPTCHA_ACTIONS, inspectCaptcha, noteCaptchaAttempt, requireCaptcha } from './captcha.ts';
 import { SECOND_FACTOR_METHODS } from './factors.ts';
-import { actorFromSession, listFamilyChildren } from './family.ts';
+import { actorFromSession, listFamilyChildren, listGuardians } from './family.ts';
 import {
   completeEmailVerification,
   completePasswordReset,
@@ -24,6 +24,7 @@ import {
   updatePassword,
   verify,
 } from './flows.ts';
+import { pendingGuardianRemoval, presentFamilyGraduation } from './graduation.ts';
 import { NO_STORE, sessionHeaders, signedOutHeaders } from './headers.ts';
 import { iso } from './iso.ts';
 import { isCanonicalLocale, preferredLocale } from './locale.ts';
@@ -95,8 +96,19 @@ const meSchema = z.object({
           account_state: z.string(),
         }),
       ),
+      guardians: z.array(
+        z.object({
+          id: z.uuid(),
+          email: z.email(),
+          display_name: z.string().nullable(),
+          status: z.enum(['pending', 'active']),
+          linked: z.boolean(),
+        }),
+      ),
+      pending_removal: z.object({ id: z.uuid(), requested_at: z.iso.datetime() }).nullable(),
+      grace_ends_at: z.iso.datetime().nullable(),
     })
-    .describe('Child accounts this signed-in parent or guardian can manage.'),
+    .describe('Family dashboard children, and this account’s own parents or guardians.'),
   roles: z.array(z.object({ id: z.uuid(), slug: z.string(), name: z.string() })),
   permissions: z.array(z.string()),
   session: z.object({ id: z.uuid(), amr: z.array(z.string()), acr: z.string().nullable() }),
@@ -792,13 +804,16 @@ export function authRoutes(router: Router<Context>): void {
     errors: ['ACCOUNT_NOT_FOUND'],
     handler: async ({ ctx, identity }) => {
       const { userId, sessionId } = signedIn(identity);
-      const [account, roles, permissions, consent, actor] = await Promise.all([
-        findAccount(ctx.db, userId),
-        loadUserRoles(ctx.db, userId),
-        loadPermissions(ctx.db, userId),
-        pendingParentalConsent(ctx, userId),
-        actorFromSession(ctx.db, sessionId),
-      ]);
+      const [account, roles, permissions, consent, actor, ownGuardians, pendingRemoval] =
+        await Promise.all([
+          findAccount(ctx.db, userId),
+          loadUserRoles(ctx.db, userId),
+          loadPermissions(ctx.db, userId),
+          pendingParentalConsent(ctx, userId),
+          actorFromSession(ctx.db, sessionId),
+          listGuardians(ctx.db, userId),
+          pendingGuardianRemoval(ctx.db, userId),
+        ]);
       if (!account || account.state === 'deleted') {
         throw new ProblemError('ACCOUNT_NOT_FOUND');
       }
@@ -806,6 +821,10 @@ export function authRoutes(router: Router<Context>): void {
         actor === undefined
           ? []
           : await listFamilyChildren(ctx.db, actor, ctx.config.age.bands, new Date());
+      const family = presentFamilyGraduation(account, ownGuardians, pendingRemoval, {
+        consentAge: ctx.config.parental.consent_age,
+        graceMs: ctx.config.parental.graduation_grace,
+      });
       return {
         status: 200,
         headers: NO_STORE,
@@ -824,7 +843,7 @@ export function authRoutes(router: Router<Context>): void {
           locale: account.locale,
           created_at: account.created_at.toISOString(),
           parental_consent: consent,
-          family: { children },
+          family: { children, ...family },
           roles: roles.map((role) => ({ id: role.id, slug: role.slug, name: role.name })),
           permissions,
           session: { id: sessionId, amr: identity.amr, acr: identity.acr },

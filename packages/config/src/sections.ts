@@ -1106,6 +1106,10 @@ export const parental = z
       .max(8)
       .default(2)
       .describe('How many parents or guardians a child account can have.'),
+    graduation_grace: duration(
+      '30d',
+      'How long parental controls stay in place after the young person reaches consent_age. After this they can ask to remove the guardian link.',
+    ),
   })
   .prefault({})
   .describe('Parental consent.');
@@ -1238,6 +1242,8 @@ const DEFAULT_CRON_JOBS: Record<string, CronJob> = {
   'retention.sweep': { schedule: '0 3 * * *', enabled: true },
   'parental.expire_pending': { schedule: '0 * * * *', enabled: true },
   'parental.activity_summary': { schedule: '0 8 * * 1', enabled: true },
+  'parental.graduation': { schedule: '10 0 * * *', enabled: true },
+  'parental.removal_reminders': { schedule: '0 9 * * 1', enabled: true },
   'accounts.purge_deleted': { schedule: '30 3 * * *', enabled: true },
   'age.recompute_bands': { schedule: '5 0 * * *', enabled: true },
   'accounts.unlock_expired': { schedule: '* * * * *', enabled: true },

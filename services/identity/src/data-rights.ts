@@ -61,6 +61,8 @@ export async function exportUser(
     usernameChanges,
     familySessions,
     activityNotices,
+    graduationNotice,
+    removalRequests,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -241,6 +243,17 @@ export async function exportUser(
       .where('child_user_id', '=', userId)
       .orderBy('period_start')
       .execute(),
+    db
+      .selectFrom('graduation_notices')
+      .select(['notified_at', 'consent_age'])
+      .where('user_id', '=', userId)
+      .executeTakeFirst(),
+    db
+      .selectFrom('guardian_removal_requests')
+      .select(['id', 'status', 'requested_at', 'decided_at', 'last_reminded_at'])
+      .where('user_id', '=', userId)
+      .orderBy('requested_at')
+      .execute(),
   ]);
 
   return {
@@ -403,6 +416,20 @@ export async function exportUser(
     family_activity_notices: activityNotices.map((row) => ({
       period_start: iso(row.period_start),
       sent_at: iso(row.sent_at),
+    })),
+    graduation_notice:
+      graduationNotice === undefined
+        ? null
+        : {
+            notified_at: iso(graduationNotice.notified_at),
+            consent_age: graduationNotice.consent_age,
+          },
+    guardian_removal_requests: removalRequests.map((row) => ({
+      id: row.id,
+      status: row.status,
+      requested_at: iso(row.requested_at),
+      decided_at: iso(row.decided_at),
+      last_reminded_at: iso(row.last_reminded_at),
     })),
   };
 }

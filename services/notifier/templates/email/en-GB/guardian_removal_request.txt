@@ -1,0 +1,9 @@
+{{ username }} asked to remove the parent or guardian link on {{ brand.product_name }}.
+
+Open the family dashboard to approve or decline:
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

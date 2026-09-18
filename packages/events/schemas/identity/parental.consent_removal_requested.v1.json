@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.parental.consent_removal_requested.v1",
+  "title": "Parental consent removal requested",
+  "description": "A young person asked to remove the parent or guardian link. The subject is the child.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {}
+}

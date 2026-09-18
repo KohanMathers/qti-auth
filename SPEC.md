@@ -339,6 +339,9 @@ double-run a job. The scheduler holds no job logic.
 |---|---|---|
 | `retention.sweep` | every service | daily 03:00 |
 | `parental.expire_pending` | identity | hourly |
+| `parental.activity_summary` | identity | weekly Mon 08:00 |
+| `parental.graduation` | identity | daily 00:10 |
+| `parental.removal_reminders` | identity | weekly Mon 09:00 |
 | `accounts.purge_deleted` | identity | daily 03:30 |
 | `age.recompute_bands` | identity | daily 00:05 |
 | `accounts.unlock_expired` | identity | every minute |

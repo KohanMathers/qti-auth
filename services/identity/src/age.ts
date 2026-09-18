@@ -50,6 +50,13 @@ export function utcDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+export function dateWhenAgeReached(dateOfBirth: string, age: number): Date {
+  const born = parts(dateOfBirth);
+  if (!born) throw new RangeError(`Not a date: ${dateOfBirth}`);
+  const [year, month, day] = born;
+  return new Date(Date.UTC(year + age, month - 1, day));
+}
+
 export function previousUtcDay(date: Date): Date {
   const day = utcDay(date);
   const [year = 0, month = 1, dayOfMonth = 1] = day.split('-').map(Number);

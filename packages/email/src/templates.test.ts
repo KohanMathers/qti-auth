@@ -109,5 +109,21 @@ describe('defineEmailTemplates', () => {
       category: 'auth',
       priority: 'normal',
     });
+    expect(EMAIL_TEMPLATES.graduation).toMatchObject({
+      category: 'auth',
+      priority: 'high',
+    });
+    expect(EMAIL_TEMPLATES.guardian_graduation).toMatchObject({
+      category: 'auth',
+      priority: 'high',
+    });
+    expect(EMAIL_TEMPLATES.guardian_removal_request).toMatchObject({
+      category: 'auth',
+      priority: 'high',
+    });
+    expect(EMAIL_TEMPLATES.guardian_removed).toMatchObject({
+      category: 'auth',
+      priority: 'high',
+    });
   });
 });

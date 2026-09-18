@@ -14,6 +14,7 @@ export const IDENTITY_EVENTS = {
   parentalConsentRequested: 'qtiauth.identity.parental.consent_requested.v1',
   parentalConsentGranted: 'qtiauth.identity.parental.consent_granted.v1',
   parentalConsentRevoked: 'qtiauth.identity.parental.consent_revoked.v1',
+  parentalConsentRemovalRequested: 'qtiauth.identity.parental.consent_removal_requested.v1',
   legalVersionPublished: 'qtiauth.identity.legal.version_published.v1',
 } as const;
 

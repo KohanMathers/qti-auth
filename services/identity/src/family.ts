@@ -18,6 +18,7 @@ import {
 import {
   type AuditRecordedData,
   auditRecordedEvent,
+  parentalConsentRevokedEvent,
   type UserUpdatedData,
   userUpdatedEvent,
 } from './events.ts';
@@ -514,6 +515,59 @@ export async function revokeGuardian(
       }),
     );
     return { status: 'ok' as const };
+  });
+}
+
+export async function endGuardianLinks(
+  db: Kysely<Database>,
+  options: {
+    childUserId: string;
+    actor: EventActor;
+    now: Date;
+  },
+): Promise<{ status: 'ok'; guardians: Guardian[] } | { status: 'none' }> {
+  return db.transaction().execute(async (trx) => {
+    const guardians = await selectGuardian(trx)
+      .where('child_user_id', '=', options.childUserId)
+      .where('status', 'in', ['pending', 'active'])
+      .orderBy('created_at')
+      .orderBy('id')
+      .execute();
+    if (guardians.length === 0) return { status: 'none' as const };
+    await trx
+      .updateTable('guardians')
+      .set({
+        status: 'revoked',
+        revoked_at: options.now,
+        updated_at: options.now,
+      })
+      .where('child_user_id', '=', options.childUserId)
+      .where('status', 'in', ['pending', 'active'])
+      .execute();
+    await trx.deleteFrom('parental_controls').where('user_id', '=', options.childUserId).execute();
+    await trx
+      .updateTable('username_change_requests')
+      .set({ status: 'cancelled', decided_at: options.now })
+      .where('user_id', '=', options.childUserId)
+      .where('status', '=', 'pending')
+      .execute();
+    await writeEvent<Database, Record<string, never>>(
+      trx,
+      parentalConsentRevokedEvent(options.childUserId, options.actor),
+    );
+    await writeEvent<Database, UserUpdatedData>(
+      trx,
+      userUpdatedEvent(options.childUserId, { fields: ['parental_controls'] }, options.actor),
+    );
+    await writeEvent<Database, AuditRecordedData>(
+      trx,
+      auditRecordedEvent(options.actor, {
+        action: 'family.removal.completed',
+        target_type: 'user',
+        target_id: options.childUserId,
+      }),
+    );
+    return { status: 'ok' as const, guardians };
   });
 }
 

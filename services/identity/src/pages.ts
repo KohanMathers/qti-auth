@@ -73,6 +73,7 @@ import {
   CHANGE_EMAIL_PAGE,
   CONNECT_PAGE,
   encryptionKey,
+  FAMILY_LEAVE_PAGE,
   FAMILY_PAGE,
   FORGOT_PASSWORD_PAGE,
   GUARDIAN_APPROVE_PAGE,
@@ -327,6 +328,7 @@ async function signedIn(
     body: `<ul>
 <li><a href="../api/v1/me">Your account</a></li>
 <li><a href="${escapeHtml(FAMILY_PAGE)}">Family dashboard</a></li>
+<li><a href="${escapeHtml(FAMILY_LEAVE_PAGE)}">Parent or guardian link</a></li>
 <li><a href="username">Username</a></li>
 <li><a href="../api/v1/sessions">Your sessions</a></li>
 ${passkeysEnabled(ctx) ? '<li><a href="passkeys">Passkeys</a></li>' : ''}

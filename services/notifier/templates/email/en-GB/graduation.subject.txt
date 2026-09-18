@@ -1,0 +1,1 @@
+You've reached the age where parental controls become optional on {{ brand.product_name }}

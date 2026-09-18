@@ -1,7 +1,7 @@
 import { FAMILY_TOKEN_HEADER, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { findAccount } from './accounts.ts';
+import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
 import { isValidDateOfBirth } from './age.ts';
 import { parseDevice } from './device.ts';
 import {
@@ -12,6 +12,7 @@ import {
   decideUsernameChange,
   DEFAULT_PARENTAL_CONTROLS,
   familyEventActor,
+  hasActiveGuardians,
   inviteGuardian,
   issueFamilyAccess,
   listFamilyChildren,
@@ -25,17 +26,32 @@ import {
   type FamilyActor,
 } from './family.ts';
 import { applyFilter } from './filter.ts';
-import { sendFamilyAccessEmail, sendFamilyInviteEmail, startDataExport } from './flows.ts';
+import {
+  sendFamilyAccessEmail,
+  sendFamilyInviteEmail,
+  sendGuardianRemovalRequestEmail,
+  sendGuardianRemovedEmail,
+  startDataExport,
+} from './flows.ts';
+import {
+  cancelGuardianRemoval,
+  decideGuardianRemoval,
+  guardianRemovalMode,
+  pendingGuardianRemoval,
+  requestGuardianRemoval,
+} from './graduation.ts';
 import { familyHeaders, familySignedOutHeaders, revokedHeaders } from './headers.ts';
 import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts';
 import { acceptLegalAsGuardian, pendingMaterialVersions } from './legal.ts';
 import { requestDeletion } from './lifecycle.ts';
 import { identityMetrics } from './metrics.ts';
 import type { Context } from './service.ts';
+import { signedIn } from './session-routes.ts';
 import { listSessions, revokeSessions } from './sessions.ts';
 import {
   FAMILY_CHILD_PAGE,
   FAMILY_INVITE_PAGE,
+  FAMILY_LEAVE_PAGE,
   FAMILY_MAGIC_LINK_PAGE,
   FAMILY_PAGE,
   FAMILY_SESSION_PAGE,
@@ -101,7 +117,150 @@ function checkbox(name: string, label: string, checked: boolean): string {
   return `<p><label><input type="checkbox" name="${escapeHtml(name)}" value="1"${checked ? ' checked' : ''}> ${escapeHtml(label)}</label></p>`;
 }
 
+async function familyLeavePage(ctx: Context, userId: string, message?: string): Promise<Response> {
+  const account = await findAccount(ctx.db, userId);
+  if (!account) {
+    return page(ctx, {
+      status: 404,
+      title: 'Account not found',
+      body: paragraph('This account does not exist.'),
+    });
+  }
+  const linked = await hasActiveGuardians(ctx.db, userId);
+  if (!linked) {
+    return page(ctx, {
+      title: 'Parent or guardian link',
+      body: `${message === undefined ? '' : alert(message)}
+${paragraph('This account has no parent or guardian link.')}`,
+    });
+  }
+  const pending = await pendingGuardianRemoval(ctx.db, userId);
+  if (pending !== undefined) {
+    return page(ctx, {
+      title: 'Waiting for approval',
+      body: `${message === undefined ? '' : alert(message)}
+${paragraph('A parent or guardian needs to approve removing this link.')}
+<form method="post" action="leave">
+<p><button type="submit" name="action" value="cancel">Cancel request</button></p>
+</form>`,
+    });
+  }
+  const mode = guardianRemovalMode(account.date_of_birth, {
+    consentAge: ctx.config.parental.consent_age,
+    adultAge: ctx.config.age.bands.adult,
+    graceMs: ctx.config.parental.graduation_grace,
+    now: new Date(),
+  });
+  if (mode === 'blocked') {
+    return page(ctx, {
+      title: 'Parent or guardian link',
+      body: `${message === undefined ? '' : alert(message)}
+${paragraph('The parent or guardian link cannot be removed yet.')}`,
+    });
+  }
+  return page(ctx, {
+    title: 'Parent or guardian link',
+    body: `${message === undefined ? '' : alert(message)}
+${paragraph(
+  mode === 'self'
+    ? 'You can remove the parent or guardian link without approval.'
+    : 'A parent or guardian must approve removing this link.',
+)}
+<form method="post" action="leave">
+<p><button type="submit">Remove the parent or guardian link</button></p>
+</form>`,
+  });
+}
+
 export function familyPageRoutes(router: Router<Context>): void {
+  router.route({
+    method: 'GET',
+    path: FAMILY_LEAVE_PAGE,
+    operation_id: 'familyLeavePage',
+    summary: 'Ask to remove the parent or guardian link',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity }) => {
+      const { userId } = signedIn(identity);
+      return familyLeavePage(ctx, userId);
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: FAMILY_LEAVE_PAGE,
+    operation_id: 'familyLeavePageSubmit',
+    summary: 'Submit a request to remove the parent or guardian link',
+    tags: ['pages'],
+    auth: 'session',
+    allow_account_states: SIGNED_IN_STATES,
+    rate_limit: 'global',
+    responses: htmlResponses,
+    handler: async ({ ctx, identity, request, log }) => {
+      const { userId } = signedIn(identity);
+      const account = await findAccount(ctx.db, userId);
+      if (!account) {
+        return page(ctx, {
+          status: 404,
+          title: 'Account not found',
+          body: paragraph('This account does not exist.'),
+        });
+      }
+      const form = await readForm(request);
+      if (form['action'] === 'cancel') {
+        const result = await cancelGuardianRemoval(ctx.db, { userId, now: new Date() });
+        if (result.status !== 'ok') {
+          return familyLeavePage(ctx, userId, 'There is no request waiting.');
+        }
+        log.info('guardian removal cancelled', { user_id: userId });
+        return familyLeavePage(ctx, userId, 'The request has been cancelled.');
+      }
+      const result = await requestGuardianRemoval(ctx.db, {
+        userId,
+        dateOfBirth: account.date_of_birth,
+        bands: ctx.config.age.bands,
+        consentAge: ctx.config.parental.consent_age,
+        graceMs: ctx.config.parental.graduation_grace,
+        now: new Date(),
+      });
+      if (result.status === 'none') {
+        return familyLeavePage(ctx, userId, 'This account has no parent or guardian link.');
+      }
+      if (result.status === 'blocked') {
+        return familyLeavePage(ctx, userId, 'The parent or guardian link cannot be removed yet.');
+      }
+      if (result.status === 'already_pending') {
+        return familyLeavePage(ctx, userId, 'A request is already waiting for approval.');
+      }
+      if (result.status === 'pending') {
+        await sendGuardianRemovalRequestEmail(ctx, {
+          childUserId: userId,
+          username: account.username,
+          locale: account.locale,
+        });
+        ctx.outbox.wake();
+        identityMetrics(ctx.metrics).graduation('removal_requested');
+        log.info('guardian removal requested', { user_id: userId });
+        return familyLeavePage(ctx, userId, 'A parent or guardian needs to approve this request.');
+      }
+      await sendGuardianRemovedEmail(ctx, {
+        username: account.username,
+        locale: account.locale,
+        guardians: result.guardians,
+      });
+      ctx.outbox.wake();
+      identityMetrics(ctx.metrics).graduation('removed');
+      log.info('guardian link removed', { user_id: userId });
+      return page(ctx, {
+        title: 'Parent or guardian link removed',
+        body: paragraph('The parent or guardian link has been removed.'),
+      });
+    },
+  });
+
   router.route({
     method: 'GET',
     path: FAMILY_MAGIC_LINK_PAGE,
@@ -608,6 +767,36 @@ ${hiddenInput('token', query.token)}
           log.info('family guardian revoked', { user_id: account.id });
           return childDashboard(ctx, actor, account.id, 'Parent or guardian removed.');
         }
+        case 'approve_removal':
+        case 'decline_removal': {
+          const result = await decideGuardianRemoval(ctx.db, {
+            childUserId: account.id,
+            approve: action === 'approve_removal',
+            actor: eventActor,
+            now,
+          });
+          if (result.status === 'not_found') {
+            return childDashboard(ctx, actor, account.id, 'That request is no longer waiting.');
+          }
+          if (action === 'approve_removal') {
+            await sendGuardianRemovedEmail(ctx, {
+              username: account.username,
+              locale: account.locale,
+              guardians: result.guardians ?? [],
+            });
+            ctx.outbox.wake();
+            identityMetrics(ctx.metrics).graduation('removed');
+            log.info('guardian removal approved', { user_id: account.id });
+            return page(ctx, {
+              title: 'Parent or guardian link removed',
+              body: `${paragraph('The parent or guardian link has been removed.')}
+<p><a href="${escapeHtml(FAMILY_PAGE)}">Family dashboard</a></p>`,
+            });
+          }
+          ctx.outbox.wake();
+          log.info('guardian removal declined', { user_id: account.id });
+          return childDashboard(ctx, actor, account.id, 'The request was declined.');
+        }
         default:
           return childDashboard(ctx, actor, account.id);
       }
@@ -640,20 +829,22 @@ async function childDashboard(
   const account = guardian ? await findAccount(ctx.db, childId) : undefined;
   if (!guardian || !account || account.state === 'deleted') return familyChildMissing(ctx);
   const now = new Date();
-  const [controls, pendingChange, pendingLegal, activity, guardians, sessions] = await Promise.all([
-    loadParentalControls(ctx.db, account.id),
-    pendingUsernameChange(ctx.db, account.id),
-    pendingMaterialVersions(ctx.db, account.id, now),
-    childActivity(ctx.db, { childUserId: account.id, now }),
-    listGuardians(ctx.db, account.id),
-    listSessions(ctx.db, {
-      userId: account.id,
-      idleTimeout: ctx.config.cookies.idle_timeout,
-      now,
-      after: undefined,
-      limit: 100,
-    }),
-  ]);
+  const [controls, pendingChange, pendingRemoval, pendingLegal, activity, guardians, sessions] =
+    await Promise.all([
+      loadParentalControls(ctx.db, account.id),
+      pendingUsernameChange(ctx.db, account.id),
+      pendingGuardianRemoval(ctx.db, account.id),
+      pendingMaterialVersions(ctx.db, account.id, now),
+      childActivity(ctx.db, { childUserId: account.id, now }),
+      listGuardians(ctx.db, account.id),
+      listSessions(ctx.db, {
+        userId: account.id,
+        idleTimeout: ctx.config.cookies.idle_timeout,
+        now,
+        after: undefined,
+        limit: 100,
+      }),
+    ]);
   const current = {
     ...(controls ?? DEFAULT_PARENTAL_CONTROLS),
     public_profile: account.public_profile,
@@ -681,6 +872,14 @@ ${hiddenInput('session_id', row.id)}
 ${hiddenInput('request_id', pendingChange.id)}
 <p><button type="submit" name="action" value="approve_username">Approve username</button>
 <button type="submit" name="action" value="decline_username">Decline</button></p>
+</form>`;
+  const removalBlock =
+    pendingRemoval === undefined
+      ? ''
+      : `${paragraph('This young person asked to remove the parent or guardian link.')}
+<form method="post" action="${escapeHtml(account.id)}">
+<p><button type="submit" name="action" value="approve_removal">Approve removal</button>
+<button type="submit" name="action" value="decline_removal">Decline</button></p>
 </form>`;
   const legalBlock =
     pendingLegal.length === 0
@@ -724,6 +923,7 @@ ${checkbox('leaderboard_visible', 'Show on leaderboards', current.leaderboard_vi
 <h2>Username</h2>
 ${paragraph(`Current username: ${account.username ?? 'none yet'}.`)}
 ${usernameBlock}
+${removalBlock}
 <h2>Legal</h2>
 ${legalBlock || paragraph('No documents are waiting.')}
 <h2>Sessions</h2>

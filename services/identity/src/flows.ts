@@ -21,8 +21,15 @@ import {
   markActivitySummarySent,
   requestUsernameChange,
   utcDateString,
+  type Guardian,
 } from './family.ts';
 import { applyFilter } from './filter.ts';
+import {
+  childrenNeedingGraduationNotice,
+  markGraduationNotified,
+  markRemovalReminded,
+  pendingRemovalsForReminder,
+} from './graduation.ts';
 import { acceptLegalDocuments } from './legal.ts';
 import { requestDeletion } from './lifecycle.ts';
 import {
@@ -76,6 +83,8 @@ import {
   FAMILY_INVITE_PAGE,
   FAMILY_SESSION_PAGE,
   familyChildUrl,
+  familyDashboardUrl,
+  familyLeaveUrl,
   GUARDIAN_APPROVE_PAGE,
   GUARDIAN_DECLINE_PAGE,
   legalDocumentUrl,
@@ -1178,6 +1187,116 @@ export async function sendFamilyActivitySummaries(ctx: Context, now = new Date()
           sign_ins: activity.sign_ins,
           link,
         },
+      });
+      sent += 1;
+    }
+  }
+  return sent;
+}
+
+async function notifyGuardiansOfRemoval(
+  ctx: Context,
+  options: { username: string | null; locale: string | null; guardians: Guardian[] },
+): Promise<void> {
+  const username = childLabel(options.username);
+  for (const guardian of options.guardians) {
+    if (guardian.status !== 'active') continue;
+    await queueEmail(ctx.bus, {
+      template: 'guardian_removed',
+      to: { address: guardian.email },
+      locale: options.locale ?? ctx.config.email.default_locale,
+      userId: guardian.user_id,
+      variables: { username },
+    });
+  }
+}
+
+export async function sendGuardianRemovalRequestEmail(
+  ctx: Context,
+  options: { childUserId: string; username: string | null; locale: string | null },
+): Promise<void> {
+  const guardians = await listActiveGuardians(ctx.db, options.childUserId);
+  const link = familyChildUrl(ctx.config, options.childUserId);
+  const username = childLabel(options.username);
+  for (const guardian of guardians) {
+    await queueEmail(ctx.bus, {
+      template: 'guardian_removal_request',
+      to: { address: guardian.email },
+      locale: options.locale ?? ctx.config.email.default_locale,
+      userId: guardian.user_id,
+      variables: { username, link },
+    });
+  }
+}
+
+export async function sendGuardianRemovedEmail(
+  ctx: Context,
+  options: { username: string | null; locale: string | null; guardians: Guardian[] },
+): Promise<void> {
+  await notifyGuardiansOfRemoval(ctx, options);
+}
+
+export async function sendGraduationNotices(ctx: Context, now = new Date()): Promise<number> {
+  const children = await childrenNeedingGraduationNotice(ctx.db, {
+    consentAge: ctx.config.parental.consent_age,
+    now,
+  });
+  const graceDays = expiresInDays(ctx.config.parental.graduation_grace);
+  let sent = 0;
+  for (const child of children) {
+    const marked = await markGraduationNotified(ctx.db, {
+      userId: child.user_id,
+      consentAge: ctx.config.parental.consent_age,
+      now,
+    });
+    if (!marked) continue;
+    const leaveLink = familyLeaveUrl(ctx.config);
+    const familyLink = familyDashboardUrl(ctx.config);
+    await queueEmail(ctx.bus, {
+      template: 'graduation',
+      to: { address: child.email },
+      locale: child.locale ?? ctx.config.email.default_locale,
+      userId: child.user_id,
+      variables: { grace_days: graceDays, link: leaveLink },
+    });
+    const guardians = await listActiveGuardians(ctx.db, child.user_id);
+    for (const guardian of guardians) {
+      await queueEmail(ctx.bus, {
+        template: 'guardian_graduation',
+        to: { address: guardian.email },
+        locale: child.locale ?? ctx.config.email.default_locale,
+        userId: guardian.user_id,
+        variables: {
+          username: childLabel(child.username),
+          grace_days: graceDays,
+          link: familyLink,
+        },
+      });
+    }
+    sent += 1;
+  }
+  return sent;
+}
+
+export async function sendGuardianRemovalReminders(
+  ctx: Context,
+  now = new Date(),
+): Promise<number> {
+  const pending = await pendingRemovalsForReminder(ctx.db, now);
+  let sent = 0;
+  for (const row of pending) {
+    const marked = await markRemovalReminded(ctx.db, { id: row.id, now });
+    if (!marked) continue;
+    const guardians = await listActiveGuardians(ctx.db, row.user_id);
+    const link = familyChildUrl(ctx.config, row.user_id);
+    const username = childLabel(row.username);
+    for (const guardian of guardians) {
+      await queueEmail(ctx.bus, {
+        template: 'guardian_removal_request',
+        to: { address: guardian.email },
+        locale: row.locale ?? ctx.config.email.default_locale,
+        userId: guardian.user_id,
+        variables: { username, link },
       });
       sent += 1;
     }

@@ -241,6 +241,30 @@ export function parentalConsentGrantedEvent(userId: string): NewEvent<Record<str
   };
 }
 
+export function parentalConsentRevokedEvent(
+  userId: string,
+  actor: EventActor = { type: 'system', id: 'identity' },
+): NewEvent<Record<string, never>> {
+  return {
+    type: IDENTITY_EVENTS.parentalConsentRevoked,
+    actor,
+    subject: { type: 'user', id: userId },
+    data: {},
+  };
+}
+
+export function parentalConsentRemovalRequestedEvent(
+  userId: string,
+  actor: EventActor = { type: 'user', id: userId },
+): NewEvent<Record<string, never>> {
+  return {
+    type: IDENTITY_EVENTS.parentalConsentRemovalRequested,
+    actor,
+    subject: { type: 'user', id: userId },
+    data: {},
+  };
+}
+
 export function auditRecordedEvent(
   actor: EventActor,
   data: AuditRecordedData,

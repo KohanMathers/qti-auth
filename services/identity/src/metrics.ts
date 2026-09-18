@@ -16,6 +16,7 @@ export type AdminUserAction =
 export type DeletionEvent = 'requested' | 'cancelled' | 'completed';
 export type DataExportResult = 'ready' | 'failed' | 'unavailable';
 export type ParentalConsentResult = 'requested' | 'granted' | 'declined' | 'expired';
+export type GraduationEvent = 'notified' | 'removal_requested' | 'removed';
 
 export interface IdentityMetrics {
   magicLink: (event: MagicLinkEvent) => void;
@@ -36,6 +37,7 @@ export interface IdentityMetrics {
   deletion: (event: DeletionEvent, count?: number) => void;
   dataExport: (status: DataExportResult) => void;
   parentalConsent: (result: ParentalConsentResult, count?: number) => void;
+  graduation: (event: GraduationEvent, count?: number) => void;
   familySession: () => void;
   ageBandChanged: (count: number) => void;
   auditRecorded: () => void;
@@ -147,6 +149,11 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     name: 'qtiauth_family_sessions_total',
     help: 'Family dashboard sessions started from a magic link.',
   });
+  const graduations = metrics.counter({
+    name: 'qtiauth_parental_graduation_total',
+    help: 'Parental-control graduation, by event: notified, removal_requested or removed.',
+    labelNames: ['event'],
+  });
   const ageBandChanges = metrics.counter({
     name: 'qtiauth_age_band_changes_total',
     help: 'Age-band changes from the daily recompute or a staff date-of-birth edit.',
@@ -228,6 +235,9 @@ export function prometheusIdentityMetrics(metrics: Metrics): IdentityMetrics {
     },
     familySession: () => {
       familySessions.inc();
+    },
+    graduation: (event, count = 1) => {
+      if (count > 0) graduations.inc({ event }, count);
     },
     ageBandChanged: (count) => {
       if (count > 0) ageBandChanges.inc(count);

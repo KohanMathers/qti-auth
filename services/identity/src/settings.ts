@@ -53,6 +53,7 @@ export const FAMILY_MAGIC_LINK_PAGE = '/family/magic-link';
 export const FAMILY_SESSION_PAGE = '/family/session';
 export const FAMILY_INVITE_PAGE = '/family/invite';
 export const FAMILY_CHILD_PAGE = '/family/:child_id';
+export const FAMILY_LEAVE_PAGE = '/auth/family/leave';
 export const LEGAL_INDEX_PAGE = '/legal';
 export const LEGAL_ACCEPT_PAGE = '/legal/accept';
 export const LEGAL_DOCUMENT_PAGE = '/legal/:id';
@@ -290,6 +291,10 @@ export function legalDocumentUrl(config: Pick<IdentityConfig, 'surfaces'>, id: s
 
 export function familyDashboardUrl(config: Pick<IdentityConfig, 'surfaces'>): string {
   return new URL(accountPath(config, FAMILY_PAGE), accountOrigin(config)).toString();
+}
+
+export function familyLeaveUrl(config: Pick<IdentityConfig, 'surfaces'>): string {
+  return new URL(accountPath(config, FAMILY_LEAVE_PAGE), accountOrigin(config)).toString();
 }
 
 export function familyChildUrl(config: Pick<IdentityConfig, 'surfaces'>, childId: string): string {

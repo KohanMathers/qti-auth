@@ -25,7 +25,13 @@ import {
   type FamilyActor,
 } from './family.ts';
 import { applyFilter } from './filter.ts';
-import { sendFamilyAccessEmail, sendFamilyInviteEmail, startDataExport } from './flows.ts';
+import {
+  sendFamilyAccessEmail,
+  sendFamilyInviteEmail,
+  sendGuardianRemovedEmail,
+  startDataExport,
+} from './flows.ts';
+import { decideGuardianRemoval, pendingGuardianRemoval } from './graduation.ts';
 import { familyHeaders, familySignedOutHeaders, NO_STORE, revokedHeaders } from './headers.ts';
 import { acceptLegalAsGuardian, pendingMaterialVersions } from './legal.ts';
 import { requestDeletion } from './lifecycle.ts';
@@ -260,6 +266,7 @@ export function familyRoutes(router: Router<Context>): void {
           email: z.email(),
           controls: controlsSchema,
           pending_username_change: z.object({ id: z.uuid(), username: z.string() }).nullable(),
+          pending_removal: z.object({ id: z.uuid(), requested_at: z.iso.datetime() }).nullable(),
           pending_legal: legalPendingSchema,
         }),
       },
@@ -269,9 +276,10 @@ export function familyRoutes(router: Router<Context>): void {
       const actor = await familyActor(ctx, request, identity);
       const { account } = await managedChild(ctx, actor, params.child_id);
       const now = new Date();
-      const [controls, pendingChange, pendingLegal, children] = await Promise.all([
+      const [controls, pendingChange, pendingRemoval, pendingLegal, children] = await Promise.all([
         loadParentalControls(ctx.db, account.id),
         pendingUsernameChange(ctx.db, account.id),
+        pendingGuardianRemoval(ctx.db, account.id),
         pendingMaterialVersions(ctx.db, account.id, now),
         listFamilyChildren(ctx.db, actor, ctx.config.age.bands, now),
       ]);
@@ -290,6 +298,10 @@ export function familyRoutes(router: Router<Context>): void {
             pendingChange === undefined
               ? null
               : { id: pendingChange.id, username: pendingChange.username },
+          pending_removal:
+            pendingRemoval === undefined
+              ? null
+              : { id: pendingRemoval.id, requested_at: pendingRemoval.requested_at.toISOString() },
           pending_legal: presentLegal(pendingLegal),
         },
       };
@@ -821,6 +833,66 @@ export function familyRoutes(router: Router<Context>): void {
       if (result.status === 'last') throw new ProblemError('GUARDIAN_LAST');
       ctx.outbox.wake();
       log.info('family guardian revoked', { user_id: account.id });
+      return { status: 204, headers: NO_STORE };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/family/:child_id/removal/approve',
+    operation_id: 'approveFamilyRemoval',
+    summary: 'Approve a young person’s request to remove the parent or guardian link',
+    tags: ['family'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { params: childParam },
+    responses: { 204: { description: 'The parent or guardian link has been removed' } },
+    errors: ['FAMILY_SESSION_REQUIRED', 'FAMILY_CHILD_NOT_FOUND', 'GUARDIAN_REMOVAL_NOT_FOUND'],
+    handler: async ({ ctx, request, identity, params, log }) => {
+      const actor = await familyActor(ctx, request, identity);
+      const { account } = await managedChild(ctx, actor, params.child_id);
+      const result = await decideGuardianRemoval(ctx.db, {
+        childUserId: account.id,
+        approve: true,
+        actor: familyEventActor(actor),
+        now: new Date(),
+      });
+      if (result.status === 'not_found') throw new ProblemError('GUARDIAN_REMOVAL_NOT_FOUND');
+      await sendGuardianRemovedEmail(ctx, {
+        username: account.username,
+        locale: account.locale,
+        guardians: result.guardians ?? [],
+      });
+      ctx.outbox.wake();
+      identityMetrics(ctx.metrics).graduation('removed');
+      log.info('guardian removal approved', { user_id: account.id });
+      return { status: 204, headers: NO_STORE };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/family/:child_id/removal/decline',
+    operation_id: 'declineFamilyRemoval',
+    summary: 'Decline a young person’s request to remove the parent or guardian link',
+    tags: ['family'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { params: childParam },
+    responses: { 204: { description: 'The parent or guardian link stays in place' } },
+    errors: ['FAMILY_SESSION_REQUIRED', 'FAMILY_CHILD_NOT_FOUND', 'GUARDIAN_REMOVAL_NOT_FOUND'],
+    handler: async ({ ctx, request, identity, params, log }) => {
+      const actor = await familyActor(ctx, request, identity);
+      const { account } = await managedChild(ctx, actor, params.child_id);
+      const result = await decideGuardianRemoval(ctx.db, {
+        childUserId: account.id,
+        approve: false,
+        actor: familyEventActor(actor),
+        now: new Date(),
+      });
+      if (result.status === 'not_found') throw new ProblemError('GUARDIAN_REMOVAL_NOT_FOUND');
+      ctx.outbox.wake();
+      log.info('guardian removal declined', { user_id: account.id });
       return { status: 204, headers: NO_STORE };
     },
   });

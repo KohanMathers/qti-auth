@@ -43,6 +43,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './database.ts';
 import { ACTIVITY_SUMMARY_JOB } from './family.ts';
+import { GRADUATION_JOB, REMOVAL_REMINDERS_JOB } from './graduation.ts';
 import { GET_LEGAL_HOLD_METHOD, PLACE_LEGAL_HOLD_METHOD } from './legal-holds.ts';
 import { PURGE_JOB } from './lifecycle.ts';
 import { EXPIRE_PENDING_JOB } from './parental.ts';
@@ -1525,6 +1526,148 @@ describe('family dashboard', () => {
   });
 });
 
+describe('graduation', () => {
+  const childDob = `${String(new Date().getUTCFullYear() - 10)}-01-01`;
+
+  function yearsAgo(years: number, extraDays = 0): string {
+    const now = new Date();
+    return new Date(
+      Date.UTC(now.getUTCFullYear() - years, now.getUTCMonth(), now.getUTCDate() - extraDays),
+    )
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  async function signUpChild(email: string, guardianEmail: string): Promise<SignedIn> {
+    const verify = await post('/api/v1/auth/magic-link/verify', { token: await linkToken(email) });
+    const next = (await verify.json()) as { signup_token: string };
+    secrets.push(next.signup_token);
+    const signup = await post('/api/v1/auth/magic-link/signup', {
+      signup_token: next.signup_token,
+      date_of_birth: childDob,
+      guardian_email: guardianEmail,
+    });
+    expect(signup.status).toBe(201);
+    return finish(signup);
+  }
+
+  async function approveChild(guardianEmail: string): Promise<void> {
+    const job = await emails.nextJob(guardianEmail, 'parental_consent');
+    const token = new URL(String(job.variables['approve_link'])).searchParams.get('token') ?? '';
+    secrets.push(token);
+    const approved = await post('/api/v1/auth/parental-consent/approve', {
+      token,
+      date_of_birth: '1980-01-01',
+    });
+    expect(approved.status).toBe(204);
+  }
+
+  async function setDateOfBirth(userId: string, dateOfBirth: string): Promise<void> {
+    await identity.context.db
+      .updateTable('users')
+      .set({ date_of_birth: dateOfBirth })
+      .where('id', '=', userId)
+      .execute();
+  }
+
+  it('notifies the child and guardian at consent_age, and keeps the link during the grace period', async () => {
+    const child = await signUpChild('grad-child@example.com', 'grad-parent@example.com');
+    await approveChild('grad-parent@example.com');
+    await setDateOfBirth(child.userId, yearsAgo(13));
+    await publishCronTick(gateway.js, GRADUATION_JOB, new Date());
+    await emails.nextJob('grad-child@example.com', 'graduation');
+    await emails.nextJob('grad-parent@example.com', 'guardian_graduation');
+    await publishCronTick(gateway.js, GRADUATION_JOB, new Date());
+    const asChild = signedInAs(child.userId, child.sessionId);
+    const me = await call('/api/v1/me', { as: asChild });
+    expect(await me.json()).toMatchObject({
+      family: { pending_removal: null, grace_ends_at: expect.any(String) as unknown },
+    });
+    const refused = await post('/api/v1/me/family/removal', {}, asChild);
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: 'GUARDIAN_REMOVAL_NOT_ALLOWED' });
+  });
+
+  it('lets a 14-year-old request removal only with guardian approval', async () => {
+    const child = await signUpChild('teen-child@example.com', 'teen-parent@example.com');
+    await approveChild('teen-parent@example.com');
+    await setDateOfBirth(child.userId, yearsAgo(14));
+    const asChild = signedInAs(child.userId, child.sessionId);
+    const requested = await post('/api/v1/me/family/removal', {}, asChild);
+    expect(requested.status).toBe(202);
+    expect(await requested.json()).toMatchObject({ status: 'pending_guardian_approval' });
+    await emails.nextJob('teen-parent@example.com', 'guardian_removal_request');
+    const again = await post('/api/v1/me/family/removal', {}, asChild);
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ code: 'GUARDIAN_REMOVAL_PENDING' });
+
+    const start = await post('/api/v1/auth/family/magic-link', {
+      email: 'teen-parent@example.com',
+    });
+    expect(start.status).toBe(202);
+    const access = await emails.nextJob('teen-parent@example.com', 'family_access');
+    const token = new URL(String(access.variables['link'])).searchParams.get('token') ?? '';
+    secrets.push(token);
+    const opened = await post('/api/v1/auth/family/session', { token });
+    const familyToken = opened.headers.get(FAMILY_TOKEN_HEADER) ?? '';
+    secrets.push(familyToken);
+    const detail = await call(`/api/v1/family/${child.userId}`, {
+      headers: { [FAMILY_TOKEN_HEADER]: familyToken },
+    });
+    expect(await detail.json()).toMatchObject({
+      pending_removal: { requested_at: expect.any(String) as unknown },
+    });
+    const approved = await call(`/api/v1/family/${child.userId}/removal/approve`, {
+      method: 'POST',
+      headers: { [FAMILY_TOKEN_HEADER]: familyToken },
+    });
+    expect(approved.status).toBe(204);
+    await emails.nextJob('teen-parent@example.com', 'guardian_removed');
+    const listed = await call('/api/v1/family', {
+      headers: { [FAMILY_TOKEN_HEADER]: familyToken },
+    });
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toEqual({ children: [] });
+    const me = await call('/api/v1/me', { as: asChild });
+    expect(await me.json()).toMatchObject({ family: { guardians: [], pending_removal: null } });
+  });
+
+  it('lets an 18-year-old remove the link without approval', async () => {
+    const child = await signUpChild('adult-child@example.com', 'adult-parent@example.com');
+    await approveChild('adult-parent@example.com');
+    await setDateOfBirth(child.userId, yearsAgo(18));
+    const removed = await post(
+      '/api/v1/me/family/removal',
+      {},
+      signedInAs(child.userId, child.sessionId),
+    );
+    expect(removed.status).toBe(204);
+    await emails.nextJob('adult-parent@example.com', 'guardian_removed');
+    const me = await call('/api/v1/me', { as: signedInAs(child.userId, child.sessionId) });
+    expect(await me.json()).toMatchObject({ family: { guardians: [], pending_removal: null } });
+  });
+
+  it('reminds guardians while a removal request is pending', async () => {
+    const child = await signUpChild('remind-child@example.com', 'remind-parent@example.com');
+    await approveChild('remind-parent@example.com');
+    await setDateOfBirth(child.userId, yearsAgo(14));
+    const requested = await post(
+      '/api/v1/me/family/removal',
+      {},
+      signedInAs(child.userId, child.sessionId),
+    );
+    expect(requested.status).toBe(202);
+    await emails.nextJob('remind-parent@example.com', 'guardian_removal_request');
+    await identity.context.db
+      .updateTable('guardian_removal_requests')
+      .set({ last_reminded_at: new Date(Date.now() - 8 * 86_400_000) })
+      .where('user_id', '=', child.userId)
+      .execute();
+    await publishCronTick(gateway.js, REMOVAL_REMINDERS_JOB, new Date());
+    await emails.nextJob('remind-parent@example.com', 'guardian_removal_request');
+  });
+});
+
 describe('log scrubbing', () => {
   it('keeps tokens, addresses and dates of birth out of the logs', () => {
     expect(logs.lines.length).toBeGreaterThan(0);
@@ -1552,6 +1695,14 @@ describe('log scrubbing', () => {
       'family-parent@example.com',
       'family-parent-2@example.com',
       'family-parent-3@example.com',
+      'grad-child@example.com',
+      'grad-parent@example.com',
+      'teen-child@example.com',
+      'teen-parent@example.com',
+      'adult-child@example.com',
+      'adult-parent@example.com',
+      'remind-child@example.com',
+      'remind-parent@example.com',
       '1985-07-04',
       PASSWORD,
       postgres.getPassword(),

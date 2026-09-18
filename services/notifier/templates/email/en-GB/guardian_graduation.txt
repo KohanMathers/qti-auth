@@ -1,0 +1,9 @@
+{{ username }} has reached the age where parental controls on {{ brand.product_name }} become optional in {{ grace_days }} days.
+
+Until then you can still manage their account. After that they can ask you to remove the parent or guardian link.
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

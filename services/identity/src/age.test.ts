@@ -7,6 +7,7 @@ import {
   agePrivacyDefaults,
   bandOn,
   dateOfBirthBounds,
+  dateWhenAgeReached,
   isLeapYear,
   isValidDateOfBirth,
   previousUtcDay,
@@ -25,6 +26,16 @@ describe('ageOn', () => {
   it('turns a 29 February birthday over on 1 March in other years', () => {
     expect(ageOn('2008-02-29', new Date('2026-02-28T12:00:00Z'))).toBe(17);
     expect(ageOn('2008-02-29', new Date('2026-03-01T12:00:00Z'))).toBe(18);
+  });
+});
+
+describe('dateWhenAgeReached', () => {
+  it('is the UTC calendar day they turn that age', () => {
+    expect(dateWhenAgeReached('2013-09-18', 13).toISOString()).toBe('2026-09-18T00:00:00.000Z');
+  });
+
+  it('rolls a 29 February birthday to 1 March in other years', () => {
+    expect(dateWhenAgeReached('2008-02-29', 18).toISOString()).toBe('2026-03-01T00:00:00.000Z');
   });
 });
 

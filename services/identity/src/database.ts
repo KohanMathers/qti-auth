@@ -140,6 +140,30 @@ export interface ParentalControlsTable {
 export const USERNAME_CHANGE_STATUSES = ['pending', 'approved', 'declined', 'cancelled'] as const;
 export type UsernameChangeStatus = (typeof USERNAME_CHANGE_STATUSES)[number];
 
+export const GUARDIAN_REMOVAL_STATUSES = [
+  'pending',
+  'approved',
+  'declined',
+  'cancelled',
+  'completed',
+] as const;
+export type GuardianRemovalStatus = (typeof GUARDIAN_REMOVAL_STATUSES)[number];
+
+export interface GraduationNoticesTable {
+  user_id: string;
+  notified_at: Date;
+  consent_age: number;
+}
+
+export interface GuardianRemovalRequestsTable {
+  id: string;
+  user_id: string;
+  status: GuardianRemovalStatus;
+  requested_at: Date;
+  decided_at: Date | null;
+  last_reminded_at: Date | null;
+}
+
 export interface UsernameChangeRequestsTable {
   id: string;
   user_id: string;
@@ -451,6 +475,8 @@ export interface Database {
   username_change_requests: UsernameChangeRequestsTable;
   family_sessions: FamilySessionsTable;
   family_activity_notices: FamilyActivityNoticesTable;
+  graduation_notices: GraduationNoticesTable;
+  guardian_removal_requests: GuardianRemovalRequestsTable;
   data_exports: DataExportsTable;
   legal_holds: LegalHoldsTable;
   deletion_ledger_outbox: DeletionLedgerOutboxTable;

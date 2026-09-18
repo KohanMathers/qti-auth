@@ -591,6 +591,7 @@ describe('parental', () => {
       consent_age: 13,
       pending_ttl: 1_209_600_000,
       max_guardians: 2,
+      graduation_grace: 2_592_000_000,
     });
   });
 });

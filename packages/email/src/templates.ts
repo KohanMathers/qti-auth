@@ -240,6 +240,42 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       link: z.url({ protocol: /^https?$/ }),
     }),
   },
+  graduation: {
+    description: 'Tell a young person they have reached the parental-consent age',
+    category: 'auth',
+    priority: 'high',
+    variables: z.object({
+      grace_days: z.int().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  guardian_graduation: {
+    description: 'Tell a parent or guardian that a child has reached the parental-consent age',
+    category: 'auth',
+    priority: 'high',
+    variables: z.object({
+      username: z.string().min(1),
+      grace_days: z.int().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  guardian_removal_request: {
+    description: 'Ask a parent or guardian to approve removing their link to a young person',
+    category: 'auth',
+    priority: 'high',
+    variables: z.object({
+      username: z.string().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  guardian_removed: {
+    description: 'Tell a parent or guardian that their link to a young person has ended',
+    category: 'auth',
+    priority: 'high',
+    variables: z.object({
+      username: z.string().min(1),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

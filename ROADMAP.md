@@ -564,9 +564,9 @@ Spec: §4.7
 ### P3.3 Graduation — M
 Spec: §4.7 (graduation)
 
-- [ ] Notifications at `consent_age`, grace period.
-- [ ] Guardian-link removal needs **young person request + guardian approval**, with reminders.
-- [ ] Self-service removal at the adult band.
+- [x] Notifications at `consent_age`, grace period.
+- [x] Guardian-link removal needs **young person request + guardian approval**, with reminders.
+- [x] Self-service removal at the adult band.
 
 **Done when:** a 14-year-old can't remove the link without guardian approval, and an 18-year-old can.
 
