@@ -1,9 +1,11 @@
+import { writeEvent } from '@qtiauth/bus';
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
 import type { Kysely } from 'kysely';
 
 import { recordIdentityUse } from './accounts.ts';
 import { challengePayload, insertChallenge, takeChallenge, useChallenge } from './challenges.ts';
 import type { Database } from './database.ts';
+import { type AuditRecordedData, auditRecordedEvent } from './events.ts';
 import {
   deleteTotp,
   findTotpIdentity,
@@ -97,6 +99,13 @@ export async function confirmTotpEnrol(
       key: options.key,
       now: options.now,
     });
+    await writeEvent<Database, AuditRecordedData>(
+      trx,
+      auditRecordedEvent(
+        { type: 'user', id: options.userId },
+        { action: 'user.totp.enabled', target_type: 'user', target_id: options.userId },
+      ),
+    );
     return {
       status: 'enabled' as const,
       recoveryCodes: await replaceRecoveryCodes(trx, options.userId, options.now),
@@ -124,7 +133,16 @@ export async function disableTotp(
   ) {
     return { status: 'wrong_code' };
   }
-  await deleteTotp(db, options.userId);
+  await db.transaction().execute(async (trx) => {
+    await deleteTotp(trx, options.userId);
+    await writeEvent<Database, AuditRecordedData>(
+      trx,
+      auditRecordedEvent(
+        { type: 'user', id: options.userId },
+        { action: 'user.totp.disabled', target_type: 'user', target_id: options.userId },
+      ),
+    );
+  });
   return { status: 'disabled' };
 }
 
@@ -322,6 +340,13 @@ export async function completePasskeyRegister(
       transports: verified.transports,
       now: options.now,
     });
+    await writeEvent<Database, AuditRecordedData>(
+      trx,
+      auditRecordedEvent(
+        { type: 'user', id: options.userId },
+        { action: 'user.passkey.registered', target_type: 'user', target_id: options.userId },
+      ),
+    );
     return { status: 'registered' as const, id };
   });
 }

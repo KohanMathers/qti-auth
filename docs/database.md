@@ -10,6 +10,9 @@ QTIAuth uses one PostgreSQL database with one schema per service. Each service c
 | `safety`   | `safety`   | `qtiauth_safety`   |
 | `support`  | `support`  | `qtiauth_support`  |
 | `games`    | `games`    | `qtiauth_games`    |
+| —          | —          | `qtiauth_audit`    |
+
+`database.audit` is not a schema. It is an extra role on the identity schema with `INSERT` and `SELECT` only on `identity.audit_log`, used by `qtiauth audit verify`. Identity’s service role cannot `UPDATE` or `TRUNCATE` that table.
 
 ## Connection settings
 
@@ -25,6 +28,7 @@ database:
   roles:
     identity: { user: qtiauth_identity, password: '${env:DB_IDENTITY_PASSWORD}' }
     # …one entry per schema
+  audit: { user: qtiauth_audit, password: '${env:DB_AUDIT_PASSWORD}' }
 ```
 
 Passwords are secrets, so reference them from `.env`. `pool.max` applies to each replica of each service, so the total can reach `pool.max × replicas × services`. Keep it below Postgres's `max_connections`.
@@ -44,7 +48,9 @@ It connects as the Postgres administrator (`POSTGRES_USER`, default `postgres`, 
 - sets the role's default `search_path` to its schema
 - grants `CONNECT` on the database
 
-It also revokes the default `PUBLIC` privileges on the database and on the `public` schema, so a role can connect to this database only if it was granted, and can't create objects outside its own schema. Every role needs a non-empty password. The command runs in one transaction and is safe to run again.
+It also creates `database.audit` (`qtiauth_audit` by default) the same way, with `search_path` set to `identity`, and grants that role `USAGE` on the identity schema. If `identity.audit_log` already exists, it grants the audit role `INSERT` and `SELECT` and revokes `UPDATE` and `TRUNCATE` from the identity role. Identity applies the same table grants when it starts, after migrations.
+
+It also revokes the default `PUBLIC` privileges on the database and on the `public` schema, so a role can connect to this database only if it was granted, and can't create objects outside its own schema. Every role needs a non-empty password, including `database.audit`. The command runs in one transaction and is safe to run again.
 
 ## Migrations
 

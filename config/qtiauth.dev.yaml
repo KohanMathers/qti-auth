@@ -15,6 +15,7 @@ database:
     safety: { password: '${env:DB_SAFETY_PASSWORD}' }
     support: { password: '${env:DB_SUPPORT_PASSWORD}' }
     games: { password: '${env:DB_GAMES_PASSWORD}' }
+  audit: { password: '${env:DB_AUDIT_PASSWORD}' }
 
 bus:
   password: '${env:NATS_PASSWORD}'

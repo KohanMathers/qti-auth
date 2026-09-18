@@ -3,7 +3,7 @@ import { startPostgres } from '@qtiauth/testing';
 import { type Kysely, sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createAdminDb, createDb, type DatabaseConfig } from './connect.ts';
+import { createAdminDb, createAuditDb, createDb, type DatabaseConfig } from './connect.ts';
 import { migrate } from './migrations.ts';
 import { provisionRoles } from './provision.ts';
 
@@ -29,6 +29,7 @@ beforeAll(async () => {
     roles: Object.fromEntries(
       DB_SCHEMAS.map((schema) => [schema, { password: `${schema}-password` }]),
     ),
+    audit: { password: 'audit-password' },
   });
   admin = createAdminDb(database, {
     user: container.getUsername(),
@@ -83,6 +84,46 @@ describe('provisionRoles', () => {
     expect(await errorCode(sql`create table public.leak (id int)`.execute(notify))).toBe('42501');
     expect(await errorCode(sql`create schema extra`.execute(notify))).toBe('42501');
     await expect(sql`create table notify.own (id int)`.execute(notify)).resolves.toBeDefined();
+  });
+
+  it('gives the audit role INSERT and SELECT only on identity.audit_log', async () => {
+    await sql`
+      create table audit_log (
+        seq bigint primary key,
+        event_id text not null unique,
+        occurred_at timestamptz not null,
+        actor_type text not null,
+        actor_id text not null,
+        action text not null,
+        target_type text not null,
+        target_id text not null,
+        prev_hash text not null,
+        row_hash text not null
+      )
+    `.execute(identity);
+    await provisionRoles(admin, database);
+
+    const audit = createAuditDb(database);
+    try {
+      await sql`
+        insert into audit_log
+        values (1, 'e1', now(), 'system', 'identity', 'role.updated', 'role', 'r1', '0', '0')
+      `.execute(audit);
+      const { rows } = await sql<{ event_id: string }>`select event_id from audit_log`.execute(
+        audit,
+      );
+      expect(rows).toEqual([{ event_id: 'e1' }]);
+      expect(await errorCode(sql`update audit_log set action = 'tampered'`.execute(audit))).toBe(
+        '42501',
+      );
+      expect(await errorCode(sql`delete from audit_log`.execute(audit))).toBe('42501');
+      expect(await errorCode(sql`update audit_log set action = 'tampered'`.execute(identity))).toBe(
+        '42501',
+      );
+      await expect(sql`delete from audit_log`.execute(identity)).resolves.toBeDefined();
+    } finally {
+      await audit.destroy();
+    }
   });
 
   it('refuses roles without a password', async () => {

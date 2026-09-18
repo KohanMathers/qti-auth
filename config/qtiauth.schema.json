@@ -601,6 +601,25 @@
             }
           },
           "additionalProperties": false
+        },
+        "audit": {
+          "description": "Postgres role for the audit log. Identity grants it INSERT and SELECT only on identity.audit_log.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "user": {
+              "default": "qtiauth_audit",
+              "description": "Postgres role for the audit log.",
+              "type": "string",
+              "minLength": 1
+            },
+            "password": {
+              "default": "",
+              "description": "The role's password. Reference a secret.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -2621,6 +2640,12 @@
         "filter_decisions": {
           "default": "30d",
           "description": "Keep text-filter decisions, including the raw input, for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "audit": {
+          "default": "730d",
+          "description": "Keep audit log rows for this long. Oldest rows are removed first. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }

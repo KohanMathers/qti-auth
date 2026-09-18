@@ -1,3 +1,4 @@
+import { writeEvent } from '@qtiauth/bus';
 import type { Kysely } from 'kysely';
 
 import { accountsWithEmail, activateVerifiedEmail, findAccount, lockEmail } from './accounts.ts';
@@ -8,6 +9,7 @@ import {
   type TokenFailure,
   useEmailToken,
 } from './email-tokens.ts';
+import { type AuditRecordedData, auditRecordedEvent } from './events.ts';
 
 export interface EmailChangeSettings {
   changeTtl: number;
@@ -154,6 +156,17 @@ async function applyEmailToken(
       .where('id', '=', userId)
       .execute();
     await activateVerifiedEmail(trx, userId, options.now);
+    await writeEvent<Database, AuditRecordedData>(
+      trx,
+      auditRecordedEvent(
+        { type: 'user', id: userId },
+        {
+          action: options.purpose === 'email_revert' ? 'user.email.reverted' : 'user.email.changed',
+          target_type: 'user',
+          target_id: userId,
+        },
+      ),
+    );
     return { status: 'applied' as const, userId, email: row.email };
   });
 }

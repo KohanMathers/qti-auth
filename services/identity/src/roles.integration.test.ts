@@ -128,7 +128,7 @@ describe('roles and permissions', () => {
     expect(admin?.builtin).toBe(true);
     expect(admin?.permissions).toEqual(['*']);
     expect(admin?.effective.map((item) => item.name).sort()).toEqual(
-      ['filter.manage', 'filter.read', 'roles.manage', 'users.edit_dob'].sort(),
+      ['audit.read', 'filter.manage', 'filter.read', 'roles.manage', 'users.edit_dob'].sort(),
     );
 
     const listed = await call('/api/v1/admin/permissions');

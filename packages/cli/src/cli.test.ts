@@ -139,5 +139,6 @@ describe('qtiauth db provision', () => {
     expect(out.stderr).toContain(
       'database.roles.identity.password, database.roles.notify.password',
     );
+    expect(out.stderr).toContain('database.audit.password');
   });
 });

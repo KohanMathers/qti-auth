@@ -47,6 +47,7 @@ database:
     safety: { user: qtiauth_safety, password: '${env:DB_SAFETY_PASSWORD}' }
     support: { user: qtiauth_support, password: '${env:DB_SUPPORT_PASSWORD}' }
     games: { user: qtiauth_games, password: '${env:DB_GAMES_PASSWORD}' }
+  audit: { user: qtiauth_audit, password: '${env:DB_AUDIT_PASSWORD}' }
 
 migrations:
   auto_apply: true
@@ -293,3 +294,4 @@ retention:
   tokens: 24h
   session_security_events: 90d
   filter_decisions: 30d
+  audit: 730d

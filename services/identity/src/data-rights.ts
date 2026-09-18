@@ -1,6 +1,7 @@
 import { type Kysely, sql } from 'kysely';
 
 import { dateOfBirthColumn } from './accounts.ts';
+import { exportAuditRecords } from './audit.ts';
 import type { Database } from './database.ts';
 
 function iso(date: Date | null): string | null {
@@ -43,6 +44,7 @@ export async function exportUser(
     ageAssurance,
     dateOfBirthChanges,
     roles,
+    audit,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -126,6 +128,7 @@ export async function exportUser(
       .where('user_roles.user_id', '=', userId)
       .orderBy('roles.slug')
       .execute(),
+    exportAuditRecords(db, userId),
   ]);
 
   return {
@@ -187,6 +190,14 @@ export async function exportUser(
       created_at: iso(row.created_at),
     })),
     roles: roles.map((row) => ({ slug: row.slug, name: row.name })),
+    audit: audit.map((row) => ({
+      occurred_at: iso(row.occurred_at),
+      actor_type: row.actor_type,
+      actor_id: row.actor_id,
+      action: row.action,
+      target_type: row.target_type,
+      target_id: row.target_id,
+    })),
   };
 }
 

@@ -542,6 +542,7 @@ database:
   roles:                        # one role per service schema (§2.3)
     identity: { user: qtiauth_identity, password: "${env:DB_IDENTITY_PASSWORD}" }
     # notify, oidc, safety, support, games likewise
+  audit: { user: qtiauth_audit, password: "${env:DB_AUDIT_PASSWORD}" }  # INSERT/SELECT on identity.audit_log (§4.15)
 
 migrations:
   auto_apply: true

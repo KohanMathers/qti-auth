@@ -46,6 +46,18 @@ export function createDb<DB>(database: DatabaseConfig, schema: DbSchema): Kysely
   return kysely(poolConfig(database, schema), `${database.name}|${schema}`);
 }
 
+export function auditPoolConfig(database: DatabaseConfig): pg.PoolConfig {
+  const credentials = database.audit.password !== '' ? database.audit : database.roles.identity;
+  return {
+    ...basePoolConfig(database, credentials, 'qtiauth-audit'),
+    options: '-c search_path=identity',
+  };
+}
+
+export function createAuditDb<DB>(database: DatabaseConfig): Kysely<DB> {
+  return kysely(auditPoolConfig(database), `${database.name}|audit`);
+}
+
 export function createAdminDb(
   database: DatabaseConfig,
   credentials: DbCredentials,

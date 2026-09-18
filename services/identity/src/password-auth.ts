@@ -23,7 +23,12 @@ import {
   type TokenFailure,
   useEmailToken,
 } from './email-tokens.ts';
-import { type UserCreatedData, userCreatedEvent } from './events.ts';
+import {
+  type AuditRecordedData,
+  auditRecordedEvent,
+  type UserCreatedData,
+  userCreatedEvent,
+} from './events.ts';
 import { hasSecondFactor, type SecondFactorMethod, secondFactorMethods } from './factors.ts';
 import {
   clearAuthFailures,
@@ -432,6 +437,13 @@ export async function resetPassword(
           now,
           except: session.id,
         });
+    await writeEvent<Database, AuditRecordedData>(
+      trx,
+      auditRecordedEvent(
+        { type: 'user', id: account.id },
+        { action: 'user.password.changed', target_type: 'user', target_id: account.id },
+      ),
+    );
     return { status: 'signed_in', userId: account.id, session, revoked };
   });
 }
@@ -550,6 +562,19 @@ export async function setAccountPassword(
     return { status: 'updated', added: false };
   }
   const hash = await hashPassword(options.password, settings.argon2);
-  await upsertPassword(db, options.userId, hash, now);
+  await db.transaction().execute(async (trx) => {
+    await upsertPassword(trx, options.userId, hash, now);
+    await writeEvent<Database, AuditRecordedData>(
+      trx,
+      auditRecordedEvent(
+        { type: 'user', id: options.userId },
+        {
+          action: hasPassword ? 'user.password.changed' : 'user.password.added',
+          target_type: 'user',
+          target_id: options.userId,
+        },
+      ),
+    );
+  });
   return { status: 'updated', added: !hasPassword };
 }

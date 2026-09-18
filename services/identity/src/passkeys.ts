@@ -1,5 +1,6 @@
 import { randomUUIDv7 } from 'node:crypto';
 
+import { writeEvent } from '@qtiauth/bus';
 import {
   type AuthenticationResponseJSON,
   generateAuthenticationOptions,
@@ -13,6 +14,7 @@ import {
 import type { Kysely } from 'kysely';
 
 import type { Database } from './database.ts';
+import { type AuditRecordedData, auditRecordedEvent } from './events.ts';
 
 export const PASSKEY_METHOD = 'passkey';
 export const PASSKEY_AMR = ['webauthn'];
@@ -303,13 +305,23 @@ export async function deletePasskey(
   db: Kysely<Database>,
   options: { id: string; userId: string },
 ): Promise<boolean> {
-  const result = await db
-    .deleteFrom('identities')
-    .where('id', '=', options.id)
-    .where('user_id', '=', options.userId)
-    .where('type', '=', PASSKEY_METHOD)
-    .executeTakeFirst();
-  return Number(result.numDeletedRows) === 1;
+  return db.transaction().execute(async (trx) => {
+    const result = await trx
+      .deleteFrom('identities')
+      .where('id', '=', options.id)
+      .where('user_id', '=', options.userId)
+      .where('type', '=', PASSKEY_METHOD)
+      .executeTakeFirst();
+    if (Number(result.numDeletedRows) !== 1) return false;
+    await writeEvent<Database, AuditRecordedData>(
+      trx,
+      auditRecordedEvent(
+        { type: 'user', id: options.userId },
+        { action: 'user.passkey.removed', target_type: 'user', target_id: options.userId },
+      ),
+    );
+    return true;
+  });
 }
 
 export async function passkeyCount(db: Kysely<Database>, userId: string): Promise<number> {

@@ -11,7 +11,7 @@ import {
 } from '@qtiauth/bus';
 import { checkOutboxContract } from '@qtiauth/bus/testing';
 import { sections } from '@qtiauth/config';
-import { IDENTITY_EVENTS, loadEventCatalog } from '@qtiauth/events';
+import { AUDIT_EVENTS, IDENTITY_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing';
 import {
   EXPORT_USER_METHOD,
@@ -906,6 +906,7 @@ describe('events, retention and data rights', () => {
         IDENTITY_EVENTS.userCreated,
         IDENTITY_EVENTS.sessionCreated,
         IDENTITY_EVENTS.sessionRevoked,
+        AUDIT_EVENTS.recorded,
       ]),
     );
   });

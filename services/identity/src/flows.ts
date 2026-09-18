@@ -486,6 +486,7 @@ export async function updatePassword(
       log.info('password change refused', { reason: result.status });
       break;
     case 'updated':
+      ctx.outbox.wake();
       log.info(result.added ? 'password added' : 'password changed', { user_id: input.userId });
       break;
   }
@@ -748,6 +749,7 @@ export async function finishEmailChange(
     settings: emailChangeSettings(ctx.config),
     now: new Date(),
   });
+  if (result.status === 'confirmed') ctx.outbox.wake();
   log.info(result.status === 'confirmed' ? 'email changed' : 'email change rejected', {
     reason: result.status,
   });
@@ -763,6 +765,7 @@ export async function finishEmailRevert(
     settings: emailChangeSettings(ctx.config),
     now: new Date(),
   });
+  if (result.status === 'reverted') ctx.outbox.wake();
   log.info(result.status === 'reverted' ? 'email change reverted' : 'email revert rejected', {
     reason: result.status,
   });

@@ -80,6 +80,19 @@ export interface DateOfBirthChangesTable {
   created_at: Generated<Date>;
 }
 
+export interface AuditLogTable {
+  seq: number;
+  event_id: string;
+  occurred_at: Date;
+  actor_type: string;
+  actor_id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  prev_hash: string;
+  row_hash: string;
+}
+
 export interface IdentitiesTable {
   id: string;
   user_id: string;
@@ -249,4 +262,5 @@ export interface Database {
   username_history: UsernameHistoryTable;
   age_assurance_results: AgeAssuranceResultsTable;
   date_of_birth_changes: DateOfBirthChangesTable;
+  audit_log: AuditLogTable;
 }

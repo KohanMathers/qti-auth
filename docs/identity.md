@@ -1,6 +1,6 @@
 # Identity
 
-Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, and assigns staff roles. Legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
+Identity owns accounts, sign-in and sessions. It always runs and uses the `identity` schema. So far it signs people up and in with passwords, magic links, passkeys and upstream providers (Google, GitHub, Discord, Steam and generic OIDC), offers TOTP, recovery codes, step-up, email changes and session security, filters public text, lets people claim and change usernames, computes age bands with self-declared age assurance, assigns staff roles, and stores the audit log. Legal documents and parental consent come in later releases (see [ROADMAP.md](../ROADMAP.md)).
 
 ## Settings
 
@@ -124,6 +124,7 @@ retention:
   tokens: 24h
   session_security_events: 90d
   filter_decisions: 30d
+  audit: 730d
 ```
 
 - `accounts.max_per_email` is how many accounts can share one email address, after normalization.
@@ -145,7 +146,7 @@ retention:
 - `security.step_up_window` is how recently a session must have reached `aal2` for a route that needs step-up, and for adding a password after a magic-link sign-in.
 - `security.require_2fa_for_permissions` is the staff permissions that require a passkey or TOTP. Matching accounts can sign in but only reach enrolment until they set one up. A grant of `*` counts.
 - `roles` are the built-in staff roles, keyed by slug. Identity seeds any missing slug on startup; after that they are edited in the admin API with `roles.manage`. `*` never matches permissions that must be granted by name, such as `safety.csea.access`.
-- `retention.sessions` is how long ended sessions are kept, `retention.tokens` how long used or expired emailed tokens are kept after they expire, `retention.session_security_events` how long session security log rows are kept, and `retention.filter_decisions` how long text-filter decisions (including the raw input) are kept.
+- `retention.sessions` is how long ended sessions are kept, `retention.tokens` how long used or expired emailed tokens are kept after they expire, `retention.session_security_events` how long session security log rows are kept, `retention.filter_decisions` how long text-filter decisions (including the raw input) are kept, and `retention.audit` how long audit log rows are kept (oldest first, so the remaining chain still verifies).
 - `features.auth.magic_link.enabled: false` turns magic links off. `features.auth.password.enabled: false` turns passwords off. `features.auth.passkeys.enabled: false` turns passkeys off. `features.auth.totp.enabled: false` turns authenticator-app sign-in off.
 - `features.session_security.enabled: false` turns session security checks off.
 - Each social provider is off until you enable it. Enabling Google, GitHub or Discord without `client_id` and `client_secret` fails config validation. Steam has no credentials. Generic OIDC providers are listed under `features.auth.social.generic_oidc`; their `id` must not collide with a built-in method.
@@ -390,6 +391,16 @@ The first admin is created with `docker compose run --rm identity qtiauth admin 
 | `GET /api/v1/admin/users/:user_id/roles` | Roles assigned to a user                                        |
 | `PUT /api/v1/admin/users/:user_id/roles` | Replace a user’s roles. Needs step-up                           |
 
+## Audit
+
+Services publish `qtiauth.audit.recorded.v1` for staff actions, security-sensitive user actions (password, 2FA, email) and administrative changes (roles, text-filter lists). Identity stores each event as an append-only row with a hash of the previous row. `database.audit` is an extra Postgres role with `INSERT` and `SELECT` only on `identity.audit_log`. Identity’s own role cannot `UPDATE` or `TRUNCATE` that table.
+
+`GET /api/v1/admin/audit` lists rows, newest first, filterable by `actor_id`, `actor_type`, `action`, `target_type`, `target_id`, `from` and `to`. It needs `audit.read`. `docker compose run --rm identity qtiauth audit verify` walks the chain and names the first row that does not match.
+
+| Endpoint                  | Does                                                   |
+| ------------------------- | ------------------------------------------------------ |
+| `GET /api/v1/admin/audit` | Filter the audit log by actor, action, target and date |
+
 Errors, on top of the [codes every service can return](services.md#errors):
 
 | Code                           | Status | When                                                                                   |
@@ -447,14 +458,15 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `qtiauth.identity.session.created.v1`       | Someone signed in                                                                                                                         |
 | `qtiauth.identity.session.revoked.v1`       | A session was ended by signing out (`logout`), by the user (`revoked`), by a newer sign-in (`evicted`) or by session security (`blocked`) |
 | `qtiauth.identity.session.flagged.v1`       | Session security challenged or blocked a session                                                                                          |
+| `qtiauth.audit.recorded.v1`                 | A staff or security-sensitive action. Identity stores these in the audit log                                                              |
 
-The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated` or `user.age_band_changed`. Schemas are in `packages/events/schemas/identity/`.
+The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated` or `user.age_band_changed`. Schemas are in `packages/events/schemas/identity/` and `packages/events/schemas/audit/`.
 
 ## Retention and data rights
 
-`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, and text-filter decisions `retention.filter_decisions` after they were recorded.
+`retention.sweep` deletes sessions and their bindings `retention.sessions` after they ended, emailed tokens and auth challenges `retention.tokens` after they expired, auth-failure counters `retention.tokens` after they were last updated, session security events `retention.session_security_events` after they were recorded, text-filter decisions `retention.filter_decisions` after they were recorded, and the oldest audit log rows `retention.audit` after they were recorded.
 
-A user's export has their account (including username, public profile, leaderboard visibility and security-notification flag), username history, age-assurance results, staff date-of-birth changes, assigned roles, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address.
+A user's export has their account (including username, public profile, leaderboard visibility and security-notification flag), username history, age-assurance results, staff date-of-birth changes, assigned roles, audit rows where they are the actor or the target, sign-in methods (without password hashes or TOTP secrets), sessions, session security events, any tokens still kept for their address, and how many recovery codes are unused. Erasure deletes the account, its username history, age-assurance results, date-of-birth changes, role assignments, sign-in methods, recovery codes, sessions, session security events, and the tokens and password-failure counters too unless another account uses the same address. Audit rows stay, so the hash chain remains intact.
 
 ## Metrics
 
@@ -477,8 +489,9 @@ A user's export has their account (including username, public profile, leaderboa
 | `qtiauth_filter_decisions_total`           | `rule`               |
 | `qtiauth_usernames_claimed_total`          | `action`             |
 | `qtiauth_age_band_changes_total`           |                      |
+| `qtiauth_audit_recorded_total`             |                      |
 
-Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
+Magic-link events are `sent`, `used`, `expired` (opened too late) and `invalid` (unknown or used already). Breach-check results are `rejected`, `passed` or `unavailable`. CAPTCHA results are `shown`, `solved` or `failed`. Two-factor `factor` is `totp`, `passkey` or `recovery`, and `result` is `success` or `failure`. Step-up results are `prompt`, `success` or `failure`. Filter `rule` is `allowlist`, `exact_block`, `dictionary`, `token_block`, `token_padded_loose`, `padded_loose` or `unknown`. Username `action` is `claim`, `change` or `reclaim`. Age-band changes are counted when the daily job or a staff date-of-birth edit moves someone to another band. `qtiauth_audit_recorded_total` counts rows stored from `audit.recorded`. A rise in `invalid` or failed sign-ins without a rise in `sent` suggests someone guessing. `qtiauth_sessions_active` and `qtiauth_accounts` are counted every minute.
 
 Logs never contain tokens, passwords, email addresses or dates of birth. User IDs are hashed as usual.
 
@@ -502,4 +515,4 @@ The gateway sends the flow cookie's value back to identity, and only to identity
 
 ### Tests
 
-`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults.
+`captureEmails` from `services/identity/src/testing.ts` consumes the high-priority email queue as the notifier would, so tests can follow magic links, verification links and reset links without running the notifier. `gateway.integration.test.ts` runs the whole flow through a real gateway, using `gatewayService` from `@qtiauth/gateway/testing`, including a country change that drops a session to `aal0` and restores the same session. `bind.integration.test.ts` does the same across three hostnames on two registrable domains. `age.integration.test.ts` covers a birthday that crosses 18 overnight, staff date-of-birth edits, and under-18 defaults. `audit.integration.test.ts` stores an `audit.recorded` event, filters it, and checks that `qtiauth audit verify` names a row after a direct Postgres edit.

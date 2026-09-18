@@ -516,6 +516,7 @@ describe('retention', () => {
       tokens: 86_400_000,
       session_security_events: 7_776_000_000,
       filter_decisions: 2_592_000_000,
+      audit: 63_072_000_000,
     });
   });
 });

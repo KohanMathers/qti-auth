@@ -1,3 +1,4 @@
+import { writeEvent } from '@qtiauth/bus';
 import {
   decodeCursor,
   pageOf,
@@ -9,9 +10,12 @@ import {
 import { normalize } from '@qtiauth/text-filter';
 import * as z from 'zod';
 
+import type { Database } from './database.ts';
+import { type AuditRecordedData, auditRecordedEvent } from './events.ts';
 import { addListEntry, listFilterDecisions, removeListEntry, requireTextFilter } from './filter.ts';
 import { NO_STORE } from './headers.ts';
 import type { Context } from './service.ts';
+import { signedIn } from './session-routes.ts';
 
 const position = z.object({ created_at: z.iso.datetime(), id: z.uuid() });
 const wordBody = z.object({
@@ -58,6 +62,22 @@ function listedWords(
   return [...items.entries()]
     .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([word, source]) => ({ word, source }));
+}
+
+async function writeFilterAudit(
+  ctx: Context,
+  actorId: string,
+  action: string,
+  word: string,
+): Promise<void> {
+  await writeEvent<Database, AuditRecordedData>(
+    ctx.db,
+    auditRecordedEvent(
+      { type: 'user', id: actorId },
+      { action, target_type: 'filter_entry', target_id: word },
+    ),
+  );
+  ctx.outbox.wake();
 }
 
 function decisionPage(rows: Awaited<ReturnType<typeof listFilterDecisions>>, limit: number) {
@@ -158,12 +178,13 @@ export function filterRoutes(router: Router<Context>): void {
     request: { body: wordBody },
     responses: { 200: { description: 'The entry', schema: listEntrySchema } },
     errors: ['FILTER_ENTRY_NOT_FOUND'],
-    handler: async ({ ctx, body }) => {
+    handler: async ({ ctx, identity, body }) => {
       const word = normalize(body.word);
       if (word === '') throw new ProblemError('FILTER_ENTRY_NOT_FOUND');
       const filter = requireTextFilter(ctx);
       filter.addAllow(word);
       await addListEntry(ctx.db, 'allow', word);
+      await writeFilterAudit(ctx, signedIn(identity).userId, 'filter.allowlist.added', word);
       return {
         status: 200,
         headers: NO_STORE,
@@ -184,12 +205,13 @@ export function filterRoutes(router: Router<Context>): void {
     request: { params: wordParam },
     responses: { 204: { description: 'Removed' } },
     errors: ['FILTER_ENTRY_NOT_FOUND'],
-    handler: async ({ ctx, params }) => {
+    handler: async ({ ctx, identity, params }) => {
       const word = normalizedWord(params.word);
       const removed = await removeListEntry(ctx.db, 'allow', word);
       if (!removed) throw new ProblemError('FILTER_ENTRY_NOT_FOUND');
       const filter = requireTextFilter(ctx);
       if (!filter.fileAllow.has(word)) filter.removeAllow(word);
+      await writeFilterAudit(ctx, signedIn(identity).userId, 'filter.allowlist.removed', word);
       return { status: 204 as const, headers: NO_STORE };
     },
   });
@@ -231,12 +253,13 @@ export function filterRoutes(router: Router<Context>): void {
     request: { body: wordBody },
     responses: { 200: { description: 'The entry', schema: listEntrySchema } },
     errors: ['FILTER_ENTRY_NOT_FOUND'],
-    handler: async ({ ctx, body }) => {
+    handler: async ({ ctx, identity, body }) => {
       const word = normalize(body.word);
       if (word === '') throw new ProblemError('FILTER_ENTRY_NOT_FOUND');
       const filter = requireTextFilter(ctx);
       filter.addExtraBlock(word);
       await addListEntry(ctx.db, 'extra_block', word);
+      await writeFilterAudit(ctx, signedIn(identity).userId, 'filter.blocklist.added', word);
       return {
         status: 200,
         headers: NO_STORE,
@@ -257,12 +280,13 @@ export function filterRoutes(router: Router<Context>): void {
     request: { params: wordParam },
     responses: { 204: { description: 'Removed' } },
     errors: ['FILTER_ENTRY_NOT_FOUND'],
-    handler: async ({ ctx, params }) => {
+    handler: async ({ ctx, identity, params }) => {
       const word = normalizedWord(params.word);
       const removed = await removeListEntry(ctx.db, 'extra_block', word);
       if (!removed) throw new ProblemError('FILTER_ENTRY_NOT_FOUND');
       const filter = requireTextFilter(ctx);
       if (!filter.fileExtra.has(word)) filter.removeExtraBlock(word);
+      await writeFilterAudit(ctx, signedIn(identity).userId, 'filter.blocklist.removed', word);
       return { status: 204 as const, headers: NO_STORE };
     },
   });

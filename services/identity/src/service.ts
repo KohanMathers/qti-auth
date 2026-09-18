@@ -10,6 +10,7 @@ import {
 
 import packageJson from '../package.json' with { type: 'json' };
 import { ageRoutes } from './age-routes.ts';
+import { auditRoutes } from './audit-routes.ts';
 import { authRoutes } from './auth-routes.ts';
 import type { Database } from './database.ts';
 import { IDENTITY_ERRORS } from './errors.ts';
@@ -57,6 +58,7 @@ export const definition = defineService({
     'filter.manage': { description: 'Change the text-filter allowlist and extra blocklist' },
     'users.edit_dob': { description: 'Change a user’s date of birth' },
     'roles.manage': { description: 'Create, edit and assign roles' },
+    'audit.read': { description: 'Read the audit log' },
   }),
   errors: IDENTITY_ERRORS,
 });
@@ -74,4 +76,5 @@ filterRoutes(router);
 usernameRoutes(router);
 ageRoutes(router);
 roleRoutes(router);
+auditRoutes(router);
 pageRoutes(router);

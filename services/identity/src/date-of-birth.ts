@@ -15,6 +15,8 @@ import {
 } from './age.ts';
 import type { Database } from './database.ts';
 import {
+  type AuditRecordedData,
+  auditRecordedEvent,
   type UserAgeBandChangedData,
   type UserUpdatedData,
   userAgeBandChangedEvent,
@@ -83,6 +85,14 @@ export async function editDateOfBirth(
       .execute();
 
     const actor = { type: 'user' as const, id: options.actorId };
+    await writeEvent<Database, AuditRecordedData>(
+      trx,
+      auditRecordedEvent(actor, {
+        action: 'user.date_of_birth.updated',
+        target_type: 'user',
+        target_id: options.userId,
+      }),
+    );
     await writeEvent<Database, UserUpdatedData>(
       trx,
       userUpdatedEvent(options.userId, { fields: ['date_of_birth'] }, actor),

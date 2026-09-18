@@ -1,8 +1,11 @@
+import { writeEvent } from '@qtiauth/bus';
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
 import * as z from 'zod';
 
 import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
+import type { Database } from './database.ts';
+import { type AuditRecordedData, auditRecordedEvent } from './events.ts';
 import { canRemovePasskey, lastSignInMethodError, totpEnrolled } from './factors.ts';
 import { finishTwoFactor, passkeysEnabled, totpEnabled, trackSession } from './flows.ts';
 import { NO_STORE, revokedHeaders, sessionHeaders } from './headers.ts';
@@ -247,6 +250,7 @@ export function factorRoutes(router: Router<Context>): void {
         case 'already_enabled':
           throw new ProblemError('TOTP_ALREADY_ENABLED');
         case 'enabled':
+          ctx.outbox.wake();
           return {
             status: 200,
             headers: revokedHeaders([sessionId]),
@@ -279,6 +283,7 @@ export function factorRoutes(router: Router<Context>): void {
       });
       if (result.status === 'not_enabled') throw new ProblemError('TOTP_NOT_ENABLED');
       if (result.status === 'wrong_code') throw new ProblemError('TOTP_INVALID');
+      ctx.outbox.wake();
       return { status: 204, headers: revokedHeaders([sessionId]) };
     },
   });
@@ -301,7 +306,22 @@ export function factorRoutes(router: Router<Context>): void {
     },
     handler: async ({ ctx, identity }) => {
       const { userId } = signedIn(identity);
-      const recoveryCodes = await replaceRecoveryCodes(ctx.db, userId, new Date());
+      const recoveryCodes = await ctx.db.transaction().execute(async (trx) => {
+        const codes = await replaceRecoveryCodes(trx, userId, new Date());
+        await writeEvent<Database, AuditRecordedData>(
+          trx,
+          auditRecordedEvent(
+            { type: 'user', id: userId },
+            {
+              action: 'user.recovery_codes.regenerated',
+              target_type: 'user',
+              target_id: userId,
+            },
+          ),
+        );
+        return codes;
+      });
+      ctx.outbox.wake();
       return { status: 200, headers: NO_STORE, body: { recovery_codes: recoveryCodes } };
     },
   });
@@ -412,6 +432,7 @@ export function factorRoutes(router: Router<Context>): void {
       });
       if (result.status === 'invalid') throw new ProblemError('PASSKEY_INVALID');
       identityMetrics(ctx.metrics).passkeyRegistration();
+      ctx.outbox.wake();
       return {
         status: 201,
         headers: revokedHeaders([sessionId]),
@@ -475,6 +496,7 @@ export function factorRoutes(router: Router<Context>): void {
       }
       const deleted = await deletePasskey(ctx.db, { id: params.passkey_id, userId });
       if (!deleted) throw new ProblemError('PASSKEY_NOT_FOUND');
+      ctx.outbox.wake();
       return { status: 204, headers: NO_STORE };
     },
   });

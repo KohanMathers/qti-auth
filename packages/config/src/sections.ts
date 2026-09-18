@@ -226,18 +226,18 @@ export const textFilter = z
 export const DB_SCHEMAS = ['identity', 'notify', 'oidc', 'safety', 'support', 'games'] as const;
 export type DbSchema = (typeof DB_SCHEMAS)[number];
 
-const dbRole = (schema: string) =>
+const dbRole = (name: string, purpose = `${name} schema`) =>
   z
     .strictObject({
       user: z
         .string()
         .min(1)
-        .default(`qtiauth_${schema}`)
-        .describe(`Postgres role for the ${schema} schema.`),
+        .default(`qtiauth_${name}`)
+        .describe(`Postgres role for the ${purpose}.`),
       password: z.string().default('').describe("The role's password. Reference a secret."),
     })
     .prefault({})
-    .describe(`Credentials for the service that owns the ${schema} schema.`);
+    .describe(`Credentials for the service that owns the ${purpose}.`);
 
 export const database = z
   .strictObject({
@@ -267,6 +267,9 @@ export const database = z
       )
       .prefault({})
       .describe('One role per service schema. Each role can only use its own schema.'),
+    audit: dbRole('audit', 'audit log').describe(
+      'Postgres role for the audit log. Identity grants it INSERT and SELECT only on identity.audit_log.',
+    ),
   })
   .prefault({})
   .describe('PostgreSQL connection.');
@@ -1539,6 +1542,7 @@ export const retention = z
       '30d',
       'Keep text-filter decisions, including the raw input, for this long.',
     ),
+    audit: duration('730d', 'Keep audit log rows for this long. Oldest rows are removed first.'),
   })
   .prefault({})
   .describe('How long data is kept. retention.sweep deletes anything older.');

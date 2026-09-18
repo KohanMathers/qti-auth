@@ -72,6 +72,12 @@ qtiauth lists audit [--config <path>] [--env-file <path>]
 
 `lists update` writes the pinned word lists into `text_filter.lists_dir`. `lists audit` prints dictionary words that contain a blocked substring. See [identity.md](identity.md#text-filter).
 
+```sh
+qtiauth audit verify [--config <path>] [--env-file <path>]
+```
+
+`audit verify` walks the identity audit log hash chain and exits non-zero if a row has been edited. Run it from the identity image. See [identity.md](identity.md#audit).
+
 ## Editor support
 
 `config/qtiauth.yaml` starts with a `yaml-language-server` comment pointing at the JSON Schema, so editors with YAML language support offer completion, descriptions and validation. If you keep your config elsewhere, point the comment at a copy of the schema.

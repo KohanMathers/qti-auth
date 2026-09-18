@@ -449,13 +449,13 @@ Spec: §4.14
 
 **Done when:** a role with `*` can't access anything requiring `safety.csea.access` (tested).
 
-### P2b.5 Audit log — M
+### P2b.5 Audit log — M ✅
 Spec: §4.15
 
-- [ ] `audit.recorded` consumer and store.
-- [ ] Hash chain, and an `INSERT`/`SELECT`-only role.
-- [ ] Filtering by actor, action, target and date.
-- [ ] `qtiauth audit verify`.
+- [x] `audit.recorded` consumer and store.
+- [x] Hash chain, and an `INSERT`/`SELECT`-only role.
+- [x] Filtering by actor, action, target and date.
+- [x] `qtiauth audit verify`.
 
 **Done when:** editing any audit row directly in Postgres makes `audit verify` fail and name the row.
 

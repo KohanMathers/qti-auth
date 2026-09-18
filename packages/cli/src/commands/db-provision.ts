@@ -10,7 +10,7 @@ export const ADMIN_PASSWORD_ENV = 'POSTGRES_PASSWORD';
 
 export const usage = `Usage: qtiauth db provision [--config <path>] [--env-file <path>]
 
-Creates or updates one Postgres role and schema per service (database.roles), so each service can only use its own schema. Connects as an administrator using $${ADMIN_USER_ENV} (default postgres) and $${ADMIN_PASSWORD_ENV}. Safe to run again, for example after changing a role's password.
+Creates or updates one Postgres role and schema per service (database.roles), plus the INSERT/SELECT-only audit role (database.audit). Connects as an administrator using $${ADMIN_USER_ENV} (default postgres) and $${ADMIN_PASSWORD_ENV}. Safe to run again, for example after changing a role's password.
 
 Options:
 ${configOptionsUsage}
@@ -41,7 +41,7 @@ export const dbProvision = configCommand({
       await admin.destroy();
     }
 
-    io.stdout(`Provisioned roles and schemas: ${DB_SCHEMAS.join(', ')}\n`);
+    io.stdout(`Provisioned roles and schemas: ${DB_SCHEMAS.join(', ')}, audit\n`);
     return EXIT_OK;
   },
 });

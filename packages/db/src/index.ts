@@ -1,5 +1,7 @@
 export {
+  auditPoolConfig,
   createAdminDb,
+  createAuditDb,
   createDb,
   type DatabaseConfig,
   type DbCredentials,
@@ -17,7 +19,7 @@ export {
   migrationStatus,
   planMigrations,
 } from './migrations.ts';
-export { ProvisionError, provisionRoles } from './provision.ts';
+export { applyAuditLogPrivileges, ProvisionError, provisionRoles } from './provision.ts';
 export { deletedRows } from './result.ts';
 export {
   migrateUpCommand,

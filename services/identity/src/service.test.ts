@@ -23,6 +23,7 @@ describe('identity service', () => {
       '0012_usernames',
       '0013_age',
       '0014_roles',
+      '0015_audit',
     ]);
   });
 
@@ -36,6 +37,7 @@ describe('identity service', () => {
       'DELETE /api/v1/me/identities/:identity_id',
       'DELETE /api/v1/me/passkeys/:passkey_id',
       'DELETE /api/v1/sessions/:session_id',
+      'GET /api/v1/admin/audit',
       'GET /api/v1/admin/filter/allowlist',
       'GET /api/v1/admin/filter/blocklist',
       'GET /api/v1/admin/filter/blocks',
@@ -188,6 +190,10 @@ describe('identity service', () => {
       auth: 'session',
       permissions: ['roles.manage'],
       step_up: true,
+    });
+    expect(route('GET', '/api/v1/admin/audit')).toMatchObject({
+      auth: 'session',
+      permissions: ['audit.read'],
     });
     expect(route('POST', '/api/v1/auth/social/:provider/start')).toMatchObject({
       auth: 'none',

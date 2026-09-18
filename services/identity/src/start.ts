@@ -1,5 +1,7 @@
-import { consumeCron, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
+import { consumeCron, consumeEvents, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
+import { applyAuditLogPrivileges } from '@qtiauth/db';
 import { queueEmail } from '@qtiauth/email';
+import { AUDIT_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { openGeoIp } from '@qtiauth/geoip';
 import { untraced } from '@qtiauth/observability';
 import {
@@ -15,6 +17,7 @@ import { closeValkey, connectValkey } from '@qtiauth/valkey';
 
 import { countAccountsByState } from './accounts.ts';
 import { AGE_RECOMPUTE_JOB, recomputeAgeBands } from './age-bands.ts';
+import { AUDIT_CONSUMER, insertAuditRecord, sweepAuditLog } from './audit.ts';
 import { attachBindStore, valkeyBindStore } from './bind-state.ts';
 import { sweepChallenges } from './challenges.ts';
 import type { Database } from './database.ts';
@@ -90,6 +93,7 @@ export function identityService(options: IdentityOptions = {}) {
         },
       });
       await seedRoles(db, config.roles);
+      await applyAuditLogPrivileges(db, config.database);
       const permissions = openPermissionCatalog(ctx, definition.permissions);
       stack.push({ stop: permissions.stop });
       const textFilter = await openTextFilter(
@@ -195,6 +199,10 @@ export function identityService(options: IdentityOptions = {}) {
                 retention: config.retention.filter_decisions,
                 now,
               });
+              const audit = await sweepAuditLog(db, {
+                retention: config.retention.audit,
+                now,
+              });
               const pruned = await pruneBusTables(db, config.bus);
               log.info('retention sweep finished', {
                 sessions,
@@ -203,6 +211,7 @@ export function identityService(options: IdentityOptions = {}) {
                 auth_failures: failures,
                 session_security_events: securityEvents,
                 filter_decisions: filterDecisions,
+                audit,
                 outbox: pruned.outbox,
                 processed_events: pruned.processedEvents,
               });
@@ -228,6 +237,24 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('age band recompute failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeEvents(bus, db, {
+            name: AUDIT_CONSUMER,
+            types: [AUDIT_EVENTS.recorded],
+            startFrom: 'all',
+            catalog: await loadEventCatalog(),
+            metrics: ctx.busMetrics,
+            handler: async (event, trx) => {
+              if (await insertAuditRecord(trx, event)) {
+                identityMetrics(ctx.metrics).auditRecorded();
+              }
+            },
+            onError: (error) => {
+              log.error('audit store failed', { error });
             },
           }),
         );
