@@ -242,6 +242,7 @@ describe('scheduler', () => {
     expect(jobs['reports.digest']).toEqual({ schedule: '*/30 * * * * *', enabled: true });
     expect(jobs['accounts.unlock_expired']).toEqual({ schedule: '* * * * *', enabled: true });
     expect(jobs['webhooks.retry']).toEqual({ schedule: '* * * * *', enabled: true });
+    expect(jobs['oidc.logout.retry']).toEqual({ schedule: '* * * * *', enabled: true });
   });
 
   it('checks job names, patterns and the time zone', () => {
@@ -626,6 +627,13 @@ describe('oidc', () => {
     expect(parsed.device_code_ttl).toBe(900_000);
     expect(parsed.device_interval).toBe(5_000);
     expect(parsed.pushed_authorization_ttl).toBe(60_000);
+    expect(parsed.logout).toEqual({
+      timeout: 10_000,
+      retry_window: 86_400_000,
+      retry_delay: 60_000,
+      max_retry_delay: 3_600_000,
+      allow_private_targets: false,
+    });
     expect(parsed.scopes['openid']).toEqual({ consent: 'Sign you in', claims: [] });
     expect(parsed.scopes['email']?.claims).toEqual(['email', 'email_verified']);
     expect(parsed.clients).toEqual({});
@@ -673,12 +681,48 @@ describe('oidc', () => {
       ),
     ).toEqual([]);
     expect(
+      messages(
+        oidc.safeParse({
+          clients: {
+            app: {
+              name: 'App',
+              type: 'public',
+              backchannel_logout_uri: 'http://example.com/logout',
+            },
+          },
+        }),
+      ),
+    ).toEqual([
+      'clients.app.backchannel_logout_uri: Must be an https URL, or http on 127.0.0.1 or [::1]',
+    ]);
+    expect(
+      messages(
+        oidc.safeParse({
+          clients: {
+            app: {
+              name: 'App',
+              type: 'public',
+              backchannel_logout_uri: 'http://127.0.0.1/backchannel',
+            },
+          },
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      messages(oidc.safeParse({ logout: { retry_delay: '1h', max_retry_delay: '1m' } })),
+    ).toEqual(['logout.max_retry_delay: Must be at least retry_delay']);
+    expect(
       oidc.parse({
         clients: {
           server: { name: 'Server', type: 'confidential', secret: 's' },
         },
       }).clients['server'],
-    ).toMatchObject({ redirect_uris: [], require_par: false });
+    ).toMatchObject({
+      redirect_uris: [],
+      require_par: false,
+      backchannel_logout_uri: null,
+      backchannel_logout_session_required: false,
+    });
   });
 
   it('keeps replaced keys published at least as long as live tokens', () => {

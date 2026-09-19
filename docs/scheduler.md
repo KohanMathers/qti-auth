@@ -35,6 +35,7 @@ Schedules are cron patterns with five fields, `minute hour day-of-month month da
 | `deletion_ledger.prune`         | identity             | `0 4 * * *`      | daily 04:00      |
 | `keys.rotate`                   | gateway, oidc, games | `0 0 * * *`      | daily 00:00      |
 | `webhooks.retry`                | notifier             | `* * * * *`      | every minute     |
+| `oidc.logout.retry`             | oidc                 | `* * * * *`      | every minute     |
 | `support.auto_close`            | support              | `0 * * * *`      | hourly           |
 | `achievements.recompute_rarity` | games                | `0 2 * * *`      | daily 02:00      |
 | `leaderboards.reset_periodic`   | games                | `* * * * *`      | every minute     |

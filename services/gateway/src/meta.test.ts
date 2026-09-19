@@ -54,6 +54,10 @@ describe('enabledFeatures', () => {
       feature: 'features.oidc.developer_portal.enabled',
       service: 'oidc',
     });
+    expect(features).toContainEqual({
+      feature: 'features.oidc.backchannel_logout.enabled',
+      service: 'oidc',
+    });
     expect(features).not.toContainEqual(
       expect.objectContaining({ feature: 'features.games.steam.enabled' }),
     );

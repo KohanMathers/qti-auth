@@ -12,6 +12,8 @@ export interface OidcMetrics {
   refreshReuse: () => void;
   deviceApproval: (result: 'granted' | 'denied') => void;
   introspection: (active: boolean) => void;
+  logoutDelivery: (status: 'retrying' | 'sent' | 'failed') => void;
+  logoutAttempt: (outcome: 'ok' | 'error', seconds: number) => void;
   keyRotated: () => void;
   keyLoaded: (createdAt: number) => void;
 }
@@ -60,6 +62,17 @@ export function prometheusOidcMetrics(metrics: Metrics): OidcMetrics {
     name: 'qtiauth_oidc_key_created_timestamp_seconds',
     help: 'When the key currently signing ID and access tokens was created, as a Unix timestamp.',
   });
+  const logoutDeliveries = metrics.counter({
+    name: 'qtiauth_oidc_logout_deliveries_total',
+    help: 'Back-channel logout deliveries, by status.',
+    labelNames: ['status'],
+  });
+  const logoutAttempts = metrics.histogram({
+    name: 'qtiauth_oidc_logout_delivery_duration_seconds',
+    help: 'Time spent POSTing a back-channel logout token, by outcome.',
+    labelNames: ['outcome'],
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60],
+  });
   return {
     authorization: (clientType, result) => {
       authorizations.inc({ client_type: clientType, result });
@@ -75,6 +88,12 @@ export function prometheusOidcMetrics(metrics: Metrics): OidcMetrics {
     },
     introspection: (active) => {
       introspections.inc({ active: active ? 'true' : 'false' });
+    },
+    logoutDelivery: (status) => {
+      logoutDeliveries.inc({ status });
+    },
+    logoutAttempt: (outcome, seconds) => {
+      logoutAttempts.observe({ outcome }, seconds);
     },
     keyRotated: () => {
       rotations.inc();

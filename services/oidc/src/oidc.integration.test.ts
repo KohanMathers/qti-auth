@@ -1,5 +1,8 @@
-import { type Bus, connectBus } from '@qtiauth/bus';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
+
+import { type Bus, connectBus, createEvent, publishEvent } from '@qtiauth/bus';
 import { sections } from '@qtiauth/config';
+import { IDENTITY_EVENTS } from '@qtiauth/events';
 import {
   definition as gatewayDefinition,
   gatewayService,
@@ -15,6 +18,7 @@ import { definition as identityDefinition } from '../../identity/src/service.ts'
 import { identityService } from '../../identity/src/start.ts';
 import { type CapturedEmails, captureEmails } from '../../identity/src/testing.ts';
 import type { Database } from './database.ts';
+import { LOGOUT_EVENT } from './logout.ts';
 import { pkceChallenge, pkceVerifier } from './pkce.ts';
 import { definition } from './service.ts';
 import { oidcService } from './start.ts';
@@ -25,12 +29,15 @@ const GAME = 'game';
 const STUDIO = 'studio';
 const SERVER = 'server';
 const PAR_APP = 'par_app';
+const LOGOUT_APP = 'logout_app';
 const STUDIO_SECRET = 'studio-secret';
 const SERVER_SECRET = 'server-secret';
 const PAR_SECRET = 'par-secret';
+const LOGOUT_SECRET = 'logout-secret';
 const GAME_REDIRECT = 'http://127.0.0.1/callback';
 const STUDIO_REDIRECT = 'https://app.example.com/callback';
 const PAR_REDIRECT = 'https://par.example.com/callback';
+const LOGOUT_REDIRECT = 'http://127.0.0.1/logout-callback';
 const surfaces = {
   account: { hosts: ['localhost'], base_path: '/', origins: [ORIGIN] },
   support: { hosts: ['localhost'], base_path: '/support', origins: [ORIGIN] },
@@ -48,6 +55,9 @@ let gatewayRunning: RunningService<typeof gatewayDefinition>;
 let gateway: RunningGateway;
 const logs = captureLogs();
 const secrets: string[] = [];
+const logoutInbox: string[] = [];
+let logoutReceiver: Server;
+let logoutUri: string;
 
 interface Browser {
   request: (path: string, init?: RequestInit) => Promise<Response>;
@@ -210,8 +220,51 @@ async function exchangeCode(
   return body;
 }
 
+function jwtPayload(token: string): Record<string, unknown> {
+  return JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')) as Record<
+    string,
+    unknown
+  >;
+}
+
+function jwtHeader(token: string): Record<string, unknown> {
+  return JSON.parse(Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8')) as Record<
+    string,
+    unknown
+  >;
+}
+
+function listenLogout(): Promise<Server> {
+  const server = createServer((request: IncomingMessage, response) => {
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk: Buffer) => chunks.push(chunk));
+    request.on('end', () => {
+      const body = Buffer.concat(chunks).toString('utf8');
+      const token = new URLSearchParams(body).get('logout_token');
+      if (token !== null) {
+        logoutInbox.push(token);
+        secrets.push(token);
+      }
+      response.statusCode = 200;
+      response.end();
+    });
+  });
+  return new Promise((resolve, reject) => {
+    server.listen(0, '127.0.0.1', () => {
+      resolve(server);
+    });
+    server.on('error', reject);
+  });
+}
+
 beforeAll(async () => {
   [postgres, nats, valkey] = await Promise.all([startPostgres(), startNats(), startValkey()]);
+  logoutReceiver = await listenLogout();
+  const address = logoutReceiver.address();
+  if (address === null || typeof address === 'string') {
+    throw new Error('logout receiver has no port');
+  }
+  logoutUri = `http://127.0.0.1:${String(address.port)}/backchannel`;
   const observability = {
     logs: { user_id_hash_key: 'integration' },
     metrics: { process_metrics: false },
@@ -247,7 +300,7 @@ beforeAll(async () => {
   });
 
   oidc = await startService(definition, {
-    ...oidcService(),
+    ...oidcService({ logoutPollInterval: 50 }),
     port: 0,
     tracing: false,
     logDestination: logs.destination,
@@ -294,6 +347,15 @@ beforeAll(async () => {
             redirect_uris: [PAR_REDIRECT],
             secret: PAR_SECRET,
           },
+          [LOGOUT_APP]: {
+            name: 'Logout App',
+            type: 'confidential',
+            first_party: true,
+            redirect_uris: [LOGOUT_REDIRECT],
+            secret: LOGOUT_SECRET,
+            backchannel_logout_uri: logoutUri,
+            backchannel_logout_session_required: true,
+          },
         },
       },
     }),
@@ -334,6 +396,12 @@ afterAll(async () => {
   await identity.stop();
   await emails.stop();
   await notifier.close();
+  await new Promise<void>((resolve, reject) => {
+    logoutReceiver.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
   await Promise.all([postgres.stop(), nats.stop(), valkey.stop()]);
   assertLogsScrubbed(logs.lines, secrets);
 });
@@ -356,6 +424,10 @@ describe('oidc through the gateway', () => {
     expect(document.authorization_endpoint).toBe(`${ORIGIN}/oauth/authorize`);
     expect(document.device_authorization_endpoint).toBe(`${ORIGIN}/oauth/device_authorization`);
     expect(document.pushed_authorization_request_endpoint).toBe(`${ORIGIN}/oauth/par`);
+    expect(document).toMatchObject({
+      backchannel_logout_supported: true,
+      backchannel_logout_session_supported: true,
+    });
     expect(document.grant_types_supported).toEqual(
       expect.arrayContaining([
         'authorization_code',
@@ -815,5 +887,115 @@ describe('oidc through the gateway', () => {
       secret: PAR_SECRET,
     });
     expect(tokens.id_token).toBeDefined();
+  });
+
+  it('POSTs a logout token when the user signs out on another surface', async () => {
+    const client = browser();
+    await signUpInBrowser(client, 'logout@example.com');
+    const me = (await (await client.request('/api/v1/me')).json()) as { id: string };
+    const { verifier, challenge } = pkce();
+    logoutInbox.length = 0;
+    const authorize = await client.request(authorizePath(LOGOUT_APP, LOGOUT_REDIRECT, challenge));
+    const code = locationOf(authorize).searchParams.get('code') ?? '';
+    secrets.push(code);
+    const tokens = await exchangeCode(client, {
+      clientId: LOGOUT_APP,
+      redirectUri: LOGOUT_REDIRECT,
+      code,
+      verifier,
+      secret: LOGOUT_SECRET,
+    });
+    expect(tokens.refresh_token).toBeDefined();
+
+    const signedOut = await client.request('/support/api/v1/auth/logout', { method: 'POST' });
+    expect(signedOut.status).toBe(204);
+
+    await vi.waitFor(
+      () => {
+        expect(logoutInbox.length).toBeGreaterThan(0);
+      },
+      { timeout: 10_000 },
+    );
+    const token = logoutInbox[0] ?? '';
+    expect(jwtHeader(token)).toMatchObject({ typ: 'logout+jwt', alg: 'ES256' });
+    const payload = jwtPayload(token);
+    expect(payload).toMatchObject({
+      iss: ORIGIN,
+      aud: LOGOUT_APP,
+      sub: me.id,
+      events: { [LOGOUT_EVENT]: {} },
+    });
+    expect(typeof payload['sid']).toBe('string');
+    expect(typeof payload['jti']).toBe('string');
+    expect(payload).not.toHaveProperty('nonce');
+
+    const userinfo = await client.request('/oauth/userinfo', {
+      headers: { authorization: `Bearer ${tokens.access_token}` },
+    });
+    expect(userinfo.status).toBe(401);
+
+    const refreshed = await client.request(
+      '/oauth/token',
+      form({
+        grant_type: 'refresh_token',
+        refresh_token: tokens.refresh_token ?? '',
+        client_id: LOGOUT_APP,
+        client_secret: LOGOUT_SECRET,
+      }),
+    );
+    expect(refreshed.status).toBe(200);
+    const next = (await refreshed.json()) as { access_token: string };
+    secrets.push(next.access_token);
+  });
+
+  it('revokes offline_access refresh tokens when the account is banned', async () => {
+    const client = browser();
+    await signUpInBrowser(client, 'banned-oidc@example.com');
+    const me = (await (await client.request('/api/v1/me')).json()) as { id: string };
+    const { verifier, challenge } = pkce();
+    logoutInbox.length = 0;
+    const authorize = await client.request(authorizePath(LOGOUT_APP, LOGOUT_REDIRECT, challenge));
+    const code = locationOf(authorize).searchParams.get('code') ?? '';
+    secrets.push(code);
+    const tokens = await exchangeCode(client, {
+      clientId: LOGOUT_APP,
+      redirectUri: LOGOUT_REDIRECT,
+      code,
+      verifier,
+      secret: LOGOUT_SECRET,
+    });
+
+    await publishEvent(
+      notifier.js,
+      createEvent({
+        type: IDENTITY_EVENTS.userBanned,
+        actor: { type: 'user', id: me.id },
+        subject: { type: 'user', id: me.id },
+        data: { reason: 'spam' },
+      }),
+    );
+
+    await vi.waitFor(
+      () => {
+        expect(logoutInbox.length).toBeGreaterThan(0);
+      },
+      { timeout: 10_000 },
+    );
+    expect(jwtPayload(logoutInbox[0] ?? '')).toMatchObject({
+      aud: LOGOUT_APP,
+      sub: me.id,
+    });
+
+    const refreshed = await client.request(
+      '/oauth/token',
+      form({
+        grant_type: 'refresh_token',
+        refresh_token: tokens.refresh_token ?? '',
+        client_id: LOGOUT_APP,
+        client_secret: LOGOUT_SECRET,
+      }),
+    );
+    expect(refreshed.status).toBe(400);
+    expect(await refreshed.json()).toMatchObject({ error: 'invalid_grant' });
   });
 });

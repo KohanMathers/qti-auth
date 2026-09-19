@@ -19,6 +19,8 @@ export interface ClientRecord {
   redirect_uris: string[];
   allowed_scopes: string[] | null;
   require_par: boolean;
+  backchannel_logout_uri: string | null;
+  backchannel_logout_session_required: boolean;
   suspended_at: Date | null;
   owner_user_id: string | null;
 }
@@ -31,6 +33,8 @@ export interface ClientSeed {
   redirect_uris: readonly string[];
   allowed_scopes: readonly string[] | null;
   require_par: boolean;
+  backchannel_logout_uri: string | null;
+  backchannel_logout_session_required: boolean;
   secret: string;
 }
 
@@ -53,6 +57,8 @@ export function presentedClient(row: ClientRow): ClientRecord {
     redirect_uris: urisOf(row.redirect_uris),
     allowed_scopes: scopesOf(row.allowed_scopes),
     require_par: row.require_par,
+    backchannel_logout_uri: row.backchannel_logout_uri,
+    backchannel_logout_session_required: row.backchannel_logout_session_required,
     suspended_at: row.suspended_at,
     owner_user_id: row.owner_user_id,
   };
@@ -125,6 +131,8 @@ export async function seedClients(
         redirect_uris: [...definition.redirect_uris],
         allowed_scopes: definition.allowed_scopes === null ? null : [...definition.allowed_scopes],
         require_par: definition.require_par,
+        backchannel_logout_uri: definition.backchannel_logout_uri,
+        backchannel_logout_session_required: definition.backchannel_logout_session_required,
         suspended_at: null,
         owner_user_id: null,
         created_at: now,

@@ -22,7 +22,7 @@ export const definition = defineService({
   name: 'oidc',
   version: packageJson.version,
   module: 'oidc',
-  sections: ['branding', 'surfaces', 'oidc', 'retention'],
+  sections: ['branding', 'surfaces', 'features', 'oidc', 'retention'],
   database: { schema: 'oidc', migrations: () => loadMigrations(MIGRATIONS_DIR) },
   permissions: definePermissions({
     'oidc.clients.verify': {

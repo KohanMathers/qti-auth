@@ -2,12 +2,13 @@ import type { Kysely, Transaction } from 'kysely';
 
 import type { Database } from './database.ts';
 import { iso } from './iso.ts';
+import { endAccount, exportLogoutDeliveries } from './logout.ts';
 
 export async function exportUser(
   db: Kysely<Database>,
   userId: string,
 ): Promise<Record<string, unknown>> {
-  const [consents, refresh, access, devices] = await Promise.all([
+  const [consents, refresh, access, devices, logouts] = await Promise.all([
     db
       .selectFrom('consents')
       .innerJoin('clients', 'clients.id', 'consents.client_id')
@@ -62,6 +63,7 @@ export async function exportUser(
       .where('device_authorizations.user_id', '=', userId)
       .orderBy('device_authorizations.created_at')
       .execute(),
+    exportLogoutDeliveries(db, userId),
   ]);
   return {
     consents: consents.map((row) => ({
@@ -94,10 +96,21 @@ export async function exportUser(
       expires_at: iso(row.expires_at),
       created_at: iso(row.created_at),
     })),
+    logout_deliveries: logouts,
   };
 }
 
-export async function eraseUser(trx: Transaction<Database>, userId: string): Promise<void> {
+export async function eraseUser(
+  trx: Transaction<Database>,
+  userId: string,
+  options: { deliverLogout?: boolean; now?: Date } = {},
+): Promise<void> {
+  await endAccount(trx, {
+    userId,
+    cause: 'deletion',
+    now: options.now ?? new Date(),
+    deliver: options.deliverLogout ?? false,
+  });
   await trx.deleteFrom('device_authorizations').where('user_id', '=', userId).execute();
   await trx.deleteFrom('authorization_requests').where('user_id', '=', userId).execute();
   await trx.deleteFrom('authorization_codes').where('user_id', '=', userId).execute();

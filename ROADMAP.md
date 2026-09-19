@@ -612,15 +612,15 @@ Spec: §6.1
 
 **Done when:** a CLI signs in with the device flow, and a service token can't reach a user-session route.
 
-### P4.4 Back-channel logout — M
+### P4.4 Back-channel logout — M ✅
 Spec: §6.1 (back-channel logout)
 
-- [ ] Client `backchannel_logout_uri` registration.
-- [ ] Logout tokens on session end from any cause (logout on any surface, revocation, lock, ban,
+- [x] Client `backchannel_logout_uri` registration.
+- [x] Logout tokens on session end from any cause (logout on any surface, revocation, lock, ban,
       deletion).
-- [ ] Queued delivery with retries and a per-client delivery log.
-- [ ] Refresh-token revocation rules (`offline_access` exceptions).
-- [ ] Discovery metadata.
+- [x] Queued delivery with retries and a per-client delivery log.
+- [x] Refresh-token revocation rules (`offline_access` exceptions).
+- [x] Discovery metadata.
 
 **Done when:** the conformance suite's back-channel logout tests pass, and logging out on `support`
 triggers a logout token to an app signed in via `account`.

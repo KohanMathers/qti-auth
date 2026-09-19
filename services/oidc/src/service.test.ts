@@ -12,6 +12,7 @@ describe('oidc service', () => {
       '0001_bus_tables',
       '0002_oidc',
       '0003_grants',
+      '0004_logout',
     ]);
   });
 

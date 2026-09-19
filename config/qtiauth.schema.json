@@ -2759,6 +2759,43 @@
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },
+        "logout": {
+          "description": "Back-channel logout delivery.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "timeout": {
+              "default": "10s",
+              "description": "Give up on a back-channel logout POST when the client is quiet for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "retry_window": {
+              "default": "24h",
+              "description": "Keep retrying a failed back-channel logout delivery for this long, then mark it failed. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "retry_delay": {
+              "default": "1m",
+              "description": "Delay before the first back-channel logout retry. Doubles with each attempt. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "max_retry_delay": {
+              "default": "1h",
+              "description": "Longest delay between back-channel logout retries. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "allow_private_targets": {
+              "default": false,
+              "description": "Allow logout URIs whose DNS resolves to private, loopback or link-local addresses. Loopback http URIs on 127.0.0.1 or [::1] are always allowed.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
         "scopes": {
           "description": "Scopes and the claims they release. Built-in scopes stay unless you replace them. Add extra scopes here.",
           "default": {},
@@ -2854,6 +2891,19 @@
               "require_par": {
                 "default": false,
                 "description": "Require Pushed Authorization Requests (RFC 9126) for this client.",
+                "type": "boolean"
+              },
+              "backchannel_logout_uri": {
+                "default": null,
+                "description": "OpenID Connect back-channel logout URI. The provider POSTs a logout token here when a session ends.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "backchannel_logout_session_required": {
+                "default": false,
+                "description": "Require sid in logout tokens sent to this client.",
                 "type": "boolean"
               },
               "secret": {
@@ -3010,7 +3060,7 @@
       "properties": {
         "delivery_logs": {
           "default": "30d",
-          "description": "Keep email and webhook delivery log entries for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "description": "Keep email, webhook and back-channel logout delivery log entries for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },

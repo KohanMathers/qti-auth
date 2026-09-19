@@ -51,6 +51,12 @@ export function discoveryDocument(ctx: Context, issuer: string): Record<string, 
     pushed_authorization_request_endpoint: endpoint(issuer, PAR_PATH),
     request_uri_parameter_supported: true,
     require_pushed_authorization_requests: false,
+    ...(ctx.config.features.oidc.backchannel_logout.enabled
+      ? {
+          backchannel_logout_supported: true,
+          backchannel_logout_session_supported: true,
+        }
+      : {}),
   };
 }
 
@@ -76,7 +82,7 @@ export function discoveryRoutes(router: Router<Context>): void {
     method: 'GET',
     path: JWKS_PATH,
     operation_id: 'jwks',
-    summary: 'JSON Web Key Set for ID and access tokens',
+    summary: 'JSON Web Key Set for ID, access and logout tokens',
     tags: ['oidc'],
     auth: 'none',
     rate_limit: 'global',

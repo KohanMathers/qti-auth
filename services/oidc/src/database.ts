@@ -12,6 +12,8 @@ export interface ClientsTable {
   redirect_uris: string[];
   allowed_scopes: string[] | null;
   require_par: boolean;
+  backchannel_logout_uri: string | null;
+  backchannel_logout_session_required: boolean;
   suspended_at: Date | null;
   owner_user_id: string | null;
   created_at: Generated<Date>;
@@ -105,6 +107,27 @@ export interface PushedAuthorizationRequestsTable {
   created_at: Generated<Date>;
 }
 
+export type LogoutCause = 'session' | 'lock' | 'ban' | 'deletion';
+export type LogoutDeliveryStatus = 'retrying' | 'sent' | 'failed';
+
+export interface LogoutDeliveriesTable {
+  id: string;
+  client_id: string;
+  user_id: string;
+  session_id: string;
+  uri: string;
+  cause: LogoutCause;
+  status: LogoutDeliveryStatus;
+  attempts: number;
+  next_attempt_at: Date | null;
+  queued_at: Date;
+  sent_at: Date | null;
+  last_error: string | null;
+  response_status: number | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface DeviceAuthorizationsTable {
   id: string;
   device_code_hash: string;
@@ -133,4 +156,5 @@ export interface Database {
   access_tokens: AccessTokensTable;
   pushed_authorization_requests: PushedAuthorizationRequestsTable;
   device_authorizations: DeviceAuthorizationsTable;
+  logout_deliveries: LogoutDeliveriesTable;
 }

@@ -4,6 +4,7 @@ import type { SigningAlgorithm } from '@qtiauth/keys';
 
 export const ACCESS_TOKEN_TYPE = 'at+jwt';
 export const ID_TOKEN_TYPE = 'JWT';
+export const LOGOUT_TOKEN_TYPE = 'logout+jwt';
 
 export interface JwtHeader {
   alg: SigningAlgorithm;

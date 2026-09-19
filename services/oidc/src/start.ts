@@ -1,4 +1,6 @@
-import { consumeCron, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
+import { consumeCron, consumeEvents, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
+import { IDENTITY_EVENTS, loadEventCatalog } from '@qtiauth/events';
+import { untraced } from '@qtiauth/observability';
 import {
   RESOLVE_ACCESS_TOKEN_METHOD,
   resolveAccessTokenRequestSchema,
@@ -12,6 +14,15 @@ import { seedClients } from './clients.ts';
 import { eraseUser, exportUser } from './data-rights.ts';
 import type { Database } from './database.ts';
 import { attachKeyring, kvKeySetStore, openKeyring } from './keys.ts';
+import {
+  createLogoutSender,
+  handleIdentityEvent,
+  LOGOUT_CONSUMER,
+  LOGOUT_POLL_INTERVAL,
+  RETRY_JOB,
+  sweepLogoutDeliveries,
+} from './logout.ts';
+import type { LogoutHttp } from './logout-http.ts';
 import { oidcMetrics } from './metrics.ts';
 import { resolveAccessToken, sweepOauth } from './oauth.ts';
 import { type Context, type definition, router } from './service.ts';
@@ -22,6 +33,8 @@ export const KEY_ROTATION_JOB = 'keys.rotate';
 
 export interface OidcOptions {
   keyStore?: Awaited<ReturnType<typeof kvKeySetStore>>;
+  logoutHttp?: LogoutHttp;
+  logoutPollInterval?: number;
 }
 
 export function oidcService(options: OidcOptions = {}) {
@@ -29,7 +42,10 @@ export function oidcService(options: OidcOptions = {}) {
     router,
     dataRights: (ctx) => ({
       exportUser: (userId) => exportUser(ctx.db, userId),
-      eraseUser: (userId, trx) => eraseUser(trx, userId),
+      eraseUser: (userId, trx) =>
+        eraseUser(trx, userId, {
+          deliverLogout: ctx.config.features.oidc.backchannel_logout.enabled,
+        }),
     }),
     start: async (ctx: Context) => {
       const { config, log, bus, db } = ctx;
@@ -37,6 +53,7 @@ export function oidcService(options: OidcOptions = {}) {
       const key = encryptionKey(config);
       const stack: Stoppable[] = [];
       const metrics = oidcMetrics(ctx.metrics);
+      const deliverLogout = config.features.oidc.backchannel_logout.enabled;
       try {
         const keyring = await openKeyring({
           store: options.keyStore ?? (await kvKeySetStore(bus)),
@@ -103,15 +120,81 @@ export function oidcService(options: OidcOptions = {}) {
         );
 
         stack.push(
+          await consumeEvents(bus, db, {
+            name: LOGOUT_CONSUMER,
+            types: [
+              IDENTITY_EVENTS.sessionRevoked,
+              IDENTITY_EVENTS.userBanned,
+              IDENTITY_EVENTS.userLocked,
+            ],
+            startFrom: 'new',
+            catalog: await loadEventCatalog(),
+            metrics: ctx.busMetrics,
+            handler: async (event, trx) => {
+              await handleIdentityEvent(trx, event, {
+                deliver: deliverLogout,
+                now: new Date(),
+              });
+            },
+            onError: (error) => {
+              log.error('back-channel logout failed', { error });
+            },
+          }),
+        );
+
+        const sender = createLogoutSender({
+          ctx,
+          log,
+          metrics,
+          ...(options.logoutHttp === undefined ? {} : { http: options.logoutHttp }),
+        });
+        const poll = () =>
+          untraced(async () => {
+            await sender.attemptDue();
+          }).catch((error: unknown) => {
+            log.error('back-channel logout poll failed', { error });
+          });
+        void poll();
+        const timer = setInterval(
+          () => void poll(),
+          options.logoutPollInterval ?? LOGOUT_POLL_INTERVAL,
+        );
+        stack.push({
+          stop: () => {
+            clearInterval(timer);
+            return Promise.resolve();
+          },
+        });
+
+        stack.push(
+          await consumeCron(bus, {
+            job: RETRY_JOB,
+            metrics: ctx.busMetrics,
+            handler: async () => {
+              const attempted = await sender.attemptDue();
+              if (attempted > 0) log.info('back-channel logout retries attempted', { attempted });
+            },
+            onError: (error) => {
+              log.error('back-channel logout retry job failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
           await consumeCron(bus, {
             job: RETENTION_JOB,
             metrics: ctx.busMetrics,
             handler: async () => {
               const now = new Date();
               const oauth = await sweepOauth(db, { retention: config.retention.oauth, now });
+              const logouts = await sweepLogoutDeliveries(db, {
+                retention: config.retention.delivery_logs,
+                now,
+              });
               const pruned = await pruneBusTables(db, config.bus);
               log.info('retention sweep finished', {
                 ...oauth,
+                logout_deliveries: logouts,
                 outbox: pruned.outbox,
                 processed_events: pruned.processedEvents,
               });

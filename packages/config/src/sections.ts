@@ -1294,6 +1294,18 @@ const oidcClient = z
       .boolean()
       .default(false)
       .describe('Require Pushed Authorization Requests (RFC 9126) for this client.'),
+    backchannel_logout_uri: z
+      .string()
+      .refine(isRedirectUri, 'Must be an https URL, or http on 127.0.0.1 or [::1]')
+      .nullable()
+      .default(null)
+      .describe(
+        'OpenID Connect back-channel logout URI. The provider POSTs a logout token here when a session ends.',
+      ),
+    backchannel_logout_session_required: z
+      .boolean()
+      .default(false)
+      .describe('Require sid in logout tokens sent to this client.'),
     secret: z
       .string()
       .default('')
@@ -1363,6 +1375,34 @@ export const oidc = z
       '1m',
       'How long a pushed authorization request_uri can be used at the authorize endpoint.',
     ),
+    logout: z
+      .strictObject({
+        timeout: duration(
+          '10s',
+          'Give up on a back-channel logout POST when the client is quiet for this long.',
+        ),
+        retry_window: duration(
+          '24h',
+          'Keep retrying a failed back-channel logout delivery for this long, then mark it failed.',
+        ),
+        retry_delay: duration(
+          '1m',
+          'Delay before the first back-channel logout retry. Doubles with each attempt.',
+        ),
+        max_retry_delay: duration('1h', 'Longest delay between back-channel logout retries.'),
+        allow_private_targets: z
+          .boolean()
+          .default(false)
+          .describe(
+            'Allow logout URIs whose DNS resolves to private, loopback or link-local addresses. Loopback http URIs on 127.0.0.1 or [::1] are always allowed.',
+          ),
+      })
+      .refine((value) => value.max_retry_delay >= value.retry_delay, {
+        message: 'Must be at least retry_delay',
+        path: ['max_retry_delay'],
+      })
+      .prefault({})
+      .describe('Back-channel logout delivery.'),
     scopes: z
       .record(z.string().regex(OIDC_SCOPE, OIDC_SCOPE_MESSAGE), oidcScope)
       .default({})
@@ -1477,6 +1517,7 @@ const DEFAULT_CRON_JOBS: Record<string, CronJob> = {
   'deletion_ledger.prune': { schedule: '0 4 * * *', enabled: true },
   'keys.rotate': { schedule: '0 0 * * *', enabled: true },
   'webhooks.retry': { schedule: '* * * * *', enabled: true },
+  'oidc.logout.retry': { schedule: '* * * * *', enabled: true },
   'support.auto_close': { schedule: '0 * * * *', enabled: true },
   'achievements.recompute_rarity': { schedule: '0 2 * * *', enabled: true },
   'leaderboards.reset_periodic': { schedule: '* * * * *', enabled: true },
@@ -1945,7 +1986,10 @@ export const webhooks = z
 
 export const retention = z
   .strictObject({
-    delivery_logs: duration('30d', 'Keep email and webhook delivery log entries for this long.'),
+    delivery_logs: duration(
+      '30d',
+      'Keep email, webhook and back-channel logout delivery log entries for this long.',
+    ),
     sessions: duration(
       '30d',
       'Keep sessions and their bindings for this long after they expire or are revoked.',
