@@ -8,7 +8,11 @@ describe('oidc service', () => {
   it('ships migrations for the oidc schema, starting with the bus tables', async () => {
     expect(definition.database.schema).toBe('oidc');
     const migrations = await definition.database.migrations();
-    expect(migrations.map((migration) => migration.name)).toEqual(['0001_bus_tables', '0002_oidc']);
+    expect(migrations.map((migration) => migration.name)).toEqual([
+      '0001_bus_tables',
+      '0002_oidc',
+      '0003_grants',
+    ]);
   });
 
   it('declares every route with a policy the gateway knows', () => {
@@ -19,11 +23,16 @@ describe('oidc service', () => {
       'GET /.well-known/jwks.json',
       'GET /.well-known/openid-configuration',
       'GET /api/v1/oauth/authorized',
+      'GET /api/v1/oauth/client',
       'GET /oauth/authorize',
       'GET /oauth/consent',
+      'GET /oauth/device',
       'GET /oauth/userinfo',
       'POST /oauth/consent',
+      'POST /oauth/device',
+      'POST /oauth/device_authorization',
       'POST /oauth/introspect',
+      'POST /oauth/par',
       'POST /oauth/revoke',
       'POST /oauth/token',
     ]);
@@ -56,6 +65,10 @@ describe('oidc service', () => {
       auth: 'oauth',
       scopes: ['openid'],
     });
+    expect(route('POST', '/oauth/device_authorization')).toMatchObject({ auth: 'none' });
+    expect(route('GET', '/oauth/device')).toMatchObject({ auth: 'session' });
+    expect(route('POST', '/oauth/par')).toMatchObject({ auth: 'none' });
+    expect(route('GET', '/api/v1/oauth/client')).toMatchObject({ auth: 'service' });
     expect(route('GET', '/.well-known/openid-configuration')).toMatchObject({ auth: 'none' });
     expect(route('GET', '/api/v1/oauth/authorized')).toMatchObject({ auth: 'session' });
   });

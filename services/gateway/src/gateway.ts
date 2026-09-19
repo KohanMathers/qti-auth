@@ -416,14 +416,16 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         }
       }
 
-      if (route.auth === 'oauth') {
+      if (route.auth === 'oauth' || route.auth === 'service') {
         const presented = bearerAccessToken(request);
         if (presented !== null && options.accessTokens) {
           const resolved = await options.accessTokens.resolve(presented);
           if (resolved.status === 'unavailable') return problem('SERVICE_UNAVAILABLE');
           if (resolved.status === 'ok') {
             oauth = resolved.token;
-            requestLog = requestLog.child({ user_id: oauth.sub });
+            if (oauth.auth === 'oauth') {
+              requestLog = requestLog.child({ user_id: oauth.sub });
+            }
           }
         }
       }

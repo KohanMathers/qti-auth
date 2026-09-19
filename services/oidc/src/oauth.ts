@@ -1,15 +1,8 @@
 import { randomUUIDv7 } from 'node:crypto';
 
-import { rpcRequest, writeEvent } from '@qtiauth/bus';
+import { writeEvent } from '@qtiauth/bus';
 import { deletedRows } from '@qtiauth/db';
-import {
-  type Identity,
-  type ResolvedAccessToken,
-  type UserClaims,
-  USER_CLAIMS_METHOD,
-  USER_CLAIMS_SERVICE,
-  userClaimsResponseSchema,
-} from '@qtiauth/service-kit';
+import { type Identity, type ResolvedAccessToken } from '@qtiauth/service-kit';
 import type { Kysely, Transaction } from 'kysely';
 
 import { userinfoClaims } from './claims.ts';
@@ -19,235 +12,53 @@ import {
   findClientById,
   isSuspended,
   redirectAllowed,
-  secretChecksOut,
 } from './clients.ts';
 import type { Database } from './database.ts';
+import { DEVICE_GRANT, deviceGrant } from './device.ts';
 import {
   type AuthorizationGrantedData,
   authorizationGrantedEvent,
   type RefreshReuseDetectedData,
   refreshReuseDetectedEvent,
 } from './events.ts';
-import { presentedCredentials, readForm } from './form.ts';
-import {
-  ACCESS_TOKEN_TYPE,
-  atHash,
-  ID_TOKEN_TYPE,
-  publicKeyFromJwk,
-  signJwt,
-  verifyJwt,
-} from './jwt.ts';
+import { readForm } from './form.ts';
+import { ACCESS_TOKEN_TYPE, publicKeyFromJwk, verifyJwt } from './jwt.ts';
 import { keyringOf } from './keys.ts';
-import { oidcMetrics } from './metrics.ts';
-import { pkceMatches } from './pkce.ts';
+import { oidcMetrics, type TokenGrantType } from './metrics.ts';
 import {
-  includesOfflineAccess,
-  includesOpenId,
-  missingConsent,
-  parseScopeString,
-  requestedScopes,
-} from './scopes.ts';
+  addMs,
+  authenticateClient,
+  type AuthorizeQuery,
+  authorizationRedirect,
+  AUTHORIZATION_REQUEST_TTL,
+  childAccount,
+  CODE_CHALLENGE,
+  issueTokens,
+  loadUser,
+  oauthJson,
+  seconds,
+  storeConsent,
+} from './oauth-core.ts';
+import { extraAuthorizeParams, readAuthorizationParams, takePushedRequest } from './par.ts';
+import { pkceMatches } from './pkce.ts';
+import { missingConsent, parseScopeString, requestedScopes } from './scopes.ts';
 import type { Context } from './service.ts';
 import { issuerUrl, resourceAudience } from './settings.ts';
 import { hashToken, newToken } from './tokens.ts';
 
-export const AUTHORIZATION_REQUEST_TTL = 10 * 60 * 1000;
-export const CODE_CHALLENGE = /^[A-Za-z0-9_-]{43,128}$/;
-
-export function oauthJson(
-  error: string,
-  description?: string,
-  status = 400,
-  headers: Record<string, string> = {},
-): Response {
-  return Response.json(
-    { error, ...(description === undefined ? {} : { error_description: description }) },
-    {
-      status,
-      headers: { ...headers, 'cache-control': 'no-store' },
-    },
-  );
-}
-
-export function authorizationRedirect(
-  redirectUri: string,
-  params: Record<string, string | undefined>,
-): Response {
-  const url = new URL(redirectUri);
-  for (const [name, value] of Object.entries(params)) {
-    if (value !== undefined) url.searchParams.set(name, value);
-  }
-  return new Response(null, { status: 302, headers: { location: url.toString() } });
-}
-
-function seconds(date: Date): number {
-  return Math.floor(date.getTime() / 1000);
-}
-
-function addMs(date: Date, ms: number): Date {
-  return new Date(date.getTime() + ms);
-}
-
-function childAccount(ageBand: string | null): boolean {
-  return ageBand !== null && ageBand !== 'adult';
-}
-
-async function loadUser(ctx: Context, userId: string): Promise<UserClaims | null> {
-  const result = await rpcRequest(
-    ctx.bus,
-    USER_CLAIMS_SERVICE,
-    USER_CLAIMS_METHOD,
-    {
-      user_id: userId,
-    },
-    { metrics: ctx.busMetrics },
-  );
-  if (result.status !== 'ok') return null;
-  const parsed = userClaimsResponseSchema.safeParse(result.data);
-  return parsed.success ? parsed.data.user : null;
-}
-
-async function authenticateClient(
-  ctx: Context,
-  request: Request,
-  form: Record<string, string>,
-  now: Date,
-): Promise<{ client: ClientRecord & { secret_hash: string | null } } | { error: Response }> {
-  const credentials = presentedCredentials(request, form);
-  if (credentials === undefined) {
-    return { error: oauthJson('invalid_client', 'Client authentication failed', 401) };
-  }
-  const client = await findClient(ctx.db, credentials.client_id);
-  if (!client || isSuspended(client, now) || !secretChecksOut(client, credentials.client_secret)) {
-    return {
-      error: oauthJson('invalid_client', 'Client authentication failed', 401, {
-        'www-authenticate': 'Basic realm="oauth"',
-      }),
-    };
-  }
-  return { client };
-}
-
-interface IssuedTokens {
-  access_token: string;
-  token_type: 'Bearer';
-  expires_in: number;
-  refresh_token?: string;
-  id_token?: string;
-  scope: string;
-}
-
-async function issueTokens(
-  ctx: Context,
-  trx: Transaction<Database>,
-  options: {
-    client: ClientRecord;
-    user: UserClaims;
-    scopes: readonly string[];
-    sessionId: string | null;
-    nonce: string | null;
-    authTime: Date;
-    amr: readonly string[];
-    acr: string;
-    familyId?: string;
-    now: Date;
-  },
-): Promise<IssuedTokens> {
-  const keyring = keyringOf(ctx);
-  if (!keyring) throw new Error('OIDC signing keys are not loaded');
-  const signing = keyring.signingKey();
-  const algorithm = ctx.config.oidc.signing.algorithm;
-  const issuer = issuerUrl(ctx.config);
-  const audience = resourceAudience(ctx.config);
-  const now = options.now;
-  const accessExpires = addMs(now, ctx.config.oidc.access_ttl);
-  const idExpires = addMs(now, ctx.config.oidc.id_ttl);
-  const refreshExpires = addMs(now, ctx.config.oidc.refresh_ttl);
-  const accessId = randomUUIDv7();
-  let refreshId: string | null = null;
-  let refreshToken: string | undefined;
-  if (includesOfflineAccess(options.scopes)) {
-    refreshId = randomUUIDv7();
-    refreshToken = newToken();
-    await trx
-      .insertInto('refresh_tokens')
-      .values({
-        id: refreshId,
-        token_hash: hashToken(refreshToken),
-        family_id: options.familyId ?? refreshId,
-        client_id: options.client.id,
-        user_id: options.user.id,
-        session_id: options.sessionId,
-        scopes: [...options.scopes],
-        expires_at: refreshExpires,
-        rotated_at: null,
-        revoked_at: null,
-        created_at: now,
-      })
-      .execute();
-  }
-  await trx
-    .insertInto('access_tokens')
-    .values({
-      id: accessId,
-      client_id: options.client.id,
-      user_id: options.user.id,
-      session_id: options.sessionId,
-      scopes: [...options.scopes],
-      amr: [...options.amr],
-      acr: options.acr,
-      expires_at: accessExpires,
-      revoked_at: null,
-      refresh_id: refreshId,
-      created_at: now,
-    })
-    .execute();
-  const iat = seconds(now);
-  const accessToken = signJwt({
-    header: { alg: algorithm, typ: ACCESS_TOKEN_TYPE, kid: signing.kid },
-    payload: {
-      iss: issuer,
-      sub: options.user.id,
-      aud: audience,
-      exp: seconds(accessExpires),
-      iat,
-      nbf: iat,
-      jti: accessId,
-      client_id: options.client.client_id,
-      scope: options.scopes.join(' '),
-      ...(options.sessionId === null ? {} : { sid: options.sessionId }),
-    },
-    privateKey: signing.privateKey,
-  });
-  let idToken: string | undefined;
-  if (includesOpenId(options.scopes)) {
-    idToken = signJwt({
-      header: { alg: algorithm, typ: ID_TOKEN_TYPE, kid: signing.kid },
-      payload: {
-        ...userinfoClaims(options.user, options.scopes, ctx.config.oidc.scopes),
-        iss: issuer,
-        aud: options.client.client_id,
-        exp: seconds(idExpires),
-        iat,
-        auth_time: seconds(options.authTime),
-        at_hash: atHash(accessToken, algorithm),
-        amr: [...options.amr],
-        acr: options.acr,
-        ...(options.nonce === null ? {} : { nonce: options.nonce }),
-        ...(options.sessionId === null ? {} : { sid: options.sessionId }),
-      },
-      privateKey: signing.privateKey,
-    });
-  }
-  return {
-    access_token: accessToken,
-    token_type: 'Bearer',
-    expires_in: Math.floor(ctx.config.oidc.access_ttl / 1000),
-    scope: options.scopes.join(' '),
-    ...(refreshToken === undefined ? {} : { refresh_token: refreshToken }),
-    ...(idToken === undefined ? {} : { id_token: idToken }),
-  };
-}
+export {
+  addMs,
+  authenticateClient,
+  type AuthorizeQuery,
+  authorizationRedirect,
+  AUTHORIZATION_REQUEST_TTL,
+  childAccount,
+  CODE_CHALLENGE,
+  issueTokens,
+  loadUser,
+  oauthJson,
+  storeConsent,
+};
 
 async function grantedScopes(
   db: Kysely<Database>,
@@ -261,27 +72,6 @@ async function grantedScopes(
     .where('client_id', '=', clientId)
     .executeTakeFirst();
   return row?.scopes;
-}
-
-async function storeConsent(
-  trx: Transaction<Database>,
-  options: { userId: string; clientId: string; scopes: readonly string[]; now: Date },
-): Promise<void> {
-  await trx
-    .insertInto('consents')
-    .values({
-      user_id: options.userId,
-      client_id: options.clientId,
-      scopes: [...options.scopes],
-      granted_at: options.now,
-    })
-    .onConflict((oc) =>
-      oc.columns(['user_id', 'client_id']).doUpdateSet({
-        scopes: [...options.scopes],
-        granted_at: options.now,
-      }),
-    )
-    .execute();
 }
 
 async function completeAuthorization(
@@ -350,17 +140,6 @@ async function completeAuthorization(
   });
 }
 
-export interface AuthorizeQuery {
-  client_id?: string | undefined;
-  redirect_uri?: string | undefined;
-  response_type?: string | undefined;
-  scope?: string | undefined;
-  state?: string | undefined;
-  nonce?: string | undefined;
-  code_challenge?: string | undefined;
-  code_challenge_method?: string | undefined;
-}
-
 export async function authorize(
   ctx: Context,
   identity: Identity,
@@ -368,13 +147,65 @@ export async function authorize(
   now = new Date(),
 ): Promise<Response> {
   const clientId = query.client_id ?? '';
-  const redirectUri = query.redirect_uri ?? '';
   const client = await findClient(ctx.db, clientId);
-  const redirectOk = client !== undefined && redirectAllowed(client, redirectUri);
-  if (!client || isSuspended(client, now) || !redirectOk) {
+  if (!client || isSuspended(client, now)) {
     oidcMetrics(ctx.metrics).authorization(client?.type ?? 'public', 'error');
     return oauthJson('invalid_request', 'Unknown client or redirect_uri');
   }
+
+  let redirectUri: string;
+  let scopes: string[];
+  let state: string | null;
+  let nonce: string | null;
+  let codeChallenge: string;
+
+  if (query.request_uri !== undefined) {
+    if (extraAuthorizeParams(query)) {
+      oidcMetrics(ctx.metrics).authorization(client.type, 'error');
+      return oauthJson('invalid_request', 'request_uri cannot be combined with other parameters');
+    }
+    const pushed = await takePushedRequest(ctx, client, query.request_uri, now);
+    if (!pushed) {
+      oidcMetrics(ctx.metrics).authorization(client.type, 'error');
+      return oauthJson('invalid_request', 'request_uri is not valid');
+    }
+    redirectUri = pushed.redirectUri;
+    scopes = pushed.scopes;
+    state = pushed.state;
+    nonce = pushed.nonce;
+    codeChallenge = pushed.codeChallenge;
+  } else {
+    redirectUri = query.redirect_uri ?? '';
+    if (!redirectAllowed(client, redirectUri)) {
+      oidcMetrics(ctx.metrics).authorization(client.type, 'error');
+      return oauthJson('invalid_request', 'Unknown client or redirect_uri');
+    }
+    if (client.require_par) {
+      oidcMetrics(ctx.metrics).authorization(client.type, 'error');
+      return authorizationRedirect(redirectUri, {
+        error: 'invalid_request',
+        error_description: 'Pushed authorization is required',
+        state: query.state,
+      });
+    }
+    const params = readAuthorizationParams(client, query, ctx.config.oidc.scopes);
+    if ('error' in params) {
+      oidcMetrics(ctx.metrics).authorization(
+        client.type,
+        params.error === 'access_denied' ? 'denied' : 'error',
+      );
+      return authorizationRedirect(redirectUri, {
+        error: params.error,
+        error_description: params.description,
+        state: query.state,
+      });
+    }
+    scopes = params.scopes;
+    state = params.state;
+    nonce = params.nonce;
+    codeChallenge = params.codeChallenge;
+  }
+
   const fail = (error: string, description?: string) => {
     oidcMetrics(ctx.metrics).authorization(
       client.type,
@@ -383,20 +214,9 @@ export async function authorize(
     return authorizationRedirect(redirectUri, {
       error,
       error_description: description,
-      state: query.state,
+      state: state ?? undefined,
     });
   };
-  if (query.response_type !== 'code') return fail('unsupported_response_type');
-  if (query.code_challenge_method !== 'S256' || query.code_challenge === undefined) {
-    return fail('invalid_request', 'PKCE S256 is required');
-  }
-  if (!CODE_CHALLENGE.test(query.code_challenge)) {
-    return fail('invalid_request', 'code_challenge is not valid');
-  }
-  const parsed = parseScopeString(query.scope);
-  if (parsed === undefined) return fail('invalid_scope');
-  const scopes = requestedScopes(parsed, ctx.config.oidc.scopes, client.allowed_scopes);
-  if (scopes === undefined) return fail('invalid_scope');
   if (identity.sub === null || identity.sid === null) {
     return fail('access_denied', 'Sign in is required');
   }
@@ -413,9 +233,9 @@ export async function authorize(
       sessionId: identity.sid,
       redirectUri,
       scopes,
-      state: query.state ?? null,
-      nonce: query.nonce ?? null,
-      codeChallenge: query.code_challenge,
+      state,
+      nonce,
+      codeChallenge,
       authTime: now,
       amr: identity.amr,
       acr: identity.acr ?? 'aal1',
@@ -432,9 +252,9 @@ export async function authorize(
       session_id: identity.sid,
       redirect_uri: redirectUri,
       scopes,
-      state: query.state ?? null,
-      nonce: query.nonce ?? null,
-      code_challenge: query.code_challenge,
+      state,
+      nonce,
+      code_challenge: codeChallenge,
       auth_time: now,
       amr: [...identity.amr],
       acr: identity.acr ?? 'aal1',
@@ -683,19 +503,66 @@ async function refreshGrant(
   return Response.json(tokens, { headers: { 'cache-control': 'no-store' } });
 }
 
+const SERVICE_FORBIDDEN_SCOPES = new Set(['openid', 'offline_access']);
+
+function tokenGrantType(grant: string | undefined): TokenGrantType {
+  if (grant === 'refresh_token') return 'refresh_token';
+  if (grant === 'client_credentials') return 'client_credentials';
+  if (grant === DEVICE_GRANT) return 'device_code';
+  return 'authorization_code';
+}
+
+async function clientCredentialsGrant(
+  ctx: Context,
+  client: ClientRecord,
+  form: Record<string, string>,
+  now: Date,
+): Promise<Response> {
+  if (client.type !== 'confidential') {
+    oidcMetrics(ctx.metrics).tokenGrant('client_credentials', 'error');
+    return oauthJson('unauthorized_client');
+  }
+  const parsed = parseScopeString(form['scope']);
+  if (parsed === undefined || parsed.some((scope) => SERVICE_FORBIDDEN_SCOPES.has(scope))) {
+    oidcMetrics(ctx.metrics).tokenGrant('client_credentials', 'error');
+    return oauthJson('invalid_scope');
+  }
+  const scopes = requestedScopes(parsed, ctx.config.oidc.scopes, client.allowed_scopes);
+  if (scopes === undefined) {
+    oidcMetrics(ctx.metrics).tokenGrant('client_credentials', 'error');
+    return oauthJson('invalid_scope');
+  }
+  const tokens = await ctx.db.transaction().execute((trx) =>
+    issueTokens(ctx, trx, {
+      client,
+      user: null,
+      scopes,
+      sessionId: null,
+      nonce: null,
+      authTime: now,
+      amr: [],
+      acr: 'aal1',
+      now,
+    }),
+  );
+  oidcMetrics(ctx.metrics).tokenGrant('client_credentials', 'success');
+  return Response.json(tokens, { headers: { 'cache-control': 'no-store' } });
+}
+
 export async function token(ctx: Context, request: Request, now = new Date()): Promise<Response> {
   const form = await readForm(request);
   const authenticated = await authenticateClient(ctx, request, form, now);
   if ('error' in authenticated) {
-    oidcMetrics(ctx.metrics).tokenGrant(
-      form['grant_type'] === 'refresh_token' ? 'refresh_token' : 'authorization_code',
-      'error',
-    );
+    oidcMetrics(ctx.metrics).tokenGrant(tokenGrantType(form['grant_type']), 'error');
     return authenticated.error;
   }
   const grant = form['grant_type'];
   if (grant === 'authorization_code') return exchangeCode(ctx, authenticated.client, form, now);
   if (grant === 'refresh_token') return refreshGrant(ctx, authenticated.client, form, now);
+  if (grant === 'client_credentials') {
+    return clientCredentialsGrant(ctx, authenticated.client, form, now);
+  }
+  if (grant === DEVICE_GRANT) return deviceGrant(ctx, authenticated.client, form, now);
   oidcMetrics(ctx.metrics).tokenGrant('authorization_code', 'error');
   return oauthJson('unsupported_grant_type');
 }
@@ -861,7 +728,7 @@ export async function introspect(
       active: true,
       token_type: 'Bearer',
       client_id: authenticated.client.client_id,
-      sub: row.user_id,
+      sub: row.user_id ?? authenticated.client.client_id,
       scope: row.scopes.join(' '),
       exp: seconds(row.expires_at),
       iat: seconds(row.created_at),
@@ -898,10 +765,27 @@ export async function resolveAccessToken(
   if (row?.revoked_at !== null || row.expires_at <= now) return null;
   const client = await findClientById(ctx.db, row.client_id);
   if (!client || isSuspended(client, now)) return null;
+  if (row.user_id === null) {
+    return {
+      jti: row.id,
+      auth: 'service',
+      sub: client.client_id,
+      client_id: client.client_id,
+      scopes: row.scopes,
+      sid: null,
+      account_state: 'active',
+      restrictions: [],
+      age_band: null,
+      parental_controls: null,
+      amr: row.amr,
+      acr: row.acr,
+    };
+  }
   const user = await loadUser(ctx, row.user_id);
   if (!user || user.account_state === 'deleted') return null;
   return {
     jti: row.id,
+    auth: 'oauth',
     sub: row.user_id,
     client_id: client.client_id,
     scopes: row.scopes,
@@ -923,6 +807,8 @@ export async function sweepOauth(
   authorization_codes: number;
   refresh_tokens: number;
   access_tokens: number;
+  pushed_authorization_requests: number;
+  device_authorizations: number;
 }> {
   const cutoff = addMs(options.now, -options.retention);
   const requests = await db
@@ -956,10 +842,30 @@ export async function sweepOauth(
       ]),
     )
     .execute();
+  const pushed = await db
+    .deleteFrom('pushed_authorization_requests')
+    .where((eb) =>
+      eb.or([
+        eb('expires_at', '<', cutoff),
+        eb.and([eb('consumed_at', 'is not', null), eb('consumed_at', '<', cutoff)]),
+      ]),
+    )
+    .execute();
+  const devices = await db
+    .deleteFrom('device_authorizations')
+    .where((eb) =>
+      eb.or([
+        eb('expires_at', '<', cutoff),
+        eb.and([eb('consumed_at', 'is not', null), eb('consumed_at', '<', cutoff)]),
+      ]),
+    )
+    .execute();
   return {
     authorization_requests: deletedRows(requests),
     authorization_codes: deletedRows(codes),
     refresh_tokens: deletedRows(refresh),
     access_tokens: deletedRows(access),
+    pushed_authorization_requests: deletedRows(pushed),
+    device_authorizations: deletedRows(devices),
   };
 }

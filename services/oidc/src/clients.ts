@@ -18,6 +18,7 @@ export interface ClientRecord {
   verified: boolean;
   redirect_uris: string[];
   allowed_scopes: string[] | null;
+  require_par: boolean;
   suspended_at: Date | null;
   owner_user_id: string | null;
 }
@@ -29,6 +30,7 @@ export interface ClientSeed {
   verified: boolean;
   redirect_uris: readonly string[];
   allowed_scopes: readonly string[] | null;
+  require_par: boolean;
   secret: string;
 }
 
@@ -50,6 +52,7 @@ export function presentedClient(row: ClientRow): ClientRecord {
     verified: row.verified,
     redirect_uris: urisOf(row.redirect_uris),
     allowed_scopes: scopesOf(row.allowed_scopes),
+    require_par: row.require_par,
     suspended_at: row.suspended_at,
     owner_user_id: row.owner_user_id,
   };
@@ -121,6 +124,7 @@ export async function seedClients(
         verified: definition.verified || definition.first_party,
         redirect_uris: [...definition.redirect_uris],
         allowed_scopes: definition.allowed_scopes === null ? null : [...definition.allowed_scopes],
+        require_par: definition.require_par,
         suspended_at: null,
         owner_user_id: null,
         created_at: now,

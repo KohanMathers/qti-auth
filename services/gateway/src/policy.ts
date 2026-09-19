@@ -48,9 +48,17 @@ export function checkPolicy(
   const { route } = table;
   if (route.auth === 'none') return null;
   if (route.auth === 'oauth') {
-    if (oauth === null) return { code: 'AUTHENTICATION_REQUIRED' };
+    if (oauth?.auth !== 'oauth') return { code: 'AUTHENTICATION_REQUIRED' };
     const state = accountStateDenial(route, oauth.account_state);
     if (state) return state;
+    const missing = route.scopes.filter((scope) => !oauth.scopes.includes(scope));
+    if (missing.length > 0) {
+      return { code: 'INSUFFICIENT_SCOPE', extensions: { missing_scopes: missing } };
+    }
+    return null;
+  }
+  if (route.auth === 'service') {
+    if (oauth?.auth !== 'service') return { code: 'AUTHENTICATION_REQUIRED' };
     const missing = route.scopes.filter((scope) => !oauth.scopes.includes(scope));
     if (missing.length > 0) {
       return { code: 'INSUFFICIENT_SCOPE', extensions: { missing_scopes: missing } };
@@ -100,7 +108,12 @@ export function impliedGatewayErrors(table: TableRoute): (GatewayErrorCode | Kit
   if (route.method !== 'GET' && route.method !== 'DELETE') codes.push('PAYLOAD_TOO_LARGE');
   if (route.method !== 'GET') codes.push('ORIGIN_NOT_ALLOWED');
   if (route.auth === 'none') return codes;
-  codes.push('AUTHENTICATION_REQUIRED', 'ACCOUNT_BANNED', 'ACCOUNT_LOCKED');
+  codes.push('AUTHENTICATION_REQUIRED');
+  if (route.auth === 'service') {
+    if (route.scopes.length > 0) codes.push('INSUFFICIENT_SCOPE');
+    return codes;
+  }
+  codes.push('ACCOUNT_BANNED', 'ACCOUNT_LOCKED');
   if (route.auth === 'oauth') {
     if (route.scopes.length > 0) codes.push('INSUFFICIENT_SCOPE');
     return codes;
@@ -119,7 +132,7 @@ export function identityFor(
   requestId: string,
   oauth: ResolvedAccessToken | null = null,
 ): Identity {
-  if (table.route.auth === 'oauth' && oauth !== null) {
+  if (table.route.auth === 'oauth' && oauth !== null && oauth.auth === 'oauth') {
     return {
       request_id: requestId,
       auth: 'oauth',
@@ -134,6 +147,23 @@ export function identityFor(
       parental_controls: oauth.parental_controls,
       amr: oauth.amr,
       acr: oauth.acr,
+    };
+  }
+  if (table.route.auth === 'service' && oauth !== null && oauth.auth === 'service') {
+    return {
+      request_id: requestId,
+      auth: 'service',
+      sub: null,
+      sid: null,
+      client_id: oauth.client_id,
+      scopes: oauth.scopes,
+      permissions: [],
+      account_state: null,
+      restrictions: [],
+      age_band: null,
+      parental_controls: null,
+      amr: [],
+      acr: null,
     };
   }
   const signedIn = table.route.auth === 'session' && session !== null;

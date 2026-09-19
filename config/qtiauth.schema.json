@@ -2741,6 +2741,24 @@
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },
+        "device_code_ttl": {
+          "default": "15m",
+          "description": "How long a device-flow code can be approved and exchanged. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "device_interval": {
+          "default": "5s",
+          "description": "Minimum time a device-flow client must wait between token polls. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "pushed_authorization_ttl": {
+          "default": "1m",
+          "description": "How long a pushed authorization request_uri can be used at the authorize endpoint. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
         "scopes": {
           "description": "Scopes and the claims they release. Built-in scopes stay unless you replace them. Add extra scopes here.",
           "default": {},
@@ -2810,12 +2828,12 @@
                 "type": "boolean"
               },
               "redirect_uris": {
-                "minItems": 1,
+                "default": [],
+                "description": "Exact-match redirect URIs. Empty for clients that only use the device flow or client credentials. Native apps may register a loopback URI; any port is accepted at authorize time.",
                 "type": "array",
                 "items": {
                   "type": "string"
-                },
-                "description": "Exact-match redirect URIs. Native apps may register a loopback URI; any port is accepted at authorize time."
+                }
               },
               "allowed_scopes": {
                 "default": null,
@@ -2833,6 +2851,11 @@
                   }
                 ]
               },
+              "require_par": {
+                "default": false,
+                "description": "Require Pushed Authorization Requests (RFC 9126) for this client.",
+                "type": "boolean"
+              },
               "secret": {
                 "default": "",
                 "description": "Client secret for confidential clients. Empty for public clients. Reference a secret.",
@@ -2841,8 +2864,7 @@
             },
             "required": [
               "name",
-              "type",
-              "redirect_uris"
+              "type"
             ],
             "additionalProperties": false,
             "description": "A seeded OAuth client. Existing client_ids are left as they are after the first start."

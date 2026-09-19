@@ -60,6 +60,7 @@ function session(overrides: Partial<ResolvedSession> = {}): ResolvedSession {
 function accessToken(overrides: Partial<ResolvedAccessToken> = {}): ResolvedAccessToken {
   return {
     jti: 't1',
+    auth: 'oauth',
     sub: 'u1',
     client_id: 'game',
     scopes: ['openid'],
@@ -101,10 +102,35 @@ describe('checkPolicy', () => {
     ).toBe('ACCOUNT_BANNED');
   });
 
-  it('refuses service and game routes until they have a verifier', () => {
-    for (const auth of ['service', 'game_authoritative'] as const) {
-      expect(code(table({ auth }), session())).toBe('AUTHENTICATION_REQUIRED');
-    }
+  it('needs a verified client-credentials token for service routes', () => {
+    const serviceRoute = table({ auth: 'service', scopes: ['games'] });
+    expect(code(serviceRoute, session())).toBe('AUTHENTICATION_REQUIRED');
+    expect(checkPolicy(serviceRoute, null, options, accessToken({ auth: 'oauth' }))).toEqual({
+      code: 'AUTHENTICATION_REQUIRED',
+    });
+    expect(
+      checkPolicy(
+        serviceRoute,
+        null,
+        options,
+        accessToken({ auth: 'service', sub: 'game', scopes: ['games'], sid: null }),
+      ),
+    ).toBeNull();
+    expect(
+      checkPolicy(
+        serviceRoute,
+        null,
+        options,
+        accessToken({ auth: 'service', sub: 'game', scopes: ['profile'], sid: null }),
+      ),
+    ).toEqual({
+      code: 'INSUFFICIENT_SCOPE',
+      extensions: { missing_scopes: ['games'] },
+    });
+  });
+
+  it('refuses game_authoritative routes until they have a verifier', () => {
+    expect(code(table({ auth: 'game_authoritative' }), session())).toBe('AUTHENTICATION_REQUIRED');
   });
 
   it('returns a specific code for each account state', () => {
@@ -192,6 +218,31 @@ describe('identityFor', () => {
     });
   });
 
+  it('describes the service caller on service routes', () => {
+    expect(
+      identityFor(
+        table({ auth: 'service', scopes: ['games'] }),
+        null,
+        'req-4',
+        accessToken({ auth: 'service', sub: 'game', scopes: ['games'], sid: null }),
+      ),
+    ).toEqual({
+      request_id: 'req-4',
+      auth: 'service',
+      sub: null,
+      sid: null,
+      client_id: 'game',
+      scopes: ['games'],
+      permissions: [],
+      account_state: null,
+      restrictions: [],
+      age_band: null,
+      parental_controls: null,
+      amr: [],
+      acr: null,
+    });
+  });
+
   it('describes the OAuth caller on oauth routes', () => {
     expect(
       identityFor(table({ auth: 'oauth', scopes: ['openid'] }), null, 'req-3', accessToken()),
@@ -243,6 +294,12 @@ describe('impliedGatewayErrors', () => {
     );
     expect(impliedGatewayErrors(table({ auth: 'oauth', scopes: ['openid'] }))).not.toContain(
       'STEP_UP_REQUIRED',
+    );
+    expect(impliedGatewayErrors(table({ auth: 'service', scopes: ['games'] }))).toEqual(
+      expect.arrayContaining(['AUTHENTICATION_REQUIRED', 'INSUFFICIENT_SCOPE']),
+    );
+    expect(impliedGatewayErrors(table({ auth: 'service', scopes: ['games'] }))).not.toContain(
+      'ACCOUNT_BANNED',
     );
   });
 });

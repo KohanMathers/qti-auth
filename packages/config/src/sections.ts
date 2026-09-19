@@ -1281,15 +1281,19 @@ const oidcClient = z
       .array(
         z.string().refine(isRedirectUri, 'Must be an https URL, or http on 127.0.0.1 or [::1]'),
       )
-      .min(1)
+      .default([])
       .describe(
-        'Exact-match redirect URIs. Native apps may register a loopback URI; any port is accepted at authorize time.',
+        'Exact-match redirect URIs. Empty for clients that only use the device flow or client credentials. Native apps may register a loopback URI; any port is accepted at authorize time.',
       ),
     allowed_scopes: z
       .array(z.string().regex(OIDC_SCOPE, OIDC_SCOPE_MESSAGE))
       .nullable()
       .default(null)
       .describe('Scopes this client may request. null allows every configured scope.'),
+    require_par: z
+      .boolean()
+      .default(false)
+      .describe('Require Pushed Authorization Requests (RFC 9126) for this client.'),
     secret: z
       .string()
       .default('')
@@ -1350,6 +1354,15 @@ export const oidc = z
     access_ttl: duration('15m', 'Access token lifetime.'),
     id_ttl: duration('15m', 'ID token lifetime.'),
     refresh_ttl: duration('30d', 'Refresh token lifetime. Rotated on every use.'),
+    device_code_ttl: duration('15m', 'How long a device-flow code can be approved and exchanged.'),
+    device_interval: duration(
+      '5s',
+      'Minimum time a device-flow client must wait between token polls.',
+    ),
+    pushed_authorization_ttl: duration(
+      '1m',
+      'How long a pushed authorization request_uri can be used at the authorize endpoint.',
+    ),
     scopes: z
       .record(z.string().regex(OIDC_SCOPE, OIDC_SCOPE_MESSAGE), oidcScope)
       .default({})

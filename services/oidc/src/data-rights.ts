@@ -7,7 +7,7 @@ export async function exportUser(
   db: Kysely<Database>,
   userId: string,
 ): Promise<Record<string, unknown>> {
-  const [consents, refresh, access] = await Promise.all([
+  const [consents, refresh, access, devices] = await Promise.all([
     db
       .selectFrom('consents')
       .innerJoin('clients', 'clients.id', 'consents.client_id')
@@ -48,6 +48,20 @@ export async function exportUser(
       .where('access_tokens.user_id', '=', userId)
       .orderBy('access_tokens.created_at')
       .execute(),
+    db
+      .selectFrom('device_authorizations')
+      .innerJoin('clients', 'clients.id', 'device_authorizations.client_id')
+      .select([
+        'device_authorizations.id as id',
+        'clients.client_id as client_id',
+        'device_authorizations.scopes as scopes',
+        'device_authorizations.status as status',
+        'device_authorizations.expires_at as expires_at',
+        'device_authorizations.created_at as created_at',
+      ])
+      .where('device_authorizations.user_id', '=', userId)
+      .orderBy('device_authorizations.created_at')
+      .execute(),
   ]);
   return {
     consents: consents.map((row) => ({
@@ -72,10 +86,19 @@ export async function exportUser(
       revoked_at: iso(row.revoked_at),
       created_at: iso(row.created_at),
     })),
+    device_authorizations: devices.map((row) => ({
+      id: row.id,
+      client_id: row.client_id,
+      scopes: row.scopes,
+      status: row.status,
+      expires_at: iso(row.expires_at),
+      created_at: iso(row.created_at),
+    })),
   };
 }
 
 export async function eraseUser(trx: Transaction<Database>, userId: string): Promise<void> {
+  await trx.deleteFrom('device_authorizations').where('user_id', '=', userId).execute();
   await trx.deleteFrom('authorization_requests').where('user_id', '=', userId).execute();
   await trx.deleteFrom('authorization_codes').where('user_id', '=', userId).execute();
   await trx.deleteFrom('access_tokens').where('user_id', '=', userId).execute();

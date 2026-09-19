@@ -2,13 +2,15 @@ import type { OidcClientType } from '@qtiauth/config';
 import type { Metrics } from '@qtiauth/observability';
 
 export type AuthorizationResult = 'granted' | 'denied' | 'error';
-export type TokenGrantType = 'authorization_code' | 'refresh_token';
+export type TokenGrantType =
+  'authorization_code' | 'refresh_token' | 'client_credentials' | 'device_code';
 export type TokenGrantResult = 'success' | 'error';
 
 export interface OidcMetrics {
   authorization: (clientType: OidcClientType, result: AuthorizationResult) => void;
   tokenGrant: (grantType: TokenGrantType, result: TokenGrantResult) => void;
   refreshReuse: () => void;
+  deviceApproval: (result: 'granted' | 'denied') => void;
   introspection: (active: boolean) => void;
   keyRotated: () => void;
   keyLoaded: (createdAt: number) => void;
@@ -40,6 +42,11 @@ export function prometheusOidcMetrics(metrics: Metrics): OidcMetrics {
     name: 'qtiauth_oidc_refresh_reuse_total',
     help: 'Refresh tokens presented after they had already been rotated. The family is revoked.',
   });
+  const deviceApprovals = metrics.counter({
+    name: 'qtiauth_oidc_device_approvals_total',
+    help: 'Device-flow approvals, by whether the user allowed or denied the request.',
+    labelNames: ['result'],
+  });
   const introspections = metrics.counter({
     name: 'qtiauth_oidc_introspections_total',
     help: 'Token introspections, by whether the token was active.',
@@ -62,6 +69,9 @@ export function prometheusOidcMetrics(metrics: Metrics): OidcMetrics {
     },
     refreshReuse: () => {
       reuse.inc();
+    },
+    deviceApproval: (result) => {
+      deviceApprovals.inc({ result });
     },
     introspection: (active) => {
       introspections.inc({ active: active ? 'true' : 'false' });

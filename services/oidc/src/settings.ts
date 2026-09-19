@@ -9,9 +9,13 @@ export const TOKEN_PATH = '/oauth/token';
 export const USERINFO_PATH = '/oauth/userinfo';
 export const REVOKE_PATH = '/oauth/revoke';
 export const INTROSPECT_PATH = '/oauth/introspect';
+export const DEVICE_AUTHORIZATION_PATH = '/oauth/device_authorization';
+export const DEVICE_PATH = '/oauth/device';
+export const PAR_PATH = '/oauth/par';
 export const DISCOVERY_PATH = '/.well-known/openid-configuration';
 export const JWKS_PATH = '/.well-known/jwks.json';
 export const AUTHORIZED_PATH = '/api/v1/oauth/authorized';
+export const CLIENT_PATH = '/api/v1/oauth/client';
 
 export class OidcConfigError extends Error {
   constructor(message: string) {

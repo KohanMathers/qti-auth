@@ -623,6 +623,9 @@ describe('oidc', () => {
     expect(parsed.signing.algorithm).toBe('ES256');
     expect(parsed.signing.rotate_after).toBe(7_776_000_000);
     expect(parsed.access_ttl).toBe(900_000);
+    expect(parsed.device_code_ttl).toBe(900_000);
+    expect(parsed.device_interval).toBe(5_000);
+    expect(parsed.pushed_authorization_ttl).toBe(60_000);
     expect(parsed.scopes['openid']).toEqual({ consent: 'Sign you in', claims: [] });
     expect(parsed.scopes['email']?.claims).toEqual(['email', 'email_verified']);
     expect(parsed.clients).toEqual({});
@@ -669,6 +672,13 @@ describe('oidc', () => {
         }),
       ),
     ).toEqual([]);
+    expect(
+      oidc.parse({
+        clients: {
+          server: { name: 'Server', type: 'confidential', secret: 's' },
+        },
+      }).clients['server'],
+    ).toMatchObject({ redirect_uris: [], require_par: false });
   });
 
   it('keeps replaced keys published at least as long as live tokens', () => {

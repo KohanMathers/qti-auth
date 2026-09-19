@@ -114,7 +114,14 @@ For `auth: oauth` routes, in order:
 | Account state not in `allow_account_states`               | `403 ACCOUNT_BANNED`, `ACCOUNT_LOCKED` or `ACCOUNT_STATE_NOT_ALLOWED` |
 | A required scope isn't on the token                       | `403 INSUFFICIENT_SCOPE` (`missing_scopes`)                           |
 
-Session cookies are ignored on oauth routes. Access tokens are ignored on session routes. `auth: none` routes skip these checks. Routes with `auth: service` or `game_authoritative` get `401 AUTHENTICATION_REQUIRED` until those credentials are available.
+For `auth: service` routes, in order:
+
+| Check                                                                      | Error                                       |
+| -------------------------------------------------------------------------- | ------------------------------------------- |
+| No `Authorization: Bearer` client-credentials token, or it is a user token | `401 AUTHENTICATION_REQUIRED`               |
+| A required scope isn't on the token                                        | `403 INSUFFICIENT_SCOPE` (`missing_scopes`) |
+
+Session cookies are ignored on oauth and service routes. Access tokens are ignored on session routes. `auth: none` routes skip these checks. Routes with `auth: game_authoritative` get `401 AUTHENTICATION_REQUIRED` until those credentials are available.
 
 A top-level browser navigation that needs a session and has none is redirected to `/auth/login?return_to=…` on the account surface, with the path and query the browser asked for. API callers still get `401 AUTHENTICATION_REQUIRED`.
 

@@ -23,9 +23,14 @@ const ORIGIN = 'http://localhost:8000';
 const COOKIE = '__Host-qtiauth_session';
 const GAME = 'game';
 const STUDIO = 'studio';
+const SERVER = 'server';
+const PAR_APP = 'par_app';
 const STUDIO_SECRET = 'studio-secret';
+const SERVER_SECRET = 'server-secret';
+const PAR_SECRET = 'par-secret';
 const GAME_REDIRECT = 'http://127.0.0.1/callback';
 const STUDIO_REDIRECT = 'https://app.example.com/callback';
+const PAR_REDIRECT = 'https://par.example.com/callback';
 const surfaces = {
   account: { hosts: ['localhost'], base_path: '/', origins: [ORIGIN] },
   support: { hosts: ['localhost'], base_path: '/support', origins: [ORIGIN] },
@@ -259,6 +264,7 @@ beforeAll(async () => {
       oidc: {
         issuer: ORIGIN,
         signing: { encryption_key: Buffer.alloc(32, 5).toString('base64') },
+        device_interval: '1ms',
         clients: {
           [GAME]: {
             name: 'Game',
@@ -272,6 +278,21 @@ beforeAll(async () => {
             first_party: false,
             redirect_uris: [STUDIO_REDIRECT],
             secret: STUDIO_SECRET,
+          },
+          [SERVER]: {
+            name: 'Game server',
+            type: 'confidential',
+            first_party: true,
+            allowed_scopes: ['games'],
+            secret: SERVER_SECRET,
+          },
+          [PAR_APP]: {
+            name: 'PAR App',
+            type: 'confidential',
+            first_party: true,
+            require_par: true,
+            redirect_uris: [PAR_REDIRECT],
+            secret: PAR_SECRET,
           },
         },
       },
@@ -325,11 +346,24 @@ describe('oidc through the gateway', () => {
     const document = (await discovery.json()) as {
       issuer: string;
       authorization_endpoint: string;
+      device_authorization_endpoint: string;
+      pushed_authorization_request_endpoint: string;
+      grant_types_supported: string[];
       code_challenge_methods_supported: string[];
       scopes_supported: string[];
     };
     expect(document.issuer).toBe(ORIGIN);
     expect(document.authorization_endpoint).toBe(`${ORIGIN}/oauth/authorize`);
+    expect(document.device_authorization_endpoint).toBe(`${ORIGIN}/oauth/device_authorization`);
+    expect(document.pushed_authorization_request_endpoint).toBe(`${ORIGIN}/oauth/par`);
+    expect(document.grant_types_supported).toEqual(
+      expect.arrayContaining([
+        'authorization_code',
+        'refresh_token',
+        'client_credentials',
+        'urn:ietf:params:oauth:grant-type:device_code',
+      ]),
+    );
     expect(document.code_challenge_methods_supported).toEqual(['S256']);
     expect(document.scopes_supported).toEqual(
       expect.arrayContaining(['openid', 'email', 'age', 'parental_controls', 'restrictions']),
@@ -622,5 +656,164 @@ describe('oidc through the gateway', () => {
         expect(locationOf(response).pathname, `${mount.method} ${path}`).toBe('/auth/login');
       }
     }
+  });
+
+  it('lets a CLI sign in with the device flow', async () => {
+    const device = browser();
+    const started = await device.request(
+      '/oauth/device_authorization',
+      form({
+        client_id: GAME,
+        scope: 'openid profile',
+      }),
+    );
+    expect(started.status).toBe(200);
+    const codes = (await started.json()) as {
+      device_code: string;
+      user_code: string;
+      verification_uri: string;
+      verification_uri_complete: string;
+      interval: number;
+    };
+    secrets.push(codes.device_code, codes.user_code);
+    expect(codes.verification_uri).toBe(`${ORIGIN}/oauth/device`);
+    expect(codes.interval).toBe(0);
+
+    const pending = await device.request(
+      '/oauth/token',
+      form({
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        client_id: GAME,
+        device_code: codes.device_code,
+      }),
+    );
+    expect(pending.status).toBe(400);
+    expect(await pending.json()).toMatchObject({ error: 'authorization_pending' });
+
+    const user = browser();
+    await signUpInBrowser(user, 'cli@example.com');
+    const confirm = await user.request(
+      `/oauth/device?user_code=${encodeURIComponent(codes.user_code)}`,
+    );
+    expect(confirm.status).toBe(200);
+    expect(await confirm.text()).toContain('Game wants to');
+    const allowed = await user.request(
+      '/oauth/device',
+      form({ user_code: codes.user_code, decision: 'allow' }),
+    );
+    expect(allowed.status).toBe(200);
+    expect(await allowed.text()).toContain('You can return to your device');
+
+    const tokens = await device.request(
+      '/oauth/token',
+      form({
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        client_id: GAME,
+        device_code: codes.device_code,
+      }),
+    );
+    expect(tokens.status).toBe(200);
+    const body = (await tokens.json()) as { access_token: string; id_token?: string };
+    secrets.push(body.access_token);
+    if (body.id_token !== undefined) secrets.push(body.id_token);
+
+    const userinfo = await device.request('/oauth/userinfo', {
+      headers: { authorization: `Bearer ${body.access_token}` },
+    });
+    expect(userinfo.status).toBe(200);
+    expect(await userinfo.json()).toMatchObject({ email: 'cli@example.com' });
+  });
+
+  it('issues a service token that cannot reach a user-session route', async () => {
+    const client = browser();
+    const issued = await client.request(
+      '/oauth/token',
+      form({
+        grant_type: 'client_credentials',
+        client_id: SERVER,
+        client_secret: SERVER_SECRET,
+        scope: 'games',
+      }),
+    );
+    expect(issued.status).toBe(200);
+    const body = (await issued.json()) as { access_token: string; refresh_token?: string };
+    secrets.push(body.access_token);
+    expect(body.refresh_token).toBeUndefined();
+
+    const me = await client.request('/api/v1/me', {
+      headers: { authorization: `Bearer ${body.access_token}` },
+    });
+    expect(me.status).toBe(401);
+    expect(await me.json()).toMatchObject({ code: 'AUTHENTICATION_REQUIRED' });
+
+    const userinfo = await client.request('/oauth/userinfo', {
+      headers: { authorization: `Bearer ${body.access_token}` },
+    });
+    expect(userinfo.status).toBe(401);
+
+    const recognized = await client.request('/api/v1/oauth/client', {
+      headers: { authorization: `Bearer ${body.access_token}` },
+    });
+    expect(recognized.status).toBe(200);
+    expect(await recognized.json()).toMatchObject({ client_id: SERVER, scopes: ['games'] });
+
+    const publicClient = await client.request(
+      '/oauth/token',
+      form({
+        grant_type: 'client_credentials',
+        client_id: GAME,
+        scope: 'games',
+      }),
+    );
+    expect(publicClient.status).toBe(400);
+    expect(await publicClient.json()).toMatchObject({ error: 'unauthorized_client' });
+  });
+
+  it('requires pushed authorization when the client is configured for it', async () => {
+    const client = browser();
+    await signUpInBrowser(client, 'par@example.com');
+    const { verifier, challenge } = pkce();
+    const direct = await client.request(authorizePath(PAR_APP, PAR_REDIRECT, challenge, 'openid'));
+    expect(direct.status).toBe(302);
+    const denied = locationOf(direct);
+    expect(denied.origin).toBe('https://par.example.com');
+    expect(denied.searchParams.get('error')).toBe('invalid_request');
+
+    const pushed = await client.request(
+      '/oauth/par',
+      form({
+        client_id: PAR_APP,
+        client_secret: PAR_SECRET,
+        response_type: 'code',
+        redirect_uri: PAR_REDIRECT,
+        scope: 'openid',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+      }),
+    );
+    expect(pushed.status).toBe(201);
+    const handle = (await pushed.json()) as { request_uri: string; expires_in: number };
+    expect(handle.request_uri).toMatch(/^urn:ietf:params:oauth:request_uri:/);
+    secrets.push(handle.request_uri);
+
+    const authorize = await client.request(
+      `/oauth/authorize?${new URLSearchParams({
+        client_id: PAR_APP,
+        request_uri: handle.request_uri,
+      }).toString()}`,
+    );
+    expect(authorize.status).toBe(302);
+    const redirected = locationOf(authorize);
+    expect(redirected.origin).toBe('https://par.example.com');
+    const code = redirected.searchParams.get('code') ?? '';
+    secrets.push(code);
+    const tokens = await exchangeCode(client, {
+      clientId: PAR_APP,
+      redirectUri: PAR_REDIRECT,
+      code,
+      verifier,
+      secret: PAR_SECRET,
+    });
+    expect(tokens.id_token).toBeDefined();
   });
 });

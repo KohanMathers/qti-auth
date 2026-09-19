@@ -11,6 +11,7 @@ export interface ClientsTable {
   verified: boolean;
   redirect_uris: string[];
   allowed_scopes: string[] | null;
+  require_par: boolean;
   suspended_at: Date | null;
   owner_user_id: string | null;
   created_at: Generated<Date>;
@@ -77,7 +78,7 @@ export interface RefreshTokensTable {
 export interface AccessTokensTable {
   id: string;
   client_id: string;
-  user_id: string;
+  user_id: string | null;
   session_id: string | null;
   scopes: string[];
   amr: string[];
@@ -88,6 +89,41 @@ export interface AccessTokensTable {
   created_at: Generated<Date>;
 }
 
+export type DeviceAuthorizationStatus = 'pending' | 'authorized' | 'denied';
+
+export interface PushedAuthorizationRequestsTable {
+  id: string;
+  request_uri_hash: string;
+  client_id: string;
+  redirect_uri: string;
+  scopes: string[];
+  state: string | null;
+  nonce: string | null;
+  code_challenge: string;
+  expires_at: Date;
+  consumed_at: Date | null;
+  created_at: Generated<Date>;
+}
+
+export interface DeviceAuthorizationsTable {
+  id: string;
+  device_code_hash: string;
+  user_code_hash: string;
+  client_id: string;
+  scopes: string[];
+  interval_ms: number;
+  last_polled_at: Date | null;
+  status: DeviceAuthorizationStatus;
+  user_id: string | null;
+  session_id: string | null;
+  auth_time: Date | null;
+  amr: string[] | null;
+  acr: string | null;
+  expires_at: Date;
+  consumed_at: Date | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   clients: ClientsTable;
   consents: ConsentsTable;
@@ -95,4 +131,6 @@ export interface Database {
   authorization_codes: AuthorizationCodesTable;
   refresh_tokens: RefreshTokensTable;
   access_tokens: AccessTokensTable;
+  pushed_authorization_requests: PushedAuthorizationRequestsTable;
+  device_authorizations: DeviceAuthorizationsTable;
 }

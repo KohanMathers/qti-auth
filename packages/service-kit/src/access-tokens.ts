@@ -11,6 +11,7 @@ export const resolveAccessTokenRequestSchema = z.strictObject({
 
 export const resolvedAccessTokenSchema = z.strictObject({
   jti: z.string().min(1),
+  auth: z.enum(['oauth', 'service']),
   sub: z.string().min(1),
   client_id: z.string().min(1),
   scopes: z.array(z.string().min(1)),

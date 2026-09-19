@@ -1,14 +1,17 @@
 import type { Router } from '@qtiauth/service-kit';
 
+import { DEVICE_GRANT } from './device.ts';
 import { keyringOf } from './keys.ts';
 import { claimsFor } from './scopes.ts';
 import type { Context } from './service.ts';
 import {
   AUTHORIZE_PATH,
+  DEVICE_AUTHORIZATION_PATH,
   DISCOVERY_PATH,
   INTROSPECT_PATH,
   issuerUrl,
   JWKS_PATH,
+  PAR_PATH,
   REVOKE_PATH,
   TOKEN_PATH,
   USERINFO_PATH,
@@ -32,13 +35,22 @@ export function discoveryDocument(ctx: Context, issuer: string): Record<string, 
     jwks_uri: endpoint(issuer, JWKS_PATH),
     response_types_supported: ['code'],
     response_modes_supported: ['query'],
-    grant_types_supported: ['authorization_code', 'refresh_token'],
+    grant_types_supported: [
+      'authorization_code',
+      'refresh_token',
+      'client_credentials',
+      DEVICE_GRANT,
+    ],
     subject_types_supported: ['public'],
     id_token_signing_alg_values_supported: [algorithm],
     token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
     code_challenge_methods_supported: ['S256'],
     scopes_supported: scopes,
     claims_supported: claims,
+    device_authorization_endpoint: endpoint(issuer, DEVICE_AUTHORIZATION_PATH),
+    pushed_authorization_request_endpoint: endpoint(issuer, PAR_PATH),
+    request_uri_parameter_supported: true,
+    require_pushed_authorization_requests: false,
   };
 }
 

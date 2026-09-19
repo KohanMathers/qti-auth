@@ -603,12 +603,12 @@ Spec: §6.1 (protocol, scopes, consent)
 **Done when:** the **OpenID Foundation conformance suite** (Basic OP, Config OP, and the PKCE/refresh
 tests) passes, and the credential separation test passes for every route in every manifest.
 
-### P4.3 Additional grants — L
+### P4.3 Additional grants — L ✅
 Spec: §6.1
 
-- [ ] `client_credentials` and the `auth: service` gateway mode.
-- [ ] Device Authorization Grant (RFC 8628) with its user code entry page.
-- [ ] Pushed Authorization Requests (RFC 9126), optional per client.
+- [x] `client_credentials` and the `auth: service` gateway mode.
+- [x] Device Authorization Grant (RFC 8628) with its user code entry page.
+- [x] Pushed Authorization Requests (RFC 9126), optional per client.
 
 **Done when:** a CLI signs in with the device flow, and a service token can't reach a user-session route.
 

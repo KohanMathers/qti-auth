@@ -82,6 +82,7 @@ const identityManifest: RouteManifest = {
     route({ path: '/api/v1/legal', allow_pending_legal: true }),
     route({ path: '/api/v1/slow', auth: 'none' }),
     route({ path: '/api/v1/userinfo', auth: 'oauth', scopes: ['openid'] }),
+    route({ path: '/api/v1/games/intake', auth: 'service', scopes: ['games'] }),
     route({ path: '/auth/bind', auth: 'session', allow_account_states: ['active'] }),
     route({ path: '/auth/login', auth: 'none' }),
   ],
@@ -399,6 +400,7 @@ describe('gateway handler', () => {
   it('accepts a bearer access token on oauth routes and rejects it on session routes', async () => {
     const oauth: ResolvedAccessToken = {
       jti: 't1',
+      auth: 'oauth',
       sub: 'u1',
       client_id: 'game',
       scopes: ['openid', 'profile'],
@@ -435,6 +437,7 @@ describe('gateway handler', () => {
       session: null,
       oauth: {
         jti: 't1',
+        auth: 'oauth',
         sub: 'u1',
         client_id: 'game',
         scopes: ['profile'],
@@ -455,6 +458,44 @@ describe('gateway handler', () => {
       code: 'INSUFFICIENT_SCOPE',
       missing_scopes: ['openid'],
     });
+  });
+
+  it('accepts a client-credentials token only on service routes', async () => {
+    const service: ResolvedAccessToken = {
+      jti: 't1',
+      auth: 'service',
+      sub: 'studio',
+      client_id: 'studio',
+      scopes: ['games'],
+      sid: null,
+      account_state: 'active',
+      restrictions: [],
+      age_band: null,
+      parental_controls: null,
+      amr: [],
+      acr: 'aal1',
+    };
+    const { request, forwarded, verify } = await setup({ session: null, oauth: service });
+    const allowed = await request('/api/v1/games/intake', {
+      headers: { authorization: 'Bearer oauth-access-token' },
+    });
+    expect(allowed.status).toBe(200);
+    expect(await verify(forwarded[0])).toMatchObject({
+      auth: 'service',
+      sub: null,
+      client_id: 'studio',
+      scopes: ['games'],
+    });
+
+    const sessionRoute = await request('/api/v1/me', {
+      headers: { authorization: 'Bearer oauth-access-token' },
+    });
+    expect(sessionRoute.status).toBe(401);
+    const userinfo = await request('/api/v1/userinfo', {
+      headers: { authorization: 'Bearer oauth-access-token' },
+    });
+    expect(userinfo.status).toBe(401);
+    expect(forwarded).toHaveLength(1);
   });
 
   it('silently binds a browser navigation on another host to the account session', async () => {

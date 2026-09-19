@@ -14,7 +14,7 @@ import type { Database } from './database.ts';
 import { discoveryRoutes } from './discovery.ts';
 import { OIDC_ERRORS } from './errors.ts';
 import { oauthRoutes } from './oauth-routes.ts';
-import { consentRoutes } from './pages.ts';
+import { consentRoutes, deviceRoutes } from './pages.ts';
 
 export const MIGRATIONS_DIR = join(import.meta.dirname, 'migrations');
 
@@ -44,4 +44,5 @@ export const router = createServiceRouter<Context>(definition);
 discoveryRoutes(router);
 oauthRoutes(router);
 consentRoutes(router);
+deviceRoutes(router);
 authorizedRoutes(router);
