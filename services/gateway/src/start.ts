@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import { type Http2Bindings, type HttpBindings, serve } from '@hono/node-server';
 import { consumeCron, consumeIdempotentEvents, rpcRequest, serveRpc } from '@qtiauth/bus';
 import { openGeoIp } from '@qtiauth/geoip';
+import { parseEncryptionKey } from '@qtiauth/keys';
 import {
   closeServer,
   IDENTITY_KEYS_METHOD,
@@ -21,7 +22,6 @@ import { closeValkey, connectValkey, type Valkey, valkeyHealthCheck } from '@qti
 import { trustedProxies } from './client-ip.ts';
 import { allowedOrigins } from './cors.ts';
 import { createServiceRegistry, type ServiceRegistry, startDiscovery } from './discovery.ts';
-import { parseEncryptionKey } from './envelope.ts';
 import { createGatewayHandler, GATEWAY_SERVICE, type GatewayHandler } from './gateway.ts';
 import { hstsValue } from './headers.ts';
 import { type Keyring, kvKeySetStore, type KeySetStore, openKeyring } from './identity-keys.ts';

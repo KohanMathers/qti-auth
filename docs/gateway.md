@@ -110,9 +110,9 @@ For `auth: session` routes, in order:
 
 ## Internal identity keys
 
-The gateway signs identity tokens with an Ed25519 key. The key set lives in the NATS key-value bucket `qtiauth_gateway`, so every replica uses the same keys and restarts keep them. Private keys are envelope-encrypted: each key is encrypted with its own random AES-256-GCM key, which is encrypted with `identity_keys.encryption_key`. The gateway refuses to start if it can't decrypt the current key, for example after the encryption key was changed.
+The gateway signs identity tokens with an Ed25519 key, using `@qtiauth/keys`. The same package will hold OIDC and game-licence keys; each purpose has its own key set, so a compromise of one can't forge tokens for another. The identity key set lives in the NATS key-value bucket `qtiauth_gateway`, so every replica uses the same keys and restarts keep them. Private keys are envelope-encrypted: each key is encrypted with its own random AES-256-GCM key, which is encrypted with `identity_keys.encryption_key`. The gateway refuses to start if it can't decrypt the current key, for example after the encryption key was changed.
 
-The key is replaced once it's `rotate_after` old, checked at startup and on each `keys.rotate` cron tick. A replaced key stays in the published key set for `retain_after_rotation`, so tokens it signed can still be checked. Services fetch the key set over `qtiauth.rpc.gateway.identity_keys`, and fetch it again as soon as they see a token signed by a key they don't know, so a rotation takes effect straight away.
+The key is replaced once it's `rotate_after` old, checked at startup and on each `keys.rotate` cron tick. A replaced key stays in the published key set for `retain_after_rotation`, so tokens it signed can still be checked. Rotation writes the new key first, then signs with it. Services fetch the key set over `qtiauth.rpc.gateway.identity_keys`, and fetch it again as soon as they see a token signed by a key they don't know, so a rotation takes effect straight away.
 
 Losing the bucket isn't a problem: a new key is generated on the next start, and services pick it up the same way.
 

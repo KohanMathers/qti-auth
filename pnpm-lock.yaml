@@ -326,6 +326,25 @@ importers:
         specifier: 5.0.5
         version: 5.0.5
 
+  packages/keys:
+    dependencies:
+      '@nats-io/kv':
+        specifier: 3.4.0
+        version: 3.4.0
+      '@qtiauth/bus':
+        specifier: workspace:*
+        version: link:../bus
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@qtiauth/config':
+        specifier: workspace:*
+        version: link:../config
+      '@qtiauth/testing':
+        specifier: workspace:*
+        version: link:../testing
+
   packages/observability:
     dependencies:
       '@opentelemetry/api':
@@ -472,6 +491,9 @@ importers:
       '@qtiauth/geoip':
         specifier: workspace:*
         version: link:../../packages/geoip
+      '@qtiauth/keys':
+        specifier: workspace:*
+        version: link:../../packages/keys
       '@qtiauth/observability':
         specifier: workspace:*
         version: link:../../packages/observability

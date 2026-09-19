@@ -579,9 +579,10 @@ Depends on Phases 2 and 2b.
 ### P4.1 Keys — M
 Spec: §6.1 (keys)
 
-- [ ] Shared key-management package: generation, envelope encryption (`KEY_ENCRYPTION_KEY`),
-      rotation schedule, publish-until-expired.
-- [ ] Adopt it in the gateway (replacing the P1.1 internal-token key code).
+- [x] Shared key-management package: generation, envelope encryption (`KEY_ENCRYPTION_KEY`),
+      rotation schedule, publish-until-expired (`@qtiauth/keys`, `openKeyring`, EdDSA / ES256 /
+      RS256).
+- [x] Adopt it in the gateway (replacing the P1.1 internal-token key code).
 
 **Done when:** rotation publishes the new key before use and keeps the old one until its last token
 expires.

@@ -1,0 +1,23 @@
+{
+  "name": "@qtiauth/keys",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Signing-key generation, envelope encryption and rotation",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nats-io/kv": "3.4.0",
+    "@qtiauth/bus": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@qtiauth/config": "workspace:*",
+    "@qtiauth/testing": "workspace:*"
+  }
+}

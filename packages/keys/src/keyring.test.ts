@@ -1,10 +1,9 @@
-import { randomBytes } from 'node:crypto';
+import { createPublicKey, randomBytes, sign, verify } from 'node:crypto';
 
-import { signIdentityToken, staticIdentityKeys, verifyIdentityToken } from '@qtiauth/service-kit';
-import { testIdentity } from '@qtiauth/service-kit/testing';
 import { describe, expect, it } from 'vitest';
 
-import { KeyringError, memoryKeySetStore, openKeyring } from './identity-keys.ts';
+import { KeyringError, openKeyring } from './keyring.ts';
+import { memoryKeySetStore } from './store.ts';
 
 const DAY = 86_400_000;
 const encryptionKey = randomBytes(32);
@@ -16,8 +15,11 @@ function setup() {
     openKeyring({
       store,
       encryptionKey,
+      algorithm: 'EdDSA',
       rotateAfter: 30 * DAY,
       retainAfterRotation: 3_600_000,
+      purpose: 'identity',
+      setting: 'gateway.identity_keys.encryption_key',
       now: () => at,
     });
   return {
@@ -26,7 +28,6 @@ function setup() {
     advance: (ms: number) => {
       at += ms;
     },
-    now: () => new Date(at),
   };
 }
 
@@ -44,27 +45,25 @@ describe('openKeyring', () => {
     expect(store.value()?.keys.keys).toHaveLength(1);
   });
 
-  it('signs tokens that verify against its JWKS', async () => {
-    const { open, now } = setup();
+  it('signs with the active key and publishes it in JWKS', async () => {
+    const { open } = setup();
     const keyring = await open();
-    const token = signIdentityToken(testIdentity(), {
-      audience: 'identity',
-      key: keyring.signingKey(),
-      now: now(),
-    });
-    const keys = staticIdentityKeys(await keyring.jwks());
-    await expect(
-      verifyIdentityToken(token, { audience: 'identity', keys, clockTolerance: 5_000, now: now() }),
-    ).resolves.toMatchObject({ aud: 'identity' });
-    expect((await keyring.jwks()).keys[0]).toMatchObject({
+    const data = Buffer.from('identity-token');
+    const signature = sign(null, data, keyring.signingKey().privateKey);
+    const jwk = (await keyring.jwks()).keys[0];
+    if (jwk === undefined) throw new Error('expected a published key');
+    expect(jwk).toMatchObject({
       kty: 'OKP',
       crv: 'Ed25519',
       alg: 'EdDSA',
       use: 'sig',
+      kid: keyring.signingKey().kid,
     });
+    const publicKey = createPublicKey({ key: jwk, format: 'jwk' });
+    expect(verify(null, data, publicKey, signature)).toBe(true);
   });
 
-  it('rotates when due and keeps publishing the old key for a while', async () => {
+  it('rotates when due and keeps publishing the old key until tokens expire', async () => {
     const { open, advance } = setup();
     const keyring = await open();
     const replica = await open();
@@ -80,6 +79,7 @@ describe('openKeyring', () => {
     expect(rotated).not.toBe(original);
     expect(replica.signingKey().kid).toBe(rotated);
     expect((await keyring.jwks()).keys.map((key) => key.kid)).toEqual([rotated, original]);
+    expect(keyring.signingKey().kid).toBe(rotated);
 
     advance(3_600_000);
     expect((await keyring.jwks()).keys.map((key) => key.kid)).toEqual([rotated]);
@@ -103,9 +103,53 @@ describe('openKeyring', () => {
       openKeyring({
         store,
         encryptionKey: randomBytes(32),
+        algorithm: 'EdDSA',
         rotateAfter: 30 * DAY,
         retainAfterRotation: 3_600_000,
+        purpose: 'identity',
+        setting: 'gateway.identity_keys.encryption_key',
       }),
     ).rejects.toThrow(KeyringError);
+  });
+
+  it('refuses a stored key from a different algorithm', async () => {
+    const store = memoryKeySetStore();
+    await openKeyring({
+      store,
+      encryptionKey,
+      algorithm: 'EdDSA',
+      rotateAfter: 30 * DAY,
+      retainAfterRotation: 3_600_000,
+      purpose: 'oidc',
+      setting: 'oidc.keys.encryption_key',
+    });
+    await expect(
+      openKeyring({
+        store,
+        encryptionKey,
+        algorithm: 'ES256',
+        rotateAfter: 30 * DAY,
+        retainAfterRotation: 3_600_000,
+        purpose: 'oidc',
+        setting: 'oidc.keys.encryption_key',
+      }),
+    ).rejects.toThrow(/is not a ES256 key/);
+  });
+
+  it('generates ES256 and RS256 keys for other purposes', async () => {
+    for (const algorithm of ['ES256', 'RS256'] as const) {
+      const keyring = await openKeyring({
+        store: memoryKeySetStore(),
+        encryptionKey,
+        algorithm,
+        rotateAfter: 30 * DAY,
+        retainAfterRotation: 3_600_000,
+        purpose: 'oidc',
+        setting: 'oidc.keys.encryption_key',
+      });
+      const jwks = await keyring.jwks();
+      expect(jwks.keys[0]?.alg).toBe(algorithm);
+      expect(jwks.keys[0]?.kty).toBe(algorithm === 'ES256' ? 'EC' : 'RSA');
+    }
   });
 });
