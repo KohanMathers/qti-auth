@@ -5,6 +5,8 @@ import { AUDIT_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { openGeoIp } from '@qtiauth/geoip';
 import { untraced } from '@qtiauth/observability';
 import {
+  CHECK_TEXT_METHOD,
+  checkTextRequestSchema,
   heldObjectPrefix,
   NOTIFICATION_ALLOWED_METHOD,
   notificationAllowedRequestSchema,
@@ -34,7 +36,7 @@ import { sweepTokens } from './email-tokens.ts';
 import { EXPORT_RESUME_JOB, sweepExports } from './exports.ts';
 import { sweepAuthFailures } from './failures.ts';
 import { ACTIVITY_SUMMARY_JOB, sweepFamilySessions } from './family.ts';
-import { loadFilterOverlay, sweepFilterDecisions } from './filter.ts';
+import { applyFilter, loadFilterOverlay, sweepFilterDecisions } from './filter.ts';
 import { attachTextFilter } from './filter-state.ts';
 import {
   resumeDataExports,
@@ -629,6 +631,22 @@ export function identityService(options: IdentityOptions = {}) {
               };
             },
             onError: onHoldError,
+          }),
+        );
+        stack.push(
+          serveRpc(bus, {
+            method: CHECK_TEXT_METHOD,
+            handler: async (request) => {
+              const parsed = checkTextRequestSchema.safeParse(request);
+              if (!parsed.success) {
+                throw new RpcError('bad_request', 'text and context are required');
+              }
+              const result = await applyFilter(ctx, parsed.data.text, parsed.data.context);
+              return { decision: result.decision };
+            },
+            onError: (error) => {
+              log.error('text filter rpc failed', { error });
+            },
           }),
         );
         stack.push(

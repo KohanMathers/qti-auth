@@ -48,8 +48,7 @@ export function consentRoutes(router: Router<Context>): void {
           return `<li>${escapeHtml(text)}</li>`;
         })
         .join('');
-      const unverified =
-        client.verified || client.first_party ? '' : `<p>This app is not verified.</p>`;
+      const unverified = client.verified || client.first_party ? '' : `<p>Unverified app</p>`;
       return page(ctx, {
         title: `Authorize ${client.name}`,
         body: `${unverified}<p>${escapeHtml(client.name)} wants to:</p>
@@ -135,8 +134,7 @@ ${deviceEnterForm()}`,
           return `<li>${escapeHtml(text)}</li>`;
         })
         .join('');
-      const unverified =
-        client.verified || client.first_party ? '' : `<p>This app is not verified.</p>`;
+      const unverified = client.verified || client.first_party ? '' : `<p>Unverified app</p>`;
       return page(ctx, {
         title: `Authorize ${client.name}`,
         body: `${unverified}<p>Code ${escapeHtml(userCode)}. ${escapeHtml(client.name)} wants to:</p>

@@ -1212,6 +1212,8 @@ export const OIDC_SCOPE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
 export const OIDC_SCOPE_MESSAGE = 'Must be a scope like openid or achievements.write';
 export const OIDC_CLIENT_ID = /^[A-Za-z0-9._~-]{1,64}$/;
 export const OIDC_CLIENT_ID_MESSAGE = 'Must be 1–64 letters, digits, ., _, ~ or -';
+export const OIDC_CLIENT_NAME_MAX = 80;
+export const OIDC_CLIENT_DESCRIPTION_MAX = 200;
 export const OIDC_CLAIM = /^[a-z][a-z0-9_]*$/;
 
 export const DEFAULT_OIDC_SCOPES = {
@@ -1263,7 +1265,7 @@ function isRedirectUri(value: string): boolean {
 
 const oidcClient = z
   .strictObject({
-    name: z.string().min(1).max(80).describe('Name shown on the consent screen.'),
+    name: z.string().min(1).max(OIDC_CLIENT_NAME_MAX).describe('Name shown on the consent screen.'),
     type: z
       .enum(OIDC_CLIENT_TYPES)
       .describe('public clients have no secret. confidential clients do.'),
@@ -1403,6 +1405,17 @@ export const oidc = z
       })
       .prefault({})
       .describe('Back-channel logout delivery.'),
+    developer_portal: z
+      .strictObject({
+        max_clients_per_user: z
+          .int()
+          .min(1)
+          .max(1000)
+          .default(10)
+          .describe('How many OAuth clients a user may register.'),
+      })
+      .prefault({})
+      .describe('Developer portal limits.'),
     scopes: z
       .record(z.string().regex(OIDC_SCOPE, OIDC_SCOPE_MESSAGE), oidcScope)
       .default({})

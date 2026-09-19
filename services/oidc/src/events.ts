@@ -37,3 +37,22 @@ export function refreshReuseDetectedEvent(
     data,
   };
 }
+
+export interface ClientCreatedData {
+  client_id: string;
+  client_type: OidcClientType;
+  owner_user_id: string;
+}
+
+export function clientCreatedEvent(
+  clientId: string,
+  actor: EventActor,
+  data: ClientCreatedData,
+): NewEvent<ClientCreatedData> {
+  return {
+    type: OIDC_EVENTS.clientCreated,
+    actor,
+    subject: { type: 'oauth_client', id: clientId },
+    data,
+  };
+}

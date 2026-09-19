@@ -628,11 +628,11 @@ triggers a logout token to an app signed in via `account`.
 ### P4.5 Developer portal — M
 Spec: §6.1 (developer portal)
 
-- [ ] Client create/list/edit/delete, step-up secret regeneration, public and confidential types.
-- [ ] No approval gate. "Unverified app" state, the verify permission, suspension (revokes tokens).
-- [ ] Filter on names and descriptions, brand-name protection, per-user client limit, no clients for
+- [x] Client create/list/edit/delete, step-up secret regeneration, public and confidential types.
+- [x] No approval gate. "Unverified app" state, the verify permission, suspension (revokes tokens).
+- [x] Filter on names and descriptions, brand-name protection, per-user client limit, no clients for
       child accounts.
-- [ ] Authorized apps list and revoke for users.
+- [x] Authorized apps list and revoke for users.
 
 **Done when:** suspending a client invalidates its live access tokens on the next introspection and
 JWT check.

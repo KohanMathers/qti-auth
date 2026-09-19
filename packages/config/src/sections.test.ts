@@ -634,6 +634,7 @@ describe('oidc', () => {
       max_retry_delay: 3_600_000,
       allow_private_targets: false,
     });
+    expect(parsed.developer_portal).toEqual({ max_clients_per_user: 10 });
     expect(parsed.scopes['openid']).toEqual({ consent: 'Sign you in', claims: [] });
     expect(parsed.scopes['email']?.claims).toEqual(['email', 'email_verified']);
     expect(parsed.clients).toEqual({});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseRedirectUri, redirectsMatch } from './redirect.ts';
+import { isRedirectUri, parseRedirectUri, redirectsMatch } from './redirect.ts';
 
 describe('redirectsMatch', () => {
   it('matches an exact https URI, including query', () => {
@@ -20,8 +20,12 @@ describe('redirectsMatch', () => {
     expect(redirectsMatch(registered, 'https://127.0.0.1/callback')).toBe(false);
   });
 
-  it('refuses userinfo, passwords and fragments', () => {
-    expect(parseRedirectUri('https://user:pass@app.example.com/callback')).toBeUndefined();
+  it('accepts https and loopback http URIs for registration', () => {
+    expect(isRedirectUri('https://app.example.com/callback')).toBe(true);
+    expect(isRedirectUri('http://127.0.0.1/callback')).toBe(true);
+    expect(isRedirectUri('http://[::1]/callback')).toBe(true);
+    expect(isRedirectUri('http://example.com/callback')).toBe(false);
+    expect(isRedirectUri('https://user:pass@app.example.com/callback')).toBe(false);
     expect(parseRedirectUri('https://app.example.com/callback#frag')).toBeUndefined();
     expect(parseRedirectUri('not a url')).toBeUndefined();
   });

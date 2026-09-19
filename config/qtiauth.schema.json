@@ -2796,6 +2796,21 @@
           },
           "additionalProperties": false
         },
+        "developer_portal": {
+          "description": "Developer portal limits.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "max_clients_per_user": {
+              "default": 10,
+              "description": "How many OAuth clients a user may register.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "additionalProperties": false
+        },
         "scopes": {
           "description": "Scopes and the claims they release. Built-in scopes stay unless you replace them. Add extra scopes here.",
           "default": {},

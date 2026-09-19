@@ -5,6 +5,7 @@ export interface ClientsTable {
   id: string;
   client_id: string;
   name: string;
+  description: string;
   type: OidcClientType;
   secret_hash: string | null;
   first_party: boolean;

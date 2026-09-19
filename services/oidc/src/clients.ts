@@ -13,6 +13,7 @@ export interface ClientRecord {
   id: string;
   client_id: string;
   name: string;
+  description: string;
   type: OidcClientType;
   first_party: boolean;
   verified: boolean;
@@ -23,6 +24,8 @@ export interface ClientRecord {
   backchannel_logout_session_required: boolean;
   suspended_at: Date | null;
   owner_user_id: string | null;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface ClientSeed {
@@ -51,6 +54,7 @@ export function presentedClient(row: ClientRow): ClientRecord {
     id: row.id,
     client_id: row.client_id,
     name: row.name,
+    description: row.description,
     type: row.type,
     first_party: row.first_party,
     verified: row.verified,
@@ -61,6 +65,8 @@ export function presentedClient(row: ClientRow): ClientRecord {
     backchannel_logout_session_required: row.backchannel_logout_session_required,
     suspended_at: row.suspended_at,
     owner_user_id: row.owner_user_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
@@ -121,6 +127,7 @@ export async function seedClients(
         id: randomUUIDv7(),
         client_id: clientId,
         name: definition.name,
+        description: '',
         type: definition.type,
         secret_hash:
           definition.type === 'confidential' && definition.secret !== ''

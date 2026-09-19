@@ -20,6 +20,7 @@ import { type CapturedEmails, captureEmails } from '../../identity/src/testing.t
 import type { Database } from './database.ts';
 import { LOGOUT_EVENT } from './logout.ts';
 import { pkceChallenge, pkceVerifier } from './pkce.ts';
+import { suspendClient } from './portal.ts';
 import { definition } from './service.ts';
 import { oidcService } from './start.ts';
 
@@ -524,7 +525,7 @@ describe('oidc through the gateway', () => {
     expect(page.status).toBe(200);
     const html = await page.text();
     expect(html).toContain('Studio wants to');
-    expect(html).toContain('This app is not verified');
+    expect(html).toContain('Unverified app');
 
     const allowed = await client.request(
       '/oauth/consent',
@@ -997,5 +998,73 @@ describe('oidc through the gateway', () => {
     );
     expect(refreshed.status).toBe(400);
     expect(await refreshed.json()).toMatchObject({ error: 'invalid_grant' });
+  });
+
+  it('invalidates live tokens on the next introspection and JWT check after a client is suspended', async () => {
+    const client = browser();
+    await signUpInBrowser(client, 'portal-suspend@example.com');
+    const created = await client.request(
+      '/api/v1/oauth/clients',
+      json({
+        name: 'Suspend Me',
+        type: 'confidential',
+        redirect_uris: ['http://127.0.0.1/portal-callback'],
+      }),
+    );
+    expect(created.status).toBe(201);
+    const app = (await created.json()) as { client_id: string; secret: string };
+    secrets.push(app.secret);
+
+    const { verifier, challenge } = pkce();
+    const authorize = await client.request(
+      authorizePath(app.client_id, 'http://127.0.0.1/portal-callback', challenge, 'openid'),
+    );
+    expect(authorize.status).toBe(302);
+    const consent = locationOf(authorize);
+    const requestId = consent.searchParams.get('request_id') ?? '';
+    const page = await client.request(`${consent.pathname}${consent.search}`);
+    expect(await page.text()).toContain('Unverified app');
+    const allowed = await client.request(
+      '/oauth/consent',
+      form({ request_id: requestId, decision: 'allow' }),
+    );
+    const code = locationOf(allowed).searchParams.get('code') ?? '';
+    secrets.push(code);
+    const tokens = await exchangeCode(client, {
+      clientId: app.client_id,
+      redirectUri: 'http://127.0.0.1/portal-callback',
+      code,
+      verifier,
+      secret: app.secret,
+    });
+
+    const live = await client.request('/oauth/userinfo', {
+      headers: { authorization: `Bearer ${tokens.access_token}` },
+    });
+    expect(live.status).toBe(200);
+
+    const result = await suspendClient(oidc.context.db, {
+      clientId: app.client_id,
+      actor: { type: 'system', id: 'oidc' },
+      now: new Date(),
+    });
+    expect(result.status).toBe('ok');
+    oidc.context.outbox.wake();
+
+    const userinfo = await client.request('/oauth/userinfo', {
+      headers: { authorization: `Bearer ${tokens.access_token}` },
+    });
+    expect(userinfo.status).toBe(401);
+
+    const introspect = await client.request(
+      '/oauth/introspect',
+      form({
+        token: tokens.access_token,
+        client_id: app.client_id,
+        client_secret: app.secret,
+      }),
+    );
+    expect(introspect.status).toBe(401);
+    expect(await introspect.json()).toMatchObject({ error: 'invalid_client' });
   });
 });

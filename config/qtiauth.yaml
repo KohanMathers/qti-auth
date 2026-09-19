@@ -298,6 +298,8 @@ oidc:
     retry_delay: 1m
     max_retry_delay: 1h
     allow_private_targets: false
+  developer_portal:
+    max_clients_per_user: 10
   scopes: {} # built-in scopes stay; add or replace them here
   clients: {} # { client_id: { name, type, first_party, redirect_uris, secret, backchannel_logout_uri } }
 

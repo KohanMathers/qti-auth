@@ -2,6 +2,13 @@ function isLoopbackHost(hostname: string): boolean {
   return hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
 }
 
+export function isRedirectUri(value: string): boolean {
+  const url = parseRedirectUri(value);
+  if (!url) return false;
+  if (isLoopbackHost(url.hostname)) return url.protocol === 'http:';
+  return url.protocol === 'https:';
+}
+
 export function parseRedirectUri(value: string): URL | undefined {
   try {
     const url = new URL(value);

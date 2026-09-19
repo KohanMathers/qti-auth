@@ -3,12 +3,27 @@ import type { Kysely, Transaction } from 'kysely';
 import type { Database } from './database.ts';
 import { iso } from './iso.ts';
 import { endAccount, exportLogoutDeliveries } from './logout.ts';
+import { eraseOwnedClients } from './portal.ts';
 
 export async function exportUser(
   db: Kysely<Database>,
   userId: string,
 ): Promise<Record<string, unknown>> {
-  const [consents, refresh, access, devices, logouts] = await Promise.all([
+  const [owned, consents, refresh, access, devices, logouts] = await Promise.all([
+    db
+      .selectFrom('clients')
+      .select([
+        'clients.client_id as client_id',
+        'clients.name as name',
+        'clients.description as description',
+        'clients.type as type',
+        'clients.verified as verified',
+        'clients.suspended_at as suspended_at',
+        'clients.created_at as created_at',
+      ])
+      .where('clients.owner_user_id', '=', userId)
+      .orderBy('clients.created_at')
+      .execute(),
     db
       .selectFrom('consents')
       .innerJoin('clients', 'clients.id', 'consents.client_id')
@@ -66,6 +81,15 @@ export async function exportUser(
     exportLogoutDeliveries(db, userId),
   ]);
   return {
+    clients: owned.map((row) => ({
+      client_id: row.client_id,
+      name: row.name,
+      description: row.description,
+      type: row.type,
+      verified: row.verified,
+      suspended: row.suspended_at !== null,
+      created_at: iso(row.created_at),
+    })),
     consents: consents.map((row) => ({
       client_id: row.client_id,
       name: row.name,
@@ -105,6 +129,7 @@ export async function eraseUser(
   userId: string,
   options: { deliverLogout?: boolean; now?: Date } = {},
 ): Promise<void> {
+  await eraseOwnedClients(trx, userId);
   await endAccount(trx, {
     userId,
     cause: 'deletion',

@@ -16,6 +16,8 @@ export const DISCOVERY_PATH = '/.well-known/openid-configuration';
 export const JWKS_PATH = '/.well-known/jwks.json';
 export const AUTHORIZED_PATH = '/api/v1/oauth/authorized';
 export const CLIENT_PATH = '/api/v1/oauth/client';
+export const CLIENTS_PATH = '/api/v1/oauth/clients';
+export const ADMIN_CLIENTS_PATH = '/api/v1/admin/oauth/clients';
 
 export class OidcConfigError extends Error {
   constructor(message: string) {

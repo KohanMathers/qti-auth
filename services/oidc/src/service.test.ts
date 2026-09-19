@@ -13,6 +13,7 @@ describe('oidc service', () => {
       '0002_oidc',
       '0003_grants',
       '0004_logout',
+      '0005_portal',
     ]);
   });
 
@@ -21,14 +22,23 @@ describe('oidc service', () => {
     const { routes } = router.manifest();
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
       'DELETE /api/v1/oauth/authorized/:client_id',
+      'DELETE /api/v1/oauth/clients/:client_id',
       'GET /.well-known/jwks.json',
       'GET /.well-known/openid-configuration',
       'GET /api/v1/oauth/authorized',
       'GET /api/v1/oauth/client',
+      'GET /api/v1/oauth/clients',
+      'GET /api/v1/oauth/clients/:client_id',
       'GET /oauth/authorize',
       'GET /oauth/consent',
       'GET /oauth/device',
       'GET /oauth/userinfo',
+      'PATCH /api/v1/oauth/clients/:client_id',
+      'POST /api/v1/admin/oauth/clients/:client_id/suspend',
+      'POST /api/v1/admin/oauth/clients/:client_id/unsuspend',
+      'POST /api/v1/admin/oauth/clients/:client_id/verify',
+      'POST /api/v1/oauth/clients',
+      'POST /api/v1/oauth/clients/:client_id/secret',
       'POST /oauth/consent',
       'POST /oauth/device',
       'POST /oauth/device_authorization',
@@ -72,12 +82,36 @@ describe('oidc service', () => {
     expect(route('GET', '/api/v1/oauth/client')).toMatchObject({ auth: 'service' });
     expect(route('GET', '/.well-known/openid-configuration')).toMatchObject({ auth: 'none' });
     expect(route('GET', '/api/v1/oauth/authorized')).toMatchObject({ auth: 'session' });
+    expect(route('POST', '/api/v1/oauth/clients')).toMatchObject({ auth: 'session' });
+    expect(route('POST', '/api/v1/oauth/clients/:client_id/secret')).toMatchObject({
+      auth: 'session',
+      step_up: true,
+    });
+    expect(route('POST', '/api/v1/admin/oauth/clients/:client_id/verify')).toMatchObject({
+      auth: 'session',
+      permissions: ['oidc.clients.verify'],
+    });
+    expect(route('POST', '/api/v1/admin/oauth/clients/:client_id/suspend')).toMatchObject({
+      auth: 'session',
+      permissions: ['oidc.clients.suspend'],
+    });
+    expect(route('POST', '/api/v1/admin/oauth/clients/:client_id/unsuspend')).toMatchObject({
+      auth: 'session',
+      permissions: ['oidc.clients.suspend'],
+    });
   });
 
   it('lists its error codes in OpenAPI', () => {
     const document = openApiDocument(router) as { 'x-qtiauth-errors': { code: string }[] };
     expect(document['x-qtiauth-errors'].map((error) => error.code)).toEqual(
-      expect.arrayContaining(['CLIENT_NOT_FOUND', 'AUTHORIZATION_INVALID']),
+      expect.arrayContaining([
+        'CLIENT_NOT_FOUND',
+        'AUTHORIZATION_INVALID',
+        'DEVELOPER_PORTAL_DISABLED',
+        'CLIENT_CHILD_ACCOUNT',
+        'CLIENT_LIMIT_REACHED',
+        'CLIENT_NAME_REJECTED',
+      ]),
     );
   });
 });

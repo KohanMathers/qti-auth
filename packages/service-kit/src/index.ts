@@ -96,6 +96,14 @@ export {
   type PaginationLimits,
 } from './pagination.ts';
 export {
+  CHECK_TEXT_METHOD,
+  CHECK_TEXT_SERVICE,
+  type CheckTextRequest,
+  checkTextRequestSchema,
+  type CheckTextResponse,
+  checkTextResponseSchema,
+} from './check-text.ts';
+export {
   type DeclaredNotification,
   declaredNotificationSchema,
   defineNotificationCategories,

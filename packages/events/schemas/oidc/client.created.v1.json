@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.oidc.client.created.v1",
+  "title": "OAuth client created",
+  "description": "A user registered an OAuth client in the developer portal. The subject is the client.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["client_id", "client_type", "owner_user_id"],
+  "properties": {
+    "client_id": {
+      "description": "The public OAuth client_id.",
+      "type": "string",
+      "minLength": 1
+    },
+    "client_type": {
+      "description": "public or confidential, as registered.",
+      "enum": ["public", "confidential"]
+    },
+    "owner_user_id": {
+      "description": "The account that owns the client.",
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

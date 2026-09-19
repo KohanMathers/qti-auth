@@ -377,7 +377,7 @@ GeoIP defaults to DB-IP Lite (CC-BY 4.0) at `geoip.database_path`. Set `geoip.so
 
 ### Text filter
 
-Identity loads the word lists in `text_filter.lists_dir` and filters public text with the pipeline in [SPEC §4.11](../SPEC.md#411-text-filter-core-library): allowlist, exact block, dictionary (this is what saves Scunthorpe), then tokens and padded B_loose matches. It never find-and-replaces, never substring-matches B_exact, and never maps `1` to `i`. Every decision is stored in `filter_decisions`.
+Identity loads the word lists in `text_filter.lists_dir` and filters public text with the pipeline in [SPEC §4.11](../SPEC.md#411-text-filter-core-library): allowlist, exact block, dictionary (this is what saves Scunthorpe), then tokens and padded B_loose matches. It never find-and-replaces, never substring-matches B_exact, and never maps `1` to `i`. Every decision is stored in `filter_decisions`. Other services ask `qtiauth.rpc.identity.check_text` with `{ text, context }` and get `{ decision: "allow" | "block" }`.
 
 `qtiauth lists update [--ldnoobw <commit>]` vendors every LDNOOBW language file at a pinned commit (spaces stripped; `tlh` omitted), SCOWL size 70, ONS and US SSA given names, US Census surnames, and GeoNames places. `qtiauth lists audit` prints dictionary words that contain a blocked substring.
 

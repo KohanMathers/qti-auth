@@ -722,6 +722,8 @@ export async function introspect(
   ) {
     return inactive();
   }
+  const tokenClient = await findClientById(ctx.db, row.client_id);
+  if (!tokenClient || isSuspended(tokenClient, now)) return inactive();
   oidcMetrics(ctx.metrics).introspection(true);
   return Response.json(
     {

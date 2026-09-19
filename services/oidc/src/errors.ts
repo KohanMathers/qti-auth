@@ -6,4 +6,19 @@ export const OIDC_ERRORS = defineErrors({
     status: 400,
     title: 'This authorization request is unknown, has expired or has already been used',
   },
+  DEVELOPER_PORTAL_DISABLED: { status: 403, title: 'The developer portal is turned off' },
+  CLIENT_CHILD_ACCOUNT: {
+    status: 403,
+    title: 'Child accounts cannot register OAuth clients',
+  },
+  CLIENT_LIMIT_REACHED: {
+    status: 409,
+    title: 'No more OAuth clients can be created on this account',
+  },
+  CLIENT_NAME_REJECTED: { status: 400, title: 'This client name is not allowed' },
+  CLIENT_DESCRIPTION_REJECTED: { status: 400, title: 'This client description is not allowed' },
+  CLIENT_SECRET_NOT_APPLICABLE: {
+    status: 400,
+    title: 'Public clients do not have a secret',
+  },
 });
