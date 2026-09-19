@@ -1,6 +1,9 @@
 <mjml lang="en-GB">
   <mj-head>
-    <mj-title>{{ username }} asked to remove the parent or guardian link on {{ brand.product_name }}</mj-title>
+    <mj-title
+      >{{ username }} asked to remove the parent or guardian link on
+      {{ brand.product_name }}</mj-title
+    >
     <mj-preview>Approve or decline this request</mj-preview>
     <mj-attributes>
       <mj-all

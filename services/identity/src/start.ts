@@ -15,6 +15,9 @@ import {
   type Stoppable,
   storageHealthCheck,
   unwind,
+  USER_CLAIMS_METHOD,
+  userClaimsRequestSchema,
+  type UserClaimsResponse,
 } from '@qtiauth/service-kit';
 import { openTextFilter, resolveListsDir } from '@qtiauth/text-filter';
 import { closeValkey, connectValkey } from '@qtiauth/valkey';
@@ -83,6 +86,7 @@ import { type Context, definition, router } from './service.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
 import { accountOrigin, encryptionKey, sessionSecuritySettings } from './settings.ts';
 import { sharedObjectStore } from './storage-state.ts';
+import { userClaims } from './user-claims.ts';
 
 export const RETENTION_JOB = 'retention.sweep';
 export const STATS_INTERVAL = 60_000;
@@ -253,6 +257,26 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('session resolution failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          serveRpc<unknown, UserClaimsResponse>(bus, {
+            method: USER_CLAIMS_METHOD,
+            handler: async (request) => {
+              const parsed = userClaimsRequestSchema.safeParse(request);
+              if (!parsed.success) throw new RpcError('bad_request', 'user_id is required');
+              return {
+                user: await userClaims(db, {
+                  userId: parsed.data.user_id,
+                  bands: config.age.bands,
+                  now: new Date(),
+                }),
+              };
+            },
+            onError: (error) => {
+              log.error('user claims lookup failed', { error });
             },
           }),
         );

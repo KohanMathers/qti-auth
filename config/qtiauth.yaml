@@ -280,6 +280,21 @@ legal:
   public_history: true
   documents_dir: legal
 
+oidc:
+  issuer: null # null uses the api surface origin
+  resource: null # access token audience; null uses the issuer
+  signing:
+    algorithm: ES256 # ES256 | RS256
+    encryption_key: '${env:KEY_ENCRYPTION_KEY}'
+    rotate_after: 90d
+    retain_after_rotation: 1h
+  authorization_code_ttl: 1m
+  access_ttl: 15m
+  id_ttl: 15m
+  refresh_ttl: 30d
+  scopes: {} # built-in scopes stay; add or replace them here
+  clients: {} # { client_id: { name, type, first_party, redirect_uris, secret } }
+
 rate_limits: # per: ip | user | client | email | account, or a list counted as one combination
   global: { per: ip, limit: 300, window: 1m }
   auth_password: { per: [ip, account], limit: 10, window: 15m, on_store_failure: closed }
@@ -292,6 +307,8 @@ rate_limits: # per: ip | user | client | email | account, or a list counted as o
   guest_ticket: { per: ip, limit: 3, window: 1h }
   key_redeem: { per: [ip, user], limit: 10, window: 1h }
   kb_feedback: { per: ip, limit: 30, window: 1h }
+  oauth_authorize: { per: ip, limit: 60, window: 1m }
+  oauth_token: { per: ip, limit: 60, window: 1m, on_store_failure: closed }
 
 scheduler:
   timezone: UTC
@@ -322,6 +339,7 @@ retention:
   session_security_events: 90d
   filter_decisions: 30d
   audit: 730d
+  oauth: 30d
 
 storage:
   enabled: false

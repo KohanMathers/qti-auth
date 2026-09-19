@@ -190,6 +190,28 @@ export {
   userObjectPrefix,
 } from './storage.ts';
 export {
+  RESOLVE_ACCESS_TOKEN_METHOD,
+  RESOLVE_ACCESS_TOKEN_SERVICE,
+  type ResolvedAccessToken,
+  resolvedAccessTokenSchema,
+  type ResolveAccessTokenRequest,
+  resolveAccessTokenRequestSchema,
+  type ResolveAccessTokenResponse,
+  resolveAccessTokenResponseSchema,
+} from './access-tokens.ts';
+export {
+  AGE_ASSURANCE_STRENGTHS,
+  type AgeAssuranceStrength,
+  USER_CLAIMS_METHOD,
+  USER_CLAIMS_SERVICE,
+  type UserClaims,
+  type UserClaimsRequest,
+  userClaimsRequestSchema,
+  userClaimsResponseSchema,
+  type UserClaimsResponse,
+  userClaimsSchema,
+} from './user-claims.ts';
+export {
   hashSessionToken,
   RESOLVE_SESSION_METHOD,
   RESOLVE_SESSION_SERVICE,

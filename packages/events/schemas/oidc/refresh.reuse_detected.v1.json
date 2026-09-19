@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.oidc.refresh.reuse_detected.v1",
+  "title": "Refresh token reuse detected",
+  "description": "A refresh token that had already been rotated was presented. The token family is revoked. The subject is the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["client_id", "family_id"],
+  "properties": {
+    "client_id": {
+      "description": "The OAuth client that presented the reused token.",
+      "type": "string",
+      "minLength": 1
+    },
+    "family_id": {
+      "description": "The refresh-token family that was revoked.",
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

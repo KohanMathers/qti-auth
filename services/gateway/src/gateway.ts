@@ -15,6 +15,7 @@ import {
   REQUEST_ID_HEADER,
   requestIdOf,
   RESOLVE_SESSION_SERVICE,
+  type ResolvedAccessToken,
   type ResolvedSession,
   REVOKED_SESSIONS_HEADER,
   type Router,
@@ -31,6 +32,7 @@ import {
   toResponse,
 } from '@qtiauth/service-kit';
 
+import type { AccessTokenResolver } from './access-tokens.ts';
 import { clientIp, type TrustedProxies } from './client-ip.ts';
 import { applyCors, isPreflight, isStateChanging, preflightResponse } from './cors.ts';
 import { ERRORS } from './errors.ts';
@@ -104,6 +106,7 @@ export interface GatewayHandlerOptions {
   routes: () => RouteTable;
   rateLimiter: RateLimiter;
   sessions: SessionResolver;
+  accessTokens?: AccessTokenResolver;
   geoip?: GeoIp;
   signingKey: () => SigningKey;
   local: Router<LocalContext>;
@@ -114,8 +117,16 @@ export interface GatewayHandlerOptions {
 }
 
 const FLOW_COOKIE_MAX_AGE = 600;
+const BEARER = /^Bearer[ \t]+(\S+)$/i;
 
 export type GatewayHandler = (request: Request, connection: Connection) => Promise<Response>;
+
+function bearerAccessToken(request: Request): string | null {
+  const header = request.headers.get('authorization');
+  if (header === null) return null;
+  const match = BEARER.exec(header);
+  return match?.[1] ?? null;
+}
 
 function lookupMethod(method: string): string {
   return method === 'HEAD' ? 'GET' : method;
@@ -156,6 +167,12 @@ function denialRedirect(input: {
   if (needsBinding && !input.bindAttempted) {
     const location = bindStartUrl(account, input.surface, `${input.browserPath}${input.search}`);
     return location === null ? null : { location, setBindCookie: true };
+  }
+  if (input.code === 'AUTHENTICATION_REQUIRED') {
+    if (needsBinding && input.bindAttempted) return null;
+    const returnTo = encodeURIComponent(`${input.browserPath}${input.search}`);
+    const login = surfacePublicUrl(account, `${LOGIN_PATH}?return_to=${returnTo}`);
+    return login === null ? null : { location: login, setBindCookie: false };
   }
   return null;
 }
@@ -250,12 +267,13 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
       policy: string,
       session: ResolvedSession | null,
       body: Uint8Array | null,
+      oauth: ResolvedAccessToken | null,
     ) => {
       let parsed: Promise<unknown> | undefined;
       limits = await rateLimiter.check(policy, {
         ip,
-        user: session?.user_id ?? null,
-        client: null,
+        user: session?.user_id ?? oauth?.sub ?? null,
+        client: oauth?.client_id ?? null,
         body: () => {
           parsed ??= Promise.resolve().then(() => {
             if (body === null || !isJsonRequest(request)) return null;
@@ -351,16 +369,16 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
 
     const handle = async (): Promise<Response> => {
       if (!matched) {
-        return (await limit(GLOBAL_POLICY, null, null)) ?? problem('NOT_FOUND');
+        return (await limit(GLOBAL_POLICY, null, null, null)) ?? problem('NOT_FOUND');
       }
       if (isPreflight(request)) {
         return (
-          (await limit(GLOBAL_POLICY, null, null)) ??
+          (await limit(GLOBAL_POLICY, null, null, null)) ??
           preflightResponse(request, options.allowedOrigins)
         );
       }
       if (lookup.status !== 'found') {
-        const refused = await limit(GLOBAL_POLICY, null, null);
+        const refused = await limit(GLOBAL_POLICY, null, null, null);
         if (refused) return refused;
         if (lookup.status === 'method_not_allowed') {
           return problem('METHOD_NOT_ALLOWED', { headers: { Allow: lookup.allowed.join(', ') } });
@@ -377,6 +395,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
       requestBytes = read.body?.byteLength ?? 0;
 
       let session: ResolvedSession | null = null;
+      let oauth: ResolvedAccessToken | null = null;
       const token = readCookie(request.headers.get('cookie'), cookieName);
       // Identity needs the caller's session id even on routes that do not take a
       // session, to restore a challenged session and to bind a linking flow.
@@ -397,7 +416,19 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         }
       }
 
-      const refused = await limit(route.rate_limit, session, read.body);
+      if (route.auth === 'oauth') {
+        const presented = bearerAccessToken(request);
+        if (presented !== null && options.accessTokens) {
+          const resolved = await options.accessTokens.resolve(presented);
+          if (resolved.status === 'unavailable') return problem('SERVICE_UNAVAILABLE');
+          if (resolved.status === 'ok') {
+            oauth = resolved.token;
+            requestLog = requestLog.child({ user_id: oauth.sub });
+          }
+        }
+      }
+
+      const refused = await limit(route.rate_limit, session, read.body, oauth);
       if (refused) return refused;
 
       if (isStateChanging(request.method)) {
@@ -406,10 +437,15 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         if (crossOrigin || missingOrigin) return problem('ORIGIN_NOT_ALLOWED');
       }
 
-      const denial = checkPolicy(entry, session, {
-        stepUpWindow: config.security.step_up_window,
-        now: now(),
-      });
+      const denial = checkPolicy(
+        entry,
+        session,
+        {
+          stepUpWindow: config.security.step_up_window,
+          now: now(),
+        },
+        oauth,
+      );
       if (denial) {
         const redirectable =
           route.auth === 'session' &&
@@ -443,7 +479,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         });
       }
 
-      const identity = identityFor(entry, session, requestId);
+      const identity = identityFor(entry, session, requestId, oauth);
       if (entry.service === GATEWAY_SERVICE) {
         const local = localRoutes.get(`${route.method} ${route.path}`);
         if (!local) return problem('NOT_FOUND');

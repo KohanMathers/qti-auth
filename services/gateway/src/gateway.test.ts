@@ -14,6 +14,7 @@ import {
   IDENTITY_HEADER,
   type ManifestRoute,
   openApiDocument,
+  type ResolvedAccessToken,
   type ResolvedSession,
   REVOKED_SESSIONS_HEADER,
   type RouteManifest,
@@ -80,6 +81,7 @@ const identityManifest: RouteManifest = {
     route({ method: 'DELETE', path: '/api/v1/sessions/:session_id' }),
     route({ path: '/api/v1/legal', allow_pending_legal: true }),
     route({ path: '/api/v1/slow', auth: 'none' }),
+    route({ path: '/api/v1/userinfo', auth: 'oauth', scopes: ['openid'] }),
     route({ path: '/auth/bind', auth: 'session', allow_account_states: ['active'] }),
     route({ path: '/auth/login', auth: 'none' }),
   ],
@@ -106,6 +108,7 @@ function session(overrides: Partial<ResolvedSession> = {}): ResolvedSession {
 
 interface SetupOptions {
   session?: ResolvedSession | null;
+  oauth?: ResolvedAccessToken | null;
   rateLimits?: unknown;
   manifests?: RouteManifest[];
   local?: typeof router;
@@ -114,6 +117,7 @@ interface SetupOptions {
 }
 
 async function setup(options: SetupOptions = {}) {
+  const oauthToken = options.oauth;
   const config = {
     cookies: sections.cookies.parse({}),
     gateway: sections.gateway.parse({ http: { max_body_size: 1024 } }),
@@ -192,6 +196,18 @@ async function setup(options: SetupOptions = {}) {
     }),
     signingKey: () => keyring.signingKey(),
     local,
+    ...(oauthToken === undefined
+      ? {}
+      : {
+          accessTokens: {
+            resolve: () =>
+              Promise.resolve(
+                oauthToken === null
+                  ? { status: 'none' as const }
+                  : { status: 'ok' as const, token: oauthToken },
+              ),
+          },
+        }),
     localContext: (surface) => ({
       surface,
       health: () =>
@@ -368,6 +384,77 @@ describe('gateway handler', () => {
     expect(stale.status).toBe(401);
     expect(stale.headers.get('set-cookie')).toContain('__Host-qtiauth_session=; Path=/; Max-Age=0');
     expect(forwarded).toHaveLength(0);
+  });
+
+  it('sends a browser navigation that needs a session to login', async () => {
+    const { request, forwarded } = await setup({ session: null });
+    const browse = await request('/api/v1/me', { headers: { accept: 'text/html' } });
+    expect(browse.status).toBe(302);
+    expect(browse.headers.get('location')).toBe(
+      `https://${HOST}/auth/login?return_to=%2Fapi%2Fv1%2Fme`,
+    );
+    expect(forwarded).toHaveLength(0);
+  });
+
+  it('accepts a bearer access token on oauth routes and rejects it on session routes', async () => {
+    const oauth: ResolvedAccessToken = {
+      jti: 't1',
+      sub: 'u1',
+      client_id: 'game',
+      scopes: ['openid', 'profile'],
+      sid: 's1',
+      account_state: 'active',
+      restrictions: [],
+      age_band: 'adult',
+      parental_controls: null,
+      amr: ['email'],
+      acr: 'aal1',
+    };
+    const { request, forwarded, verify } = await setup({ session: null, oauth });
+    const allowed = await request('/api/v1/userinfo', {
+      headers: { authorization: 'Bearer oauth-access-token' },
+    });
+    expect(allowed.status).toBe(200);
+    expect(await verify(forwarded[0])).toMatchObject({
+      auth: 'oauth',
+      sub: 'u1',
+      client_id: 'game',
+      scopes: ['openid', 'profile'],
+    });
+
+    const sessionRoute = await request('/api/v1/me', {
+      headers: { authorization: 'Bearer oauth-access-token' },
+    });
+    expect(sessionRoute.status).toBe(401);
+    expect(await sessionRoute.json()).toMatchObject({ code: 'AUTHENTICATION_REQUIRED' });
+    expect(forwarded).toHaveLength(1);
+  });
+
+  it('needs the route’s scopes on the access token', async () => {
+    const { request } = await setup({
+      session: null,
+      oauth: {
+        jti: 't1',
+        sub: 'u1',
+        client_id: 'game',
+        scopes: ['profile'],
+        sid: null,
+        account_state: 'active',
+        restrictions: [],
+        age_band: 'adult',
+        parental_controls: null,
+        amr: [],
+        acr: 'aal1',
+      },
+    });
+    const response = await request('/api/v1/userinfo', {
+      headers: { authorization: 'Bearer oauth-access-token' },
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: 'INSUFFICIENT_SCOPE',
+      missing_scopes: ['openid'],
+    });
   });
 
   it('silently binds a browser navigation on another host to the account session', async () => {

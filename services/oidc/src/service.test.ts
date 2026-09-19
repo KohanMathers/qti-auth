@@ -1,0 +1,69 @@
+import { sections } from '@qtiauth/config';
+import { openApiDocument } from '@qtiauth/service-kit';
+import { describe, expect, it } from 'vitest';
+
+import { definition, router } from './service.ts';
+
+describe('oidc service', () => {
+  it('ships migrations for the oidc schema, starting with the bus tables', async () => {
+    expect(definition.database.schema).toBe('oidc');
+    const migrations = await definition.database.migrations();
+    expect(migrations.map((migration) => migration.name)).toEqual(['0001_bus_tables', '0002_oidc']);
+  });
+
+  it('declares every route with a policy the gateway knows', () => {
+    const policies = Object.keys(sections.rate_limits.parse({}));
+    const { routes } = router.manifest();
+    expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
+      'DELETE /api/v1/oauth/authorized/:client_id',
+      'GET /.well-known/jwks.json',
+      'GET /.well-known/openid-configuration',
+      'GET /api/v1/oauth/authorized',
+      'GET /oauth/authorize',
+      'GET /oauth/consent',
+      'GET /oauth/userinfo',
+      'POST /oauth/consent',
+      'POST /oauth/introspect',
+      'POST /oauth/revoke',
+      'POST /oauth/token',
+    ]);
+    for (const route of routes) {
+      expect(policies, route.path).toContain(route.rate_limit);
+    }
+    expect(
+      router
+        .manifest()
+        .permissions.map((permission) => permission.name)
+        .sort(),
+    ).toEqual(['oidc.clients.suspend', 'oidc.clients.verify']);
+  });
+
+  it('protects the protocol endpoints the way the spec requires', () => {
+    const route = (method: string, path: string) =>
+      router.manifest().routes.find((entry) => entry.method === method && entry.path === path);
+
+    expect(route('GET', '/oauth/authorize')).toMatchObject({
+      auth: 'session',
+      module: 'oidc',
+      rate_limit: 'oauth_authorize',
+    });
+    expect(route('GET', '/oauth/consent')).toMatchObject({ auth: 'session' });
+    expect(route('POST', '/oauth/token')).toMatchObject({
+      auth: 'none',
+      rate_limit: 'oauth_token',
+    });
+    expect(route('GET', '/oauth/userinfo')).toMatchObject({
+      auth: 'oauth',
+      scopes: ['openid'],
+    });
+    expect(route('GET', '/.well-known/openid-configuration')).toMatchObject({ auth: 'none' });
+    expect(route('GET', '/api/v1/oauth/authorized')).toMatchObject({ auth: 'session' });
+  });
+
+  it('lists its error codes in OpenAPI', () => {
+    const document = openApiDocument(router) as { 'x-qtiauth-errors': { code: string }[] };
+    expect(document['x-qtiauth-errors'].map((error) => error.code)).toEqual(
+      expect.arrayContaining(['CLIENT_NOT_FOUND', 'AUTHORIZATION_INVALID']),
+    );
+  });
+});

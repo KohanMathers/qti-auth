@@ -1,6 +1,9 @@
 <mjml lang="en-GB">
   <mj-head>
-    <mj-title>{{ username }} has reached the age where parental controls become optional on {{ brand.product_name }}</mj-title>
+    <mj-title
+      >{{ username }} has reached the age where parental controls become optional on
+      {{ brand.product_name }}</mj-title
+    >
     <mj-preview>Controls stay in place for {{ grace_days }} days</mj-preview>
     <mj-attributes>
       <mj-all
@@ -16,9 +19,10 @@
           Parental controls will become optional
         </mj-text>
         <mj-text>
-          {{ username }} has reached the age where parental controls on {{ brand.product_name }}
-          become optional in {{ grace_days }} days. Until then you can still manage their account.
-          After that they can ask you to remove the parent or guardian link.
+          {{ username }} has reached the age where parental controls on
+          {{ brand.product_name }} become optional in {{ grace_days }} days. Until then you can
+          still manage their account. After that they can ask you to remove the parent or guardian
+          link.
         </mj-text>
         <mj-button
           href="{{ link }}"

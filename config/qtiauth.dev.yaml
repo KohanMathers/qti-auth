@@ -26,6 +26,9 @@ valkey:
 gateway:
   identity_keys: { encryption_key: '${env:KEY_ENCRYPTION_KEY}' }
 
+oidc:
+  signing: { encryption_key: '${env:KEY_ENCRYPTION_KEY}' }
+
 observability:
   logs: { user_id_hash_key: '${env:LOG_USER_ID_HASH_KEY}' }
 

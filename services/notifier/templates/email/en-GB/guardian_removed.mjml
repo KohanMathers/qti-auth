@@ -1,6 +1,9 @@
 <mjml lang="en-GB">
   <mj-head>
-    <mj-title>The parent or guardian link for {{ username }} has ended on {{ brand.product_name }}</mj-title>
+    <mj-title
+      >The parent or guardian link for {{ username }} has ended on
+      {{ brand.product_name }}</mj-title
+    >
     <mj-preview>You can no longer manage that account</mj-preview>
     <mj-attributes>
       <mj-all

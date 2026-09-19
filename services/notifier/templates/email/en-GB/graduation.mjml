@@ -1,6 +1,9 @@
 <mjml lang="en-GB">
   <mj-head>
-    <mj-title>You've reached the age where parental controls become optional on {{ brand.product_name }}</mj-title>
+    <mj-title
+      >You've reached the age where parental controls become optional on
+      {{ brand.product_name }}</mj-title
+    >
     <mj-preview>Controls stay in place for {{ grace_days }} days</mj-preview>
     <mj-attributes>
       <mj-all

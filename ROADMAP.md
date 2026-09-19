@@ -590,15 +590,15 @@ expires.
 ### P4.2 Core protocol — XL
 Spec: §6.1 (protocol, scopes, consent)
 
-- [ ] Discovery and JWKS.
-- [ ] Authorization code with mandatory PKCE S256, exact redirect matching, RFC 8252 loopback.
-- [ ] Consent screen (see the note on interim pages below), stored consent, first-party skip.
-- [ ] JWT access tokens (RFC 9068) and ID tokens (RS256 and ES256, `at_hash`).
-- [ ] Refresh rotation with **reuse detection** revoking the family.
-- [ ] `userinfo`, `revoke`, `introspect`.
-- [ ] Scopes and claims from config, including `age`, `parental_controls`, `restrictions`.
-- [ ] `auth: oauth` enforcement in the gateway (audience and scope checks).
-- [ ] **Credential separation test:** an OAuth access token is rejected on every `auth: session` route.
+- [x] Discovery and JWKS.
+- [x] Authorization code with mandatory PKCE S256, exact redirect matching, RFC 8252 loopback.
+- [x] Consent screen (see the note on interim pages below), stored consent, first-party skip.
+- [x] JWT access tokens (RFC 9068) and ID tokens (RS256 and ES256, `at_hash`).
+- [x] Refresh rotation with **reuse detection** revoking the family.
+- [x] `userinfo`, `revoke`, `introspect`.
+- [x] Scopes and claims from config, including `age`, `parental_controls`, `restrictions`.
+- [x] `auth: oauth` enforcement in the gateway (audience and scope checks).
+- [x] **Credential separation test:** an OAuth access token is rejected on every `auth: session` route.
 
 **Done when:** the **OpenID Foundation conformance suite** (Basic OP, Config OP, and the PKCE/refresh
 tests) passes, and the credential separation test passes for every route in every manifest.

@@ -11,6 +11,8 @@ import {
   OPENAPI_METHOD,
   type OpenApiDocument,
   openApiDocument,
+  RESOLVE_ACCESS_TOKEN_METHOD,
+  RESOLVE_ACCESS_TOKEN_SERVICE,
   RESOLVE_SESSION_METHOD,
   RESOLVE_SESSION_SERVICE,
   type StartServiceOptions,
@@ -19,6 +21,7 @@ import {
 } from '@qtiauth/service-kit';
 import { closeValkey, connectValkey, type Valkey, valkeyHealthCheck } from '@qtiauth/valkey';
 
+import { createAccessTokenResolver } from './access-tokens.ts';
 import { trustedProxies } from './client-ip.ts';
 import { allowedOrigins } from './cors.ts';
 import { createServiceRegistry, type ServiceRegistry, startDiscovery } from './discovery.ts';
@@ -179,6 +182,15 @@ export async function startGateway(
         log.warn(message, { error });
       },
     });
+    const accessTokens = createAccessTokenResolver({
+      resolve: (request) =>
+        rpcRequest(bus, RESOLVE_ACCESS_TOKEN_SERVICE, RESOLVE_ACCESS_TOKEN_METHOD, request, {
+          metrics: ctx.busMetrics,
+        }),
+      onError: (message, error) => {
+        log.warn(message, { error });
+      },
+    });
     const invalidation = await consumeIdempotentEvents(bus, {
       name: SESSION_CACHE_CONSUMER,
       types: SESSION_EVENTS,
@@ -312,6 +324,7 @@ export async function startGateway(
       routes: () => table,
       rateLimiter,
       sessions,
+      accessTokens,
       geoip,
       signingKey: () => keyring.signingKey(),
       local: router,

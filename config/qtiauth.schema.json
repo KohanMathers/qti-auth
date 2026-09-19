@@ -2646,6 +2646,211 @@
       },
       "additionalProperties": false
     },
+    "oidc": {
+      "description": "OIDC provider: keys, token lifetimes, scopes and seeded clients.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "default": null,
+          "description": "Issuer URL advertised in discovery and used as JWT iss. null uses the api surface origin.",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource": {
+          "default": null,
+          "description": "Access token audience (RFC 9068). null uses the issuer. Gateway oauth routes require this audience.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "signing": {
+          "description": "Signing keys for ID tokens, access tokens and logout tokens.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "algorithm": {
+              "default": "ES256",
+              "description": "ID and access token signing algorithm. RS256 or ES256.",
+              "type": "string",
+              "enum": [
+                "ES256",
+                "RS256"
+              ]
+            },
+            "encryption_key": {
+              "default": "",
+              "description": "Base64 32-byte key that encrypts the signing keys at rest. Required to start oidc. Reference a secret.",
+              "type": "string"
+            },
+            "rotate_after": {
+              "default": "90d",
+              "description": "Replace the signing key once it is this old. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "retain_after_rotation": {
+              "default": "1h",
+              "description": "Keep publishing a replaced key for this long, so tokens it signed can still be checked. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "refresh": {
+              "default": "30s",
+              "description": "Reload signing keys from the store this often, so other oidc replicas pick up a rotation. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "authorization_code_ttl": {
+          "default": "1m",
+          "description": "How long an authorization code can be exchanged. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "access_ttl": {
+          "default": "15m",
+          "description": "Access token lifetime. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "id_ttl": {
+          "default": "15m",
+          "description": "ID token lifetime. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "refresh_ttl": {
+          "default": "30d",
+          "description": "Refresh token lifetime. Rotated on every use. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "scopes": {
+          "description": "Scopes and the claims they release. Built-in scopes stay unless you replace them. Add extra scopes here.",
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "consent": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Text shown on the consent screen for this scope."
+              },
+              "claims": {
+                "default": [],
+                "description": "ID token and userinfo claims this scope releases.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                }
+              }
+            },
+            "required": [
+              "consent"
+            ],
+            "additionalProperties": false,
+            "description": "An OAuth scope and the claims it releases."
+          }
+        },
+        "clients": {
+          "default": {},
+          "description": "Clients to seed on startup, keyed by client_id. Existing client_ids are left as they are; manage them in the developer portal after that.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._~-]{1,64}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "description": "Name shown on the consent screen."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "public",
+                  "confidential"
+                ],
+                "description": "public clients have no secret. confidential clients do."
+              },
+              "first_party": {
+                "default": false,
+                "description": "Skip the consent screen. For the first-party web app and other in-house clients.",
+                "type": "boolean"
+              },
+              "verified": {
+                "default": false,
+                "description": "Show a verified badge on the consent screen. First-party clients are treated as verified.",
+                "type": "boolean"
+              },
+              "redirect_uris": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Exact-match redirect URIs. Native apps may register a loopback URI; any port is accepted at authorize time."
+              },
+              "allowed_scopes": {
+                "default": null,
+                "description": "Scopes this client may request. null allows every configured scope.",
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "secret": {
+                "default": "",
+                "description": "Client secret for confidential clients. Empty for public clients. Reference a secret.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "redirect_uris"
+            ],
+            "additionalProperties": false,
+            "description": "A seeded OAuth client. Existing client_ids are left as they are after the first start."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "rate_limits": {
       "description": "Named rate-limit policies, referenced by routes. Policies you set replace the built-in policy of the same name.",
       "type": "object",
@@ -2814,6 +3019,12 @@
         "audit": {
           "default": "730d",
           "description": "Keep audit log rows for this long. Oldest rows are removed first. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "oauth": {
+          "default": "30d",
+          "description": "Keep expired or revoked OAuth authorization codes, access tokens and refresh tokens for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }

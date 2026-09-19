@@ -1,4 +1,9 @@
-import { definePermissions, type ManifestRoute, type ResolvedSession } from '@qtiauth/service-kit';
+import {
+  definePermissions,
+  type ManifestRoute,
+  type ResolvedAccessToken,
+  type ResolvedSession,
+} from '@qtiauth/service-kit';
 import { describe, expect, it } from 'vitest';
 
 import { checkPolicy, identityFor, impliedGatewayErrors } from './policy.ts';
@@ -52,6 +57,23 @@ function session(overrides: Partial<ResolvedSession> = {}): ResolvedSession {
   };
 }
 
+function accessToken(overrides: Partial<ResolvedAccessToken> = {}): ResolvedAccessToken {
+  return {
+    jti: 't1',
+    sub: 'u1',
+    client_id: 'game',
+    scopes: ['openid'],
+    sid: 's1',
+    account_state: 'active',
+    restrictions: [],
+    age_band: 'adult',
+    parental_controls: null,
+    amr: ['email'],
+    acr: 'aal1',
+    ...overrides,
+  };
+}
+
 const options = { stepUpWindow: 600_000, now: NOW };
 const code = (route: TableRoute, caller: ResolvedSession | null) =>
   checkPolicy(route, caller, options)?.code ?? null;
@@ -66,8 +88,21 @@ describe('checkPolicy', () => {
     expect(code(table(), session())).toBeNull();
   });
 
-  it('refuses OAuth, service and game routes until they have a verifier', () => {
-    for (const auth of ['oauth', 'service', 'game_authoritative'] as const) {
+  it('needs a verified access token for oauth routes', () => {
+    const oauthRoute = table({ auth: 'oauth', scopes: ['openid'] });
+    expect(code(oauthRoute, session())).toBe('AUTHENTICATION_REQUIRED');
+    expect(checkPolicy(oauthRoute, null, options, accessToken())).toBeNull();
+    expect(checkPolicy(oauthRoute, null, options, accessToken({ scopes: ['profile'] }))).toEqual({
+      code: 'INSUFFICIENT_SCOPE',
+      extensions: { missing_scopes: ['openid'] },
+    });
+    expect(
+      checkPolicy(oauthRoute, null, options, accessToken({ account_state: 'banned' }))?.code,
+    ).toBe('ACCOUNT_BANNED');
+  });
+
+  it('refuses service and game routes until they have a verifier', () => {
+    for (const auth of ['service', 'game_authoritative'] as const) {
       expect(code(table({ auth }), session())).toBe('AUTHENTICATION_REQUIRED');
     }
   });
@@ -156,6 +191,26 @@ describe('identityFor', () => {
       account_state: null,
     });
   });
+
+  it('describes the OAuth caller on oauth routes', () => {
+    expect(
+      identityFor(table({ auth: 'oauth', scopes: ['openid'] }), null, 'req-3', accessToken()),
+    ).toEqual({
+      request_id: 'req-3',
+      auth: 'oauth',
+      sub: 'u1',
+      sid: 's1',
+      client_id: 'game',
+      scopes: ['openid'],
+      permissions: [],
+      account_state: 'active',
+      restrictions: [],
+      age_band: 'adult',
+      parental_controls: null,
+      amr: ['email'],
+      acr: 'aal1',
+    });
+  });
 });
 
 describe('impliedGatewayErrors', () => {
@@ -182,6 +237,12 @@ describe('impliedGatewayErrors', () => {
     );
     expect(impliedGatewayErrors(table({ allow_pending_2fa_enrolment: true }))).not.toContain(
       'TWO_FACTOR_ENROLMENT_REQUIRED',
+    );
+    expect(impliedGatewayErrors(table({ auth: 'oauth', scopes: ['openid'] }))).toEqual(
+      expect.arrayContaining(['AUTHENTICATION_REQUIRED', 'INSUFFICIENT_SCOPE']),
+    );
+    expect(impliedGatewayErrors(table({ auth: 'oauth', scopes: ['openid'] }))).not.toContain(
+      'STEP_UP_REQUIRED',
     );
   });
 });

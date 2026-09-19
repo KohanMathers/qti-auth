@@ -675,6 +675,8 @@ const DEFAULT_RATE_LIMITS = {
   guest_ticket: { per: 'ip', limit: 3, window: '1h' },
   key_redeem: { per: ['ip', 'user'], limit: 10, window: '1h' },
   kb_feedback: { per: 'ip', limit: 30, window: '1h' },
+  oauth_authorize: { per: 'ip', limit: 60, window: '1m' },
+  oauth_token: { per: 'ip', limit: 60, window: '1m', on_store_failure: 'closed' },
 } as const;
 
 export const rateLimits = z
@@ -1199,6 +1201,216 @@ export const legal = z
   })
   .prefault({})
   .describe('Legal documents and re-acceptance.');
+
+export const OIDC_SIGNING_ALGORITHMS = ['ES256', 'RS256'] as const;
+export type OidcSigningAlgorithm = (typeof OIDC_SIGNING_ALGORITHMS)[number];
+
+export const OIDC_CLIENT_TYPES = ['public', 'confidential'] as const;
+export type OidcClientType = (typeof OIDC_CLIENT_TYPES)[number];
+
+export const OIDC_SCOPE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
+export const OIDC_SCOPE_MESSAGE = 'Must be a scope like openid or achievements.write';
+export const OIDC_CLIENT_ID = /^[A-Za-z0-9._~-]{1,64}$/;
+export const OIDC_CLIENT_ID_MESSAGE = 'Must be 1–64 letters, digits, ., _, ~ or -';
+export const OIDC_CLAIM = /^[a-z][a-z0-9_]*$/;
+
+export const DEFAULT_OIDC_SCOPES = {
+  openid: { consent: 'Sign you in', claims: [] as string[] },
+  profile: {
+    consent: 'See your username',
+    claims: ['preferred_username', 'username_updated_at'],
+  },
+  email: { consent: 'See your email address', claims: ['email', 'email_verified'] },
+  offline_access: {
+    consent: 'Stay signed in when you are not using the app',
+    claims: [] as string[],
+  },
+  age: { consent: 'See your age band', claims: ['age_band', 'age_assurance_strength'] },
+  parental_controls: {
+    consent: 'See parental controls on this account',
+    claims: ['parental_controls'],
+  },
+  restrictions: { consent: 'See restrictions on this account', claims: ['restrictions'] },
+  games: { consent: 'See which games you own', claims: [] as string[] },
+  achievements: { consent: 'See your achievements', claims: [] as string[] },
+  game_stats: { consent: 'See your game stats', claims: [] as string[] },
+} as const;
+
+const oidcScope = z
+  .strictObject({
+    consent: z.string().min(1).describe('Text shown on the consent screen for this scope.'),
+    claims: z
+      .array(z.string().regex(OIDC_CLAIM, 'Must be a claim like email or age_band'))
+      .default([])
+      .describe('ID token and userinfo claims this scope releases.'),
+  })
+  .describe('An OAuth scope and the claims it releases.');
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
+}
+
+function isRedirectUri(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.username !== '' || url.password !== '' || url.hash !== '') return false;
+    if (isLoopbackHost(url.hostname)) return url.protocol === 'http:';
+    return url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+const oidcClient = z
+  .strictObject({
+    name: z.string().min(1).max(80).describe('Name shown on the consent screen.'),
+    type: z
+      .enum(OIDC_CLIENT_TYPES)
+      .describe('public clients have no secret. confidential clients do.'),
+    first_party: z
+      .boolean()
+      .default(false)
+      .describe('Skip the consent screen. For the first-party web app and other in-house clients.'),
+    verified: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Show a verified badge on the consent screen. First-party clients are treated as verified.',
+      ),
+    redirect_uris: z
+      .array(
+        z.string().refine(isRedirectUri, 'Must be an https URL, or http on 127.0.0.1 or [::1]'),
+      )
+      .min(1)
+      .describe(
+        'Exact-match redirect URIs. Native apps may register a loopback URI; any port is accepted at authorize time.',
+      ),
+    allowed_scopes: z
+      .array(z.string().regex(OIDC_SCOPE, OIDC_SCOPE_MESSAGE))
+      .nullable()
+      .default(null)
+      .describe('Scopes this client may request. null allows every configured scope.'),
+    secret: z
+      .string()
+      .default('')
+      .describe(
+        'Client secret for confidential clients. Empty for public clients. Reference a secret.',
+      ),
+  })
+  .refine((client) => client.type === 'public' || client.secret !== '', {
+    message: 'Required for confidential clients',
+    path: ['secret'],
+  })
+  .describe(
+    'A seeded OAuth client. Existing client_ids are left as they are after the first start.',
+  );
+
+export const oidc = z
+  .strictObject({
+    issuer: z
+      .url({ protocol: /^https?$/ })
+      .nullable()
+      .default(null)
+      .describe(
+        'Issuer URL advertised in discovery and used as JWT iss. null uses the api surface origin.',
+      ),
+    resource: z
+      .string()
+      .min(1)
+      .nullable()
+      .default(null)
+      .describe(
+        'Access token audience (RFC 9068). null uses the issuer. Gateway oauth routes require this audience.',
+      ),
+    signing: z
+      .strictObject({
+        algorithm: z
+          .enum(OIDC_SIGNING_ALGORITHMS)
+          .default('ES256')
+          .describe('ID and access token signing algorithm. RS256 or ES256.'),
+        encryption_key: z
+          .string()
+          .default('')
+          .describe(
+            'Base64 32-byte key that encrypts the signing keys at rest. Required to start oidc. Reference a secret.',
+          ),
+        rotate_after: duration('90d', 'Replace the signing key once it is this old.'),
+        retain_after_rotation: duration(
+          '1h',
+          'Keep publishing a replaced key for this long, so tokens it signed can still be checked.',
+        ),
+        refresh: duration(
+          '30s',
+          'Reload signing keys from the store this often, so other oidc replicas pick up a rotation.',
+        ),
+      })
+      .prefault({})
+      .describe('Signing keys for ID tokens, access tokens and logout tokens.'),
+    authorization_code_ttl: duration('1m', 'How long an authorization code can be exchanged.'),
+    access_ttl: duration('15m', 'Access token lifetime.'),
+    id_ttl: duration('15m', 'ID token lifetime.'),
+    refresh_ttl: duration('30d', 'Refresh token lifetime. Rotated on every use.'),
+    scopes: z
+      .record(z.string().regex(OIDC_SCOPE, OIDC_SCOPE_MESSAGE), oidcScope)
+      .default({})
+      .transform((scopes) => ({
+        ...Object.fromEntries(
+          Object.entries(DEFAULT_OIDC_SCOPES).map(([name, scope]) => [
+            name,
+            { consent: scope.consent, claims: [...scope.claims] },
+          ]),
+        ),
+        ...scopes,
+      }))
+      .describe(
+        'Scopes and the claims they release. Built-in scopes stay unless you replace them. Add extra scopes here.',
+      ),
+    clients: z
+      .record(z.string().regex(OIDC_CLIENT_ID, OIDC_CLIENT_ID_MESSAGE), oidcClient)
+      .default({})
+      .describe(
+        'Clients to seed on startup, keyed by client_id. Existing client_ids are left as they are; manage them in the developer portal after that.',
+      ),
+  })
+  .superRefine((value, ctx) => {
+    const retain = value.signing.retain_after_rotation;
+    if (retain < value.access_ttl) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Must be at least access_ttl, so replaced keys can still verify live tokens',
+        path: ['signing', 'retain_after_rotation'],
+      });
+    }
+    if (retain < value.id_ttl) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Must be at least id_ttl, so replaced keys can still verify live tokens',
+        path: ['signing', 'retain_after_rotation'],
+      });
+    }
+    const known = new Set(Object.keys(value.scopes));
+    for (const [id, client] of Object.entries(value.clients)) {
+      const uris = client.redirect_uris;
+      if (new Set(uris).size !== uris.length) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Redirect URIs must be unique',
+          path: ['clients', id, 'redirect_uris'],
+        });
+      }
+      for (const [index, scope] of (client.allowed_scopes ?? []).entries()) {
+        if (!known.has(scope)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Must name a configured scope',
+            path: ['clients', id, 'allowed_scopes', index],
+          });
+        }
+      }
+    }
+  })
+  .prefault({})
+  .describe('OIDC provider: keys, token lifetimes, scopes and seeded clients.');
 
 const CRON_JOB_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
 
@@ -1735,6 +1947,10 @@ export const retention = z
       'Keep text-filter decisions, including the raw input, for this long.',
     ),
     audit: duration('730d', 'Keep audit log rows for this long. Oldest rows are removed first.'),
+    oauth: duration(
+      '30d',
+      'Keep expired or revoked OAuth authorization codes, access tokens and refresh tokens for this long.',
+    ),
   })
   .prefault({})
   .describe('How long data is kept. retention.sweep deletes anything older.');
@@ -1881,6 +2097,7 @@ export const sections = {
   parental,
   usernames,
   legal,
+  oidc,
   rate_limits: rateLimits,
   scheduler,
   retention,

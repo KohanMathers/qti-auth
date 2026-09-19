@@ -22,6 +22,7 @@ import {
   surfaces,
   usernames,
   legal,
+  oidc,
   parental,
   storage,
   backups,
@@ -611,7 +612,71 @@ describe('retention', () => {
       session_security_events: 7_776_000_000,
       filter_decisions: 2_592_000_000,
       audit: 63_072_000_000,
+      oauth: 2_592_000_000,
     });
+  });
+});
+
+describe('oidc', () => {
+  it('ships built-in scopes and ES256 keys that last 90 days', () => {
+    const parsed = oidc.parse({});
+    expect(parsed.signing.algorithm).toBe('ES256');
+    expect(parsed.signing.rotate_after).toBe(7_776_000_000);
+    expect(parsed.access_ttl).toBe(900_000);
+    expect(parsed.scopes['openid']).toEqual({ consent: 'Sign you in', claims: [] });
+    expect(parsed.scopes['email']?.claims).toEqual(['email', 'email_verified']);
+    expect(parsed.clients).toEqual({});
+  });
+
+  it('needs a secret for confidential clients and known scopes', () => {
+    expect(
+      messages(
+        oidc.safeParse({
+          clients: {
+            app: {
+              name: 'App',
+              type: 'confidential',
+              redirect_uris: ['https://app.example.com/callback'],
+            },
+          },
+        }),
+      ),
+    ).toEqual(['clients.app.secret: Required for confidential clients']);
+    expect(
+      messages(
+        oidc.safeParse({
+          clients: {
+            app: {
+              name: 'App',
+              type: 'public',
+              redirect_uris: ['https://app.example.com/callback'],
+              allowed_scopes: ['not_a_scope'],
+            },
+          },
+        }),
+      ),
+    ).toEqual(['clients.app.allowed_scopes.0: Must name a configured scope']);
+    expect(
+      messages(
+        oidc.safeParse({
+          clients: {
+            app: {
+              name: 'App',
+              type: 'public',
+              redirect_uris: ['http://[::1]/callback'],
+            },
+          },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps replaced keys published at least as long as live tokens', () => {
+    expect(
+      messages(oidc.safeParse({ access_ttl: '2h', signing: { retain_after_rotation: '1h' } })),
+    ).toEqual([
+      'signing.retain_after_rotation: Must be at least access_ttl, so replaced keys can still verify live tokens',
+    ]);
   });
 });
 

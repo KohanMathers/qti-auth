@@ -28,7 +28,7 @@ Provisioning starts the infrastructure first and is safe to run again, for examp
 
 Set `email.smtp` in `config/qtiauth.yaml` to your mail server before relying on email (see [notifier.md](notifier.md)). Until then, email waits in the queue and is retried.
 
-The gateway, identity, notifier and scheduler are built from source the first time. Rebuild them after pulling changes with `docker compose --env-file .env -f deploy/compose.yaml build`.
+The gateway, identity, notifier, scheduler and oidc are built from source the first time. Rebuild them after pulling changes with `docker compose --env-file .env -f deploy/compose.yaml build`.
 
 ## Profiles
 
@@ -54,7 +54,7 @@ docker compose --env-file .env -f deploy/compose.yaml --profile games --profile 
 
 A profile only chooses which containers run. Features inside a service are switched on in `qtiauth.yaml`, and the gateway reports a feature whose service isn't running at `GET /api/v1/meta/health`.
 
-Services that haven't been built yet run as empty placeholder containers, so every profile can already be enabled.
+Services that haven't been built yet (`safety`, `support`, `games`) run as empty placeholder containers, so every profile can already be enabled.
 
 ## Networking
 
@@ -125,6 +125,6 @@ Add `--volumes` to delete the database and JetStream data as well.
 
 ### Adding a service
 
-Each QTIAuth service extends `x-qtiauth-service` in `deploy/compose.yaml`, which puts it on the `internal` network, mounts `config/`, passes `.env` and waits for healthy infra. Replace the placeholder `image` and `command` with a `build` of the service's Dockerfile and `command: ['node', 'src/main.ts']`, as `gateway`, `identity`, `notifier` and `scheduler` do. Add every QTIAuth service to `deploy/compose.dev.yaml` as `*dev-service`, so it reads the development config.
+Each QTIAuth service extends `x-qtiauth-service` in `deploy/compose.yaml`, which puts it on the `internal` network, mounts `config/`, passes `.env` and waits for healthy infra. Replace the placeholder `image` and `command` with a `build` of the service's Dockerfile and `command: ['node', 'src/main.ts']`, as `gateway`, `identity`, `notifier`, `scheduler` and `oidc` do. Add every QTIAuth service to `deploy/compose.dev.yaml` as `*dev-service`, so it reads the development config.
 
 The infra images in `deploy/compose.yaml` match the images integration tests run (`IMAGES` in `@qtiauth/testing`). A unit test fails if they drift, so update both together. The same tests check that every profile has its services, that only the gateway publishes a port and that `.env.example` documents every variable the Compose files use.

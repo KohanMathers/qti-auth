@@ -106,7 +106,17 @@ For `auth: session` routes, in order:
 | A required permission isn't granted                                         | `403 PERMISSION_DENIED`                                                                           |
 | `step_up: true` and the session didn't reach `aal2` within `step_up_window` | `403 STEP_UP_REQUIRED`                                                                            |
 
-`auth: none` routes skip these checks. Routes with `auth: oauth`, `service` or `game_authoritative` get `401 AUTHENTICATION_REQUIRED` until the OIDC provider is available.
+For `auth: oauth` routes, in order:
+
+| Check                                                     | Error                                                                 |
+| --------------------------------------------------------- | --------------------------------------------------------------------- |
+| No `Authorization: Bearer` access token, or it is invalid | `401 AUTHENTICATION_REQUIRED`                                         |
+| Account state not in `allow_account_states`               | `403 ACCOUNT_BANNED`, `ACCOUNT_LOCKED` or `ACCOUNT_STATE_NOT_ALLOWED` |
+| A required scope isn't on the token                       | `403 INSUFFICIENT_SCOPE` (`missing_scopes`)                           |
+
+Session cookies are ignored on oauth routes. Access tokens are ignored on session routes. `auth: none` routes skip these checks. Routes with `auth: service` or `game_authoritative` get `401 AUTHENTICATION_REQUIRED` until those credentials are available.
+
+A top-level browser navigation that needs a session and has none is redirected to `/auth/login?return_to=…` on the account surface, with the path and query the browser asked for. API callers still get `401 AUTHENTICATION_REQUIRED`.
 
 ## Internal identity keys
 
@@ -280,6 +290,10 @@ Identity answers `qtiauth.rpc.identity.resolve_session`:
 ```
 
 `resolvedSessionSchema` in `services/gateway/src/sessions.ts` is the exact shape. Cookie tokens must be 32 to 128 base64url characters, and anything else is treated as signed out without asking identity. Events that should clear cached sessions use a `user` or `session` subject, or carry `user_id` or `session_id` in their data.
+
+### Resolving access tokens
+
+OIDC answers `qtiauth.rpc.oidc.resolve_access_token` with `{ "token": null }` or the claims the gateway copies into the forwarded identity token (`sub`, `client_id`, `scopes`, account state, age band, restrictions). There is no cache, so a revocation is visible on the next request. See [oidc.md](oidc.md).
 
 ### Tests
 

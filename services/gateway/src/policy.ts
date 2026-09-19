@@ -2,6 +2,7 @@ import {
   type Identity,
   type KitErrorCode,
   missingPermissions,
+  type ResolvedAccessToken,
   type ResolvedSession,
 } from '@qtiauth/service-kit';
 
@@ -24,25 +25,42 @@ const STATE_ERRORS: Partial<Record<ResolvedSession['account_state'], GatewayErro
   pending_parental_consent: 'PARENTAL_CONSENT_PENDING',
 };
 
+function accountStateDenial(
+  route: TableRoute['route'],
+  state: ResolvedSession['account_state'],
+): PolicyDenial | null {
+  const stateAllowed =
+    route.allow_account_states.includes(state) ||
+    (state === 'pending_parental_consent' && route.allow_pending_parental_consent);
+  if (stateAllowed) return null;
+  return {
+    code: STATE_ERRORS[state] ?? 'ACCOUNT_STATE_NOT_ALLOWED',
+    extensions: { account_state: state },
+  };
+}
+
 export function checkPolicy(
   table: TableRoute,
   session: ResolvedSession | null,
   options: PolicyOptions,
+  oauth: ResolvedAccessToken | null = null,
 ): PolicyDenial | null {
   const { route } = table;
   if (route.auth === 'none') return null;
+  if (route.auth === 'oauth') {
+    if (oauth === null) return { code: 'AUTHENTICATION_REQUIRED' };
+    const state = accountStateDenial(route, oauth.account_state);
+    if (state) return state;
+    const missing = route.scopes.filter((scope) => !oauth.scopes.includes(scope));
+    if (missing.length > 0) {
+      return { code: 'INSUFFICIENT_SCOPE', extensions: { missing_scopes: missing } };
+    }
+    return null;
+  }
   if (route.auth !== 'session' || session === null) return { code: 'AUTHENTICATION_REQUIRED' };
 
-  const state = session.account_state;
-  const stateAllowed =
-    route.allow_account_states.includes(state) ||
-    (state === 'pending_parental_consent' && route.allow_pending_parental_consent);
-  if (!stateAllowed) {
-    return {
-      code: STATE_ERRORS[state] ?? 'ACCOUNT_STATE_NOT_ALLOWED',
-      extensions: { account_state: state },
-    };
-  }
+  const state = accountStateDenial(route, session.account_state);
+  if (state) return state;
 
   if (session.legal_acceptance_required && !route.allow_pending_legal) {
     return { code: 'LEGAL_ACCEPTANCE_REQUIRED' };
@@ -83,6 +101,10 @@ export function impliedGatewayErrors(table: TableRoute): (GatewayErrorCode | Kit
   if (route.method !== 'GET') codes.push('ORIGIN_NOT_ALLOWED');
   if (route.auth === 'none') return codes;
   codes.push('AUTHENTICATION_REQUIRED', 'ACCOUNT_BANNED', 'ACCOUNT_LOCKED');
+  if (route.auth === 'oauth') {
+    if (route.scopes.length > 0) codes.push('INSUFFICIENT_SCOPE');
+    return codes;
+  }
   if (!route.allow_pending_parental_consent) codes.push('PARENTAL_CONSENT_PENDING');
   if (!route.allow_pending_legal) codes.push('LEGAL_ACCEPTANCE_REQUIRED');
   if (!route.allow_pending_2fa_enrolment) codes.push('TWO_FACTOR_ENROLMENT_REQUIRED');
@@ -95,7 +117,25 @@ export function identityFor(
   table: TableRoute,
   session: ResolvedSession | null,
   requestId: string,
+  oauth: ResolvedAccessToken | null = null,
 ): Identity {
+  if (table.route.auth === 'oauth' && oauth !== null) {
+    return {
+      request_id: requestId,
+      auth: 'oauth',
+      sub: oauth.sub,
+      sid: oauth.sid,
+      client_id: oauth.client_id,
+      scopes: oauth.scopes,
+      permissions: [],
+      account_state: oauth.account_state,
+      restrictions: oauth.restrictions,
+      age_band: oauth.age_band,
+      parental_controls: oauth.parental_controls,
+      amr: oauth.amr,
+      acr: oauth.acr,
+    };
+  }
   const signedIn = table.route.auth === 'session' && session !== null;
   return {
     request_id: requestId,

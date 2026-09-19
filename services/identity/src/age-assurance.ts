@@ -115,6 +115,19 @@ export async function completeAgeAssurance(
   return begun.result;
 }
 
+export async function latestAssuranceStrength(
+  db: Kysely<Database>,
+  userId: string,
+): Promise<AgeAssuranceStrength | null> {
+  const row = await db
+    .selectFrom('age_assurance_results')
+    .select('strength')
+    .where('user_id', '=', userId)
+    .orderBy('created_at', 'desc')
+    .executeTakeFirst();
+  return row?.strength ?? null;
+}
+
 export async function recordSignupAgeAssurance(
   db: Kysely<Database>,
   options: {

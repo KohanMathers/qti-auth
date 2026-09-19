@@ -107,6 +107,11 @@ services:
 
   oidc:
     <<: *qtiauth-service
+    image: qtiauth/oidc:dev
+    build:
+      context: ..
+      dockerfile: services/oidc/Dockerfile
+    command: ['node', 'src/main.ts']
     profiles: [oidc]
 
   safety:
