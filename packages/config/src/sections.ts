@@ -663,6 +663,11 @@ const rateLimitGroup = z
 export type RateLimitPolicy = z.output<typeof rateLimitPolicy>;
 export type RateLimitGroup = z.output<typeof rateLimitGroup>;
 
+const DEFAULT_SAFETY_RATE_LIMITS = {
+  safety_report: { per: ['ip', 'user'], limit: 20, window: '1h', on_store_failure: 'closed' },
+  safety_intake: { per: 'client', limit: 600, window: '1m', on_store_failure: 'closed' },
+} as const;
+
 const DEFAULT_RATE_LIMITS = {
   global: { per: 'ip', limit: 300, window: '1m' },
   auth_password: { per: ['ip', 'account'], limit: 10, window: '15m', on_store_failure: 'closed' },
@@ -677,6 +682,7 @@ const DEFAULT_RATE_LIMITS = {
   kb_feedback: { per: 'ip', limit: 30, window: '1h' },
   oauth_authorize: { per: 'ip', limit: 60, window: '1m' },
   oauth_token: { per: 'ip', limit: 60, window: '1m', on_store_failure: 'closed' },
+  ...DEFAULT_SAFETY_RATE_LIMITS,
 } as const;
 
 export const rateLimits = z
@@ -1202,6 +1208,246 @@ export const legal = z
   .prefault({})
   .describe('Legal documents and re-acceptance.');
 
+export const SAFETY_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type SafetyPriority = (typeof SAFETY_PRIORITIES)[number];
+
+export const SAFETY_TAXONOMY_ID = /^[a-z][a-z0-9_]*$/;
+export const SAFETY_TAXONOMY_ID_MESSAGE = 'Must be a lowercase slug like hate_speech';
+export const SAFETY_LABEL_MAX = 80;
+export const SAFETY_NOTE_MAX = 2_000;
+export const SAFETY_SNAPSHOT_MAX = 65_536;
+export const SAFETY_CLASSIFIER_MAX = 80;
+export const SAFETY_PERSON_MAX = 120;
+
+const safetySubtype = z
+  .strictObject({
+    id: z
+      .string()
+      .regex(SAFETY_TAXONOMY_ID, SAFETY_TAXONOMY_ID_MESSAGE)
+      .describe('Subtype slug, unique within the type.'),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(SAFETY_LABEL_MAX)
+      .describe('Subtype name shown to reporters and moderators.'),
+  })
+  .describe('A reason subtype under a report type.');
+
+const safetyType = z
+  .strictObject({
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(SAFETY_LABEL_MAX)
+      .describe('Type name shown to reporters and moderators.'),
+    subtypes: z
+      .array(safetySubtype)
+      .min(1)
+      .refine((list) => new Set(list.map((s) => s.id)).size === list.length, {
+        message: 'Subtype ids must be unique within a type',
+      })
+      .describe('Subtypes offered to reporters when they pick this type.'),
+    default_priority: z
+      .enum(SAFETY_PRIORITIES)
+      .default('normal')
+      .describe('Priority the report enters the queue with.'),
+    sla: requiredDuration('Time-to-first-action target for reports of this type.'),
+    csea: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Opens a CSEA case, restricting access, evidence preservation and NCA workflow. Never delivered to webhooks, email bodies or logs.',
+      ),
+  })
+  .describe('A report type in the taxonomy.');
+
+const DEFAULT_SAFETY_TAXONOMY = {
+  csea: {
+    name: 'Child sexual exploitation and abuse',
+    default_priority: 'urgent',
+    sla: '1h',
+    csea: true,
+    subtypes: [
+      { id: 'csam', name: 'Child sexual abuse material' },
+      { id: 'grooming', name: 'Grooming or solicitation of a child' },
+      { id: 'sexual_extortion', name: 'Sexual extortion of a child' },
+    ],
+  },
+  terrorism: {
+    name: 'Terrorism',
+    default_priority: 'urgent',
+    sla: '1h',
+    csea: false,
+    subtypes: [
+      { id: 'propaganda', name: 'Terrorist propaganda or glorification' },
+      { id: 'recruitment', name: 'Recruitment to a terrorist organisation' },
+      { id: 'planning', name: 'Planning of a terrorist act' },
+    ],
+  },
+  violence: {
+    name: 'Violence and credible threats',
+    default_priority: 'high',
+    sla: '24h',
+    csea: false,
+    subtypes: [
+      { id: 'threats', name: 'Threats of violence' },
+      { id: 'incitement', name: 'Incitement to violence' },
+      { id: 'graphic_violence', name: 'Graphic violence or gore' },
+    ],
+  },
+  self_harm: {
+    name: 'Suicide and self-harm',
+    default_priority: 'high',
+    sla: '24h',
+    csea: false,
+    subtypes: [
+      { id: 'encouragement', name: 'Encouragement of suicide or self-harm' },
+      { id: 'method_sharing', name: 'Sharing of methods' },
+      { id: 'graphic_self_harm', name: 'Graphic self-harm imagery' },
+    ],
+  },
+  hate: {
+    name: 'Hate and harassment',
+    default_priority: 'normal',
+    sla: '24h',
+    csea: false,
+    subtypes: [
+      { id: 'protected_characteristic', name: 'Hate against a protected characteristic' },
+      { id: 'targeted_harassment', name: 'Targeted harassment of an individual' },
+      { id: 'unwanted_contact', name: 'Unwanted contact after being asked to stop' },
+    ],
+  },
+  sexual: {
+    name: 'Sexual content involving adults',
+    default_priority: 'normal',
+    sla: '24h',
+    csea: false,
+    subtypes: [
+      { id: 'non_consensual', name: 'Intimate image shared without consent' },
+      { id: 'adult_content', name: 'Sexual content outside a permitted space' },
+    ],
+  },
+  fraud: {
+    name: 'Fraud and scams',
+    default_priority: 'normal',
+    sla: '24h',
+    csea: false,
+    subtypes: [
+      { id: 'phishing', name: 'Phishing or account theft' },
+      { id: 'financial_scam', name: 'Financial scam' },
+      { id: 'impersonation', name: 'Impersonation of a person or brand' },
+    ],
+  },
+  illegal_goods: {
+    name: 'Illegal goods and controlled items',
+    default_priority: 'normal',
+    sla: '24h',
+    csea: false,
+    subtypes: [
+      { id: 'drugs', name: 'Drugs' },
+      { id: 'weapons', name: 'Weapons' },
+      { id: 'stolen_goods', name: 'Stolen goods or credentials' },
+    ],
+  },
+  other: {
+    name: 'Other rule violation',
+    default_priority: 'normal',
+    sla: '24h',
+    csea: false,
+    subtypes: [
+      { id: 'spam', name: 'Spam or repeated low-quality content' },
+      { id: 'under_age', name: 'Account holder appears under-age' },
+      { id: 'privacy', name: "Someone else's private information" },
+      { id: 'other', name: 'Something else' },
+    ],
+  },
+} as const;
+
+export const safety = z
+  .strictObject({
+    reports: z
+      .strictObject({
+        reporter_ack: z
+          .boolean()
+          .default(true)
+          .describe('Email the reporter to acknowledge receipt when they gave an email address.'),
+        reporter_outcome: z
+          .boolean()
+          .default(true)
+          .describe(
+            'Email the reporter with the outcome once a moderator acts on the report. Reporters are never identified to the reported user.',
+          ),
+        default_priority: z
+          .enum(SAFETY_PRIORITIES)
+          .default('normal')
+          .describe("Priority when a type's default_priority is not overridden."),
+        max_note_length: z
+          .int()
+          .min(1)
+          .max(SAFETY_NOTE_MAX)
+          .default(SAFETY_NOTE_MAX)
+          .describe('Longest note a reporter can attach to a report.'),
+        max_snapshot_bytes: z
+          .int()
+          .min(1)
+          .max(SAFETY_SNAPSHOT_MAX)
+          .default(SAFETY_SNAPSHOT_MAX)
+          .describe('Longest content snapshot, in bytes, accepted on intake.'),
+        sla_check_interval: duration(
+          '1m',
+          'How often the SLA sweep runs. sla_breached events are emitted at most once per report.',
+        ),
+      })
+      .prefault({})
+      .describe('Reporting behaviour.'),
+    taxonomy: z
+      .strictObject({
+        types: z
+          .record(z.string().regex(SAFETY_TAXONOMY_ID, SAFETY_TAXONOMY_ID_MESSAGE), safetyType)
+          .default({})
+          .transform((types) => {
+            const merged = z.record(z.string(), safetyType).parse(DEFAULT_SAFETY_TAXONOMY);
+            for (const [id, type] of Object.entries(types)) merged[id] = type;
+            return merged;
+          })
+          .describe(
+            'Report types. Ids you set replace the built-in type of the same name, and other built-in types stay as they are.',
+          ),
+      })
+      .prefault({})
+      .describe('Report taxonomy: types, subtypes, priorities, SLAs and CSEA flags.'),
+    csea_alert_emails: z
+      .array(z.email())
+      .default([])
+      .refine((list) => new Set(list).size === list.length, {
+        message: 'Alert email addresses must be unique',
+      })
+      .describe(
+        'Recipients of the alert-only notification that a CSEA case exists. Bodies never contain case content.',
+      ),
+    accountable_person: z
+      .strictObject({
+        name: z
+          .string()
+          .trim()
+          .max(SAFETY_PERSON_MAX)
+          .default('')
+          .describe('Name of the person accountable for compliance with the OSA safety duties.'),
+        role: z
+          .string()
+          .trim()
+          .max(SAFETY_PERSON_MAX)
+          .default('')
+          .describe('Their role, shown to legal document templates and in the admin UI.'),
+      })
+      .prefault({})
+      .describe('Accountable person for the OSA safety duties (ICU A2).'),
+  })
+  .prefault({})
+  .describe('Safety module (safety profile): reporting, moderation, CSEA workflow.');
+
 export const OIDC_SIGNING_ALGORITHMS = ['ES256', 'RS256'] as const;
 export type OidcSigningAlgorithm = (typeof OIDC_SIGNING_ALGORITHMS)[number];
 
@@ -1532,6 +1778,7 @@ const DEFAULT_CRON_JOBS: Record<string, CronJob> = {
   'webhooks.retry': { schedule: '* * * * *', enabled: true },
   'oidc.logout.retry': { schedule: '* * * * *', enabled: true },
   'support.auto_close': { schedule: '0 * * * *', enabled: true },
+  'safety.sla_sweep': { schedule: '* * * * *', enabled: true },
   'achievements.recompute_rarity': { schedule: '0 2 * * *', enabled: true },
   'leaderboards.reset_periodic': { schedule: '* * * * *', enabled: true },
   'steam.ownership_sync': { schedule: '0 5 * * *', enabled: true },
@@ -1692,6 +1939,14 @@ export const features = z
       })
       .prefault({})
       .describe('Support features (support profile).'),
+    safety: z
+      .strictObject({
+        reports: toggle(true, 'user, content and game report intake'),
+        game_intake: toggle(true, 'the game and service report intake API'),
+        automated_flags: toggle(true, 'automated flag intake from games and services'),
+      })
+      .prefault({})
+      .describe('Safety features (safety profile).'),
   })
   .prefault({})
   .describe('Feature flags inside services.');
@@ -1870,9 +2125,11 @@ export type WebhookFormat = (typeof WEBHOOK_FORMATS)[number];
 
 export const WEBHOOK_EVENTS = [
   'safety.report.created',
+  'safety.report.acknowledged',
   'safety.report.actioned',
   'safety.report.dismissed',
   'safety.report.sla_breached',
+  'safety.flag.created',
   'safety.appeal.created',
   'identity.user.created',
   'identity.user.banned',
@@ -2021,6 +2278,10 @@ export const retention = z
       '30d',
       'Keep expired or revoked OAuth authorization codes, access tokens and refresh tokens for this long.',
     ),
+    safety_reports: duration(
+      '730d',
+      'Keep closed safety reports and their snapshots for this long. Open reports and reports under a legal hold are not swept.',
+    ),
   })
   .prefault({})
   .describe('How long data is kept. retention.sweep deletes anything older.');
@@ -2168,6 +2429,7 @@ export const sections = {
   usernames,
   legal,
   oidc,
+  safety,
   rate_limits: rateLimits,
   scheduler,
   retention,

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.report.created.v1",
+  "title": "Report created",
+  "description": "A new safety report was accepted for triage. The subject is the report. CSEA-flagged reports are never emitted with this event; the CSEA workflow handles them out of band.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_id", "type", "subtype", "priority", "target", "source", "sla_deadline"],
+  "properties": {
+    "report_id": { "description": "The new report.", "type": "string", "format": "uuid" },
+    "type": {
+      "description": "Report type from the taxonomy.",
+      "type": "string",
+      "minLength": 1
+    },
+    "subtype": {
+      "description": "Report subtype from the taxonomy.",
+      "type": "string",
+      "minLength": 1
+    },
+    "priority": {
+      "description": "Priority when the report entered the queue.",
+      "enum": ["low", "normal", "high", "urgent"]
+    },
+    "target": {
+      "description": "What was reported.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "description": "target type.", "enum": ["user", "content"] },
+        "id": { "description": "target id.", "type": "string", "minLength": 1 },
+        "user_id": {
+          "description": "For content reports, the owning user if known.",
+          "type": ["string", "null"],
+          "minLength": 1
+        }
+      }
+    },
+    "source": {
+      "description": "Where the report originated.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "description": "user for in-product reports, game for the game intake API, service for other services.",
+          "enum": ["user", "game", "service"]
+        },
+        "game_id": {
+          "description": "The reporting game, when kind is game.",
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "client_id": {
+          "description": "The OAuth client that submitted the report, when the caller was authenticated as a client.",
+          "type": ["string", "null"],
+          "minLength": 1
+        }
+      }
+    },
+    "sla_deadline": {
+      "description": "First-action deadline computed from the taxonomy's sla for this type.",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

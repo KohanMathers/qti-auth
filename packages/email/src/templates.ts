@@ -297,6 +297,28 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       username: z.string().min(1),
     }),
   },
+  safety_report_received: {
+    description: 'Confirm to a reporter that a safety report was received',
+    category: 'support',
+    priority: 'normal',
+    variables: z.object({
+      reference: z.string().min(1),
+      type: z.string().min(1),
+      product_name: z.string().min(1),
+      support_email: z.string().min(1),
+    }),
+  },
+  safety_report_outcome: {
+    description: 'Tell a reporter the outcome of a safety report',
+    category: 'support',
+    priority: 'normal',
+    variables: z.object({
+      reference: z.string().min(1),
+      outcome: z.string().min(1),
+      product_name: z.string().min(1),
+      support_email: z.string().min(1),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

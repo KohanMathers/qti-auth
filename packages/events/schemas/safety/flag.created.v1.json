@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.flag.created.v1",
+  "title": "Automated flag created",
+  "description": "A machine-generated flag entered the moderation queue as a report. The subject is the report the flag became.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_id", "type", "subtype", "priority", "target", "classifier", "score"],
+  "properties": {
+    "report_id": {
+      "description": "The report the flag was recorded as.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "description": "Report type from the taxonomy.",
+      "type": "string",
+      "minLength": 1
+    },
+    "subtype": {
+      "description": "Report subtype from the taxonomy.",
+      "type": "string",
+      "minLength": 1
+    },
+    "priority": {
+      "description": "Priority the flag entered the queue with.",
+      "enum": ["low", "normal", "high", "urgent"]
+    },
+    "target": {
+      "description": "What was flagged.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "description": "target type.", "enum": ["user", "content"] },
+        "id": { "description": "target id.", "type": "string", "minLength": 1 },
+        "user_id": {
+          "description": "For content flags, the owning user if known.",
+          "type": ["string", "null"],
+          "minLength": 1
+        }
+      }
+    },
+    "classifier": {
+      "description": "Name of the classifier that produced the flag, such as toxicity_v3.",
+      "type": "string",
+      "minLength": 1
+    },
+    "score": {
+      "description": "Classifier score in the classifier's own scale. Stored as-is.",
+      "type": "number"
+    },
+    "game_id": {
+      "description": "The reporting game, when the flag came from a game server.",
+      "type": ["string", "null"],
+      "minLength": 1
+    }
+  }
+}

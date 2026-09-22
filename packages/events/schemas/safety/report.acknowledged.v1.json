@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.report.acknowledged.v1",
+  "title": "Report acknowledged",
+  "description": "The report was queued for the reporter's acknowledgement email. The subject is the report.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_id"],
+  "properties": {
+    "report_id": { "description": "The acknowledged report.", "type": "string", "format": "uuid" },
+    "recipient_hash": {
+      "description": "Salted hash of the reporter's contact address, or null when there is no address. The address itself never appears in the event.",
+      "type": ["string", "null"],
+      "minLength": 1
+    }
+  }
+}

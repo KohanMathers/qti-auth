@@ -116,6 +116,11 @@ services:
 
   safety:
     <<: *qtiauth-service
+    image: qtiauth/safety:dev
+    build:
+      context: ..
+      dockerfile: services/safety/Dockerfile
+    command: ['node', 'src/main.ts']
     profiles: [safety]
 
   support:

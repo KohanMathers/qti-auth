@@ -653,15 +653,15 @@ client `access_denied`.
 
 Depends on Phases 2b and 2c.
 
-### P5.1 Reporting — M
+### P5.1 Reporting — M ✅
 Spec: §6.2 (reporting)
 
-- [ ] Taxonomy from config, including per-type SLAs and CSEA flags. Ships the default OSA-mapped
+- [x] Taxonomy from config, including per-type SLAs and CSEA flags. Ships the default OSA-mapped
       taxonomy.
-- [ ] User and content reports with snapshots, status lookup.
-- [ ] Game intake API (`auth: service` and `auth: oauth`) and automated flag intake.
-- [ ] Reporter acknowledgement and outcome notifications. Reporter anonymity.
-- [ ] SLA breach detection and events.
+- [x] User and content reports with snapshots, status lookup.
+- [x] Game intake API (`auth: service` and `auth: oauth`) and automated flag intake.
+- [x] Reporter acknowledgement and outcome notifications. Reporter anonymity.
+- [x] SLA breach detection and events.
 
 **Done when:** a report from a game server appears in the queue, and an overdue report emits
 `sla_breached` to a webhook.

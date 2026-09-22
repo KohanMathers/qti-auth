@@ -1,0 +1,11 @@
+Thanks for the report
+
+We have received your report of {{ type }} on {{ product_name }} and a moderator will review it.
+
+Your reference is {{ reference }}.
+
+We will not share your identity with the person you reported. You can reply to this email if you need to add anything.
+
+Need help? Contact {{ support_email }}.
+
+{{ brand.company_name }}

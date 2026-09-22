@@ -1,0 +1,35 @@
+<mjml lang="en-GB">
+  <mj-head>
+    <mj-title>Outcome for your report on {{ product_name }}</mj-title>
+    <mj-preview>An update on report {{ reference }}.</mj-preview>
+    <mj-attributes>
+      <mj-all
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      />
+      <mj-text font-size="16px" line-height="24px" color="#1f2937" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <mj-section padding="32px 16px 0">
+      <mj-column background-color="#ffffff" border-radius="8px" padding="24px">
+        <mj-text font-size="22px" line-height="30px" font-weight="600">
+          Outcome for your report
+        </mj-text>
+        <mj-text>Reference: {{ reference }}.</mj-text>
+        <mj-text>{{ outcome }}</mj-text>
+        <mj-text>
+          Thanks for helping keep {{ product_name }} safer. We never share your identity with the
+          person you reported.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+    <mj-section padding="16px">
+      <mj-column>
+        <mj-text font-size="12px" line-height="18px" color="#6b7280" align="center">
+          Need help? Contact {{ support_email }}.<br />
+          {{ brand.company_name }}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

@@ -614,6 +614,7 @@ describe('retention', () => {
       filter_decisions: 2_592_000_000,
       audit: 63_072_000_000,
       oauth: 2_592_000_000,
+      safety_reports: 63_072_000_000,
     });
   });
 });

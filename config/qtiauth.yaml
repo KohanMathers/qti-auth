@@ -139,6 +139,10 @@ features:
     kb: { enabled: true }
     guest_tickets: { enabled: true }
     attachments: { enabled: false }
+  safety:
+    reports: { enabled: true }
+    game_intake: { enabled: true }
+    automated_flags: { enabled: true }
 
 captcha:
   provider: altcha # altcha | turnstile | hcaptcha | friendly_captcha | none
@@ -280,6 +284,21 @@ legal:
   public_history: true
   documents_dir: legal
 
+safety:
+  reports:
+    reporter_ack: true
+    reporter_outcome: true
+    default_priority: normal
+    max_note_length: 2000
+    max_snapshot_bytes: 65536
+    sla_check_interval: 1m
+  taxonomy:
+    types: {} # ids you set replace the built-in type of the same name; see docs/safety.md
+  csea_alert_emails: [] # alert-only; bodies never contain case content
+  accountable_person:
+    name: ''
+    role: ''
+
 oidc:
   issuer: null # null uses the api surface origin
   resource: null # access token audience; null uses the issuer
@@ -317,6 +336,8 @@ rate_limits: # per: ip | user | client | email | account, or a list counted as o
   kb_feedback: { per: ip, limit: 30, window: 1h }
   oauth_authorize: { per: ip, limit: 60, window: 1m }
   oauth_token: { per: ip, limit: 60, window: 1m, on_store_failure: closed }
+  safety_report: { per: [ip, user], limit: 20, window: 1h, on_store_failure: closed }
+  safety_intake: { per: client, limit: 600, window: 1m, on_store_failure: closed }
 
 scheduler:
   timezone: UTC
@@ -336,6 +357,7 @@ scheduler:
     webhooks.retry: { schedule: '* * * * *', enabled: true }
     oidc.logout.retry: { schedule: '* * * * *', enabled: true }
     support.auto_close: { schedule: '0 * * * *', enabled: true }
+    safety.sla_sweep: { schedule: '* * * * *', enabled: true }
     achievements.recompute_rarity: { schedule: '0 2 * * *', enabled: true }
     leaderboards.reset_periodic: { schedule: '* * * * *', enabled: true }
     steam.ownership_sync: { schedule: '0 5 * * *', enabled: true }
@@ -349,6 +371,7 @@ retention:
   filter_decisions: 30d
   audit: 730d
   oauth: 30d
+  safety_reports: 730d
 
 storage:
   enabled: false

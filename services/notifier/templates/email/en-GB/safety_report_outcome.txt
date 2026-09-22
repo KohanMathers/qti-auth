@@ -1,0 +1,11 @@
+Outcome for your report
+
+Reference: {{ reference }}.
+
+{{ outcome }}
+
+Thanks for helping keep {{ product_name }} safer. We never share your identity with the person you reported.
+
+Need help? Contact {{ support_email }}.
+
+{{ brand.company_name }}

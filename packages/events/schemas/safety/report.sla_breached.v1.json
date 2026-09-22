@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.report.sla_breached.v1",
+  "title": "Report SLA breached",
+  "description": "The first-action SLA passed without a moderator action. Emitted at most once per report. Available to webhooks. The subject is the report.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_id", "type", "priority", "sla_deadline", "overdue_by_seconds"],
+  "properties": {
+    "report_id": { "description": "The overdue report.", "type": "string", "format": "uuid" },
+    "type": { "description": "Report type from the taxonomy.", "type": "string", "minLength": 1 },
+    "priority": {
+      "description": "Priority when the SLA was breached.",
+      "enum": ["low", "normal", "high", "urgent"]
+    },
+    "sla_deadline": {
+      "description": "The deadline that was missed.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "overdue_by_seconds": {
+      "description": "How far past the deadline the sweep detected the breach.",
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

@@ -1606,6 +1606,53 @@
             }
           },
           "additionalProperties": false
+        },
+        "safety": {
+          "description": "Safety features (safety profile).",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "reports": {
+              "description": "user, content and game report intake",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable user, content and game report intake.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "game_intake": {
+              "description": "the game and service report intake API",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable the game and service report intake API.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "automated_flags": {
+              "description": "automated flag intake from games and services",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable automated flag intake from games and services.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -2938,6 +2985,175 @@
       },
       "additionalProperties": false
     },
+    "safety": {
+      "description": "Safety module (safety profile): reporting, moderation, CSEA workflow.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "reports": {
+          "description": "Reporting behaviour.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "reporter_ack": {
+              "default": true,
+              "description": "Email the reporter to acknowledge receipt when they gave an email address.",
+              "type": "boolean"
+            },
+            "reporter_outcome": {
+              "default": true,
+              "description": "Email the reporter with the outcome once a moderator acts on the report. Reporters are never identified to the reported user.",
+              "type": "boolean"
+            },
+            "default_priority": {
+              "default": "normal",
+              "description": "Priority when a type's default_priority is not overridden.",
+              "type": "string",
+              "enum": [
+                "low",
+                "normal",
+                "high",
+                "urgent"
+              ]
+            },
+            "max_note_length": {
+              "default": 2000,
+              "description": "Longest note a reporter can attach to a report.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            },
+            "max_snapshot_bytes": {
+              "default": 65536,
+              "description": "Longest content snapshot, in bytes, accepted on intake.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            },
+            "sla_check_interval": {
+              "default": "1m",
+              "description": "How often the SLA sweep runs. sla_breached events are emitted at most once per report. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "taxonomy": {
+          "description": "Report taxonomy: types, subtypes, priorities, SLAs and CSEA flags.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "types": {
+              "description": "Report types. Ids you set replace the built-in type of the same name, and other built-in types stay as they are.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "Type name shown to reporters and moderators."
+                  },
+                  "subtypes": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9_]*$",
+                          "description": "Subtype slug, unique within the type."
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80,
+                          "description": "Subtype name shown to reporters and moderators."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A reason subtype under a report type."
+                    },
+                    "description": "Subtypes offered to reporters when they pick this type."
+                  },
+                  "default_priority": {
+                    "default": "normal",
+                    "description": "Priority the report enters the queue with.",
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "normal",
+                      "high",
+                      "urgent"
+                    ]
+                  },
+                  "sla": {
+                    "description": "Time-to-first-action target for reports of this type. Written as <integer><unit> (ms, s, m, h, d, w).",
+                    "type": "string",
+                    "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+                  },
+                  "csea": {
+                    "default": false,
+                    "description": "Opens a CSEA case, restricting access, evidence preservation and NCA workflow. Never delivered to webhooks, email bodies or logs.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "subtypes",
+                  "sla"
+                ],
+                "additionalProperties": false,
+                "description": "A report type in the taxonomy."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "csea_alert_emails": {
+          "default": [],
+          "description": "Recipients of the alert-only notification that a CSEA case exists. Bodies never contain case content.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          }
+        },
+        "accountable_person": {
+          "description": "Accountable person for the OSA safety duties (ICU A2).",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "name": {
+              "default": "",
+              "description": "Name of the person accountable for compliance with the OSA safety duties.",
+              "type": "string",
+              "maxLength": 120
+            },
+            "role": {
+              "default": "",
+              "description": "Their role, shown to legal document templates and in the admin UI.",
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "rate_limits": {
       "description": "Named rate-limit policies, referenced by routes. Policies you set replace the built-in policy of the same name.",
       "type": "object",
@@ -3112,6 +3328,12 @@
         "oauth": {
           "default": "30d",
           "description": "Keep expired or revoked OAuth authorization codes, access tokens and refresh tokens for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "safety_reports": {
+          "default": "730d",
+          "description": "Keep closed safety reports and their snapshots for this long. Open reports and reports under a legal hold are not swept. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }
