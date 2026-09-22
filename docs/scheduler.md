@@ -37,6 +37,8 @@ Schedules are cron patterns with five fields, `minute hour day-of-month month da
 | `webhooks.retry`                | notifier             | `* * * * *`      | every minute     |
 | `oidc.logout.retry`             | oidc                 | `* * * * *`      | every minute     |
 | `support.auto_close`            | support              | `0 * * * *`      | hourly           |
+| `safety.sla_sweep`              | safety               | `* * * * *`      | every minute     |
+| `safety.csea_retention`         | safety               | `15 3 * * *`     | daily 03:15      |
 | `achievements.recompute_rarity` | games                | `0 2 * * *`      | daily 02:00      |
 | `leaderboards.reset_periodic`   | games                | `* * * * *`      | every minute     |
 | `steam.ownership_sync`          | games                | `0 5 * * *`      | daily 05:00      |

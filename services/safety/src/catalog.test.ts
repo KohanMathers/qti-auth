@@ -9,6 +9,7 @@ describe('moderation catalog', () => {
   it('loads built-in actions, rules and restrictions', () => {
     expect(catalog.actions.get('ban')).toMatchObject({ name: 'Ban', enabled: true });
     expect(ruleOf(catalog, 'hate')?.name).toBe('Hate and harassment');
+    expect(ruleOf(catalog, 'protective')?.name).toBe('Immediate protective action');
     expect(catalog.restrictions).toEqual(['chat', 'ugc', 'username_change']);
     expect(catalog.requireSecondApproval).toBe(false);
   });

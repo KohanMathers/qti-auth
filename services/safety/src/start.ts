@@ -2,6 +2,7 @@ import { consumeCron, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
 import { type StartServiceOptions, type Stoppable, unwind } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
+import { countOpenCases, encryptionKey, sweepCseaRetention } from './csea.ts';
 import type { Database } from './database.ts';
 import { safetyMetrics } from './metrics.ts';
 import { USER_MODERATION_METHOD, userModeration } from './moderation.ts';
@@ -14,9 +15,11 @@ import {
 } from './reports.ts';
 import { type Context, type definition, router } from './service.ts';
 import { sweepSlaBreaches } from './sla.ts';
+import { objectStoreOf } from './storage.ts';
 
 export const SLA_SWEEP_JOB = 'safety.sla_sweep';
 export const RETENTION_JOB = 'retention.sweep';
+export const CSEA_RETENTION_JOB = 'safety.csea_retention';
 
 export function safetyService() {
   return {
@@ -33,8 +36,17 @@ export function safetyService() {
     }),
     start: async (ctx: Context) => {
       const { bus, db, log } = ctx;
+      if (ctx.config.features.safety.csea.enabled) {
+        encryptionKey(ctx.config.safety.csea.encryption_key);
+      }
+      const store = objectStoreOf(ctx.config);
       const stack: Stoppable[] = [];
       try {
+        if (store !== null) {
+          if (ctx.config.storage.create_bucket) await store.ensureBucket();
+          stack.push({ stop: () => store.close() });
+        }
+
         stack.push(
           serveRpc(bus, {
             method: USER_MODERATION_METHOD,
@@ -75,6 +87,18 @@ export function safetyService() {
           }),
         );
 
+        const runCseaRetention = async () => {
+          const result = await sweepCseaRetention(db, { now: new Date(), store });
+          safetyMetrics(ctx.metrics).cseaCasesOpen(await countOpenCases(db));
+          if (result.evidence > 0 || result.references > 0) {
+            log.info('csea retention sweep finished', {
+              evidence: result.evidence,
+              references: result.references,
+            });
+            ctx.outbox.wake();
+          }
+        };
+
         stack.push(
           await consumeCron(bus, {
             job: RETENTION_JOB,
@@ -85,6 +109,7 @@ export function safetyService() {
                 now: new Date(),
               });
               const pruned = await pruneBusTables(db, ctx.config.bus);
+              await runCseaRetention();
               log.info('retention sweep finished', {
                 reports,
                 outbox: pruned.outbox,
@@ -97,10 +122,23 @@ export function safetyService() {
           }),
         );
 
+        stack.push(
+          await consumeCron(bus, {
+            job: CSEA_RETENTION_JOB,
+            metrics: ctx.busMetrics,
+            handler: runCseaRetention,
+            onError: (error) => {
+              log.error('csea retention sweep failed', { error });
+            },
+          }),
+        );
+
+        safetyMetrics(ctx.metrics).cseaCasesOpen(await countOpenCases(db));
         log.info('safety started', {
           taxonomy_types: Object.keys(ctx.config.safety.taxonomy.types).length,
           intake: ctx.config.features.safety.game_intake.enabled,
           automated_flags: ctx.config.features.safety.automated_flags.enabled,
+          csea: ctx.config.features.safety.csea.enabled,
         });
         return stack;
       } catch (error) {

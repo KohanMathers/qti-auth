@@ -416,7 +416,7 @@ export async function handleSafetyEnforcement(
   trx: Kysely<Database>,
 ): Promise<void> {
   const now = new Date();
-  if (event.type === SAFETY_EVENTS.reportActioned) {
+  if (event.type === SAFETY_EVENTS.reportActioned || event.type === SAFETY_EVENTS.cseaEnforced) {
     const userId = await applyActioned(trx, event, now);
     if (userId !== null) {
       const parsed = actionedSchema.safeParse(event.data);

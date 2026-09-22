@@ -1219,6 +1219,9 @@ export const SAFETY_NOTE_MAX = 2_000;
 export const SAFETY_SNAPSHOT_MAX = 65_536;
 export const SAFETY_CLASSIFIER_MAX = 80;
 export const SAFETY_PERSON_MAX = 120;
+export const SAFETY_NCA_REFERENCE_MAX = 80;
+export const CSEA_NCA_PRIORITIES = [1, 2, 3] as const;
+export type CseaNcaPriority = (typeof CSEA_NCA_PRIORITIES)[number];
 
 const safetySubtype = z
   .strictObject({
@@ -1463,6 +1466,10 @@ const DEFAULT_SAFETY_RULES = {
     name: 'Other rule violation',
     summary: 'This broke the rules.',
   },
+  protective: {
+    name: 'Immediate protective action',
+    summary: 'An urgent restriction was applied while a report is reviewed.',
+  },
 } as const;
 
 export const safety = z
@@ -1527,6 +1534,51 @@ export const safety = z
       .describe(
         'Recipients of the alert-only notification that a CSEA case exists. Bodies never contain case content.',
       ),
+    csea: z
+      .strictObject({
+        encryption_key: z
+          .string()
+          .default('')
+          .describe(
+            'Base64 32-byte key that encrypts CSEA evidence at rest. Required when CSEA is enabled. Reference a secret.',
+          ),
+        nca_portal_url: z
+          .string()
+          .default('')
+          .refine(
+            (value) => {
+              if (value === '') return true;
+              try {
+                const url = new URL(value);
+                return url.protocol === 'https:' || url.protocol === 'http:';
+              } catch {
+                return false;
+              }
+            },
+            { message: 'Must be an http or https URL' },
+          )
+          .describe(
+            'URL of the NCA CSEA-IRP portal, shown to staff as the submission destination. Empty until the operator registers.',
+          ),
+        protective_lock: duration(
+          '7d',
+          'How long a one-click protective lock lasts. Staff can lift it earlier.',
+        ),
+        priority_1: duration(
+          '15m',
+          'NCA submission window for priority 1 (immediate threat to a child\'s life or serious harm). SI 2026/268 says immediately.',
+        ),
+        priority_2: duration(
+          '4h',
+          'NCA submission window for priority 2 (risk of serious harm in the near future). SI 2026/268 says as soon as reasonably practicable.',
+        ),
+        priority_3: duration(
+          '24h',
+          'NCA submission window for priority 3. SI 2026/268 says without undue delay.',
+        ),
+      })
+      .prefault({})
+      .describe('CSEA / NCA reporting workflow (SI 2026/268).'),
     accountable_person: z
       .strictObject({
         name: z
@@ -1942,6 +1994,7 @@ const DEFAULT_CRON_JOBS: Record<string, CronJob> = {
   'oidc.logout.retry': { schedule: '* * * * *', enabled: true },
   'support.auto_close': { schedule: '0 * * * *', enabled: true },
   'safety.sla_sweep': { schedule: '* * * * *', enabled: true },
+  'safety.csea_retention': { schedule: '15 3 * * *', enabled: true },
   'achievements.recompute_rarity': { schedule: '0 2 * * *', enabled: true },
   'leaderboards.reset_periodic': { schedule: '* * * * *', enabled: true },
   'steam.ownership_sync': { schedule: '0 5 * * *', enabled: true },
@@ -2109,6 +2162,7 @@ export const features = z
         automated_flags: toggle(true, 'automated flag intake from games and services'),
         moderation: toggle(true, 'the moderation queue, actions and two-person bans'),
         appeals: toggle(true, 'appeals against locks, bans and restrictions'),
+        csea: toggle(true, 'the CSEA / NCA case workflow'),
       })
       .prefault({})
       .describe('Safety features (safety profile).'),
@@ -2446,6 +2500,14 @@ export const retention = z
     safety_reports: duration(
       '730d',
       'Keep closed safety reports and their snapshots for this long. Open reports and reports under a legal hold are not swept.',
+    ),
+    csea_evidence: duration(
+      '365d',
+      'Keep encrypted CSEA evidence this long after the NCA report is sent, then destroy it with an audit record. SI 2026/268 regulation 8(1)(b): one year.',
+    ),
+    csea_nca_reference: duration(
+      '1825d',
+      'Keep the NCA unique report reference this long after submission. SI 2026/268 regulation 8(1)(a): five years (365 × 5 days).',
     ),
   })
   .prefault({})

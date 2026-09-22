@@ -1,0 +1,11 @@
+A CSEA case needs attention
+
+A case has been opened and needs a holder of the CSEA access permission to review it and, if required, submit it through the NCA portal.
+
+Open the case:
+
+{{ link }}
+
+This message never includes case content.
+
+{{ brand.company_name }}

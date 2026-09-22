@@ -18,6 +18,10 @@ describe('isRedactedKey', () => {
       'report_content',
       'email_body',
       'captcha',
+      'snapshot',
+      'evidence',
+      'sealed',
+      'ciphertext',
     ]) {
       expect(isRedactedKey(key), key).toBe(true);
     }

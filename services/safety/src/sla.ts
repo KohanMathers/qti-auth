@@ -19,6 +19,7 @@ export async function sweepSlaBreaches(db: Kysely<Database>, now: Date): Promise
       .selectFrom('reports')
       .select(['id', 'type', 'priority', 'sla_deadline'])
       .where('status', 'in', ['open', 'triaged'])
+      .where('csea', '=', false)
       .where('sla_breach_notified_at', 'is', null)
       .where('sla_deadline', '<=', now)
       .forUpdate()
@@ -60,7 +61,7 @@ export async function nextSlaDeadline(db: Kysely<Database>): Promise<Date | null
   const row = await sql<{ next_deadline: Date | null }>`
     select min(sla_deadline) as next_deadline
     from reports
-    where status in ('open', 'triaged') and sla_breach_notified_at is null
+    where status in ('open', 'triaged') and sla_breach_notified_at is null and csea = false
   `.execute(db);
   return row.rows[0]?.next_deadline ?? null;
 }

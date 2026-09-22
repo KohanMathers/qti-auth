@@ -244,6 +244,7 @@ describe('scheduler', () => {
     expect(jobs['accounts.unlock_expired']).toEqual({ schedule: '* * * * *', enabled: true });
     expect(jobs['webhooks.retry']).toEqual({ schedule: '* * * * *', enabled: true });
     expect(jobs['oidc.logout.retry']).toEqual({ schedule: '* * * * *', enabled: true });
+    expect(jobs['safety.csea_retention']).toEqual({ schedule: '15 3 * * *', enabled: true });
   });
 
   it('checks job names, patterns and the time zone', () => {
@@ -615,6 +616,15 @@ describe('safety', () => {
     expect(parsed.rules.items['hate']?.name).toBe('Hate and harassment');
     expect(parsed.appeals.max_length).toBe(2_000);
     expect(parsed.accountable_person).toEqual({ name: '', role: '' });
+    expect(parsed.csea).toEqual({
+      encryption_key: '',
+      nca_portal_url: '',
+      protective_lock: 7 * 86_400_000,
+      priority_1: 15 * 60_000,
+      priority_2: 4 * 3_600_000,
+      priority_3: 86_400_000,
+    });
+    expect(parsed.rules.items['protective']?.name).toBe('Immediate protective action');
   });
 
   it('lets you replace a built-in action and add a rule without dropping the rest', () => {
@@ -644,6 +654,8 @@ describe('retention', () => {
       audit: 63_072_000_000,
       oauth: 2_592_000_000,
       safety_reports: 63_072_000_000,
+      csea_evidence: 31_536_000_000,
+      csea_nca_reference: 157_680_000_000,
     });
   });
 });

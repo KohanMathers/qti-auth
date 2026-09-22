@@ -5,6 +5,8 @@ import {
   appealCreatedEvent,
   appealResolvedEvent,
   contentRemovalRequestedEvent,
+  cseaCaseOpenedEvent,
+  cseaEnforcedEvent,
   flagCreatedEvent,
   reportAcknowledgedEvent,
   reportActionedEvent,
@@ -185,6 +187,23 @@ describe('safety event schemas', () => {
           ),
         ),
       ),
+      catalog.validate(envelope(cseaCaseOpenedEvent(REPORT_ID, actor))),
+      catalog.validate(
+        envelope(
+          cseaEnforcedEvent(
+            REPORT_ID,
+            {
+              report_id: REPORT_ID,
+              action_id: actionId,
+              action: 'lock',
+              rule_id: 'protective',
+              target,
+              expires_at: new Date().toISOString(),
+            },
+            actor,
+          ),
+        ),
+      ),
     ];
     for (const result of results) {
       expect(result.valid).toBe(true);
@@ -196,6 +215,8 @@ describe('safety event schemas', () => {
       'qtiauth.safety.appeal.created.v1',
       'qtiauth.safety.appeal.resolved.v1',
       'qtiauth.safety.content.removal_requested.v1',
+      'qtiauth.safety.csea.case_opened.v1',
+      'qtiauth.safety.csea.enforced.v1',
       'qtiauth.safety.flag.created.v1',
       'qtiauth.safety.report.acknowledged.v1',
       'qtiauth.safety.report.actioned.v1',

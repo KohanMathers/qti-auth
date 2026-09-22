@@ -90,6 +90,19 @@ export interface ContentRemovalRequestedData {
   game_id: string | null;
 }
 
+export interface CseaCaseOpenedData {
+  case_id: string;
+}
+
+export interface CseaEnforcedData {
+  report_id: string;
+  action_id: string;
+  action: 'lock' | 'remove_content';
+  rule_id: string;
+  target: ReportTargetData;
+  expires_at?: string | null;
+}
+
 const SYSTEM_ACTOR: EventActor = { type: 'system', id: 'safety' };
 
 export function reportCreatedEvent(
@@ -201,6 +214,31 @@ export function contentRemovalRequestedEvent(
 ): NewEvent<ContentRemovalRequestedData> {
   return {
     type: SAFETY_EVENTS.contentRemovalRequested,
+    actor,
+    subject: { type: 'report', id: reportId },
+    data,
+  };
+}
+
+export function cseaCaseOpenedEvent(
+  caseId: string,
+  actor: EventActor,
+): NewEvent<CseaCaseOpenedData> {
+  return {
+    type: SAFETY_EVENTS.cseaCaseOpened,
+    actor,
+    subject: { type: 'csea_case', id: caseId },
+    data: { case_id: caseId },
+  };
+}
+
+export function cseaEnforcedEvent(
+  reportId: string,
+  data: CseaEnforcedData,
+  actor: EventActor,
+): NewEvent<CseaEnforcedData> {
+  return {
+    type: SAFETY_EVENTS.cseaEnforced,
     actor,
     subject: { type: 'report', id: reportId },
     data,

@@ -257,6 +257,30 @@ describe('safety enforcement', () => {
     expect(await change.json()).toMatchObject({ code: 'ACCOUNT_RESTRICTED' });
   });
 
+  it('locks from safety.csea.enforced', async () => {
+    const locked = await signUp('locked-csea@example.com');
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+    await publishEvent(
+      gateway.js,
+      createEvent({
+        type: SAFETY_EVENTS.cseaEnforced,
+        actor: { type: 'user', id: randomUUID() },
+        subject: { type: 'report', id: randomUUID() },
+        data: {
+          report_id: randomUUID(),
+          action_id: randomUUID(),
+          action: 'lock',
+          rule_id: 'protective',
+          target: { type: 'user', id: locked.userId, user_id: locked.userId },
+          expires_at: expiresAt,
+        },
+      }),
+    );
+    await vi.waitFor(async () => {
+      expect((await resolve(locked.token))?.account_state).toBe('locked');
+    });
+  });
+
   it('locks, forces a username reset, and lifts a ban when an appeal succeeds', async () => {
     const locked = await signUp('locked-moderation@example.com');
     const expiresAt = new Date(Date.now() + 60_000).toISOString();

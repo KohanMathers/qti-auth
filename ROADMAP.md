@@ -684,18 +684,18 @@ support and data rights.
 ### P5.3 CSEA / NCA workflow — L
 Spec: §6.2 (CSEA)
 
-- [ ] **Before starting:** confirm report fields, timeframes and retention against SI 2026/268 and
+- [x] **Before starting:** confirm report fields, timeframes and retention against SI 2026/268 and
       current NCA CSEA-IRP guidance. Record the findings in `docs/compliance/csea.md` and set config
       defaults from them.
 - [ ] **Before starting:** register the deployment operator with the NCA portal (operator task,
-      documented in the runbook).
-- [ ] Case creation from flagged types and reclassification.
-- [ ] Encrypted, isolated evidence store under a legal hold (uses the P2b.8 interface).
-- [ ] Access restricted to `safety.csea.access`, with every view audited.
-- [ ] Guided submission checklist, NCA reference and timestamp recording, deadline tracking.
-- [ ] One-click lock + removal request.
-- [ ] Alert-only notification to `csea_alert_emails`.
-- [ ] Evidence retention and audited destruction.
+      documented in `docs/compliance/csea.md`).
+- [x] Case creation from flagged types and reclassification.
+- [x] Encrypted, isolated evidence store under a legal hold (uses the P2b.8 interface).
+- [x] Access restricted to `safety.csea.access`, with every view audited.
+- [x] Guided submission checklist, NCA reference and timestamp recording, deadline tracking.
+- [x] One-click lock + removal request.
+- [x] Alert-only notification to `csea_alert_emails`.
+- [x] Evidence retention and audited destruction.
 
 **Done when:**
 - A **leak test** proves no CSEA case content reaches logs, traces, metrics labels, webhooks or email
@@ -978,7 +978,7 @@ These don't block the roadmap, but must be resolved at the milestone listed.
 | Item | Resolve at |
 |---|---|
 | LDNOOBW, SCOWL, name/surname lists and GeoNames licences allow redistribution | P2b.1 (see THIRD_PARTY_NOTICES.md) |
-| SI 2026/268 report fields, timeframes and retention | P5.3 |
+| SI 2026/268 report fields, timeframes and retention | P5.3 — see docs/compliance/csea.md |
 | NCA CSEA-IRP registration for each deployment operator | P5.3 |
 | Steamworks partner access and publisher key | P7.8 |
 | Web app framework choice | P9.1 |

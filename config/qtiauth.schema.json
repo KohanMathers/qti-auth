@@ -1676,6 +1676,19 @@
                 }
               },
               "additionalProperties": false
+            },
+            "csea": {
+              "description": "the CSEA / NCA case workflow",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable the CSEA / NCA case workflow.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false
@@ -3157,6 +3170,48 @@
             "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           }
         },
+        "csea": {
+          "description": "CSEA / NCA reporting workflow (SI 2026/268).",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "encryption_key": {
+              "default": "",
+              "description": "Base64 32-byte key that encrypts CSEA evidence at rest. Required when CSEA is enabled. Reference a secret.",
+              "type": "string"
+            },
+            "nca_portal_url": {
+              "default": "",
+              "description": "URL of the NCA CSEA-IRP portal, shown to staff as the submission destination. Empty until the operator registers.",
+              "type": "string"
+            },
+            "protective_lock": {
+              "default": "7d",
+              "description": "How long a one-click protective lock lasts. Staff can lift it earlier. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "priority_1": {
+              "default": "15m",
+              "description": "NCA submission window for priority 1 (immediate threat to a child's life or serious harm). SI 2026/268 says immediately. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "priority_2": {
+              "default": "4h",
+              "description": "NCA submission window for priority 2 (risk of serious harm in the near future). SI 2026/268 says as soon as reasonably practicable. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "priority_3": {
+              "default": "24h",
+              "description": "NCA submission window for priority 3. SI 2026/268 says without undue delay. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
+        },
         "accountable_person": {
           "description": "Accountable person for the OSA safety duties (ICU A2).",
           "default": {},
@@ -3479,6 +3534,18 @@
         "safety_reports": {
           "default": "730d",
           "description": "Keep closed safety reports and their snapshots for this long. Open reports and reports under a legal hold are not swept. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "csea_evidence": {
+          "default": "365d",
+          "description": "Keep encrypted CSEA evidence this long after the NCA report is sent, then destroy it with an audit record. SI 2026/268 regulation 8(1)(b): one year. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "csea_nca_reference": {
+          "default": "1825d",
+          "description": "Keep the NCA unique report reference this long after submission. SI 2026/268 regulation 8(1)(a): five years (365 × 5 days). Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         }

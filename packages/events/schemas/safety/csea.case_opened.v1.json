@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.csea.case_opened.v1",
+  "title": "CSEA case opened",
+  "description": "A CSEA case was opened from a flagged report or a reclassification. Never delivered to webhooks. The payload carries only the case id; case content is never included.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case_id"],
+  "properties": {
+    "case_id": {
+      "description": "The new CSEA case. This is an identifier, not case content.",
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

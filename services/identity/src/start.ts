@@ -429,7 +429,11 @@ export function identityService(options: IdentityOptions = {}) {
         stack.push(
           await consumeEvents(bus, db, {
             name: SAFETY_ENFORCEMENT_CONSUMER,
-            types: [SAFETY_EVENTS.reportActioned, SAFETY_EVENTS.appealResolved],
+            types: [
+              SAFETY_EVENTS.reportActioned,
+              SAFETY_EVENTS.appealResolved,
+              SAFETY_EVENTS.cseaEnforced,
+            ],
             startFrom: 'new',
             catalog: await loadEventCatalog(),
             metrics: ctx.busMetrics,

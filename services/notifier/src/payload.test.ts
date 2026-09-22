@@ -13,6 +13,7 @@ describe('webhook payloads', () => {
         description: 'user said a thing',
         reporter_id: 'u1',
         body: 'secret',
+        evidence: 'held',
       }),
     ).toEqual({ reason: 'spam', trust: 'game', report_id: 'r1' });
   });

@@ -30,6 +30,12 @@ export type AppealStatus = (typeof APPEAL_STATUSES)[number];
 export const APPROVAL_STATUSES = ['pending', 'approved', 'cancelled'] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 
+export const CSEA_CASE_STATUSES = ['open', 'submitted', 'closed', 'destroyed'] as const;
+export type CseaCaseStatus = (typeof CSEA_CASE_STATUSES)[number];
+
+export const CSEA_EVIDENCE_KINDS = ['snapshot', 'metadata'] as const;
+export type CseaEvidenceKind = (typeof CSEA_EVIDENCE_KINDS)[number];
+
 export interface ReportsTable {
   id: string;
   status: ReportStatus;
@@ -104,10 +110,43 @@ export interface AppealsTable {
   resolved_at: Date | null;
 }
 
+export interface CseaCasesTable {
+  id: string;
+  report_id: string;
+  status: CseaCaseStatus;
+  nca_priority: number;
+  nca_reference: string | null;
+  submitted_at: Date | null;
+  submission_deadline: Date;
+  evidence_until: Date | null;
+  reference_until: Date | null;
+  legal_hold_id: string | null;
+  target_user_id: string | null;
+  checklist: Record<string, unknown>;
+  closed_reason: string | null;
+  actor_id: string | null;
+  created_at: Date;
+  updated_at: Generated<Date>;
+  destroyed_at: Date | null;
+}
+
+export interface CseaEvidenceTable {
+  id: string;
+  case_id: string;
+  kind: CseaEvidenceKind;
+  content_type: string;
+  sealed: string;
+  storage_key: string | null;
+  created_at: Date;
+  destroyed_at: Date | null;
+}
+
 export interface Database {
   reports: ReportsTable;
   report_snapshots: ReportSnapshotsTable;
   moderation_actions: ModerationActionsTable;
   action_approvals: ActionApprovalsTable;
   appeals: AppealsTable;
+  csea_cases: CseaCasesTable;
+  csea_evidence: CseaEvidenceTable;
 }

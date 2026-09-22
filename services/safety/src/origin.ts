@@ -13,3 +13,12 @@ export function appealUrl(
   if (origin === undefined) return undefined;
   return new URL(`/appeals/${encodeURIComponent(actionId)}`, origin).toString();
 }
+
+export function cseaCaseUrl(
+  surfaces: QtiauthConfig['surfaces'],
+  caseId: string,
+): string | undefined {
+  const origin = accountOrigin(surfaces);
+  if (origin === undefined) return undefined;
+  return new URL(`/admin/safety/csea/${encodeURIComponent(caseId)}`, origin).toString();
+}

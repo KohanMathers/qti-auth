@@ -350,6 +350,15 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       link: z.url({ protocol: /^https?$/ }),
     }),
   },
+  csea_case_opened: {
+    description:
+      'Alert-only notice that a CSEA case exists. The body is a link; it never contains case content',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

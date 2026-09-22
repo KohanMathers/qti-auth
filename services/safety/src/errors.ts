@@ -76,4 +76,25 @@ export const SAFETY_ERRORS = defineErrors({
     status: 400,
     title: 'This appeal is too long',
   },
+  SAFETY_CSEA_DISABLED: {
+    status: 404,
+    title: 'The CSEA workflow is not enabled here',
+  },
+  SAFETY_CSEA_CASE_NOT_FOUND: { status: 404, title: 'No such CSEA case' },
+  SAFETY_CSEA_CASE_CLOSED: {
+    status: 409,
+    title: 'This CSEA case is no longer open',
+  },
+  SAFETY_CSEA_ALREADY_OPEN: {
+    status: 409,
+    title: 'A CSEA case already exists for this report',
+  },
+  SAFETY_CSEA_SUBMIT_INVALID: {
+    status: 400,
+    title: 'An NCA reference and a completed declaration are required',
+  },
+  SAFETY_CSEA_UNAVAILABLE: {
+    status: 503,
+    title: 'CSEA evidence encryption is not configured',
+  },
 });

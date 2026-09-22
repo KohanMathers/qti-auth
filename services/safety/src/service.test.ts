@@ -12,6 +12,7 @@ describe('safety service', () => {
       '0001_bus_tables',
       '0002_reports',
       '0003_moderation',
+      '0004_csea',
     ]);
   });
 
@@ -21,6 +22,8 @@ describe('safety service', () => {
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
       'GET /api/v1/admin/safety/appeals',
       'GET /api/v1/admin/safety/catalog',
+      'GET /api/v1/admin/safety/csea/cases',
+      'GET /api/v1/admin/safety/csea/cases/:case_id',
       'GET /api/v1/admin/safety/moderators/:moderator_id/history',
       'GET /api/v1/admin/safety/reports',
       'GET /api/v1/admin/safety/reports/:report_id',
@@ -30,8 +33,13 @@ describe('safety service', () => {
       'GET /api/v1/safety/taxonomy',
       'POST /api/v1/admin/safety/appeals/:appeal_id/resolve',
       'POST /api/v1/admin/safety/approvals/:approval_id/confirm',
+      'POST /api/v1/admin/safety/csea/cases/:case_id/checklist',
+      'POST /api/v1/admin/safety/csea/cases/:case_id/close',
+      'POST /api/v1/admin/safety/csea/cases/:case_id/protect',
+      'POST /api/v1/admin/safety/csea/cases/:case_id/submit',
       'POST /api/v1/admin/safety/reports/:report_id/actions',
       'POST /api/v1/admin/safety/reports/:report_id/dismiss',
+      'POST /api/v1/admin/safety/reports/:report_id/reclassify',
       'POST /api/v1/safety/appeals',
       'POST /api/v1/safety/intake/flags',
       'POST /api/v1/safety/intake/reports',
@@ -42,9 +50,19 @@ describe('safety service', () => {
     }
     expect(permissions.map((permission) => permission.name).sort()).toEqual([
       'safety.actions.apply',
+      'safety.csea.access',
       'safety.reports.read',
       'safety.reports.submit',
     ]);
+    expect(
+      permissions.find((permission) => permission.name === 'safety.csea.access'),
+    ).toMatchObject({
+      wildcard: false,
+    });
+    expect(
+      routes.find((route) => route.path === '/api/v1/admin/safety/csea/cases/:case_id')
+        ?.permissions,
+    ).toEqual(['safety.csea.access']);
     const document = openApiDocument(router) as { paths: Record<string, unknown> };
     expect(document.paths['/api/v1/safety/reports']).toBeDefined();
   });

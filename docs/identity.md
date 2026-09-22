@@ -666,7 +666,7 @@ Errors, on top of the [codes every service can return](services.md#errors):
 
 The gateway clears cached sessions when it sees `session.revoked`, `session.flagged`, `user.updated`, `user.banned`, `user.unbanned`, `user.locked`, `user.unlocked`, `user.restricted`, `user.deleted`, `user.age_band_changed`, `parental.consent_granted` or `parental.consent_revoked`, and every cached session when it sees `legal.version_published`. Accepting a legal version publishes `user.updated` with `fields: ["legal"]` so the gate lifts without waiting for the cache TTL. Schemas are in `packages/events/schemas/identity/` and `packages/events/schemas/audit/`.
 
-Identity consumes `safety.report.actioned` and `safety.appeal.resolved` to apply or lift bans, locks, username resets and named restrictions. Named restrictions are stored on `user_restrictions`, copied into the identity token and the `restrictions` claim, and dropped when they expire (`accounts.unlock_expired` also sweeps them).
+Identity consumes `safety.report.actioned`, `safety.csea.enforced` and `safety.appeal.resolved` to apply or lift bans, locks, username resets and named restrictions. Named restrictions are stored on `user_restrictions`, copied into the identity token and the `restrictions` claim, and dropped when they expire (`accounts.unlock_expired` also sweeps them).
 
 ## Retention and data rights
 

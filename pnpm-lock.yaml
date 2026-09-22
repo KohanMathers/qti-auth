@@ -699,6 +699,9 @@ importers:
       '@qtiauth/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@qtiauth/keys':
+        specifier: workspace:*
+        version: link:../../packages/keys
       '@qtiauth/observability':
         specifier: workspace:*
         version: link:../../packages/observability

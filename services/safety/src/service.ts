@@ -9,6 +9,7 @@ import {
 } from '@qtiauth/service-kit';
 
 import packageJson from '../package.json' with { type: 'json' };
+import { cseaRoutes } from './csea-routes.ts';
 import type { Database } from './database.ts';
 import { SAFETY_ERRORS } from './errors.ts';
 import { moderationRoutes } from './moderation-routes.ts';
@@ -20,7 +21,7 @@ export const definition = defineService({
   name: 'safety',
   version: packageJson.version,
   module: 'safety',
-  sections: ['branding', 'surfaces', 'features', 'safety', 'retention', 'email'],
+  sections: ['branding', 'surfaces', 'features', 'safety', 'retention', 'email', 'storage'],
   database: { schema: 'safety', migrations: () => loadMigrations(MIGRATIONS_DIR) },
   permissions: definePermissions({
     'safety.reports.read': {
@@ -31,6 +32,10 @@ export const definition = defineService({
     },
     'safety.actions.apply': {
       description: 'Apply moderation actions such as warnings, restrictions, locks and bans',
+    },
+    'safety.csea.access': {
+      description: 'View CSEA cases, snapshots and evidence, and record NCA submissions',
+      wildcard: false,
     },
   }),
   errors: SAFETY_ERRORS,
@@ -43,3 +48,4 @@ export const router = createServiceRouter<Context>(definition);
 
 intakeRoutes(router);
 moderationRoutes(router);
+cseaRoutes(router);

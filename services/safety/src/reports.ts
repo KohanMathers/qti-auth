@@ -360,6 +360,7 @@ export async function sweepClosedReports(
   const result = await db
     .deleteFrom('reports')
     .where('status', 'in', ['resolved', 'dismissed'])
+    .where('csea', '=', false)
     .where('outcome_at', '<', cutoff)
     .executeTakeFirst();
   return Number(result.numDeletedRows);
@@ -450,6 +451,7 @@ export async function eraseUserReports(trx: Kysely<Database>, userId: string): P
     update reports
     set target_user_id = null
     where target_user_id = ${userId}
+      and csea = false
   `.execute(trx);
   await sql`
     update moderation_actions

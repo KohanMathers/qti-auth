@@ -3,6 +3,7 @@ import { SAFETY_NOTE_MAX, SAFETY_PRIORITIES, SAFETY_SNAPSHOT_MAX } from '@qtiaut
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
+import { openCseaCase } from './csea-routes.ts';
 import { REPORT_STATUSES } from './database.ts';
 import { safetyMetrics } from './metrics.ts';
 import { listActionsForReport } from './moderation.ts';
@@ -168,6 +169,7 @@ async function submitAndAck(
   if (result.status !== 'ok') reportError(result);
   ctx.outbox.wake();
   safetyMetrics(ctx.metrics).reportReceived(result.report.type, input.source);
+  if (result.report.csea) await openCseaCase(ctx, result.report.id);
   const brand = ctx.config.branding;
   await queueReporterAck(ctx.db, bus, result.report, input, {
     reporterAckEnabled: ctx.config.safety.reports.reporter_ack,

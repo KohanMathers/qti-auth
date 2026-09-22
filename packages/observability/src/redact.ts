@@ -19,6 +19,10 @@ export const REDACTED_KEYS = [
   'reportcontent',
   'emailbody',
   'filterinput',
+  'snapshot',
+  'evidence',
+  'sealed',
+  'ciphertext',
   'signature',
   'captcha',
 ] as const;

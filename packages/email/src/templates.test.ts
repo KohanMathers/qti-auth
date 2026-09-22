@@ -145,5 +145,9 @@ describe('defineEmailTemplates', () => {
       category: 'auth',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.csea_case_opened).toMatchObject({
+      category: 'security',
+      priority: 'high',
+    });
   });
 });

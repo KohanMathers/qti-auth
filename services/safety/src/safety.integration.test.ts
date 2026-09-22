@@ -4,7 +4,8 @@ import { join } from 'node:path';
 
 import { type Bus, connectBus, publishCronTick } from '@qtiauth/bus';
 import { sections } from '@qtiauth/config';
-import { captureLogs } from '@qtiauth/observability/testing';
+import { SAFETY_EVENTS } from '@qtiauth/events';
+import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing';
 import { type RunningService, startService } from '@qtiauth/service-kit';
 import {
   generateIdentityKey,
@@ -15,20 +16,34 @@ import { natsUrl, startNats, startPostgres } from '@qtiauth/testing';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { type CapturedEmails, captureEmails } from '../../identity/src/testing.ts';
 import { loadCatalog } from './catalog.ts';
+import {
+  DESTROYED_SEALED,
+  decryptEvidence,
+  encryptionKey,
+  getCase,
+  getCaseByReport,
+  listEvidence,
+} from './csea.ts';
 import type { Database } from './database.ts';
 import { applyAction } from './moderation.ts';
-import { createReport, getReport } from './reports.ts';
+import { createReport, eraseUserReports, getReport } from './reports.ts';
 import { definition } from './service.ts';
-import { safetyService } from './start.ts';
+import { CSEA_RETENTION_JOB, safetyService } from './start.ts';
 import { loadTaxonomy } from './taxonomy.ts';
 
 let postgres: Awaited<ReturnType<typeof startPostgres>>;
 let nats: Awaited<ReturnType<typeof startNats>>;
 let scheduler: Bus;
 let gateway: Bus;
+let notifier: Bus;
+let emails: CapturedEmails;
 let configDir: string;
 const key = generateIdentityKey();
+const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
+const ALERT_EMAIL = 'csea-alerts@example.com';
+const LEAK_MARKER = 'held-snapshot-plaintext-9f2c';
 
 function config() {
   return {
@@ -49,11 +64,15 @@ function config() {
     }),
     migrations: sections.migrations.parse({}),
     branding: sections.branding.parse({}),
-    surfaces: sections.surfaces.parse({}),
+    surfaces: sections.surfaces.parse({ account: { hosts: ['account.example.com'] } }),
     features: sections.features.parse({}),
-    safety: sections.safety.parse({}),
+    safety: sections.safety.parse({
+      csea_alert_emails: [ALERT_EMAIL],
+      csea: { encryption_key: ENCRYPTION_KEY },
+    }),
     retention: sections.retention.parse({}),
     email: sections.email.parse({ provider: 'console' }),
+    storage: sections.storage.parse({}),
   };
 }
 
@@ -78,13 +97,17 @@ beforeAll(async () => {
   const bus = sections.bus.parse({ servers: [natsUrl(nats)] });
   scheduler = await connectBus(bus, 'scheduler');
   gateway = await connectBus(bus, 'gateway');
+  notifier = await connectBus(bus, 'notifier');
   serveTestIdentityKeys(gateway, key);
+  emails = await captureEmails(notifier);
   configDir = await mkdtemp(join(tmpdir(), 'qtiauth-safety-'));
 });
 
 afterAll(async () => {
+  await emails.stop();
   await scheduler.close();
   await gateway.close();
+  await notifier.close();
   await Promise.all([postgres.stop(), nats.stop()]);
   await rm(configDir, { recursive: true, force: true });
 });
@@ -381,5 +404,226 @@ describe('safety service', () => {
       },
     );
     expect(confirm.status).toBe(201);
+  });
+
+  it('opens a CSEA case, keeps evidence off every leak surface, and holds it after erasure', async () => {
+    const reporterId = 'cccccccc-dddd-eeee-ffff-000000000001';
+    const staffId = 'cccccccc-dddd-eeee-ffff-000000000002';
+    const targetId = 'cccccccc-dddd-eeee-ffff-000000000003';
+    const json = { 'content-type': 'application/json' };
+    const reporter = {
+      ...identityHeaders(key, 'safety', { sub: reporterId }),
+      ...json,
+    };
+    const reader = {
+      ...identityHeaders(key, 'safety', {
+        sub: staffId,
+        permissions: ['safety.reports.read', 'safety.actions.apply'],
+      }),
+      ...json,
+    };
+    const wildcard = {
+      ...identityHeaders(key, 'safety', { sub: staffId, permissions: ['*'] }),
+      ...json,
+    };
+    const holder = {
+      ...identityHeaders(key, 'safety', { sub: staffId, permissions: ['safety.csea.access'] }),
+      ...json,
+    };
+
+    const created = await fetch(`${safety.url}/api/v1/safety/reports`, {
+      method: 'POST',
+      headers: reporter,
+      body: JSON.stringify({
+        type: 'csea',
+        subtype: 'csam',
+        target: { type: 'content', id: 'post-held', user_id: targetId },
+        snapshot: { content_type: 'text/plain', content: LEAK_MARKER },
+      }),
+    });
+    expect(created.status).toBe(201);
+    const receipt = (await created.json()) as { id: string; csea: boolean };
+    expect(receipt.csea).toBe(true);
+
+    const record = await getCaseByReport(safety.context.db, receipt.id);
+    expect(record).toBeDefined();
+    if (record === undefined) throw new Error('case missing');
+
+    expect(await outboxTypes(safety)).toContain(SAFETY_EVENTS.cseaCaseOpened);
+    const related = (await outboxEnvelopes(safety)).filter((envelope) =>
+      envelope.includes(receipt.id),
+    );
+    expect(related.some((envelope) => envelope.includes('report.created'))).toBe(false);
+    expect(related.some((envelope) => envelope.includes('report.actioned'))).toBe(false);
+    for (const envelope of await outboxEnvelopes(safety)) {
+      expect(envelope).not.toContain(LEAK_MARKER);
+    }
+
+    const snapshots = await safety.context.db
+      .selectFrom('report_snapshots')
+      .select('content')
+      .where('report_id', '=', receipt.id)
+      .execute();
+    expect(snapshots).toEqual([]);
+
+    const queue = await fetch(`${safety.url}/api/v1/admin/safety/reports`, { headers: reader });
+    expect(queue.status).toBe(200);
+    const queued = (await queue.json()) as { items: { id: string }[] };
+    expect(queued.items.some((item) => item.id === receipt.id)).toBe(false);
+
+    const hidden = await fetch(`${safety.url}/api/v1/admin/safety/reports/${receipt.id}`, {
+      headers: reader,
+    });
+    expect(hidden.status).toBe(404);
+
+    const denied = await fetch(`${safety.url}/api/v1/admin/safety/csea/cases/${record.id}`, {
+      headers: reader,
+    });
+    expect(denied.status).toBe(403);
+
+    const starred = await fetch(`${safety.url}/api/v1/admin/safety/csea/cases/${record.id}`, {
+      headers: wildcard,
+    });
+    expect(starred.status).toBe(403);
+
+    const listed = await fetch(`${safety.url}/api/v1/admin/safety/csea/cases`, { headers: holder });
+    expect(listed.status).toBe(200);
+    const page = (await listed.json()) as {
+      items: { id: string; report_id: string; overdue: boolean }[];
+    };
+    expect(page.items.some((item) => item.id === record.id)).toBe(true);
+    expect(JSON.stringify(page)).not.toContain(LEAK_MARKER);
+
+    const detail = await fetch(`${safety.url}/api/v1/admin/safety/csea/cases/${record.id}`, {
+      headers: holder,
+    });
+    expect(detail.status).toBe(200);
+    const body = (await detail.json()) as {
+      id: string;
+      evidence: { kind: string; content: string }[];
+    };
+    expect(body.evidence.some((item) => item.content === LEAK_MARKER)).toBe(true);
+
+    expect(await outboxTypes(safety)).toContain('qtiauth.audit.recorded.v1');
+
+    const alert = await emails.nextJob(ALERT_EMAIL, 'csea_case_opened');
+    expect(JSON.stringify(alert.variables)).not.toContain(LEAK_MARKER);
+    expect(alert.variables).toEqual({
+      link: `https://account.example.com/admin/safety/csea/${record.id}`,
+    });
+
+    const metrics = await (await fetch(`${safety.url}/metrics`)).text();
+    expect(metrics).toContain('qtiauth_safety_csea_cases_open');
+    expect(metrics).not.toContain(LEAK_MARKER);
+    assertLogsScrubbed(logs.lines, [LEAK_MARKER]);
+
+    await safety.context.db.transaction().execute(async (trx) => {
+      await eraseUserReports(trx, targetId);
+    });
+    const held = await getCase(safety.context.db, record.id);
+    expect(held?.target_user_id).toBe(targetId);
+    const keyBytes = encryptionKey(ENCRYPTION_KEY);
+    const evidence = decryptEvidence(
+      await listEvidence(safety.context.db, record.id),
+      keyBytes,
+      record.id,
+    );
+    expect(evidence.some((item) => item.content === LEAK_MARKER)).toBe(true);
+
+    const protectedAction = await fetch(
+      `${safety.url}/api/v1/admin/safety/csea/cases/${record.id}/protect`,
+      { method: 'POST', headers: holder },
+    );
+    expect(protectedAction.status).toBe(204);
+    expect(await outboxTypes(safety)).toContain(SAFETY_EVENTS.cseaEnforced);
+    expect(await outboxTypes(safety)).toContain('qtiauth.safety.content.removal_requested.v1');
+    const afterProtect = (await outboxEnvelopes(safety)).filter((envelope) =>
+      envelope.includes(receipt.id),
+    );
+    expect(afterProtect.some((envelope) => envelope.includes('report.actioned'))).toBe(false);
+
+    const submitted = await fetch(
+      `${safety.url}/api/v1/admin/safety/csea/cases/${record.id}/submit`,
+      {
+        method: 'POST',
+        headers: holder,
+        body: JSON.stringify({
+          nca_reference: 'NCA-REF-1',
+          declaration: true,
+        }),
+      },
+    );
+    expect(submitted.status).toBe(200);
+    expect(await submitted.json()).toMatchObject({
+      status: 'submitted',
+      nca_reference: 'NCA-REF-1',
+    });
+
+    await safety.context.db
+      .updateTable('csea_cases')
+      .set({ evidence_until: new Date(Date.now() - 1_000) })
+      .where('id', '=', record.id)
+      .execute();
+    await publishCronTick(scheduler.js, CSEA_RETENTION_JOB, new Date());
+    await vi.waitFor(async () => {
+      const swept = await getCase(safety.context.db, record.id);
+      expect(swept?.status).toBe('destroyed');
+    });
+    const destroyed = await listEvidence(safety.context.db, record.id);
+    expect(destroyed.every((row) => row.sealed === DESTROYED_SEALED)).toBe(true);
+    assertLogsScrubbed(logs.lines, [LEAK_MARKER]);
+  });
+
+  it('opens a CSEA case when a moderator reclassifies a report', async () => {
+    const staffId = 'cccccccc-dddd-eeee-ffff-000000000010';
+    const targetId = 'cccccccc-dddd-eeee-ffff-000000000011';
+    const taxonomy = loadTaxonomy(config().safety);
+    const opened = await createReport(safety.context.db, taxonomy, {
+      typeId: 'hate',
+      subtypeId: 'targeted_harassment',
+      target: { type: 'user', id: targetId, user_id: targetId },
+      source: 'user',
+      actor: { type: 'user', id: staffId },
+      now: new Date(),
+    });
+    expect(opened.status).toBe('ok');
+    if (opened.status !== 'ok') throw new Error('report failed');
+
+    const reclassified = await fetch(
+      `${safety.url}/api/v1/admin/safety/reports/${opened.report.id}/reclassify`,
+      {
+        method: 'POST',
+        headers: {
+          ...identityHeaders(key, 'safety', {
+            sub: staffId,
+            permissions: ['safety.actions.apply'],
+          }),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'csea', subtype: 'csam' }),
+      },
+    );
+    expect(reclassified.status).toBe(204);
+    const record = await getCaseByReport(safety.context.db, opened.report.id);
+    expect(record?.status).toBe('open');
+    if (record === undefined) throw new Error('case missing');
+    const row = await getReport(safety.context.db, opened.report.id);
+    expect(row?.csea).toBe(true);
+
+    const closed = await fetch(`${safety.url}/api/v1/admin/safety/csea/cases/${record.id}/close`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'safety', {
+          sub: staffId,
+          permissions: ['safety.csea.access'],
+        }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ reason: 'Not CSEA' }),
+    });
+    expect(closed.status).toBe(204);
+    const returned = await getReport(safety.context.db, opened.report.id);
+    expect(returned?.csea).toBe(false);
+    expect(returned?.status).toBe('open');
   });
 });

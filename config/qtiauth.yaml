@@ -295,6 +295,13 @@ safety:
   taxonomy:
     types: {} # ids you set replace the built-in type of the same name; see docs/safety.md
   csea_alert_emails: [] # alert-only; bodies never contain case content
+  csea:
+    encryption_key: '${env:APP_ENCRYPTION_KEY}'
+    nca_portal_url: '' # operator sets this after NCA CSEA-IRP registration; see docs/compliance/csea.md
+    protective_lock: 7d
+    priority_1: 15m
+    priority_2: 4h
+    priority_3: 24h
   accountable_person:
     name: ''
     role: ''
@@ -358,6 +365,7 @@ scheduler:
     oidc.logout.retry: { schedule: '* * * * *', enabled: true }
     support.auto_close: { schedule: '0 * * * *', enabled: true }
     safety.sla_sweep: { schedule: '* * * * *', enabled: true }
+    safety.csea_retention: { schedule: '15 3 * * *', enabled: true }
     achievements.recompute_rarity: { schedule: '0 2 * * *', enabled: true }
     leaderboards.reset_periodic: { schedule: '* * * * *', enabled: true }
     steam.ownership_sync: { schedule: '0 5 * * *', enabled: true }
@@ -372,6 +380,8 @@ retention:
   audit: 730d
   oauth: 30d
   safety_reports: 730d
+  csea_evidence: 365d
+  csea_nca_reference: 1825d
 
 storage:
   enabled: false

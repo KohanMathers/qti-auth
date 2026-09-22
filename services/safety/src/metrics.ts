@@ -11,6 +11,7 @@ export interface SafetyMetrics {
   appeal: (outcome: AppealMetricOutcome) => void;
   timeToAction: (seconds: number) => void;
   queueDepth: (priority: string, count: number) => void;
+  cseaCasesOpen: (count: number) => void;
 }
 
 const created = new WeakMap<Metrics, SafetyMetrics>();
@@ -59,6 +60,10 @@ function prometheusSafetyMetrics(metrics: Metrics): SafetyMetrics {
     help: 'Open moderation queue depth, by priority.',
     labelNames: ['priority'],
   });
+  const cseaOpen = metrics.gauge({
+    name: 'qtiauth_safety_csea_cases_open',
+    help: 'Open or submitted CSEA cases (count only).',
+  });
   return {
     reportReceived: (type, source) => {
       received.inc({ type, source });
@@ -80,6 +85,9 @@ function prometheusSafetyMetrics(metrics: Metrics): SafetyMetrics {
     },
     queueDepth: (priority, count) => {
       queue.set({ priority }, count);
+    },
+    cseaCasesOpen: (count) => {
+      cseaOpen.set(count);
     },
   };
 }
