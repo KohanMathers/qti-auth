@@ -1,7 +1,7 @@
 import { NOTIFICATION_AUDIENCES, ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
+import { findAccount, OPEN_ACCOUNT_STATES } from './accounts.ts';
 import { NO_STORE } from './headers.ts';
 import { listedNotifications } from './notification-registry.ts';
 import { listPreferences, setPreferences } from './notifications.ts';
@@ -44,7 +44,7 @@ export function notificationRoutes(router: Router<Context>): void {
       'Security and legal categories are listed but cannot be turned off. Staff-only alert categories appear when the caller has any staff permission.',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     responses: { 200: { description: 'The current preferences', schema: preferencesSchema } },
     errors: ['ACCOUNT_NOT_FOUND'],
@@ -69,7 +69,7 @@ export function notificationRoutes(router: Router<Context>): void {
       'Security and legal categories cannot be disabled. Categories the caller cannot see answer as not found.',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     request: { body: patchBody },
     responses: { 200: { description: 'The updated preferences', schema: preferencesSchema } },

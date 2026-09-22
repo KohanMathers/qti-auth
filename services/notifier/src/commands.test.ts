@@ -89,6 +89,9 @@ describe('qtiauth templates check', () => {
         { name: 'guardian_removed', locales: ['en-GB'] },
         { name: 'safety_report_received', locales: ['en-GB'] },
         { name: 'safety_report_outcome', locales: ['en-GB'] },
+        { name: 'moderation_action', locales: ['en-GB'] },
+        { name: 'moderation_appeal_outcome', locales: ['en-GB'] },
+        { name: 'guardian_moderation_action', locales: ['en-GB'] },
       ],
     });
   });

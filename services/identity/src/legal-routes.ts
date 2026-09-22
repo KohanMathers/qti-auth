@@ -1,7 +1,7 @@
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
+import { findAccount, OPEN_ACCOUNT_STATES } from './accounts.ts';
 import { LEGAL_ACCEPTANCE_METHODS } from './database.ts';
 import { acceptLegal } from './flows.ts';
 import { NO_STORE } from './headers.ts';
@@ -133,7 +133,7 @@ export function legalRoutes(router: Router<Context>): void {
     summary: 'Legal documents this account still needs to accept',
     tags: ['legal'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     rate_limit: 'global',
@@ -185,7 +185,7 @@ export function legalRoutes(router: Router<Context>): void {
     summary: 'Accept legal document versions',
     tags: ['legal'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     rate_limit: 'global',

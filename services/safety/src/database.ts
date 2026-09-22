@@ -10,6 +10,26 @@ export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 export const REPORT_SOURCES = ['user', 'game', 'service', 'automated'] as const;
 export type ReportSource = (typeof REPORT_SOURCES)[number];
 
+export const ACTION_TYPES = [
+  'warn',
+  'restrict',
+  'force_username_reset',
+  'lock',
+  'ban',
+  'remove_content',
+  'proscribed_org_removal',
+] as const;
+export type ActionType = (typeof ACTION_TYPES)[number];
+
+export const ACTION_STATUSES = ['applied', 'pending_approval', 'lifted'] as const;
+export type ActionStatus = (typeof ACTION_STATUSES)[number];
+
+export const APPEAL_STATUSES = ['open', 'lifted', 'upheld'] as const;
+export type AppealStatus = (typeof APPEAL_STATUSES)[number];
+
+export const APPROVAL_STATUSES = ['pending', 'approved', 'cancelled'] as const;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+
 export interface ReportsTable {
   id: string;
   status: ReportStatus;
@@ -46,7 +66,48 @@ export interface ReportSnapshotsTable {
   created_at: Generated<Date>;
 }
 
+export interface ModerationActionsTable {
+  id: string;
+  report_id: string;
+  user_id: string | null;
+  action: ActionType;
+  status: ActionStatus;
+  rule_id: string;
+  restrictions: string[];
+  expires_at: Date | null;
+  reason_code: string | null;
+  actor_id: string;
+  created_at: Date;
+  updated_at: Generated<Date>;
+}
+
+export interface ActionApprovalsTable {
+  id: string;
+  report_id: string;
+  action_id: string;
+  requested_by: string;
+  approved_by: string | null;
+  status: ApprovalStatus;
+  created_at: Date;
+  decided_at: Date | null;
+}
+
+export interface AppealsTable {
+  id: string;
+  action_id: string;
+  user_id: string | null;
+  body: string;
+  status: AppealStatus;
+  ticket_id: string | null;
+  resolved_by: string | null;
+  created_at: Date;
+  resolved_at: Date | null;
+}
+
 export interface Database {
   reports: ReportsTable;
   report_snapshots: ReportSnapshotsTable;
+  moderation_actions: ModerationActionsTable;
+  action_approvals: ActionApprovalsTable;
+  appeals: AppealsTable;
 }

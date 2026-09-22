@@ -1,8 +1,17 @@
-import { consumeCron, pruneBusTables } from '@qtiauth/bus';
+import { consumeCron, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
 import { type StartServiceOptions, type Stoppable, unwind } from '@qtiauth/service-kit';
+import * as z from 'zod';
 
 import type { Database } from './database.ts';
-import { eraseUserReports, exportUserReports, sweepClosedReports } from './reports.ts';
+import { safetyMetrics } from './metrics.ts';
+import { USER_MODERATION_METHOD, userModeration } from './moderation.ts';
+import {
+  eraseUserReports,
+  exportUserActions,
+  exportUserAppeals,
+  exportUserReports,
+  sweepClosedReports,
+} from './reports.ts';
 import { type Context, type definition, router } from './service.ts';
 import { sweepSlaBreaches } from './sla.ts';
 
@@ -15,6 +24,8 @@ export function safetyService() {
     dataRights: ({ db }) => ({
       exportUser: async (userId) => ({
         reports: await exportUserReports(db, userId),
+        actions: await exportUserActions(db, userId),
+        appeals: await exportUserAppeals(db, userId),
       }),
       eraseUser: async (userId, trx) => {
         await eraseUserReports(trx, userId);
@@ -25,12 +36,27 @@ export function safetyService() {
       const stack: Stoppable[] = [];
       try {
         stack.push(
+          serveRpc(bus, {
+            method: USER_MODERATION_METHOD,
+            handler: async (request) => {
+              const parsed = z.object({ user_id: z.uuid() }).safeParse(request);
+              if (!parsed.success) throw new RpcError('bad_request', 'user_id is required');
+              return userModeration(db, parsed.data.user_id);
+            },
+            onError: (error) => {
+              log.error('user moderation lookup failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
           await consumeCron(bus, {
             job: SLA_SWEEP_JOB,
             metrics: ctx.busMetrics,
             handler: async () => {
               const breaches = await sweepSlaBreaches(db, new Date());
               if (breaches.length > 0) {
+                safetyMetrics(ctx.metrics).slaBreached();
                 log.warn('safety report SLA breached', {
                   count: breaches.length,
                   reports: breaches.map((b) => ({

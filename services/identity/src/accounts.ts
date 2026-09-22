@@ -20,6 +20,10 @@ export const SIGNED_IN_STATES = Object.keys(ACCOUNT_TRANSITIONS).filter(
   (state) => state !== 'deleted',
 ) as Exclude<AccountState, 'deleted'>[];
 
+export const OPEN_ACCOUNT_STATES = SIGNED_IN_STATES.filter(
+  (state) => state !== 'banned' && state !== 'locked',
+);
+
 export class AccountStateError extends Error {
   constructor(from: AccountState, to: AccountState) {
     super(`An account can't go from ${from} to ${to}`);

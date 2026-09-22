@@ -384,6 +384,8 @@ export const ACCOUNT_ACTIONS = [
   'unban',
   'lock',
   'unlock',
+  'restrict',
+  'unrestrict',
   'force_reauth',
   'revoke_sessions',
   'force_username_reset',
@@ -447,6 +449,15 @@ export interface NotificationPreferencesTable {
   updated_at: Date;
 }
 
+export interface UserRestrictionsTable {
+  id: string;
+  user_id: string;
+  name: string;
+  action_id: string;
+  expires_at: Date | null;
+  created_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   identities: IdentitiesTable;
@@ -481,4 +492,5 @@ export interface Database {
   legal_holds: LegalHoldsTable;
   deletion_ledger_outbox: DeletionLedgerOutboxTable;
   notification_preferences: NotificationPreferencesTable;
+  user_restrictions: UserRestrictionsTable;
 }

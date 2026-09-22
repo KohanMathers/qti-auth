@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.report.actioned.v1",
+  "title": "Report actioned",
+  "description": "A moderator applied an enforcement action to a report. Identity consumes this for the real effect. The subject is the report. Payloads never include content, snapshots or reporter identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_id", "action_id", "action", "rule_id", "target"],
+  "properties": {
+    "report_id": { "description": "The actioned report.", "type": "string", "format": "uuid" },
+    "action_id": {
+      "description": "The moderation action that was applied.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "action": {
+      "description": "Action type from config.",
+      "enum": [
+        "warn",
+        "restrict",
+        "force_username_reset",
+        "lock",
+        "ban",
+        "remove_content",
+        "proscribed_org_removal"
+      ]
+    },
+    "rule_id": {
+      "description": "Rule selected for the statement of reasons.",
+      "type": "string",
+      "minLength": 1
+    },
+    "target": {
+      "description": "What the action applies to.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "description": "target type.", "enum": ["user", "content"] },
+        "id": { "description": "target id.", "type": "string", "minLength": 1 },
+        "user_id": {
+          "description": "The account the action affects, when known.",
+          "type": ["string", "null"],
+          "format": "uuid"
+        }
+      }
+    },
+    "restrictions": {
+      "description": "Named restrictions added when action is restrict.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "expires_at": {
+      "description": "When a lock or restriction ends. Null or omitted for permanent actions.",
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "reason_code": {
+      "description": "Machine-readable reason, such as icu_h1 for proscribed organisation removal.",
+      "type": ["string", "null"],
+      "minLength": 1
+    }
+  }
+}

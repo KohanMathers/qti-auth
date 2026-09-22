@@ -2,7 +2,7 @@ import type { CaptchaWidget } from '@qtiauth/captcha';
 import { FLOW_BINDING_HEADER, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
+import { findAccount, OPEN_ACCOUNT_STATES, SIGNED_IN_STATES } from './accounts.ts';
 import { isValidDateOfBirth } from './age.ts';
 import { completeBind, issueBindCode } from './bind.ts';
 import { bindStoreOf } from './bind-state.ts';
@@ -356,6 +356,8 @@ function usernameMessage(
       return 'You have used all your username changes for now.';
     case 'already_pending':
       return 'A username change is already waiting for a parent or guardian.';
+    case 'restricted':
+      return 'This account cannot change its username right now.';
     case 'not_found':
       return 'Sign in again.';
   }
@@ -1355,7 +1357,7 @@ ${hiddenInput('token', query.token)}
     summary: 'Set up or turn off an authenticator app',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     allow_pending_2fa_enrolment: true,
@@ -1378,7 +1380,7 @@ ${hiddenInput('token', query.token)}
     summary: 'Start, confirm or turn off authenticator-app sign-in from the form',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     allow_pending_2fa_enrolment: true,
@@ -1474,7 +1476,7 @@ ${passkeysEnabled(ctx) ? '<p><a href="passkeys">Passkeys</a></p>' : ''}`,
     summary: 'Manage passkeys on this account',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     allow_pending_2fa_enrolment: true,
@@ -1507,7 +1509,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     summary: 'Claim or change this account’s username',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     responses: htmlResponses,
     handler: async ({ ctx, identity }) => {
@@ -1528,7 +1530,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     summary: 'Save a username from the username page',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     responses: htmlResponses,
     handler: async ({ ctx, identity, request, log }) => {
@@ -1612,7 +1614,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     summary: 'Connect an upstream provider while signed in',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'auth_password',
     request: { params: z.object({ provider: z.string().max(64) }) },
     responses: { 302: { description: 'Redirect to the provider' }, ...htmlResponses },
@@ -1782,7 +1784,7 @@ ${socialEnabled(ctx) ? '<p><a href="identities">Connected sign-in methods</a></p
     summary: 'Connected upstream sign-in methods',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     responses: htmlResponses,
     handler: async ({ ctx, identity }) => {
@@ -1922,7 +1924,7 @@ ${hiddenInput('token', query.token)}
     summary: 'Issue a one-time code that binds this session to another surface',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     allow_pending_2fa_enrolment: true,
@@ -2043,7 +2045,7 @@ ${hiddenInput('token', query.token)}
     summary: 'Accept updated legal documents',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     rate_limit: 'global',
@@ -2080,7 +2082,7 @@ ${hiddenInput('token', query.token)}
     summary: 'Accept updated legal documents from the form',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     rate_limit: 'global',

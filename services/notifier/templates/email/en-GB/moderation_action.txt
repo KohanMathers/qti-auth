@@ -1,0 +1,14 @@
+A moderation decision on your account
+
+Action: {{ action }}.
+Rule: {{ rule }}.
+{{ summary }}
+Duration: {{ duration }}.
+
+If you think this is wrong, you can appeal:
+
+{{ appeal_link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

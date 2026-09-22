@@ -24,6 +24,7 @@ import {
   legal,
   oidc,
   parental,
+  safety,
   storage,
   backups,
   webhooks,
@@ -601,6 +602,34 @@ describe('parental', () => {
 describe('legal', () => {
   it('publishes version history and reads documents from legal/ by default', () => {
     expect(legal.parse({})).toEqual({ public_history: true, documents_dir: 'legal' });
+  });
+});
+
+describe('safety', () => {
+  it('ships built-in actions, rules and restrictions, with two-person bans off', () => {
+    const parsed = safety.parse({});
+    expect(parsed.bans.require_second_approval).toBe(false);
+    expect(parsed.restrictions).toEqual(['chat', 'ugc', 'username_change']);
+    expect(parsed.actions.types['ban']?.name).toBe('Ban');
+    expect(parsed.actions.types['warn']?.enabled).toBe(true);
+    expect(parsed.rules.items['hate']?.name).toBe('Hate and harassment');
+    expect(parsed.appeals.max_length).toBe(2_000);
+    expect(parsed.accountable_person).toEqual({ name: '', role: '' });
+  });
+
+  it('lets you replace a built-in action and add a rule without dropping the rest', () => {
+    const parsed = safety.parse({
+      actions: { types: { ban: { name: 'Permanent ban', enabled: false } } },
+      rules: { items: { cheating: { name: 'Cheating', summary: 'Cheating is not allowed.' } } },
+      restrictions: ['chat', 'voice'],
+      bans: { require_second_approval: true },
+    });
+    expect(parsed.actions.types['ban']).toEqual({ name: 'Permanent ban', enabled: false });
+    expect(parsed.actions.types['lock']?.name).toBe('Lock');
+    expect(parsed.rules.items['cheating']?.name).toBe('Cheating');
+    expect(parsed.rules.items['hate']?.name).toBe('Hate and harassment');
+    expect(parsed.restrictions).toEqual(['chat', 'voice']);
+    expect(parsed.bans.require_second_approval).toBe(true);
   });
 });
 

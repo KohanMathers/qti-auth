@@ -319,6 +319,37 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       support_email: z.string().min(1),
     }),
   },
+  moderation_action: {
+    description: 'Statement of reasons after a moderation action',
+    category: 'support',
+    priority: 'high',
+    variables: z.object({
+      action: z.string().min(1),
+      rule: z.string().min(1),
+      summary: z.string().min(1),
+      duration: z.string().min(1),
+      appeal_link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  moderation_appeal_outcome: {
+    description: 'Tell a user whether their appeal lifted the action or left it in place',
+    category: 'support',
+    priority: 'high',
+    variables: z.object({
+      action: z.string().min(1),
+      outcome: z.string().min(1),
+    }),
+  },
+  guardian_moderation_action: {
+    description: 'Tell a parent or guardian that a moderation action was taken on a child account',
+    category: 'auth',
+    priority: 'high',
+    variables: z.object({
+      username: z.string().min(1),
+      action: z.string().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

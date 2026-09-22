@@ -666,6 +666,7 @@ export type RateLimitGroup = z.output<typeof rateLimitGroup>;
 const DEFAULT_SAFETY_RATE_LIMITS = {
   safety_report: { per: ['ip', 'user'], limit: 20, window: '1h', on_store_failure: 'closed' },
   safety_intake: { per: 'client', limit: 600, window: '1m', on_store_failure: 'closed' },
+  safety_appeal: { per: ['ip', 'user'], limit: 10, window: '1h', on_store_failure: 'closed' },
 } as const;
 
 const DEFAULT_RATE_LIMITS = {
@@ -1365,6 +1366,105 @@ const DEFAULT_SAFETY_TAXONOMY = {
   },
 } as const;
 
+export const SAFETY_ACTIONS = [
+  'warn',
+  'restrict',
+  'force_username_reset',
+  'lock',
+  'ban',
+  'remove_content',
+  'proscribed_org_removal',
+] as const;
+export type SafetyActionType = (typeof SAFETY_ACTIONS)[number];
+
+export const SAFETY_RESTRICTIONS = ['chat', 'ugc', 'username_change'] as const;
+export type SafetyRestriction = (typeof SAFETY_RESTRICTIONS)[number];
+
+export const SAFETY_SUMMARY_MAX = 500;
+export const SAFETY_APPEAL_MAX = SAFETY_NOTE_MAX;
+
+const safetyAction = z
+  .strictObject({
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(SAFETY_LABEL_MAX)
+      .describe('Action name shown to staff and in the statement of reasons.'),
+    enabled: z.boolean().default(true).describe('Staff can apply this action.'),
+  })
+  .describe('A moderation action type.');
+
+const DEFAULT_SAFETY_ACTIONS = {
+  warn: { name: 'Warn' },
+  restrict: { name: 'Restrict' },
+  force_username_reset: { name: 'Force username reset' },
+  lock: { name: 'Lock' },
+  ban: { name: 'Ban' },
+  remove_content: { name: 'Remove content' },
+  proscribed_org_removal: { name: 'Proscribed organisation removal' },
+} as const;
+
+const safetyRule = z
+  .strictObject({
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(SAFETY_LABEL_MAX)
+      .describe('Rule name shown to staff and in the statement of reasons.'),
+    summary: z
+      .string()
+      .trim()
+      .min(1)
+      .max(SAFETY_SUMMARY_MAX)
+      .describe('Short explanation of the rule, sent to the user with the action.'),
+  })
+  .describe('A rule staff must select to apply an enforcement action.');
+
+const DEFAULT_SAFETY_RULES = {
+  community_standards: {
+    name: 'Community standards',
+    summary: 'This broke the community standards.',
+  },
+  hate: {
+    name: 'Hate and harassment',
+    summary: 'Hate or harassment of other people is not allowed.',
+  },
+  violence: {
+    name: 'Violence and credible threats',
+    summary: 'Violence, threats of violence and incitement are not allowed.',
+  },
+  self_harm: {
+    name: 'Suicide and self-harm',
+    summary: 'Content that encourages suicide or self-harm is not allowed.',
+  },
+  sexual: {
+    name: 'Sexual content',
+    summary: 'This sexual content is not allowed here.',
+  },
+  fraud: {
+    name: 'Fraud and scams',
+    summary: 'Fraud, phishing and scams are not allowed.',
+  },
+  illegal_goods: {
+    name: 'Illegal goods',
+    summary: 'Selling or sharing illegal goods is not allowed.',
+  },
+  terrorism: {
+    name: 'Terrorism',
+    summary: 'Terrorist content and recruitment are not allowed.',
+  },
+  proscribed_organisation: {
+    name: 'Proscribed organisation',
+    summary: 'Content that supports a proscribed organisation is not allowed.',
+  },
+  other: {
+    name: 'Other rule violation',
+    summary: 'This broke the rules.',
+  },
+} as const;
+
 export const safety = z
   .strictObject({
     reports: z
@@ -1444,6 +1544,69 @@ export const safety = z
       })
       .prefault({})
       .describe('Accountable person for the OSA safety duties (ICU A2).'),
+    actions: z
+      .strictObject({
+        types: z
+          .record(z.string().regex(SAFETY_TAXONOMY_ID, SAFETY_TAXONOMY_ID_MESSAGE), safetyAction)
+          .default({})
+          .transform((types) => {
+            const merged = z.record(z.string(), safetyAction).parse(DEFAULT_SAFETY_ACTIONS);
+            for (const [id, action] of Object.entries(types)) merged[id] = action;
+            return merged;
+          })
+          .describe(
+            'Moderation actions. Ids you set replace the built-in action of the same name, and other built-in actions stay as they are.',
+          ),
+      })
+      .prefault({})
+      .describe('Config-defined moderation actions and whether each is available to staff.'),
+    rules: z
+      .strictObject({
+        items: z
+          .record(z.string().regex(SAFETY_TAXONOMY_ID, SAFETY_TAXONOMY_ID_MESSAGE), safetyRule)
+          .default({})
+          .transform((items) => {
+            const merged = z.record(z.string(), safetyRule).parse(DEFAULT_SAFETY_RULES);
+            for (const [id, rule] of Object.entries(items)) merged[id] = rule;
+            return merged;
+          })
+          .describe(
+            'Rules staff must choose from for a statement of reasons. Ids you set replace the built-in rule of the same name.',
+          ),
+      })
+      .prefault({})
+      .describe('Rules offered when applying an enforcement action.'),
+    restrictions: z
+      .array(z.string().regex(SAFETY_TAXONOMY_ID, SAFETY_TAXONOMY_ID_MESSAGE))
+      .default([...SAFETY_RESTRICTIONS])
+      .refine((list) => new Set(list).size === list.length, {
+        message: 'Restriction ids must be unique',
+      })
+      .describe(
+        'Named restrictions a restrict action may apply, such as chat, ugc and username_change. Exposed on the identity token.',
+      ),
+    bans: z
+      .strictObject({
+        require_second_approval: z
+          .boolean()
+          .default(false)
+          .describe(
+            'Permanent bans and proscribed-organisation removals need a second, different moderator to take effect.',
+          ),
+      })
+      .prefault({})
+      .describe('Ban policy.'),
+    appeals: z
+      .strictObject({
+        max_length: z
+          .int()
+          .min(1)
+          .max(SAFETY_APPEAL_MAX)
+          .default(SAFETY_APPEAL_MAX)
+          .describe('Longest appeal a user can submit.'),
+      })
+      .prefault({})
+      .describe('Appeals against locks, bans and restrictions.'),
   })
   .prefault({})
   .describe('Safety module (safety profile): reporting, moderation, CSEA workflow.');
@@ -1944,6 +2107,8 @@ export const features = z
         reports: toggle(true, 'user, content and game report intake'),
         game_intake: toggle(true, 'the game and service report intake API'),
         automated_flags: toggle(true, 'automated flag intake from games and services'),
+        moderation: toggle(true, 'the moderation queue, actions and two-person bans'),
+        appeals: toggle(true, 'appeals against locks, bans and restrictions'),
       })
       .prefault({})
       .describe('Safety features (safety profile).'),

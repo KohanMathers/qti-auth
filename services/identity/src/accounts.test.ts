@@ -7,6 +7,7 @@ import {
   assertTransition,
   canTransition,
   initialAccountState,
+  OPEN_ACCOUNT_STATES,
   SIGNED_IN_STATES,
 } from './accounts.ts';
 
@@ -50,5 +51,12 @@ describe('account state machine', () => {
   it('lets every state but deleted be signed in to', () => {
     expect(SIGNED_IN_STATES).not.toContain('deleted');
     expect(SIGNED_IN_STATES).toHaveLength(ACCOUNT_STATES.length - 1);
+  });
+
+  it('keeps banned and locked accounts off ordinary account-management routes', () => {
+    expect(OPEN_ACCOUNT_STATES).not.toContain('banned');
+    expect(OPEN_ACCOUNT_STATES).not.toContain('locked');
+    expect(OPEN_ACCOUNT_STATES).not.toContain('deleted');
+    expect(OPEN_ACCOUNT_STATES).toContain('active');
   });
 });

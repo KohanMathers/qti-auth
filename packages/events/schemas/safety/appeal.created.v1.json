@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.appeal.created.v1",
+  "title": "Appeal created",
+  "description": "A locked, banned or restricted user appealed an enforcement action. The subject is the appeal. The body of the appeal is never included.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["appeal_id", "action_id", "action", "user_id"],
+  "properties": {
+    "appeal_id": { "description": "The new appeal.", "type": "string", "format": "uuid" },
+    "action_id": {
+      "description": "The enforcement action being appealed.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "action": {
+      "description": "Action type that was appealed.",
+      "type": "string",
+      "minLength": 1
+    },
+    "user_id": {
+      "description": "The account that appealed.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "ticket_id": {
+      "description": "Support ticket created for this appeal, when Support is running.",
+      "type": ["string", "null"],
+      "minLength": 1
+    }
+  }
+}

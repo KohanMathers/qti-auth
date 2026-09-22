@@ -1,0 +1,30 @@
+<mjml lang="en-GB">
+  <mj-head>
+    <mj-title>Update on your appeal on {{ brand.product_name }}</mj-title>
+    <mj-preview>The {{ action }} was {{ outcome }}.</mj-preview>
+    <mj-attributes>
+      <mj-all
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      />
+      <mj-text font-size="16px" line-height="24px" color="#1f2937" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <mj-section padding="32px 16px 0">
+      <mj-column background-color="#ffffff" border-radius="8px" padding="24px">
+        <mj-text font-size="22px" line-height="30px" font-weight="600">
+          Update on your appeal
+        </mj-text>
+        <mj-text>The {{ action }} on your account was {{ outcome }}.</mj-text>
+      </mj-column>
+    </mj-section>
+    <mj-section padding="16px">
+      <mj-column>
+        <mj-text font-size="12px" line-height="18px" color="#6b7280" align="center">
+          Need help? Contact {{ brand.support_email }}.<br />
+          {{ brand.company_name }}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

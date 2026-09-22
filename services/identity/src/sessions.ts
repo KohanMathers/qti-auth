@@ -16,6 +16,7 @@ import { loadParentalControls } from './family.ts';
 import { iso } from './iso.ts';
 import { legalAcceptanceRequired } from './legal.ts';
 import { cancelPendingDeletion } from './pending-deletion.ts';
+import { expireRestrictions, loadActiveRestrictions } from './restrictions.ts';
 import { loadPermissions } from './roles.ts';
 import {
   applyResolvedSecurity,
@@ -402,6 +403,7 @@ export async function resolveSession(
   session: ResolvedSession | null;
   alert: SecurityAlert | null;
   unlocked: boolean;
+  restrictionsChanged: boolean;
 } | null> {
   const { now, idleTimeout } = options;
   const row = await db
@@ -445,6 +447,8 @@ export async function resolveSession(
     unlocked = (await expireLocks(db, now, row.user_id)).length > 0;
     if (unlocked) accountState = 'active';
   }
+  const restrictionsChanged = (await expireRestrictions(db, now, row.user_id)).length > 0;
+  const restrictions = await loadActiveRestrictions(db, row.user_id, now);
 
   let acr = row.acr;
   let lastActive = row.last_active_at;
@@ -490,7 +494,7 @@ export async function resolveSession(
         now,
       });
     }
-    if (applied.blocked) return { session: null, alert, unlocked };
+    if (applied.blocked) return { session: null, alert, unlocked, restrictionsChanged };
     acr = applied.acr;
   }
 
@@ -511,7 +515,7 @@ export async function resolveSession(
       user_id: row.user_id,
       account_state: accountState,
       permissions,
-      restrictions: [],
+      restrictions,
       age_band: ageBand(ageOn(row.date_of_birth, now), options.bands),
       parental_controls: await loadParentalControls(db, row.user_id),
       amr: row.amr,
@@ -530,6 +534,7 @@ export async function resolveSession(
     },
     alert,
     unlocked,
+    restrictionsChanged,
   };
 }
 

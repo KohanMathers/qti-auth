@@ -1,7 +1,7 @@
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
+import { findAccount, OPEN_ACCOUNT_STATES, SIGNED_IN_STATES } from './accounts.ts';
 import { ageBand, ageOn, isValidDateOfBirth } from './age.ts';
 import { CAPTCHA_ACTIONS, inspectCaptcha, noteCaptchaAttempt, requireCaptcha } from './captcha.ts';
 import { SECOND_FACTOR_METHODS } from './factors.ts';
@@ -30,6 +30,7 @@ import { iso } from './iso.ts';
 import { isCanonicalLocale, preferredLocale } from './locale.ts';
 import { throwGuardianSignup } from './parental-routes.ts';
 import type { PasswordPolicyReason } from './passwords.ts';
+import { loadActiveRestrictions } from './restrictions.ts';
 import { loadPermissions, loadUserRoles } from './roles.ts';
 import type { Context } from './service.ts';
 import { revoke, signedIn } from './session-routes.ts';
@@ -111,6 +112,7 @@ const meSchema = z.object({
     .describe('Family dashboard children, and this account’s own parents or guardians.'),
   roles: z.array(z.object({ id: z.uuid(), slug: z.string(), name: z.string() })),
   permissions: z.array(z.string()),
+  restrictions: z.array(z.string()),
   session: z.object({ id: z.uuid(), amr: z.array(z.string()), acr: z.string().nullable() }),
 });
 
@@ -579,7 +581,7 @@ export function authRoutes(router: Router<Context>): void {
       'Adding a password needs a recent magic-link sign-in. Changing one needs the current password.',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     allow_pending_legal: true,
     allow_pending_parental_consent: true,
     rate_limit: 'global',
@@ -804,23 +806,33 @@ export function authRoutes(router: Router<Context>): void {
     errors: ['ACCOUNT_NOT_FOUND'],
     handler: async ({ ctx, identity }) => {
       const { userId, sessionId } = signedIn(identity);
-      const [account, roles, permissions, consent, actor, ownGuardians, pendingRemoval] =
-        await Promise.all([
-          findAccount(ctx.db, userId),
-          loadUserRoles(ctx.db, userId),
-          loadPermissions(ctx.db, userId),
-          pendingParentalConsent(ctx, userId),
-          actorFromSession(ctx.db, sessionId),
-          listGuardians(ctx.db, userId),
-          pendingGuardianRemoval(ctx.db, userId),
-        ]);
+      const now = new Date();
+      const [
+        account,
+        roles,
+        permissions,
+        consent,
+        actor,
+        ownGuardians,
+        pendingRemoval,
+        restrictions,
+      ] = await Promise.all([
+        findAccount(ctx.db, userId),
+        loadUserRoles(ctx.db, userId),
+        loadPermissions(ctx.db, userId),
+        pendingParentalConsent(ctx, userId),
+        actorFromSession(ctx.db, sessionId),
+        listGuardians(ctx.db, userId),
+        pendingGuardianRemoval(ctx.db, userId),
+        loadActiveRestrictions(ctx.db, userId, now),
+      ]);
       if (!account || account.state === 'deleted') {
         throw new ProblemError('ACCOUNT_NOT_FOUND');
       }
       const children =
         actor === undefined
           ? []
-          : await listFamilyChildren(ctx.db, actor, ctx.config.age.bands, new Date());
+          : await listFamilyChildren(ctx.db, actor, ctx.config.age.bands, now);
       const family = presentFamilyGraduation(account, ownGuardians, pendingRemoval, {
         consentAge: ctx.config.parental.consent_age,
         graceMs: ctx.config.parental.graduation_grace,
@@ -837,7 +849,7 @@ export function authRoutes(router: Router<Context>): void {
           username_reset_required: account.username_reset_required,
           account_state: account.state,
           deletion_requested_at: iso(account.deletion_requested_at),
-          age_band: ageBand(ageOn(account.date_of_birth, new Date()), ctx.config.age.bands),
+          age_band: ageBand(ageOn(account.date_of_birth, now), ctx.config.age.bands),
           public_profile: account.public_profile,
           leaderboard_visible: account.leaderboard_visible,
           locale: account.locale,
@@ -846,6 +858,7 @@ export function authRoutes(router: Router<Context>): void {
           family: { children, ...family },
           roles: roles.map((role) => ({ id: role.id, slug: role.slug, name: role.name })),
           permissions,
+          restrictions,
           session: { id: sessionId, amr: identity.amr, acr: identity.acr },
         },
       };
@@ -862,7 +875,7 @@ export function authRoutes(router: Router<Context>): void {
     tags: ['account'],
     auth: 'session',
     step_up: true,
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'magic_link',
     request: { body: z.object({ email: z.email().max(254) }) },
     responses: {

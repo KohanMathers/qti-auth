@@ -13,6 +13,8 @@ const ALLOWED_DATA = new Set([
   'status',
   'trust',
   'type',
+  'outcome',
+  'restrictions',
 ]);
 
 const DENIED_DATA = /^(content|snapshot|description|reporter|body|text|message|evidence|email|ip)/i;

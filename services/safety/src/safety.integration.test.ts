@@ -6,11 +6,19 @@ import { type Bus, connectBus, publishCronTick } from '@qtiauth/bus';
 import { sections } from '@qtiauth/config';
 import { captureLogs } from '@qtiauth/observability/testing';
 import { type RunningService, startService } from '@qtiauth/service-kit';
+import {
+  generateIdentityKey,
+  identityHeaders,
+  serveTestIdentityKeys,
+} from '@qtiauth/service-kit/testing';
 import { natsUrl, startNats, startPostgres } from '@qtiauth/testing';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { loadCatalog } from './catalog.ts';
 import type { Database } from './database.ts';
+import { applyAction } from './moderation.ts';
+import { createReport, getReport } from './reports.ts';
 import { definition } from './service.ts';
 import { safetyService } from './start.ts';
 import { loadTaxonomy } from './taxonomy.ts';
@@ -18,7 +26,9 @@ import { loadTaxonomy } from './taxonomy.ts';
 let postgres: Awaited<ReturnType<typeof startPostgres>>;
 let nats: Awaited<ReturnType<typeof startNats>>;
 let scheduler: Bus;
+let gateway: Bus;
 let configDir: string;
+const key = generateIdentityKey();
 
 function config() {
   return {
@@ -65,12 +75,16 @@ async function outboxEnvelopes(
 
 beforeAll(async () => {
   [postgres, nats] = await Promise.all([startPostgres(), startNats()]);
-  scheduler = await connectBus(sections.bus.parse({ servers: [natsUrl(nats)] }), 'scheduler');
+  const bus = sections.bus.parse({ servers: [natsUrl(nats)] });
+  scheduler = await connectBus(bus, 'scheduler');
+  gateway = await connectBus(bus, 'gateway');
+  serveTestIdentityKeys(gateway, key);
   configDir = await mkdtemp(join(tmpdir(), 'qtiauth-safety-'));
 });
 
 afterAll(async () => {
   await scheduler.close();
+  await gateway.close();
   await Promise.all([postgres.stop(), nats.stop()]);
   await rm(configDir, { recursive: true, force: true });
 });
@@ -232,5 +246,140 @@ describe('safety service', () => {
       (type) => type === 'qtiauth.safety.report.sla_breached.v1',
     ).length;
     expect(secondCount).toBe(firstCount);
+  });
+
+  it('serves the catalog, queue, actions, dismiss, history and appeals', async () => {
+    const staffId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    const otherStaff = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+    const targetId = '11111111-2222-3333-4444-555555555555';
+    const staff = {
+      sub: staffId,
+      permissions: ['safety.reports.read', 'safety.actions.apply'],
+    };
+    const headers = {
+      ...identityHeaders(key, 'safety', staff),
+      'content-type': 'application/json',
+    };
+    const catalog = await fetch(`${safety.url}/api/v1/admin/safety/catalog`, { headers });
+    expect(catalog.status).toBe(200);
+    expect(await catalog.json()).toMatchObject({
+      bans: { require_second_approval: false },
+      restrictions: ['chat', 'ugc', 'username_change'],
+    });
+
+    const taxonomy = loadTaxonomy(config().safety);
+    const opened = await createReport(safety.context.db, taxonomy, {
+      typeId: 'hate',
+      subtypeId: 'targeted_harassment',
+      target: { type: 'user', id: targetId, user_id: targetId },
+      source: 'user',
+      actor: { type: 'user', id: staffId },
+      now: new Date(),
+    });
+    expect(opened.status).toBe('ok');
+    if (opened.status !== 'ok') throw new Error('report failed');
+
+    const queue = await fetch(`${safety.url}/api/v1/admin/safety/reports`, { headers });
+    expect(queue.status).toBe(200);
+    const queued = (await queue.json()) as { items: { id: string }[] };
+    expect(queued.items.some((item) => item.id === opened.report.id)).toBe(true);
+
+    const applied = await fetch(
+      `${safety.url}/api/v1/admin/safety/reports/${opened.report.id}/actions`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'restrict', rule_id: 'hate', restrictions: ['chat'] }),
+      },
+    );
+    expect(applied.status).toBe(201);
+    const action = (await applied.json()) as { id: string; action: string; status: string };
+    expect(action).toMatchObject({ action: 'restrict', status: 'applied' });
+    expect(await outboxTypes(safety)).toContain('qtiauth.safety.report.actioned.v1');
+
+    const history = await fetch(`${safety.url}/api/v1/admin/safety/users/${targetId}/history`, {
+      headers,
+    });
+    expect(history.status).toBe(200);
+    expect(await history.json()).toMatchObject({
+      items: [expect.objectContaining({ id: action.id })],
+    });
+
+    const appeal = await fetch(`${safety.url}/api/v1/safety/appeals`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'safety', { sub: targetId, account_state: 'active' }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ action_id: action.id, body: 'This was a joke.' }),
+    });
+    expect(appeal.status).toBe(201);
+    const openedAppeal = (await appeal.json()) as { id: string };
+    const resolved = await fetch(
+      `${safety.url}/api/v1/admin/safety/appeals/${openedAppeal.id}/resolve`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ outcome: 'lifted' }),
+      },
+    );
+    expect(resolved.status).toBe(200);
+    expect(await outboxTypes(safety)).toContain('qtiauth.safety.appeal.resolved.v1');
+
+    const toDismiss = await createReport(safety.context.db, taxonomy, {
+      typeId: 'fraud',
+      subtypeId: 'phishing',
+      target: { type: 'user', id: targetId, user_id: targetId },
+      source: 'game',
+      gameId: 'arena',
+      actor: { type: 'service', id: 'game:arena' },
+      now: new Date(),
+    });
+    if (toDismiss.status !== 'ok') throw new Error('report failed');
+    const dismissed = await fetch(
+      `${safety.url}/api/v1/admin/safety/reports/${toDismiss.report.id}/dismiss`,
+      { method: 'POST', headers },
+    );
+    expect(dismissed.status).toBe(204);
+
+    const pendingReport = await createReport(safety.context.db, taxonomy, {
+      typeId: 'hate',
+      subtypeId: 'targeted_harassment',
+      target: { type: 'user', id: targetId, user_id: targetId },
+      source: 'user',
+      actor: { type: 'user', id: otherStaff },
+      now: new Date(),
+    });
+    if (pendingReport.status !== 'ok') throw new Error('report failed');
+    const pendingRow = await getReport(safety.context.db, pendingReport.report.id);
+    expect(pendingRow).toBeDefined();
+    if (!pendingRow) throw new Error('report missing');
+    const twoPerson = loadCatalog(
+      sections.safety.parse({ bans: { require_second_approval: true } }),
+    );
+    const pending = await applyAction(safety.context.db, twoPerson, pendingRow, {
+      reportId: pendingReport.report.id,
+      action: 'ban',
+      ruleId: 'hate',
+      actorId: staffId,
+      now: new Date(),
+    });
+    expect(pending.status).toBe('pending_approval');
+    if (pending.status !== 'pending_approval') throw new Error('expected pending');
+
+    const confirm = await fetch(
+      `${safety.url}/api/v1/admin/safety/approvals/${pending.approvalId}/confirm`,
+      {
+        method: 'POST',
+        headers: {
+          ...identityHeaders(key, 'safety', {
+            sub: otherStaff,
+            permissions: ['safety.actions.apply'],
+          }),
+          'content-type': 'application/json',
+        },
+      },
+    );
+    expect(confirm.status).toBe(201);
   });
 });

@@ -669,14 +669,14 @@ Spec: §6.2 (reporting)
 ### P5.2 Moderation — L
 Spec: §6.2 (moderation)
 
-- [ ] Queue, detail, dismiss, history per user and per moderator.
-- [ ] Config-defined actions with real effects: warn, restrict, force username reset, lock, ban,
+- [x] Queue, detail, dismiss, history per user and per moderator.
+- [x] Config-defined actions with real effects: warn, restrict, force username reset, lock, ban,
       remove content, proscribed org removal.
-- [ ] Restrictions in the internal token and `restrictions` claim, with expiry.
-- [ ] Statement of reasons (rule selection required).
-- [ ] Basic appeals: Support ticket when Support is enabled, minimal Safety form otherwise.
-- [ ] Optional two-person rule for permanent bans.
-- [ ] Accountable person config.
+- [x] Restrictions in the internal token and `restrictions` claim, with expiry.
+- [x] Statement of reasons (rule selection required).
+- [x] Basic appeals: Support ticket when Support is enabled, minimal Safety form otherwise.
+- [x] Optional two-person rule for permanent bans.
+- [x] Accountable person config.
 
 **Done when:** every action type has a tested effect, and a banned user can reach only appeals,
 support and data rights.

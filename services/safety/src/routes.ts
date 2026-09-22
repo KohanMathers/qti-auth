@@ -4,6 +4,8 @@ import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { REPORT_STATUSES } from './database.ts';
+import { safetyMetrics } from './metrics.ts';
+import { listActionsForReport } from './moderation.ts';
 import {
   type CreatedReport,
   type CreateReportInput,
@@ -11,6 +13,7 @@ import {
   createReport,
   getReport,
   getReporterStatus,
+  getReportSnapshot,
   queueReporterAck,
 } from './reports.ts';
 import type { Context } from './service.ts';
@@ -88,6 +91,20 @@ const detailSchema = receiptSchema.extend({
   sla_breach_notified_at: z.iso.datetime().nullable(),
   classifier: z.string().nullable(),
   classifier_score: z.number().nullable(),
+  note: z.string().nullable(),
+  snapshot: snapshotSchema.extend({ captured_at: z.iso.datetime() }).nullable(),
+  actions: z.array(
+    z.object({
+      id: z.uuid(),
+      action: z.string(),
+      status: z.string(),
+      rule_id: z.string(),
+      restrictions: z.array(z.string()),
+      expires_at: z.iso.datetime().nullable(),
+      actor_id: z.uuid(),
+      created_at: z.iso.datetime(),
+    }),
+  ),
 });
 
 const taxonomyResponseSchema = z.object({
@@ -150,6 +167,7 @@ async function submitAndAck(
   const result = await createReport(ctx.db, taxonomy, input);
   if (result.status !== 'ok') reportError(result);
   ctx.outbox.wake();
+  safetyMetrics(ctx.metrics).reportReceived(result.report.type, input.source);
   const brand = ctx.config.branding;
   await queueReporterAck(ctx.db, bus, result.report, input, {
     reporterAckEnabled: ctx.config.safety.reports.reporter_ack,
@@ -381,6 +399,10 @@ export function intakeRoutes(router: Router<Context>): void {
     handler: async ({ ctx, params }) => {
       const report = await getReport(ctx.db, params.report_id);
       if (!report || report.csea) throw new ProblemError('SAFETY_REPORT_NOT_FOUND');
+      const [snapshot, actions] = await Promise.all([
+        getReportSnapshot(ctx.db, report.id),
+        listActionsForReport(ctx.db, report.id),
+      ]);
       return {
         status: 200 as const,
         body: {
@@ -403,6 +425,25 @@ export function intakeRoutes(router: Router<Context>): void {
           classifier: report.classifier,
           classifier_score: report.classifier_score,
           created_at: report.created_at.toISOString(),
+          note: report.note,
+          snapshot:
+            snapshot === undefined
+              ? null
+              : {
+                  content_type: snapshot.content_type,
+                  content: snapshot.content,
+                  captured_at: snapshot.captured_at.toISOString(),
+                },
+          actions: actions.map((action) => ({
+            id: action.id,
+            action: action.action,
+            status: action.status,
+            rule_id: action.rule_id,
+            restrictions: action.restrictions,
+            expires_at: action.expires_at?.toISOString() ?? null,
+            actor_id: action.actor_id,
+            created_at: action.created_at.toISOString(),
+          })),
         },
       };
     },

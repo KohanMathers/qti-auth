@@ -1,7 +1,7 @@
 import { consumeCron, consumeEvents, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
 import { applyAuditLogPrivileges } from '@qtiauth/db';
 import { queueEmail } from '@qtiauth/email';
-import { AUDIT_EVENTS, loadEventCatalog, OIDC_EVENTS } from '@qtiauth/events';
+import { AUDIT_EVENTS, loadEventCatalog, OIDC_EVENTS, SAFETY_EVENTS } from '@qtiauth/events';
 import { openGeoIp } from '@qtiauth/geoip';
 import { untraced } from '@qtiauth/observability';
 import {
@@ -33,6 +33,7 @@ import { sweepChallenges } from './challenges.ts';
 import { eraseUser, exportUser, storeHeldSnapshot } from './data-rights.ts';
 import type { Database } from './database.ts';
 import { sweepTokens } from './email-tokens.ts';
+import { handleSafetyEnforcement, SAFETY_ENFORCEMENT_CONSUMER } from './enforcement.ts';
 import { EXPORT_RESUME_JOB, sweepExports } from './exports.ts';
 import { sweepAuthFailures } from './failures.ts';
 import { ACTIVITY_SUMMARY_JOB, sweepFamilySessions } from './family.ts';
@@ -83,6 +84,7 @@ import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
 import { EXPIRE_PENDING_JOB, expirePendingConsents } from './parental.ts';
 import { openPermissionCatalog } from './permission-registry.ts';
 import { anySocialEnabled } from './providers.ts';
+import { expireRestrictions } from './restrictions.ts';
 import { seedRoles } from './roles.ts';
 import { sweepSecurityEvents } from './security.ts';
 import { type Context, definition, router } from './service.ts';
@@ -253,7 +255,7 @@ export function identityService(options: IdentityOptions = {}) {
                   },
                 });
                 ctx.outbox.wake();
-              } else if (resolved?.unlocked) {
+              } else if (resolved?.unlocked || resolved?.restrictionsChanged) {
                 ctx.outbox.wake();
               }
               return { session: resolved?.session ?? null };
@@ -352,10 +354,17 @@ export function identityService(options: IdentityOptions = {}) {
             job: UNLOCK_JOB,
             metrics: ctx.busMetrics,
             handler: async () => {
-              const unlocked = await expireLocks(db, new Date());
-              if (unlocked.length > 0) {
+              const now = new Date();
+              const unlocked = await expireLocks(db, now);
+              const restrictions = await expireRestrictions(db, now);
+              if (unlocked.length > 0 || restrictions.length > 0) {
                 ctx.outbox.wake();
-                log.info('expired locks lifted', { unlocked: unlocked.length });
+                if (unlocked.length > 0) {
+                  log.info('expired locks lifted', { unlocked: unlocked.length });
+                }
+                if (restrictions.length > 0) {
+                  log.info('expired restrictions lifted', { expired: restrictions.length });
+                }
               }
             },
             onError: (error) => {
@@ -413,6 +422,22 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('guardian app notification failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeEvents(bus, db, {
+            name: SAFETY_ENFORCEMENT_CONSUMER,
+            types: [SAFETY_EVENTS.reportActioned, SAFETY_EVENTS.appealResolved],
+            startFrom: 'new',
+            catalog: await loadEventCatalog(),
+            metrics: ctx.busMetrics,
+            handler: async (event, trx) => {
+              await handleSafetyEnforcement(ctx, event, trx);
+            },
+            onError: (error) => {
+              log.error('safety enforcement failed', { error });
             },
           }),
         );

@@ -63,6 +63,7 @@ export async function exportUser(
     activityNotices,
     graduationNotice,
     removalRequests,
+    restrictions,
   ] = await Promise.all([
     db
       .selectFrom('identities')
@@ -254,6 +255,12 @@ export async function exportUser(
       .where('user_id', '=', userId)
       .orderBy('requested_at')
       .execute(),
+    db
+      .selectFrom('user_restrictions')
+      .select(['name', 'action_id', 'expires_at', 'created_at'])
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute(),
   ]);
 
   return {
@@ -430,6 +437,12 @@ export async function exportUser(
       requested_at: iso(row.requested_at),
       decided_at: iso(row.decided_at),
       last_reminded_at: iso(row.last_reminded_at),
+    })),
+    restrictions: restrictions.map((row) => ({
+      name: row.name,
+      action_id: row.action_id,
+      expires_at: iso(row.expires_at),
+      created_at: iso(row.created_at),
     })),
   };
 }

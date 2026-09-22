@@ -34,6 +34,7 @@ describe('identity service', () => {
       '0023_parental_consent',
       '0024_family',
       '0025_graduation',
+      '0026_user_restrictions',
     ]);
   });
 
@@ -319,8 +320,10 @@ describe('identity service', () => {
     });
     expect(route('POST', '/api/v1/me/username')).toMatchObject({
       auth: 'session',
-      allow_account_states: expect.arrayContaining(['active', 'banned', 'locked']) as unknown,
     });
+    expect(route('POST', '/api/v1/me/username')?.allow_account_states).toContain('active');
+    expect(route('POST', '/api/v1/me/username')?.allow_account_states).not.toContain('banned');
+    expect(route('POST', '/api/v1/me/username')?.allow_account_states).not.toContain('locked');
     expect(route('GET', '/api/v1/admin/permissions')).toMatchObject({
       auth: 'session',
       permissions: ['roles.manage'],
@@ -344,11 +347,11 @@ describe('identity service', () => {
     });
     expect(route('GET', '/api/v1/me/notifications')).toMatchObject({
       auth: 'session',
-      allow_account_states: expect.arrayContaining(['active', 'banned', 'locked']) as unknown,
+      allow_account_states: expect.arrayContaining(['active']) as unknown,
     });
     expect(route('PATCH', '/api/v1/me/notifications')).toMatchObject({
       auth: 'session',
-      allow_account_states: expect.arrayContaining(['active', 'banned', 'locked']) as unknown,
+      allow_account_states: expect.arrayContaining(['active']) as unknown,
     });
     expect(route('POST', '/api/v1/auth/social/:provider/start')).toMatchObject({
       auth: 'none',
@@ -436,6 +439,7 @@ describe('identity service', () => {
         'ROLE_BUILTIN',
         'LEGAL_DOCUMENT_NOT_FOUND',
         'ACCOUNT_SELF',
+        'ACCOUNT_RESTRICTED',
         'ACCOUNT_STATE_CONFLICT',
         'LOCK_EXPIRY_INVALID',
         'EXPORT_NOT_FOUND',

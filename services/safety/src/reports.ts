@@ -284,6 +284,53 @@ export async function getReport(
   return row;
 }
 
+export interface ReportSnapshotView {
+  content_type: string;
+  content: string;
+  captured_at: Date;
+}
+
+export async function getReportSnapshot(
+  db: Kysely<Database>,
+  reportId: string,
+): Promise<ReportSnapshotView | undefined> {
+  return db
+    .selectFrom('report_snapshots')
+    .select(['content_type', 'content', 'captured_at'])
+    .where('report_id', '=', reportId)
+    .orderBy('captured_at', 'desc')
+    .executeTakeFirst();
+}
+
+export async function queueReporterOutcome(
+  bus: Bus,
+  report: ReportRecord,
+  outcome: string,
+  options: {
+    reporterOutcomeEnabled: boolean;
+    productName: string;
+    supportEmail: string;
+    defaultLocale: string;
+  },
+): Promise<boolean> {
+  if (!options.reporterOutcomeEnabled) return false;
+  const contact = report.reporter_contact;
+  if (!contact) return false;
+  await queueEmail(bus, {
+    template: 'safety_report_outcome',
+    to: { address: contact },
+    locale: report.reporter_locale ?? options.defaultLocale,
+    userId: report.reporter_user_id,
+    variables: {
+      reference: report.id,
+      outcome,
+      product_name: options.productName,
+      support_email: options.supportEmail,
+    },
+  });
+  return true;
+}
+
 export interface ReporterStatusView {
   id: string;
   status: ReportStatus;
@@ -347,6 +394,50 @@ export async function exportUserReports(
   }));
 }
 
+export async function exportUserActions(
+  db: Kysely<Database>,
+  userId: string,
+): Promise<Record<string, unknown>[]> {
+  const rows = await db
+    .selectFrom('moderation_actions')
+    .select([
+      'id',
+      'report_id',
+      'action',
+      'status',
+      'rule_id',
+      'restrictions',
+      'expires_at',
+      'reason_code',
+      'created_at',
+    ])
+    .where('user_id', '=', userId)
+    .orderBy('created_at', 'desc')
+    .execute();
+  return rows.map((row) => ({
+    ...row,
+    expires_at: row.expires_at?.toISOString() ?? null,
+    created_at: row.created_at.toISOString(),
+  }));
+}
+
+export async function exportUserAppeals(
+  db: Kysely<Database>,
+  userId: string,
+): Promise<Record<string, unknown>[]> {
+  const rows = await db
+    .selectFrom('appeals')
+    .select(['id', 'action_id', 'body', 'status', 'ticket_id', 'created_at', 'resolved_at'])
+    .where('user_id', '=', userId)
+    .orderBy('created_at', 'desc')
+    .execute();
+  return rows.map((row) => ({
+    ...row,
+    created_at: row.created_at.toISOString(),
+    resolved_at: row.resolved_at?.toISOString() ?? null,
+  }));
+}
+
 export async function eraseUserReports(trx: Kysely<Database>, userId: string): Promise<void> {
   await sql`
     update reports
@@ -359,5 +450,16 @@ export async function eraseUserReports(trx: Kysely<Database>, userId: string): P
     update reports
     set target_user_id = null
     where target_user_id = ${userId}
+  `.execute(trx);
+  await sql`
+    update moderation_actions
+    set user_id = null
+    where user_id = ${userId}
+  `.execute(trx);
+  await sql`
+    update appeals
+    set user_id = null,
+        body = ''
+    where user_id = ${userId}
   `.execute(trx);
 }

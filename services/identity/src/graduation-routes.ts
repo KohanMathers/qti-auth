@@ -1,7 +1,7 @@
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
+import { findAccount, OPEN_ACCOUNT_STATES } from './accounts.ts';
 import { sendGuardianRemovalRequestEmail, sendGuardianRemovedEmail } from './flows.ts';
 import { cancelGuardianRemoval, requestGuardianRemoval } from './graduation.ts';
 import { NO_STORE } from './headers.ts';
@@ -19,7 +19,7 @@ export function graduationRoutes(router: Router<Context>): void {
       'After parental.graduation_grace the young person can request removal, which a parent or guardian must approve. At the adult band the link can be removed without approval.',
     tags: ['family'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     responses: {
       202: {
@@ -89,7 +89,7 @@ export function graduationRoutes(router: Router<Context>): void {
     summary: 'Cancel a pending request to remove the parent or guardian link',
     tags: ['family'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     responses: { 204: { description: 'The request has been cancelled' } },
     errors: ['GUARDIAN_REMOVAL_NOT_FOUND'],

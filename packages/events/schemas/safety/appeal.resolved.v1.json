@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.appeal.resolved.v1",
+  "title": "Appeal resolved",
+  "description": "Staff lifted an enforcement action or left it in place after an appeal. Identity consumes a lift for the real effect. The subject is the appeal.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["appeal_id", "action_id", "action", "user_id", "outcome"],
+  "properties": {
+    "appeal_id": { "description": "The resolved appeal.", "type": "string", "format": "uuid" },
+    "action_id": {
+      "description": "The enforcement action that was appealed.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "action": {
+      "description": "Action type that was appealed.",
+      "type": "string",
+      "minLength": 1
+    },
+    "user_id": {
+      "description": "The account that appealed.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "outcome": {
+      "description": "lifted undoes the action. upheld leaves it in place.",
+      "enum": ["lifted", "upheld"]
+    },
+    "restrictions": {
+      "description": "Restrictions that were lifted when outcome is lifted and action is restrict.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

@@ -52,6 +52,11 @@ export interface UserUnlockedData {
   reason: string;
 }
 
+export interface UserRestrictedData {
+  restrictions: string[];
+  reason?: string;
+}
+
 export interface UserUpdatedData {
   fields: string[];
 }
@@ -177,6 +182,19 @@ export function userUnlockedEvent(
 ): NewEvent<UserUnlockedData> {
   return {
     type: IDENTITY_EVENTS.userUnlocked,
+    actor,
+    subject: { type: 'user', id: userId },
+    data,
+  };
+}
+
+export function userRestrictedEvent(
+  userId: string,
+  data: UserRestrictedData,
+  actor: EventActor,
+): NewEvent<UserRestrictedData> {
+  return {
+    type: IDENTITY_EVENTS.userRestricted,
     actor,
     subject: { type: 'user', id: userId },
     data,

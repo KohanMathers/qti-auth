@@ -1,7 +1,7 @@
 import { FAMILY_TOKEN_HEADER, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { findAccount, SIGNED_IN_STATES } from './accounts.ts';
+import { findAccount, OPEN_ACCOUNT_STATES } from './accounts.ts';
 import { isValidDateOfBirth } from './age.ts';
 import { parseDevice } from './device.ts';
 import {
@@ -180,7 +180,7 @@ export function familyPageRoutes(router: Router<Context>): void {
     summary: 'Ask to remove the parent or guardian link',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     responses: htmlResponses,
     handler: async ({ ctx, identity }) => {
@@ -196,7 +196,7 @@ export function familyPageRoutes(router: Router<Context>): void {
     summary: 'Submit a request to remove the parent or guardian link',
     tags: ['pages'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     responses: htmlResponses,
     handler: async ({ ctx, identity, request, log }) => {

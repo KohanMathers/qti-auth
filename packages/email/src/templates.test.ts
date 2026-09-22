@@ -133,5 +133,17 @@ describe('defineEmailTemplates', () => {
       category: 'auth',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.moderation_action).toMatchObject({
+      category: 'support',
+      priority: 'high',
+    });
+    expect(EMAIL_TEMPLATES.moderation_appeal_outcome).toMatchObject({
+      category: 'support',
+      priority: 'high',
+    });
+    expect(EMAIL_TEMPLATES.guardian_moderation_action).toMatchObject({
+      category: 'auth',
+      priority: 'high',
+    });
   });
 });

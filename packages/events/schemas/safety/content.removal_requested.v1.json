@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.content.removal_requested.v1",
+  "title": "Content removal requested",
+  "description": "A moderator requested that the originating game or service remove content. The subject is the report. Payloads never include the content itself.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_id", "action_id", "target"],
+  "properties": {
+    "report_id": {
+      "description": "The report this removal was applied from.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "action_id": {
+      "description": "The remove_content action.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "target": {
+      "description": "The content to remove.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "description": "Always content.", "const": "content" },
+        "id": {
+          "description": "Content id in the originating game or service.",
+          "type": "string",
+          "minLength": 1
+        },
+        "user_id": {
+          "description": "Owning user if known.",
+          "type": ["string", "null"],
+          "format": "uuid"
+        }
+      }
+    },
+    "game_id": {
+      "description": "The originating game, when the report came from a game.",
+      "type": ["string", "null"],
+      "minLength": 1
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.identity.user.restricted.v1",
+  "title": "User restricted",
+  "description": "Active moderation restrictions on an account changed. The gateway drops cached sessions for the user. The subject is the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["restrictions"],
+  "properties": {
+    "restrictions": {
+      "description": "Named restrictions now in force, such as chat, ugc or username_change. Empty when none remain.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "reason": {
+      "description": "Why the restrictions changed. Stored with the staff action when present.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

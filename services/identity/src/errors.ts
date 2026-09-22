@@ -164,6 +164,10 @@ export const IDENTITY_ERRORS = defineErrors({
     title: 'No request to remove the parent or guardian link is waiting',
   },
   ACCOUNT_NOT_FOUND: { status: 404, title: 'The account does not exist' },
+  ACCOUNT_RESTRICTED: {
+    status: 403,
+    title: 'This action is restricted on this account',
+  },
   ACCOUNT_SELF: { status: 409, title: 'You cannot perform this action on your own account' },
   ACCOUNT_STATE_CONFLICT: {
     status: 409,

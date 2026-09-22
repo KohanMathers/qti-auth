@@ -2,7 +2,7 @@ import { USERNAME_MAX_LENGTH } from '@qtiauth/config';
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { SIGNED_IN_STATES } from './accounts.ts';
+import { OPEN_ACCOUNT_STATES } from './accounts.ts';
 import { chooseUsername, type ChooseUsernameResult } from './flows.ts';
 import { NO_STORE } from './headers.ts';
 import type { Context } from './service.ts';
@@ -38,6 +38,8 @@ function usernameError(
       throw new ProblemError('USERNAME_CHANGE_LIMIT');
     case 'already_pending':
       throw new ProblemError('USERNAME_CHANGE_PENDING');
+    case 'restricted':
+      throw new ProblemError('ACCOUNT_RESTRICTED');
   }
 }
 
@@ -51,7 +53,7 @@ export function usernameRoutes(router: Router<Context>): void {
       'Accounts can exist without a username. Changing one is limited by usernames.change_cooldown and usernames.changes_per_year. Taken, reserved and filtered names all answer Username not available. Child accounts with a parent or guardian queue a change for approval.',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     request: { body: usernameBody },
     responses: {
@@ -69,6 +71,7 @@ export function usernameRoutes(router: Router<Context>): void {
       'USERNAME_COOLDOWN',
       'USERNAME_CHANGE_LIMIT',
       'USERNAME_CHANGE_PENDING',
+      'ACCOUNT_RESTRICTED',
     ],
     handler: async ({ ctx, identity, body, request, log }) => {
       const { userId } = signedIn(identity);

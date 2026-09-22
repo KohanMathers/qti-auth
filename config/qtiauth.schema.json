@@ -1650,6 +1650,32 @@
                 }
               },
               "additionalProperties": false
+            },
+            "moderation": {
+              "description": "the moderation queue, actions and two-person bans",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable the moderation queue, actions and two-person bans.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "appeals": {
+              "description": "appeals against locks, bans and restrictions",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "description": "Enable appeals against locks, bans and restrictions.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false
@@ -3147,6 +3173,125 @@
               "description": "Their role, shown to legal document templates and in the admin UI.",
               "type": "string",
               "maxLength": 120
+            }
+          },
+          "additionalProperties": false
+        },
+        "actions": {
+          "description": "Config-defined moderation actions and whether each is available to staff.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "types": {
+              "description": "Moderation actions. Ids you set replace the built-in action of the same name, and other built-in actions stay as they are.",
+              "default": {},
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "Action name shown to staff and in the statement of reasons."
+                  },
+                  "enabled": {
+                    "default": true,
+                    "description": "Staff can apply this action.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false,
+                "description": "A moderation action type."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "rules": {
+          "description": "Rules offered when applying an enforcement action.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "items": {
+              "description": "Rules staff must choose from for a statement of reasons. Ids you set replace the built-in rule of the same name.",
+              "default": {},
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "Rule name shown to staff and in the statement of reasons."
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "description": "Short explanation of the rule, sent to the user with the action."
+                  }
+                },
+                "required": [
+                  "name",
+                  "summary"
+                ],
+                "additionalProperties": false,
+                "description": "A rule staff must select to apply an enforcement action."
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "restrictions": {
+          "default": [
+            "chat",
+            "ugc",
+            "username_change"
+          ],
+          "description": "Named restrictions a restrict action may apply, such as chat, ugc and username_change. Exposed on the identity token.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        },
+        "bans": {
+          "description": "Ban policy.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "require_second_approval": {
+              "default": false,
+              "description": "Permanent bans and proscribed-organisation removals need a second, different moderator to take effect.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "appeals": {
+          "description": "Appeals against locks, bans and restrictions.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "max_length": {
+              "default": 2000,
+              "description": "Longest appeal a user can submit.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
             }
           },
           "additionalProperties": false

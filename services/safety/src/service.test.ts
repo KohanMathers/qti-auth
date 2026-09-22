@@ -11,6 +11,7 @@ describe('safety service', () => {
     expect(migrations.map((migration) => migration.name)).toEqual([
       '0001_bus_tables',
       '0002_reports',
+      '0003_moderation',
     ]);
   });
 
@@ -18,9 +19,20 @@ describe('safety service', () => {
     const policies = Object.keys(sections.rate_limits.parse({}));
     const { routes, permissions } = router.manifest();
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
+      'GET /api/v1/admin/safety/appeals',
+      'GET /api/v1/admin/safety/catalog',
+      'GET /api/v1/admin/safety/moderators/:moderator_id/history',
+      'GET /api/v1/admin/safety/reports',
       'GET /api/v1/admin/safety/reports/:report_id',
+      'GET /api/v1/admin/safety/users/:user_id/history',
+      'GET /api/v1/safety/appeals',
       'GET /api/v1/safety/reports/:report_id',
       'GET /api/v1/safety/taxonomy',
+      'POST /api/v1/admin/safety/appeals/:appeal_id/resolve',
+      'POST /api/v1/admin/safety/approvals/:approval_id/confirm',
+      'POST /api/v1/admin/safety/reports/:report_id/actions',
+      'POST /api/v1/admin/safety/reports/:report_id/dismiss',
+      'POST /api/v1/safety/appeals',
       'POST /api/v1/safety/intake/flags',
       'POST /api/v1/safety/intake/reports',
       'POST /api/v1/safety/reports',

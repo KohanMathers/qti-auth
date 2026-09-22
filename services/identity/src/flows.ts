@@ -70,6 +70,7 @@ import {
 } from './password-auth.ts';
 import { PASSWORD_METHOD } from './passwords.ts';
 import { anySocialEnabled, findSocialProvider, metricMethod } from './providers.ts';
+import { loadActiveRestrictions, USERNAME_CHANGE_RESTRICTION } from './restrictions.ts';
 import type { Context } from './service.ts';
 import type { CreatedSession } from './sessions.ts';
 import {
@@ -110,7 +111,10 @@ import { completeSecondFactor } from './two-factor.ts';
 import { claimUsername, type ClaimUsernameResult } from './usernames.ts';
 
 export type ChooseUsernameResult =
-  ClaimUsernameResult | { status: 'pending'; username: string } | { status: 'already_pending' };
+  | ClaimUsernameResult
+  | { status: 'pending'; username: string }
+  | { status: 'already_pending' }
+  | { status: 'restricted' };
 
 export interface FlowInput {
   ctx: Context;
@@ -1089,6 +1093,10 @@ export async function chooseUsername(
   input: { userId: string; username: string },
 ): Promise<ChooseUsernameResult> {
   const account = await findAccount(ctx.db, input.userId);
+  if (account && !account.username_reset_required) {
+    const names = await loadActiveRestrictions(ctx.db, input.userId, new Date());
+    if (names.includes(USERNAME_CHANGE_RESTRICTION)) return { status: 'restricted' };
+  }
   const isBlocked = async (username: string) =>
     (await applyFilter(ctx, username, 'username')).decision === 'block';
   if (account?.username && (await hasActiveGuardians(ctx.db, input.userId))) {

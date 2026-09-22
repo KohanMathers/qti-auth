@@ -7,6 +7,7 @@ import { latestAssuranceStrength } from './age-assurance.ts';
 import type { Database } from './database.ts';
 import { hasActiveGuardians, loadParentalControls } from './family.ts';
 import { iso } from './iso.ts';
+import { loadActiveRestrictions } from './restrictions.ts';
 
 export async function userClaims(
   db: Kysely<Database>,
@@ -14,10 +15,11 @@ export async function userClaims(
 ): Promise<UserClaims | null> {
   const account = await findAccount(db, options.userId);
   if (!account || account.state === 'deleted') return null;
-  const [parental, strength, guardians] = await Promise.all([
+  const [parental, strength, guardians, restrictions] = await Promise.all([
     loadParentalControls(db, account.id),
     latestAssuranceStrength(db, account.id),
     hasActiveGuardians(db, account.id),
+    loadActiveRestrictions(db, account.id, options.now),
   ]);
   return {
     id: account.id,
@@ -30,6 +32,6 @@ export async function userClaims(
     age_assurance_strength: strength,
     has_guardians: guardians,
     parental_controls: parental,
-    restrictions: [],
+    restrictions,
   };
 }

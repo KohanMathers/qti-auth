@@ -12,6 +12,7 @@ import {
   userCreatedEvent,
   userDeletedEvent,
   userLockedEvent,
+  userRestrictedEvent,
   userUnbannedEvent,
   userUnlockedEvent,
   userUpdatedEvent,
@@ -103,6 +104,16 @@ describe('identity events', () => {
       ),
       createEvent(
         userUnlockedEvent(USER_ID, { reason: 'expired' }, { type: 'system', id: 'identity' }),
+      ),
+      createEvent(
+        userRestrictedEvent(
+          USER_ID,
+          { restrictions: ['chat', 'username_change'], reason: 'hate' },
+          { type: 'user', id: USER_ID },
+        ),
+      ),
+      createEvent(
+        userRestrictedEvent(USER_ID, { restrictions: [] }, { type: 'system', id: 'identity' }),
       ),
       createEvent(
         auditRecordedEvent(

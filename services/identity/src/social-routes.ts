@@ -1,7 +1,7 @@
 import { FLOW_BINDING_HEADER, ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { SIGNED_IN_STATES } from './accounts.ts';
+import { OPEN_ACCOUNT_STATES } from './accounts.ts';
 import { isValidDateOfBirth } from './age.ts';
 import { canRemovePrimaryMethod, lastSignInMethodError } from './factors.ts';
 import { completeSocialSignup, finishSocial, socialProviderEnabled, startSocial } from './flows.ts';
@@ -199,7 +199,7 @@ export function socialRoutes(router: Router<Context>): void {
       'Connecting only happens when the user is signed in and chooses it. Matching emails do not link accounts.',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'auth_password',
     request: { params: providerParam, body: startBody },
     responses: {
@@ -361,7 +361,7 @@ export function socialRoutes(router: Router<Context>): void {
     summary: 'Connected upstream sign-in methods',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     responses: {
       200: {
@@ -396,7 +396,7 @@ export function socialRoutes(router: Router<Context>): void {
     summary: 'Remove a connected upstream sign-in method',
     tags: ['account'],
     auth: 'session',
-    allow_account_states: SIGNED_IN_STATES,
+    allow_account_states: OPEN_ACCOUNT_STATES,
     rate_limit: 'global',
     request: { params: z.object({ identity_id: z.uuid() }) },
     responses: { 204: { description: 'The method was removed' } },

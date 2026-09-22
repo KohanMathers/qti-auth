@@ -11,6 +11,7 @@ import {
 import packageJson from '../package.json' with { type: 'json' };
 import type { Database } from './database.ts';
 import { SAFETY_ERRORS } from './errors.ts';
+import { moderationRoutes } from './moderation-routes.ts';
 import { intakeRoutes } from './routes.ts';
 
 export const MIGRATIONS_DIR = join(import.meta.dirname, 'migrations');
@@ -41,3 +42,4 @@ export type SafetyConfig = Context['config'];
 export const router = createServiceRouter<Context>(definition);
 
 intakeRoutes(router);
+moderationRoutes(router);

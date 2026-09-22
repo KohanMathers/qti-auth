@@ -1,0 +1,7 @@
+Update on your appeal
+
+The {{ action }} on your account was {{ outcome }}.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

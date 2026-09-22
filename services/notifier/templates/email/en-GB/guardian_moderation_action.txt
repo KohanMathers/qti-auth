@@ -1,0 +1,9 @@
+{{ username }} received a moderation action ({{ action }}) on {{ brand.product_name }}.
+
+Open the family dashboard:
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

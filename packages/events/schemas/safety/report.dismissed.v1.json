@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.safety.report.dismissed.v1",
+  "title": "Report dismissed",
+  "description": "A moderator dismissed a report without an enforcement action. The subject is the report. Payloads never include content, snapshots or reporter identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_id", "type", "priority", "target"],
+  "properties": {
+    "report_id": { "description": "The dismissed report.", "type": "string", "format": "uuid" },
+    "type": {
+      "description": "Report type from the taxonomy.",
+      "type": "string",
+      "minLength": 1
+    },
+    "priority": {
+      "description": "Priority when the report was dismissed.",
+      "enum": ["low", "normal", "high", "urgent"]
+    },
+    "target": {
+      "description": "What was reported.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "description": "target type.", "enum": ["user", "content"] },
+        "id": { "description": "target id.", "type": "string", "minLength": 1 },
+        "user_id": {
+          "description": "For content reports, the owning user if known.",
+          "type": ["string", "null"],
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
