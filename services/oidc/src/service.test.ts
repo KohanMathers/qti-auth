@@ -14,6 +14,7 @@ describe('oidc service', () => {
       '0003_grants',
       '0004_logout',
       '0005_portal',
+      '0006_guardian',
     ]);
   });
 

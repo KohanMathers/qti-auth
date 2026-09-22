@@ -208,6 +208,16 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       link: z.url({ protocol: /^https?$/ }),
     }),
   },
+  guardian_new_app: {
+    description: 'Tell a parent or guardian that a child connected a new app',
+    category: 'security',
+    priority: 'high',
+    variables: z.object({
+      username: z.string().min(1),
+      app_name: z.string().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
   guardian_legal_update: {
     description: 'Tell a parent or guardian that a legal document for a child account changed',
     category: 'security',
@@ -230,6 +240,16 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       link: z.url({ protocol: /^https?$/ }),
     }),
   },
+  guardian_app_approval: {
+    description: 'Ask a parent or guardian to approve a child connecting an app',
+    category: 'auth',
+    priority: 'high',
+    variables: z.object({
+      username: z.string().min(1),
+      app_name: z.string().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
   guardian_activity: {
     description: 'Weekly activity summary for a parent or guardian',
     category: 'auth',
@@ -237,6 +257,7 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
     variables: z.object({
       username: z.string().min(1),
       sign_ins: z.int().min(0),
+      connected_apps: z.string().min(1),
       link: z.url({ protocol: /^https?$/ }),
     }),
   },

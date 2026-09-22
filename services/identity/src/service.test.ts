@@ -154,6 +154,8 @@ describe('identity service', () => {
       'POST /api/v1/auth/social/:provider/start',
       'POST /api/v1/auth/social/complete',
       'POST /api/v1/auth/social/signup',
+      'POST /api/v1/family/:child_id/app-approvals/:request_id/approve',
+      'POST /api/v1/family/:child_id/app-approvals/:request_id/decline',
       'POST /api/v1/family/:child_id/deletion',
       'POST /api/v1/family/:child_id/export',
       'POST /api/v1/family/:child_id/guardians',
@@ -446,6 +448,7 @@ describe('identity service', () => {
         'GUARDIAN_EMAIL_CHANGE_LIMIT',
         'GUARDIAN_CONSENT_INVALID',
         'GUARDIAN_NOT_ADULT',
+        'APP_APPROVAL_NOT_FOUND',
       ]),
     );
     expect(JSON.stringify(document.paths['/api/v1/auth/magic-link/signup'])).toContain(

@@ -18,10 +18,13 @@ import { DEVICE_GRANT, deviceGrant } from './device.ts';
 import {
   type AuthorizationGrantedData,
   authorizationGrantedEvent,
+  type ClientAuthorizedData,
+  clientAuthorizedEvent,
   type RefreshReuseDetectedData,
   refreshReuseDetectedEvent,
 } from './events.ts';
 import { readForm } from './form.ts';
+import { beginGuardianAuthorization, childHasGuardians } from './guardian.ts';
 import { ACCESS_TOKEN_TYPE, publicKeyFromJwk, verifyJwt } from './jwt.ts';
 import { keyringOf } from './keys.ts';
 import { oidcMetrics, type TokenGrantType } from './metrics.ts';
@@ -93,7 +96,7 @@ async function completeAuthorization(
 ): Promise<Response> {
   const code = newToken();
   await ctx.db.transaction().execute(async (trx: Transaction<Database>) => {
-    await storeConsent(trx, {
+    const consent = await storeConsent(trx, {
       userId: options.userId,
       clientId: options.client.id,
       scopes: options.scopes,
@@ -119,6 +122,7 @@ async function completeAuthorization(
         created_at: options.now,
       })
       .execute();
+    const actor = { type: 'user' as const, id: options.userId };
     await writeEvent<Database, AuthorizationGrantedData>(
       trx,
       authorizationGrantedEvent(
@@ -128,9 +132,24 @@ async function completeAuthorization(
           client_type: options.client.type,
           scopes: [...options.scopes],
         },
-        { type: 'user', id: options.userId },
+        actor,
       ),
     );
+    if (consent.created) {
+      await writeEvent<Database, ClientAuthorizedData>(
+        trx,
+        clientAuthorizedEvent(
+          options.userId,
+          {
+            client_id: options.client.client_id,
+            client_name: options.client.name,
+            client_type: options.client.type,
+            scopes: [...options.scopes],
+          },
+          actor,
+        ),
+      );
+    }
   });
   ctx.outbox.wake();
   oidcMetrics(ctx.metrics).authorization(options.client.type, 'granted');
@@ -220,9 +239,6 @@ export async function authorize(
   if (identity.sub === null || identity.sid === null) {
     return fail('access_denied', 'Sign in is required');
   }
-  if (childAccount(identity.age_band) && !client.first_party) {
-    return fail('access_denied', 'This app cannot be used with this account yet');
-  }
   if (
     client.first_party ||
     missingConsent(scopes, await grantedScopes(ctx.db, identity.sub, client.id)).length === 0
@@ -240,6 +256,28 @@ export async function authorize(
       amr: identity.amr,
       acr: identity.acr ?? 'aal1',
       now,
+    });
+  }
+  if (childAccount(identity.age_band)) {
+    if (!(await childHasGuardians(ctx, identity.sub))) {
+      return fail('access_denied', 'This app cannot be used with this account yet');
+    }
+    const requestId = await beginGuardianAuthorization(ctx, {
+      client,
+      userId: identity.sub,
+      sessionId: identity.sid,
+      redirectUri,
+      scopes,
+      state,
+      nonce,
+      codeChallenge,
+      amr: identity.amr,
+      acr: identity.acr ?? 'aal1',
+      now,
+    });
+    return new Response(null, {
+      status: 302,
+      headers: { location: `/oauth/consent?request_id=${requestId}` },
     });
   }
   const requestId = randomUUIDv7();
@@ -260,6 +298,7 @@ export async function authorize(
       acr: identity.acr ?? 'aal1',
       expires_at: addMs(now, AUTHORIZATION_REQUEST_TTL),
       completed_at: null,
+      guardian_status: 'none',
       created_at: now,
     })
     .execute();
@@ -282,10 +321,47 @@ export async function loadAuthorizationRequest(
     .where('id', '=', requestId)
     .where('user_id', '=', identity.sub)
     .executeTakeFirst();
-  if (row?.completed_at !== null || row.expires_at <= now) return undefined;
+  if (!row) return undefined;
   const client = await findClientById(ctx.db, row.client_id);
   if (!client || isSuspended(client, now)) return undefined;
+  if (row.guardian_status === 'declined') return { row, client };
+  if (row.guardian_status !== 'none' && row.completed_at === null) return { row, client };
+  if (row.completed_at !== null || row.expires_at <= now) return undefined;
   return { row, client };
+}
+
+export async function finishAuthorizationRequest(
+  ctx: Context,
+  identity: Identity,
+  requestId: string,
+  now = new Date(),
+): Promise<Response | { status: 'not_found' }> {
+  const loaded = await loadAuthorizationRequest(ctx, identity, requestId, now);
+  if (!loaded || identity.sid === null || identity.sub === null) return { status: 'not_found' };
+  const { row, client } = loaded;
+  if (row.guardian_status !== 'approved' || row.completed_at !== null)
+    return { status: 'not_found' };
+  await ctx.db
+    .updateTable('authorization_requests')
+    .set({ completed_at: now })
+    .where('id', '=', row.id)
+    .where('guardian_status', '=', 'approved')
+    .where('completed_at', 'is', null)
+    .execute();
+  return completeAuthorization(ctx, {
+    client,
+    userId: identity.sub,
+    sessionId: row.session_id,
+    redirectUri: row.redirect_uri,
+    scopes: row.scopes,
+    state: row.state,
+    nonce: row.nonce,
+    codeChallenge: row.code_challenge,
+    authTime: row.auth_time,
+    amr: row.amr,
+    acr: row.acr,
+    now,
+  });
 }
 
 export async function decideConsent(
@@ -298,6 +374,30 @@ export async function decideConsent(
   const loaded = await loadAuthorizationRequest(ctx, identity, requestId, now);
   if (!loaded || identity.sid === null || identity.sub === null) return { status: 'not_found' };
   const { row, client } = loaded;
+  if (row.guardian_status === 'approved') {
+    return finishAuthorizationRequest(ctx, identity, requestId, now);
+  }
+  if (row.guardian_status === 'declined') {
+    oidcMetrics(ctx.metrics).authorization(client.type, 'denied');
+    return authorizationRedirect(row.redirect_uri, {
+      error: 'access_denied',
+      state: row.state ?? undefined,
+    });
+  }
+  if (row.guardian_status === 'pending') {
+    if (form['decision'] === 'allow') return { status: 'not_found' };
+    await ctx.db
+      .updateTable('authorization_requests')
+      .set({ guardian_status: 'declined', completed_at: now })
+      .where('id', '=', row.id)
+      .where('guardian_status', '=', 'pending')
+      .execute();
+    oidcMetrics(ctx.metrics).authorization(client.type, 'denied');
+    return authorizationRedirect(row.redirect_uri, {
+      error: 'access_denied',
+      state: row.state ?? undefined,
+    });
+  }
   await ctx.db
     .updateTable('authorization_requests')
     .set({ completed_at: now })

@@ -5,7 +5,7 @@ import { findAccount } from './accounts.ts';
 import { type AgeBands, ageBand, ageOn } from './age.ts';
 import { latestAssuranceStrength } from './age-assurance.ts';
 import type { Database } from './database.ts';
-import { loadParentalControls } from './family.ts';
+import { hasActiveGuardians, loadParentalControls } from './family.ts';
 import { iso } from './iso.ts';
 
 export async function userClaims(
@@ -14,9 +14,10 @@ export async function userClaims(
 ): Promise<UserClaims | null> {
   const account = await findAccount(db, options.userId);
   if (!account || account.state === 'deleted') return null;
-  const [parental, strength] = await Promise.all([
+  const [parental, strength, guardians] = await Promise.all([
     loadParentalControls(db, account.id),
     latestAssuranceStrength(db, account.id),
+    hasActiveGuardians(db, account.id),
   ]);
   return {
     id: account.id,
@@ -27,6 +28,7 @@ export async function userClaims(
     account_state: account.state,
     age_band: ageBand(ageOn(account.date_of_birth, options.now), options.bands),
     age_assurance_strength: strength,
+    has_guardians: guardians,
     parental_controls: parental,
     restrictions: [],
   };

@@ -7,7 +7,6 @@ import { parseDevice } from './device.ts';
 import {
   acceptGuardianInvite,
   actorManagesChild,
-  childActivity,
   createFamilySession,
   decideUsernameChange,
   DEFAULT_PARENTAL_CONTROLS,
@@ -25,6 +24,7 @@ import {
   updateChildControls,
   type FamilyActor,
 } from './family.ts';
+import { decideChildAppApproval, familyChildActivity, pendingAppApprovals } from './family-apps.ts';
 import { applyFilter } from './filter.ts';
 import {
   sendFamilyAccessEmail,
@@ -645,6 +645,27 @@ ${hiddenInput('token', query.token)}
             action === 'approve_username' ? 'Username saved.' : 'Username change declined.',
           );
         }
+        case 'approve_app':
+        case 'decline_app': {
+          const status = await decideChildAppApproval(ctx, {
+            childUserId: account.id,
+            requestId: form['request_id'] ?? '',
+            approve: action === 'approve_app',
+            actor: eventActor,
+          });
+          if (status === 'not_found') {
+            return childDashboard(ctx, actor, account.id, 'That app request is no longer waiting.');
+          }
+          log.info(action === 'approve_app' ? 'child app approved' : 'child app declined', {
+            user_id: account.id,
+          });
+          return childDashboard(
+            ctx,
+            actor,
+            account.id,
+            action === 'approve_app' ? 'App approved.' : 'App declined.',
+          );
+        }
         case 'accept_legal': {
           const pending = await pendingMaterialVersions(ctx.db, account.id, now);
           if (pending.length === 0) {
@@ -829,22 +850,31 @@ async function childDashboard(
   const account = guardian ? await findAccount(ctx.db, childId) : undefined;
   if (!guardian || !account || account.state === 'deleted') return familyChildMissing(ctx);
   const now = new Date();
-  const [controls, pendingChange, pendingRemoval, pendingLegal, activity, guardians, sessions] =
-    await Promise.all([
-      loadParentalControls(ctx.db, account.id),
-      pendingUsernameChange(ctx.db, account.id),
-      pendingGuardianRemoval(ctx.db, account.id),
-      pendingMaterialVersions(ctx.db, account.id, now),
-      childActivity(ctx.db, { childUserId: account.id, now }),
-      listGuardians(ctx.db, account.id),
-      listSessions(ctx.db, {
-        userId: account.id,
-        idleTimeout: ctx.config.cookies.idle_timeout,
-        now,
-        after: undefined,
-        limit: 100,
-      }),
-    ]);
+  const [
+    controls,
+    pendingChange,
+    pendingApps,
+    pendingRemoval,
+    pendingLegal,
+    activity,
+    guardians,
+    sessions,
+  ] = await Promise.all([
+    loadParentalControls(ctx.db, account.id),
+    pendingUsernameChange(ctx.db, account.id),
+    pendingAppApprovals(ctx.bus, account.id),
+    pendingGuardianRemoval(ctx.db, account.id),
+    pendingMaterialVersions(ctx.db, account.id, now),
+    familyChildActivity(ctx, { childUserId: account.id, now }),
+    listGuardians(ctx.db, account.id),
+    listSessions(ctx.db, {
+      userId: account.id,
+      idleTimeout: ctx.config.cookies.idle_timeout,
+      now,
+      after: undefined,
+      limit: 100,
+    }),
+  ]);
   const current = {
     ...(controls ?? DEFAULT_PARENTAL_CONTROLS),
     public_profile: account.public_profile,
@@ -873,6 +903,22 @@ ${hiddenInput('request_id', pendingChange.id)}
 <p><button type="submit" name="action" value="approve_username">Approve username</button>
 <button type="submit" name="action" value="decline_username">Decline</button></p>
 </form>`;
+  const appItems = pendingApps
+    .map(
+      (app) =>
+        `<li>${escapeHtml(app.name)}
+<form method="post" action="${escapeHtml(account.id)}">
+${hiddenInput('request_id', app.id)}
+<p><button type="submit" name="action" value="approve_app">Approve app</button>
+<button type="submit" name="action" value="decline_app">Decline</button></p>
+</form>
+</li>`,
+    )
+    .join('');
+  const connected =
+    activity.connected_apps.length === 0
+      ? 'None this week'
+      : activity.connected_apps.map((app) => app.name).join(', ');
   const removalBlock =
     pendingRemoval === undefined
       ? ''
@@ -906,7 +952,9 @@ ${hiddenInput('guardian_id', row.id)}
     title: account.username ?? 'Child account',
     body: `${message === undefined ? '' : alert(message)}
 <p><a href="${escapeHtml(FAMILY_PAGE)}">All children</a></p>
-${paragraph(`Sign-ins in the last seven days: ${String(activity.sign_ins)}. Games and connected apps will show here later.`)}
+${paragraph(`Sign-ins in the last seven days: ${String(activity.sign_ins)}. Connected apps: ${connected}.`)}
+<h2>Apps waiting for approval</h2>
+${appItems === '' ? paragraph('No apps are waiting.') : `<ul>${appItems}</ul>`}
 <h2>Controls</h2>
 <form method="post" action="${escapeHtml(account.id)}">
 ${hiddenInput('action', 'controls')}

@@ -1455,8 +1455,10 @@ describe('family dashboard', () => {
     const detail = await call(`/api/v1/family/${child.userId}`, asFamily(familyToken));
     const body = (await detail.json()) as {
       pending_username_change: { id: string; username: string };
+      pending_app_approvals: unknown[];
     };
     expect(body.pending_username_change.username).toBe('ChildTwo');
+    expect(body.pending_app_approvals).toEqual([]);
     const approvedName = await call(
       `/api/v1/family/${child.userId}/username-changes/${body.pending_username_change.id}/approve`,
       { method: 'POST', ...asFamily(familyToken) },
@@ -1501,6 +1503,7 @@ describe('family dashboard', () => {
     expect(await activity.json()).toMatchObject({
       sign_ins: expect.any(Number) as unknown,
       games: [],
+      connected_apps: [],
     });
 
     const adult = await signUp('family-parent@example.com');

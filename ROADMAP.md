@@ -640,9 +640,9 @@ JWT check.
 ### P4.6 Guardian app approval — M
 Spec: §4.7, §6.1 (consent)
 
-- [ ] Child consent to non-first-party clients becomes a pending guardian request. Approval completes
+- [x] Child consent to non-first-party clients becomes a pending guardian request. Approval completes
       the authorization.
-- [ ] Connected apps feed the guardian activity summary.
+- [x] Connected apps feed the guardian activity summary.
 
 **Done when:** a child authorization only completes after guardian approval, and a decline tells the
 client `access_denied`.

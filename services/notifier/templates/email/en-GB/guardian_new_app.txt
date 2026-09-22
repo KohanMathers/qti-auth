@@ -1,0 +1,9 @@
+{{ username }} connected {{ app_name }} on {{ brand.product_name }}
+
+Open the family dashboard to review connected apps:
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

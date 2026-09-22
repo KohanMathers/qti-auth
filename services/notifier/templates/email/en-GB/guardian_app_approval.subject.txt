@@ -1,0 +1,1 @@
+{{ username }} wants to connect {{ app_name }} on {{ brand.product_name }}

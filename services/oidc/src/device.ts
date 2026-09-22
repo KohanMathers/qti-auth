@@ -6,8 +6,14 @@ import type { Selectable } from 'kysely';
 
 import { type ClientRecord, findClientById, isSuspended } from './clients.ts';
 import type { Database, DeviceAuthorizationStatus } from './database.ts';
-import { type AuthorizationGrantedData, authorizationGrantedEvent } from './events.ts';
+import {
+  type AuthorizationGrantedData,
+  authorizationGrantedEvent,
+  type ClientAuthorizedData,
+  clientAuthorizedEvent,
+} from './events.ts';
 import { readForm } from './form.ts';
+import { childHasGuardians, holdDeviceForGuardian } from './guardian.ts';
 import { oidcMetrics } from './metrics.ts';
 import {
   addMs,
@@ -30,7 +36,11 @@ const SLOW_DOWN_STEP_MS = 5_000;
 
 export type DeviceAuthorizationRow = Selectable<Database['device_authorizations']>;
 
-export type DeviceDecision = { status: 'not_found' } | { status: 'denied' } | { status: 'granted' };
+export type DeviceDecision =
+  | { status: 'not_found' }
+  | { status: 'denied' }
+  | { status: 'granted' }
+  | { status: 'pending_guardian' };
 
 export function newUserCode(): string {
   const bytes = randomBytes(USER_CODE_LENGTH);
@@ -142,7 +152,11 @@ export async function loadDeviceAuthorization(
     .selectAll()
     .where('user_code_hash', '=', hashToken(normalized))
     .executeTakeFirst();
-  if (row?.status !== 'pending' || row.expires_at <= now || row.consumed_at !== null) {
+  if (
+    (row?.status !== 'pending' && row?.status !== 'pending_guardian') ||
+    row.expires_at <= now ||
+    row.consumed_at !== null
+  ) {
     return undefined;
   }
   const client = await findClientById(ctx.db, row.client_id);
@@ -161,6 +175,20 @@ export async function decideDeviceAuthorization(
   const loaded = await loadDeviceAuthorization(ctx, form['user_code'] ?? '', now);
   if (!loaded || userId === null || sessionId === null) return { status: 'not_found' };
   const { row, client } = loaded;
+  if (row.status === 'pending_guardian') {
+    if (form['decision'] !== 'allow') {
+      await ctx.db
+        .updateTable('device_authorizations')
+        .set({ status: 'denied' satisfies DeviceAuthorizationStatus, consumed_at: now })
+        .where('id', '=', row.id)
+        .where('status', '=', 'pending_guardian')
+        .execute();
+      oidcMetrics(ctx.metrics).deviceApproval('denied');
+      oidcMetrics(ctx.metrics).authorization(client.type, 'denied');
+      return { status: 'denied' };
+    }
+    return { status: 'pending_guardian' };
+  }
   if (form['decision'] !== 'allow') {
     await ctx.db
       .updateTable('device_authorizations')
@@ -173,6 +201,19 @@ export async function decideDeviceAuthorization(
     return { status: 'denied' };
   }
   if (childAccount(identity.age_band) && !client.first_party) {
+    if (await childHasGuardians(ctx, userId)) {
+      const held = await holdDeviceForGuardian(ctx, {
+        rowId: row.id,
+        client,
+        userId,
+        sessionId,
+        scopes: row.scopes,
+        amr: identity.amr,
+        acr: identity.acr ?? 'aal1',
+        now,
+      });
+      return held ? { status: 'pending_guardian' } : { status: 'not_found' };
+    }
     await ctx.db
       .updateTable('device_authorizations')
       .set({ status: 'denied' satisfies DeviceAuthorizationStatus, consumed_at: now })
@@ -184,7 +225,7 @@ export async function decideDeviceAuthorization(
     return { status: 'denied' };
   }
   await ctx.db.transaction().execute(async (trx) => {
-    await storeConsent(trx, {
+    const consent = await storeConsent(trx, {
       userId,
       clientId: client.id,
       scopes: row.scopes,
@@ -203,6 +244,7 @@ export async function decideDeviceAuthorization(
       .where('id', '=', row.id)
       .where('status', '=', 'pending')
       .execute();
+    const actor = { type: 'user' as const, id: userId };
     await writeEvent<Database, AuthorizationGrantedData>(
       trx,
       authorizationGrantedEvent(
@@ -212,9 +254,24 @@ export async function decideDeviceAuthorization(
           client_type: client.type,
           scopes: [...row.scopes],
         },
-        { type: 'user', id: userId },
+        actor,
       ),
     );
+    if (consent.created) {
+      await writeEvent<Database, ClientAuthorizedData>(
+        trx,
+        clientAuthorizedEvent(
+          userId,
+          {
+            client_id: client.client_id,
+            client_name: client.name,
+            client_type: client.type,
+            scopes: [...row.scopes],
+          },
+          actor,
+        ),
+      );
+    }
   });
   ctx.outbox.wake();
   oidcMetrics(ctx.metrics).deviceApproval('granted');
@@ -261,7 +318,7 @@ export async function deviceGrant(
     .set({ last_polled_at: now })
     .where('id', '=', row.id)
     .execute();
-  if (row.status === 'pending') {
+  if (row.status === 'pending' || row.status === 'pending_guardian') {
     oidcMetrics(ctx.metrics).tokenGrant('device_code', 'error');
     return oauthJson('authorization_pending');
   }

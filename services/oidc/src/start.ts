@@ -2,6 +2,15 @@ import { consumeCron, consumeEvents, pruneBusTables, RpcError, serveRpc } from '
 import { IDENTITY_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { untraced } from '@qtiauth/observability';
 import {
+  CONNECTED_APPS_METHOD,
+  type ConnectedAppsResponse,
+  connectedAppsRequestSchema,
+  DECIDE_APP_APPROVAL_METHOD,
+  type DecideAppApprovalResponse,
+  decideAppApprovalRequestSchema,
+  PENDING_APP_APPROVALS_METHOD,
+  type PendingAppApprovalsResponse,
+  pendingAppApprovalsRequestSchema,
   RESOLVE_ACCESS_TOKEN_METHOD,
   resolveAccessTokenRequestSchema,
   type ResolveAccessTokenResponse,
@@ -13,6 +22,7 @@ import {
 import { seedClients } from './clients.ts';
 import { eraseUser, exportUser } from './data-rights.ts';
 import type { Database } from './database.ts';
+import { decideAppApproval, listConnectedApps, listPendingAppApprovals } from './guardian.ts';
 import { attachKeyring, kvKeySetStore, openKeyring } from './keys.ts';
 import {
   createLogoutSender,
@@ -115,6 +125,62 @@ export function oidcService(options: OidcOptions = {}) {
             },
             onError: (error) => {
               log.error('access token resolution failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          serveRpc<unknown, PendingAppApprovalsResponse>(bus, {
+            method: PENDING_APP_APPROVALS_METHOD,
+            handler: async (request) => {
+              const parsed = pendingAppApprovalsRequestSchema.safeParse(request);
+              if (!parsed.success) throw new RpcError('bad_request', 'user_id is required');
+              return { items: await listPendingAppApprovals(db, parsed.data.user_id) };
+            },
+            onError: (error) => {
+              log.error('pending app approvals lookup failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          serveRpc<unknown, DecideAppApprovalResponse>(bus, {
+            method: DECIDE_APP_APPROVAL_METHOD,
+            handler: async (request) => {
+              const parsed = decideAppApprovalRequestSchema.safeParse(request);
+              if (!parsed.success) {
+                throw new RpcError('bad_request', 'user_id, request_id and approve are required');
+              }
+              return decideAppApproval(ctx, {
+                userId: parsed.data.user_id,
+                requestId: parsed.data.request_id,
+                approve: parsed.data.approve,
+              });
+            },
+            onError: (error) => {
+              log.error('app approval decision failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          serveRpc<unknown, ConnectedAppsResponse>(bus, {
+            method: CONNECTED_APPS_METHOD,
+            handler: async (request) => {
+              const parsed = connectedAppsRequestSchema.safeParse(request);
+              if (!parsed.success) {
+                throw new RpcError('bad_request', 'user_id, since and until are required');
+              }
+              return {
+                items: await listConnectedApps(db, {
+                  userId: parsed.data.user_id,
+                  since: new Date(parsed.data.since),
+                  until: new Date(parsed.data.until),
+                }),
+              };
+            },
+            onError: (error) => {
+              log.error('connected apps lookup failed', { error });
             },
           }),
         );

@@ -3,7 +3,7 @@ import { randomUUIDv7 } from 'node:crypto';
 import { writeEvent } from '@qtiauth/bus';
 import { deletedRows, updatedRows } from '@qtiauth/db';
 import type { EventActor } from '@qtiauth/events';
-import type { ParentalControls } from '@qtiauth/service-kit';
+import type { ConnectedApp, ParentalControls } from '@qtiauth/service-kit';
 import { type Kysely, sql } from 'kysely';
 
 import { dateOfBirthColumn } from './accounts.ts';
@@ -95,7 +95,7 @@ export interface ChildActivity {
   period_end: string;
   sign_ins: number;
   games: [];
-  connected_apps: [];
+  connected_apps: ConnectedApp[];
 }
 
 export type ActivateGuardianResult = { status: 'ok'; id: string } | { status: 'limit' };

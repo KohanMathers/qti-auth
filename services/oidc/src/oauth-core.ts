@@ -21,6 +21,7 @@ import { issuerUrl, resourceAudience } from './settings.ts';
 import { hashToken, newToken } from './tokens.ts';
 
 export const AUTHORIZATION_REQUEST_TTL = 10 * 60 * 1000;
+export const GUARDIAN_APPROVAL_TTL = 24 * 60 * 60 * 1000;
 export const CODE_CHALLENGE = /^[A-Za-z0-9_-]{43,128}$/;
 
 export interface AuthorizeQuery {
@@ -234,7 +235,13 @@ export async function issueTokens(
 export async function storeConsent(
   trx: Transaction<Database>,
   options: { userId: string; clientId: string; scopes: readonly string[]; now: Date },
-): Promise<void> {
+): Promise<{ created: boolean }> {
+  const existing = await trx
+    .selectFrom('consents')
+    .select('client_id')
+    .where('user_id', '=', options.userId)
+    .where('client_id', '=', options.clientId)
+    .executeTakeFirst();
   await trx
     .insertInto('consents')
     .values({
@@ -250,4 +257,5 @@ export async function storeConsent(
       }),
     )
     .execute();
+  return { created: existing === undefined };
 }

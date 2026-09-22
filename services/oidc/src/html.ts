@@ -12,6 +12,7 @@ export interface HtmlPage {
   body: string;
   status?: number;
   headers?: Record<string, string>;
+  refreshSeconds?: number;
 }
 
 export function htmlResponse(page: HtmlPage): Response {
@@ -22,6 +23,7 @@ export function htmlResponse(page: HtmlPage): Response {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex">
+${page.refreshSeconds === undefined ? '' : `<meta http-equiv="refresh" content="${String(page.refreshSeconds)}">`}
 <title>${escapeHtml(page.title)} · ${escapeHtml(page.product)}</title>
 </head>
 <body>

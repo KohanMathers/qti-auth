@@ -158,6 +158,85 @@ async function signUpInBrowser(
   expect(client.cookie()).not.toBeNull();
 }
 
+const CHILD_DOB = `${String(new Date().getUTCFullYear() - 10)}-01-01`;
+
+async function signUpChildWithGuardian(
+  child: Browser,
+  email: string,
+  guardianEmail: string,
+): Promise<string> {
+  const token = await openLink(child, email);
+  const confirm = await child.request('/auth/magic-link', form({ token }));
+  const dobPage = await confirm.text();
+  const signupToken = /name="signup_token" value="([^"]+)"/.exec(dobPage)?.[1] ?? '';
+  expect(signupToken).not.toBe('');
+  secrets.push(signupToken);
+  const created = await child.request(
+    '/auth/signup',
+    form({
+      signup_token: signupToken,
+      date_of_birth: CHILD_DOB,
+      guardian_email: guardianEmail,
+    }),
+  );
+  expect(created.status).toBe(200);
+  expect(await created.text()).toContain('We’ve emailed');
+  expect(child.cookie()).not.toBeNull();
+  const me = await child.request('/api/v1/me');
+  expect(me.status).toBe(200);
+  const account = (await me.json()) as { id: string };
+  const job = await emails.nextJob(guardianEmail, 'parental_consent');
+  const approveToken =
+    new URL(String(job.variables['approve_link'])).searchParams.get('token') ?? '';
+  secrets.push(approveToken);
+  const approved = await child.request(
+    '/api/v1/auth/parental-consent/approve',
+    json({ token: approveToken, date_of_birth: '1980-01-01' }),
+  );
+  expect(approved.status).toBe(204);
+  await vi.waitFor(
+    async () => {
+      const page = await child.request('/oauth/device');
+      expect(page.status).toBe(200);
+    },
+    { timeout: 10_000 },
+  );
+  return account.id;
+}
+
+async function openFamily(guardianEmail: string): Promise<Browser> {
+  const guardian = browser();
+  const start = await guardian.request(
+    '/api/v1/auth/family/magic-link',
+    json({ email: guardianEmail }),
+  );
+  expect(start.status).toBe(202);
+  const job = await emails.nextJob(guardianEmail, 'family_access');
+  const familyToken = new URL(String(job.variables['link'])).searchParams.get('token') ?? '';
+  secrets.push(familyToken);
+  const opened = await guardian.request(
+    '/api/v1/auth/family/session',
+    json({ token: familyToken }),
+  );
+  expect(opened.status).toBe(200);
+  return guardian;
+}
+
+async function pendingStudioApproval(
+  guardian: Browser,
+  childId: string,
+): Promise<{ id: string; name: string }> {
+  const detail = await guardian.request(`/api/v1/family/${childId}`);
+  expect(detail.status).toBe(200);
+  const body = (await detail.json()) as {
+    pending_app_approvals: { id: string; name: string }[];
+  };
+  expect(body.pending_app_approvals[0]?.name).toBe('Studio');
+  const pending = body.pending_app_approvals[0];
+  expect(pending).toBeDefined();
+  return { id: pending?.id ?? '', name: pending?.name ?? '' };
+}
+
 function pkce(): { verifier: string; challenge: string } {
   const verifier = pkceVerifier();
   secrets.push(verifier);
@@ -580,6 +659,147 @@ describe('oidc through the gateway', () => {
     expect(authorize.status).toBe(302);
     const redirected = locationOf(authorize);
     expect(redirected.searchParams.get('error')).toBe('access_denied');
+  });
+
+  it('holds a child’s third-party authorization until a guardian approves', async () => {
+    const child = browser();
+    const childId = await signUpChildWithGuardian(
+      child,
+      'guardian-child@example.com',
+      'guardian-parent@example.com',
+    );
+    const guardian = await openFamily('guardian-parent@example.com');
+    const { verifier, challenge } = pkce();
+    const authorize = await child.request(authorizePath(STUDIO, STUDIO_REDIRECT, challenge));
+    expect(authorize.status).toBe(302);
+    const consentUrl = locationOf(authorize);
+    expect(consentUrl.pathname).toBe('/oauth/consent');
+    const waiting = await child.request(`${consentUrl.pathname}${consentUrl.search}`);
+    expect(waiting.status).toBe(200);
+    expect(await waiting.text()).toContain('Waiting for a parent or guardian');
+    await emails.nextJob('guardian-parent@example.com', 'guardian_app_approval');
+
+    const pending = await pendingStudioApproval(guardian, childId);
+    const approved = await guardian.request(
+      `/api/v1/family/${childId}/app-approvals/${pending.id}/approve`,
+      { method: 'POST' },
+    );
+    expect(approved.status).toBe(204);
+
+    const finished = await child.request(`${consentUrl.pathname}${consentUrl.search}`);
+    expect(finished.status).toBe(302);
+    const code = locationOf(finished).searchParams.get('code') ?? '';
+    secrets.push(code);
+    expect(code).not.toBe('');
+    await exchangeCode(child, {
+      clientId: STUDIO,
+      redirectUri: STUDIO_REDIRECT,
+      code,
+      verifier,
+      secret: STUDIO_SECRET,
+    });
+    await emails.nextJob('guardian-parent@example.com', 'guardian_new_app');
+
+    const activity = await guardian.request(`/api/v1/family/${childId}/activity`);
+    expect(activity.status).toBe(200);
+    const summary = (await activity.json()) as { connected_apps: { name: string }[] };
+    expect(summary.connected_apps.map((app) => app.name)).toEqual(['Studio']);
+  });
+
+  it('tells the client access_denied when a guardian declines the app', async () => {
+    const child = browser();
+    const childId = await signUpChildWithGuardian(
+      child,
+      'deny-child@example.com',
+      'deny-parent@example.com',
+    );
+    const guardian = await openFamily('deny-parent@example.com');
+    const authorize = await child.request(authorizePath(STUDIO, STUDIO_REDIRECT, pkce().challenge));
+    expect(authorize.status).toBe(302);
+    const consentUrl = locationOf(authorize);
+    const waiting = await child.request(`${consentUrl.pathname}${consentUrl.search}`);
+    expect(waiting.status).toBe(200);
+    await emails.nextJob('deny-parent@example.com', 'guardian_app_approval');
+
+    const pending = await pendingStudioApproval(guardian, childId);
+    const declined = await guardian.request(
+      `/api/v1/family/${childId}/app-approvals/${pending.id}/decline`,
+      { method: 'POST' },
+    );
+    expect(declined.status).toBe(204);
+
+    const finished = await child.request(`${consentUrl.pathname}${consentUrl.search}`);
+    expect(finished.status).toBe(302);
+    expect(locationOf(finished).searchParams.get('error')).toBe('access_denied');
+  });
+
+  it('keeps a child’s device flow pending until a guardian approves', async () => {
+    const device = browser();
+    const started = await device.request(
+      '/oauth/device_authorization',
+      form({
+        client_id: STUDIO,
+        client_secret: STUDIO_SECRET,
+        scope: 'openid',
+      }),
+    );
+    expect(started.status).toBe(200);
+    const codes = (await started.json()) as {
+      device_code: string;
+      user_code: string;
+    };
+    secrets.push(codes.device_code, codes.user_code);
+
+    const child = browser();
+    const childId = await signUpChildWithGuardian(
+      child,
+      'device-child@example.com',
+      'device-parent@example.com',
+    );
+    const guardian = await openFamily('device-parent@example.com');
+    const confirm = await child.request(
+      `/oauth/device?user_code=${encodeURIComponent(codes.user_code)}`,
+    );
+    expect(confirm.status).toBe(200);
+    const allowed = await child.request(
+      '/oauth/device',
+      form({ user_code: codes.user_code, decision: 'allow' }),
+    );
+    expect(allowed.status).toBe(200);
+    expect(await allowed.text()).toContain('Waiting for a parent or guardian');
+    await emails.nextJob('device-parent@example.com', 'guardian_app_approval');
+
+    const pendingPoll = await device.request(
+      '/oauth/token',
+      form({
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        client_id: STUDIO,
+        client_secret: STUDIO_SECRET,
+        device_code: codes.device_code,
+      }),
+    );
+    expect(pendingPoll.status).toBe(400);
+    expect(await pendingPoll.json()).toMatchObject({ error: 'authorization_pending' });
+
+    const pending = await pendingStudioApproval(guardian, childId);
+    const approved = await guardian.request(
+      `/api/v1/family/${childId}/app-approvals/${pending.id}/approve`,
+      { method: 'POST' },
+    );
+    expect(approved.status).toBe(204);
+
+    const tokens = await device.request(
+      '/oauth/token',
+      form({
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        client_id: STUDIO,
+        client_secret: STUDIO_SECRET,
+        device_code: codes.device_code,
+      }),
+    );
+    expect(tokens.status).toBe(200);
+    const body = (await tokens.json()) as { access_token: string };
+    secrets.push(body.access_token);
   });
 
   it('rotates refresh tokens and revokes the family after reuse', async () => {

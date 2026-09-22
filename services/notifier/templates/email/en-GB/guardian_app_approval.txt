@@ -1,0 +1,9 @@
+{{ username }} wants to connect {{ app_name }} on {{ brand.product_name }}
+
+Open the family dashboard to approve or decline:
+
+{{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

@@ -441,9 +441,9 @@ An admin invite for someone below `consent_age` still answers `403 PARENTAL_CONS
 
 After approval, parents and guardians manage the child from the family dashboard. Access is a hashed family session from a magic link (no account required), or the guardian’s own signed-in account when that address is linked. Up to `parental.max_guardians` (default 2) per child.
 
-Game restrictions live in `parental_controls` and are copied into the internal identity token. Leaderboard and public-profile visibility are on the user row and off by default. Guardians can list and revoke the child’s sessions, approve or decline a username change, accept material legal versions with `method: guardian`, request a data export or deletion, and invite or remove another guardian (the last active one stays). `parental.activity_summary` (Monday 08:00) emails a weekly sign-in count; games and connected apps stay empty until those services land.
+Game restrictions live in `parental_controls` and are copied into the internal identity token. Leaderboard and public-profile visibility are on the user row and off by default. Guardians can list and revoke the child’s sessions, approve or decline a username change, approve or decline a non-first-party app, accept material legal versions with `method: guardian`, request a data export or deletion, and invite or remove another guardian (the last active one stays). `parental.activity_summary` (Monday 08:00) emails a weekly sign-in count and the names of apps connected that week; games stay empty until that service lands.
 
-New-device sign-in, username-change requests and legal updates also email every active guardian. Child accounts with an active guardian skip `legal_acceptance_required` on the child’s own session.
+New-device sign-in, username-change requests, app-approval requests, newly connected apps and legal updates also email every active guardian. Child accounts with an active guardian skip `legal_acceptance_required` on the child’s own session.
 
 When a linked young person reaches `parental.consent_age`, `parental.graduation` (daily 00:10) emails them and every active guardian. Controls stay until the link is removed. After `parental.graduation_grace` (default 30 days) the young person can ask to leave; a parent or guardian must approve. `parental.removal_reminders` (Monday 09:00) emails guardians while a request is waiting. At the adult band they can remove the link without approval, and guardians are notified.
 
@@ -456,18 +456,20 @@ When a linked young person reaches `parental.consent_age`, `parental.graduation`
 | `POST /api/v1/auth/family/invite/accept`                             | Accept an invitation (`{ token, date_of_birth }`). Must be an adult                |
 | `POST /api/v1/auth/family/logout`                                    | End the family session                                                             |
 | `GET /api/v1/family`                                                 | Child accounts this guardian can manage                                            |
-| `GET /api/v1/family/:child_id`                                       | Controls, pending username change, pending removal and pending legal versions      |
+| `GET /api/v1/family/:child_id`                                       | Controls, pending username, app approvals, removal and legal versions              |
 | `PATCH /api/v1/family/:child_id/controls`                            | Game restrictions and visibility                                                   |
 | `GET /api/v1/family/:child_id/sessions`                              | The child’s sessions                                                               |
 | `DELETE /api/v1/family/:child_id/sessions/:session_id`               | End one session                                                                    |
 | `POST /api/v1/family/:child_id/sessions/revoke-all`                  | End every session                                                                  |
 | `POST /api/v1/family/:child_id/username-changes/:request_id/approve` | Approve a queued username                                                          |
 | `POST /api/v1/family/:child_id/username-changes/:request_id/decline` | Decline it                                                                         |
+| `POST /api/v1/family/:child_id/app-approvals/:request_id/approve`    | Approve a child’s request to connect an app                                        |
+| `POST /api/v1/family/:child_id/app-approvals/:request_id/decline`    | Decline it. The client receives `access_denied`                                    |
 | `GET /api/v1/family/:child_id/legal`                                 | Pending material versions                                                          |
 | `POST /api/v1/family/:child_id/legal/accept`                         | Accept them on the child’s behalf                                                  |
 | `POST /api/v1/family/:child_id/export`                               | Request a copy of the child’s data                                                 |
 | `POST /api/v1/family/:child_id/deletion`                             | Schedule deletion                                                                  |
-| `GET /api/v1/family/:child_id/activity`                              | Seven-day sign-in count. `games` and `connected_apps` are empty until later phases |
+| `GET /api/v1/family/:child_id/activity`                              | Seven-day sign-in count and connected apps. `games` stays empty until later phases |
 | `GET /api/v1/family/:child_id/guardians`                             | Parents and guardians                                                              |
 | `POST /api/v1/family/:child_id/guardians`                            | Invite another (`{ email, display_name? }`)                                        |
 | `DELETE /api/v1/family/:child_id/guardians/:guardian_id`             | Remove one, except the last active guardian                                        |
@@ -612,6 +614,7 @@ Errors, on top of the [codes every service can return](services.md#errors):
 | `FAMILY_CHILD_NOT_FOUND`          | 404    | This guardian has no such child account                                                |
 | `GUARDIAN_NOT_FOUND`              | 404    | No such parent or guardian on this child account                                       |
 | `USERNAME_CHANGE_NOT_FOUND`       | 404    | No username change is waiting for approval                                             |
+| `APP_APPROVAL_NOT_FOUND`          | 404    | No app authorization is waiting for approval                                           |
 | `GUARDIAN_REMOVAL_NOT_FOUND`      | 404    | No request to remove the parent or guardian link is waiting                            |
 | `NOTIFICATION_CATEGORY_NOT_FOUND` | 404    | No such notification category, or it is a staff alert the caller cannot see            |
 | `USERNAME_UNAVAILABLE`            | 409    | The username is taken, reserved, held or blocked by the text filter                    |

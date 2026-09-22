@@ -16,6 +16,7 @@ const user: UserClaims = {
   age_band: 'adult',
   age_assurance_strength: 'self_declared',
   parental_controls: null,
+  has_guardians: false,
   restrictions: ['chat'],
 };
 

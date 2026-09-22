@@ -105,6 +105,14 @@ describe('defineEmailTemplates', () => {
       category: 'auth',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.guardian_new_app).toMatchObject({
+      category: 'security',
+      priority: 'high',
+    });
+    expect(EMAIL_TEMPLATES.guardian_app_approval).toMatchObject({
+      category: 'auth',
+      priority: 'high',
+    });
     expect(EMAIL_TEMPLATES.guardian_activity).toMatchObject({
       category: 'auth',
       priority: 'normal',

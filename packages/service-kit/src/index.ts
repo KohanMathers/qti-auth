@@ -104,6 +104,28 @@ export {
   checkTextResponseSchema,
 } from './check-text.ts';
 export {
+  CONNECTED_APPS_METHOD,
+  type ConnectedApp,
+  connectedAppSchema,
+  type ConnectedAppsRequest,
+  connectedAppsRequestSchema,
+  type ConnectedAppsResponse,
+  connectedAppsResponseSchema,
+  DECIDE_APP_APPROVAL_METHOD,
+  type DecideAppApprovalRequest,
+  decideAppApprovalRequestSchema,
+  type DecideAppApprovalResponse,
+  decideAppApprovalResponseSchema,
+  GUARDIAN_APPS_SERVICE,
+  PENDING_APP_APPROVALS_METHOD,
+  type PendingAppApproval,
+  pendingAppApprovalSchema,
+  type PendingAppApprovalsRequest,
+  pendingAppApprovalsRequestSchema,
+  type PendingAppApprovalsResponse,
+  pendingAppApprovalsResponseSchema,
+} from './guardian-apps.ts';
+export {
   type DeclaredNotification,
   declaredNotificationSchema,
   defineNotificationCategories,

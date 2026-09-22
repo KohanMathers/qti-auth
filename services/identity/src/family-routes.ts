@@ -7,7 +7,6 @@ import { parseDevice } from './device.ts';
 import {
   acceptGuardianInvite,
   actorManagesChild,
-  childActivity,
   createFamilySession,
   decideUsernameChange,
   DEFAULT_PARENTAL_CONTROLS,
@@ -24,6 +23,7 @@ import {
   updateChildControls,
   type FamilyActor,
 } from './family.ts';
+import { decideChildAppApproval, familyChildActivity, pendingAppApprovals } from './family-apps.ts';
 import { applyFilter } from './filter.ts';
 import {
   sendFamilyAccessEmail,
@@ -266,6 +266,15 @@ export function familyRoutes(router: Router<Context>): void {
           email: z.email(),
           controls: controlsSchema,
           pending_username_change: z.object({ id: z.uuid(), username: z.string() }).nullable(),
+          pending_app_approvals: z.array(
+            z.object({
+              id: z.uuid(),
+              client_id: z.string(),
+              name: z.string(),
+              scopes: z.array(z.string()),
+              created_at: z.iso.datetime(),
+            }),
+          ),
           pending_removal: z.object({ id: z.uuid(), requested_at: z.iso.datetime() }).nullable(),
           pending_legal: legalPendingSchema,
         }),
@@ -276,13 +285,15 @@ export function familyRoutes(router: Router<Context>): void {
       const actor = await familyActor(ctx, request, identity);
       const { account } = await managedChild(ctx, actor, params.child_id);
       const now = new Date();
-      const [controls, pendingChange, pendingRemoval, pendingLegal, children] = await Promise.all([
-        loadParentalControls(ctx.db, account.id),
-        pendingUsernameChange(ctx.db, account.id),
-        pendingGuardianRemoval(ctx.db, account.id),
-        pendingMaterialVersions(ctx.db, account.id, now),
-        listFamilyChildren(ctx.db, actor, ctx.config.age.bands, now),
-      ]);
+      const [controls, pendingChange, pendingApps, pendingRemoval, pendingLegal, children] =
+        await Promise.all([
+          loadParentalControls(ctx.db, account.id),
+          pendingUsernameChange(ctx.db, account.id),
+          pendingAppApprovals(ctx.bus, account.id),
+          pendingGuardianRemoval(ctx.db, account.id),
+          pendingMaterialVersions(ctx.db, account.id, now),
+          listFamilyChildren(ctx.db, actor, ctx.config.age.bands, now),
+        ]);
       const summary = children.find((child) => child.id === account.id);
       return {
         status: 200,
@@ -298,6 +309,7 @@ export function familyRoutes(router: Router<Context>): void {
             pendingChange === undefined
               ? null
               : { id: pendingChange.id, username: pendingChange.username },
+          pending_app_approvals: pendingApps,
           pending_removal:
             pendingRemoval === undefined
               ? null
@@ -549,6 +561,58 @@ export function familyRoutes(router: Router<Context>): void {
   });
 
   router.route({
+    method: 'POST',
+    path: '/api/v1/family/:child_id/app-approvals/:request_id/approve',
+    operation_id: 'approveFamilyApp',
+    summary: 'Approve a child’s request to authorize an app',
+    tags: ['family'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { params: childParam.extend({ request_id: z.uuid() }) },
+    responses: { 204: { description: 'The app can now be authorized' } },
+    errors: ['FAMILY_SESSION_REQUIRED', 'FAMILY_CHILD_NOT_FOUND', 'APP_APPROVAL_NOT_FOUND'],
+    handler: async ({ ctx, request, identity, params, log }) => {
+      const actor = await familyActor(ctx, request, identity);
+      const { account } = await managedChild(ctx, actor, params.child_id);
+      const status = await decideChildAppApproval(ctx, {
+        childUserId: account.id,
+        requestId: params.request_id,
+        approve: true,
+        actor: familyEventActor(actor),
+      });
+      if (status === 'not_found') throw new ProblemError('APP_APPROVAL_NOT_FOUND');
+      log.info('child app approved', { user_id: account.id });
+      return { status: 204, headers: NO_STORE };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/family/:child_id/app-approvals/:request_id/decline',
+    operation_id: 'declineFamilyApp',
+    summary: 'Decline a child’s request to authorize an app',
+    tags: ['family'],
+    auth: 'none',
+    rate_limit: 'global',
+    request: { params: childParam.extend({ request_id: z.uuid() }) },
+    responses: { 204: { description: 'The app was not authorized' } },
+    errors: ['FAMILY_SESSION_REQUIRED', 'FAMILY_CHILD_NOT_FOUND', 'APP_APPROVAL_NOT_FOUND'],
+    handler: async ({ ctx, request, identity, params, log }) => {
+      const actor = await familyActor(ctx, request, identity);
+      const { account } = await managedChild(ctx, actor, params.child_id);
+      const status = await decideChildAppApproval(ctx, {
+        childUserId: account.id,
+        requestId: params.request_id,
+        approve: false,
+        actor: familyEventActor(actor),
+      });
+      if (status === 'not_found') throw new ProblemError('APP_APPROVAL_NOT_FOUND');
+      log.info('child app declined', { user_id: account.id });
+      return { status: 204, headers: NO_STORE };
+    },
+  });
+
+  router.route({
     method: 'GET',
     path: '/api/v1/family/:child_id/legal',
     operation_id: 'getFamilyChildLegal',
@@ -669,7 +733,7 @@ export function familyRoutes(router: Router<Context>): void {
     operation_id: 'getFamilyChildActivity',
     summary: 'Activity summary for a child account',
     description:
-      'Sign-ins for the last seven days. Games and connected apps are empty until those services land.',
+      'Sign-ins and connected apps for the last seven days. Games stay empty until that service lands.',
     tags: ['family'],
     auth: 'none',
     rate_limit: 'global',
@@ -682,7 +746,13 @@ export function familyRoutes(router: Router<Context>): void {
           period_end: z.iso.datetime(),
           sign_ins: z.int(),
           games: z.array(z.never()),
-          connected_apps: z.array(z.never()),
+          connected_apps: z.array(
+            z.object({
+              client_id: z.string(),
+              name: z.string(),
+              granted_at: z.iso.datetime(),
+            }),
+          ),
         }),
       },
     },
@@ -690,7 +760,7 @@ export function familyRoutes(router: Router<Context>): void {
     handler: async ({ ctx, request, identity, params }) => {
       const actor = await familyActor(ctx, request, identity);
       const { account } = await managedChild(ctx, actor, params.child_id);
-      const activity = await childActivity(ctx.db, { childUserId: account.id, now: new Date() });
+      const activity = await familyChildActivity(ctx, { childUserId: account.id, now: new Date() });
       return { status: 200, headers: NO_STORE, body: activity };
     },
   });

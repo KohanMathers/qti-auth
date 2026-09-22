@@ -28,6 +28,8 @@ export interface ConsentsTable {
   granted_at: Date;
 }
 
+export type GuardianAuthorizationStatus = 'none' | 'pending' | 'approved' | 'declined';
+
 export interface AuthorizationRequestsTable {
   id: string;
   client_id: string;
@@ -43,6 +45,7 @@ export interface AuthorizationRequestsTable {
   acr: string;
   expires_at: Date;
   completed_at: Date | null;
+  guardian_status: GuardianAuthorizationStatus;
   created_at: Generated<Date>;
 }
 
@@ -92,7 +95,7 @@ export interface AccessTokensTable {
   created_at: Generated<Date>;
 }
 
-export type DeviceAuthorizationStatus = 'pending' | 'authorized' | 'denied';
+export type DeviceAuthorizationStatus = 'pending' | 'pending_guardian' | 'authorized' | 'denied';
 
 export interface PushedAuthorizationRequestsTable {
   id: string;

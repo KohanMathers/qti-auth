@@ -1,7 +1,7 @@
 import { consumeCron, consumeEvents, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
 import { applyAuditLogPrivileges } from '@qtiauth/db';
 import { queueEmail } from '@qtiauth/email';
-import { AUDIT_EVENTS, loadEventCatalog } from '@qtiauth/events';
+import { AUDIT_EVENTS, loadEventCatalog, OIDC_EVENTS } from '@qtiauth/events';
 import { openGeoIp } from '@qtiauth/geoip';
 import { untraced } from '@qtiauth/observability';
 import {
@@ -36,6 +36,7 @@ import { sweepTokens } from './email-tokens.ts';
 import { EXPORT_RESUME_JOB, sweepExports } from './exports.ts';
 import { sweepAuthFailures } from './failures.ts';
 import { ACTIVITY_SUMMARY_JOB, sweepFamilySessions } from './family.ts';
+import { handleOidcFamilyEvent } from './family-apps.ts';
 import { applyFilter, loadFilterOverlay, sweepFilterDecisions } from './filter.ts';
 import { attachTextFilter } from './filter-state.ts';
 import {
@@ -396,6 +397,22 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('audit store failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeEvents(bus, db, {
+            name: 'guardian_apps',
+            types: [OIDC_EVENTS.authorizationGuardianRequested, OIDC_EVENTS.clientAuthorized],
+            startFrom: 'new',
+            catalog: await loadEventCatalog(),
+            metrics: ctx.busMetrics,
+            handler: async (event) => {
+              await handleOidcFamilyEvent(ctx, event);
+            },
+            onError: (error) => {
+              log.error('guardian app notification failed', { error });
             },
           }),
         );

@@ -13,7 +13,6 @@ import {
   resumePendingExports,
 } from './exports.ts';
 import {
-  childActivity,
   childLabel,
   childrenNeedingActivitySummary,
   hasActiveGuardians,
@@ -23,6 +22,7 @@ import {
   utcDateString,
   type Guardian,
 } from './family.ts';
+import { familyChildActivity, formatConnectedApps } from './family-apps.ts';
 import { applyFilter } from './filter.ts';
 import {
   childrenNeedingGraduationNotice,
@@ -1173,7 +1173,7 @@ export async function sendFamilyActivitySummaries(ctx: Context, now = new Date()
       now,
     });
     if (!marked) continue;
-    const activity = await childActivity(ctx.db, { childUserId: child.child_user_id, now });
+    const activity = await familyChildActivity(ctx, { childUserId: child.child_user_id, now });
     const guardians = await listActiveGuardians(ctx.db, child.child_user_id);
     const link = familyChildUrl(ctx.config, child.child_user_id);
     for (const guardian of guardians) {
@@ -1185,6 +1185,7 @@ export async function sendFamilyActivitySummaries(ctx: Context, now = new Date()
         variables: {
           username: childLabel(child.username),
           sign_ins: activity.sign_ins,
+          connected_apps: formatConnectedApps(activity.connected_apps),
           link,
         },
       });

@@ -147,6 +147,10 @@ export const IDENTITY_ERRORS = defineErrors({
     status: 409,
     title: 'A username change is already waiting for approval',
   },
+  APP_APPROVAL_NOT_FOUND: {
+    status: 404,
+    title: 'No app authorization is waiting for approval',
+  },
   GUARDIAN_REMOVAL_NOT_ALLOWED: {
     status: 403,
     title: 'The parent or guardian link cannot be removed yet',

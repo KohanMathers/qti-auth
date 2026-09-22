@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   authorizationGrantedEvent,
+  authorizationGuardianRequestedEvent,
+  clientAuthorizedEvent,
   clientCreatedEvent,
   refreshReuseDetectedEvent,
 } from './events.ts';
@@ -18,6 +20,27 @@ describe('oidc events', () => {
         authorizationGrantedEvent(
           USER_ID,
           { client_id: 'game', client_type: 'public', scopes: ['openid'] },
+          { type: 'user', id: USER_ID },
+        ),
+      ),
+      createEvent(
+        authorizationGuardianRequestedEvent(USER_ID, {
+          client_id: 'studio',
+          client_name: 'Studio',
+          client_type: 'confidential',
+          scopes: ['openid'],
+          request_id: USER_ID,
+        }),
+      ),
+      createEvent(
+        clientAuthorizedEvent(
+          USER_ID,
+          {
+            client_id: 'studio',
+            client_name: 'Studio',
+            client_type: 'confidential',
+            scopes: ['openid'],
+          },
           { type: 'user', id: USER_ID },
         ),
       ),

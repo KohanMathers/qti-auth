@@ -8,13 +8,21 @@ import {
 } from './device.ts';
 import { readForm } from './form.ts';
 import { escapeHtml, hiddenInput, htmlResponse } from './html.ts';
-import { decideConsent, loadAuthorizationRequest } from './oauth.ts';
+import {
+  authorizationRedirect,
+  decideConsent,
+  finishAuthorizationRequest,
+  loadAuthorizationRequest,
+} from './oauth.ts';
 import type { Context } from './service.ts';
 import { CONSENT_PATH, DEVICE_PATH } from './settings.ts';
 
 const htmlResponses = { 200: { description: 'An HTML page' } };
 
-function page(ctx: Context, content: { title: string; body: string; status?: number }): Response {
+function page(
+  ctx: Context,
+  content: { title: string; body: string; status?: number; refreshSeconds?: number },
+): Response {
   return htmlResponse({ ...content, product: ctx.config.branding.product_name });
 }
 
@@ -42,6 +50,38 @@ export function consentRoutes(router: Router<Context>): void {
       const loaded = await loadAuthorizationRequest(ctx, identity, requestId);
       if (!loaded) return unknownRequest(ctx);
       const { client, row } = loaded;
+      if (row.guardian_status === 'declined') {
+        return authorizationRedirect(row.redirect_uri, {
+          error: 'access_denied',
+          state: row.state ?? undefined,
+        });
+      }
+      if (row.guardian_status === 'approved') {
+        const result = await finishAuthorizationRequest(ctx, identity, requestId);
+        if (result.status === 'not_found') return unknownRequest(ctx);
+        return result;
+      }
+      if (row.guardian_status === 'pending') {
+        if (row.expires_at <= new Date()) {
+          const result = await decideConsent(ctx, identity, {
+            request_id: requestId,
+            decision: 'deny',
+          });
+          if (result.status === 'not_found') return unknownRequest(ctx);
+          return result;
+        }
+        return page(ctx, {
+          title: `Waiting for a parent or guardian`,
+          refreshSeconds: 5,
+          body: `<p>We’ve asked a parent or guardian to approve ${escapeHtml(client.name)}. This page continues when they decide.</p>
+<p><a href="consent?request_id=${encodeURIComponent(requestId)}">Check again</a></p>
+<form method="post" action="consent">
+${hiddenInput('request_id', requestId)}
+${hiddenInput('decision', 'deny')}
+<p><button type="submit">Cancel</button></p>
+</form>`,
+        });
+      }
       const scopes = row.scopes
         .map((scope) => {
           const text = ctx.config.oidc.scopes[scope]?.consent ?? scope;
@@ -128,6 +168,14 @@ ${deviceEnterForm()}`,
       const { client, row } = loaded;
       const normalized = normalizeUserCode(presented);
       const userCode = normalized === undefined ? presented : displayUserCode(normalized);
+      if (row.status === 'pending_guardian') {
+        return page(ctx, {
+          title: 'Waiting for a parent or guardian',
+          refreshSeconds: 5,
+          body: `<p>We’ve asked a parent or guardian to approve ${escapeHtml(client.name)}. You can close this page.</p>
+<p>Code ${escapeHtml(userCode)}.</p>`,
+        });
+      }
       const scopes = row.scopes
         .map((scope) => {
           const text = ctx.config.oidc.scopes[scope]?.consent ?? scope;
@@ -182,6 +230,15 @@ ${hiddenInput('decision', 'deny')}
         return page(ctx, {
           title: 'Request denied',
           body: `<p>You can close this page. Your device will not be signed in.</p>`,
+        });
+      }
+      if (result.status === 'pending_guardian') {
+        const userCode = form['user_code'] ?? '';
+        return page(ctx, {
+          title: 'Waiting for a parent or guardian',
+          refreshSeconds: 5,
+          body: `<p>We’ve asked a parent or guardian to approve this app. You can close this page.</p>
+<p>Code ${escapeHtml(userCode)}.</p>`,
         });
       }
       return page(ctx, {

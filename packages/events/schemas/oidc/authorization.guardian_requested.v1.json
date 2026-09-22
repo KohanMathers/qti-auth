@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.oidc.authorization.guardian_requested.v1",
+  "title": "Guardian authorization requested",
+  "description": "A child account asked to authorize a non-first-party OAuth client. A parent or guardian must approve. The subject is the child.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["client_id", "client_name", "client_type", "scopes", "request_id"],
+  "properties": {
+    "client_id": {
+      "description": "The OAuth client the child wants to authorize.",
+      "type": "string",
+      "minLength": 1
+    },
+    "client_name": {
+      "description": "The client’s display name at the time of the request.",
+      "type": "string",
+      "minLength": 1
+    },
+    "client_type": {
+      "description": "public or confidential, as registered.",
+      "enum": ["public", "confidential"]
+    },
+    "scopes": {
+      "description": "Scopes the child asked for.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "request_id": {
+      "description": "The pending authorization or device-authorization id a parent or guardian decides.",
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

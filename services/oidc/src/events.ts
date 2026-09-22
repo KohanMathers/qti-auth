@@ -44,6 +44,46 @@ export interface ClientCreatedData {
   owner_user_id: string;
 }
 
+export interface AuthorizationGuardianRequestedData {
+  client_id: string;
+  client_name: string;
+  client_type: OidcClientType;
+  scopes: string[];
+  request_id: string;
+}
+
+export function authorizationGuardianRequestedEvent(
+  userId: string,
+  data: AuthorizationGuardianRequestedData,
+): NewEvent<AuthorizationGuardianRequestedData> {
+  return {
+    type: OIDC_EVENTS.authorizationGuardianRequested,
+    actor: { type: 'user', id: userId },
+    subject: { type: 'user', id: userId },
+    data,
+  };
+}
+
+export interface ClientAuthorizedData {
+  client_id: string;
+  client_name: string;
+  client_type: OidcClientType;
+  scopes: string[];
+}
+
+export function clientAuthorizedEvent(
+  userId: string,
+  data: ClientAuthorizedData,
+  actor: EventActor,
+): NewEvent<ClientAuthorizedData> {
+  return {
+    type: OIDC_EVENTS.clientAuthorized,
+    actor,
+    subject: { type: 'user', id: userId },
+    data,
+  };
+}
+
 export function clientCreatedEvent(
   clientId: string,
   actor: EventActor,

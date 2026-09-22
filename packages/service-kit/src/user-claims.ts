@@ -21,6 +21,7 @@ export const userClaimsSchema = z.strictObject({
   account_state: z.enum(ACCOUNT_STATES),
   age_band: z.enum(AGE_BANDS),
   age_assurance_strength: z.enum(AGE_ASSURANCE_STRENGTHS).nullable(),
+  has_guardians: z.boolean(),
   parental_controls: parentalControlsSchema.nullable(),
   restrictions: z.array(z.string().min(1)),
 });

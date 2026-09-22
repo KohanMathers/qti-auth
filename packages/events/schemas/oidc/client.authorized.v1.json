@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.oidc.client.authorized.v1",
+  "title": "OAuth client authorized",
+  "description": "A user authorized an OAuth client for the first time. The subject is the user.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["client_id", "client_name", "client_type", "scopes"],
+  "properties": {
+    "client_id": {
+      "description": "The OAuth client that was authorized.",
+      "type": "string",
+      "minLength": 1
+    },
+    "client_name": {
+      "description": "The client’s display name at the time of the grant.",
+      "type": "string",
+      "minLength": 1
+    },
+    "client_type": {
+      "description": "public or confidential, as registered.",
+      "enum": ["public", "confidential"]
+    },
+    "scopes": {
+      "description": "Scopes granted on this first authorization.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
