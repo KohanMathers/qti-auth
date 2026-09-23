@@ -1,7 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { type Bus, consumeWork } from '@qtiauth/bus';
-import { type EmailJob, emailQueue } from '@qtiauth/email';
+import { EMAIL_PRIORITIES, type EmailJob, emailQueue } from '@qtiauth/email';
 import type { Kysely } from 'kysely';
 
 import type { Database } from './database.ts';
@@ -19,14 +19,18 @@ export async function captureEmails(bus: Bus): Promise<CapturedEmails> {
   }
   const jobs: EmailJob[] = [];
   const taken = new Set<string>();
-  const consumer = await consumeWork<EmailJob>(bus, {
-    queue: emailQueue('high'),
-    handler: (message) => {
-      jobs.push(message.data);
-      return Promise.resolve();
-    },
-    onError: () => undefined,
-  });
+  const consumers = await Promise.all(
+    EMAIL_PRIORITIES.map((priority) =>
+      consumeWork<EmailJob>(bus, {
+        queue: emailQueue(priority),
+        handler: (message) => {
+          jobs.push(message.data);
+          return Promise.resolve();
+        },
+        onError: () => undefined,
+      }),
+    ),
+  );
 
   const nextJob = async (address: string, template?: string, timeout = 10_000) => {
     const deadline = Date.now() + timeout;
@@ -70,7 +74,9 @@ export async function captureEmails(bus: Bus): Promise<CapturedEmails> {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
     },
-    stop: () => consumer.stop(),
+    stop: async () => {
+      await Promise.all(consumers.map((consumer) => consumer.stop()));
+    },
   };
 }
 

@@ -1,4 +1,4 @@
-import { type ObjectStore, type StoredObject } from './store.ts';
+import { type ObjectStore, type PresignGetOptions, type StoredObject } from './store.ts';
 
 interface MemoryEntry {
   body: Uint8Array;
@@ -41,8 +41,15 @@ export function createMemoryStore(clock: () => Date = () => new Date()): ObjectS
       }
       return Promise.resolve(listed.sort((a, b) => (a.key < b.key ? -1 : 1)));
     },
-    presignGet(key, expiresSeconds) {
-      return Promise.resolve(`memory://${key}?expires=${String(expiresSeconds)}`);
+    presignGet(key, expiresSeconds, response?: PresignGetOptions) {
+      const params = new URLSearchParams({ expires: String(expiresSeconds) });
+      if (response?.contentType !== undefined) {
+        params.set('response-content-type', response.contentType);
+      }
+      if (response?.contentDisposition !== undefined) {
+        params.set('response-content-disposition', response.contentDisposition);
+      }
+      return Promise.resolve(`memory://${key}?${params.toString()}`);
     },
     presignPut(key, contentType, expiresSeconds) {
       return Promise.resolve(

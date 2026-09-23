@@ -650,6 +650,10 @@ describe('support', () => {
     expect(parsed.auto_close_after).toBe(604_800_000);
     expect(parsed.max_subject_length).toBe(200);
     expect(parsed.max_body_length).toBe(8_000);
+    expect(parsed.guest_code_ttl).toBe(900_000);
+    expect(parsed.guest_link_ttl).toBe(604_800_000);
+    expect(parsed.attachment_max_bytes).toBe(524_288);
+    expect(parsed.attachment_download_ttl).toBe(900_000);
     expect(parsed.categories['account']).toEqual({
       name: 'Account',
       guest_allowed: false,

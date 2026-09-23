@@ -758,6 +758,9 @@ importers:
       '@qtiauth/bus':
         specifier: workspace:*
         version: link:../../packages/bus
+      '@qtiauth/captcha':
+        specifier: workspace:*
+        version: link:../../packages/captcha
       '@qtiauth/cli':
         specifier: workspace:*
         version: link:../../packages/cli
@@ -789,6 +792,9 @@ importers:
       '@qtiauth/identity':
         specifier: workspace:*
         version: link:../identity
+      '@qtiauth/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@qtiauth/testing':
         specifier: workspace:*
         version: link:../../packages/testing

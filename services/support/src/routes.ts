@@ -8,11 +8,19 @@ import {
 } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
+import {
+  addAttachment,
+  getAttachment,
+  listAttachments,
+  presentedAttachment,
+  signAttachmentDownload,
+} from './attachments.ts';
 import { loadCategories } from './categories.ts';
 import { TICKET_STATUSES } from './database.ts';
 import { refreshOpenTickets, supportMetrics } from './metrics.ts';
 import { queueNewTicketStaff, queueUserStatus } from './notify.ts';
 import type { Context } from './service.ts';
+import { objectStoreOf } from './storage-state.ts';
 import {
   closeTicket,
   createAppealTicket,
@@ -50,8 +58,31 @@ const messageSchema = z.object({
   created_at: z.iso.datetime(),
 });
 
+const attachmentSchema = z.object({
+  id: z.uuid(),
+  filename: z.string(),
+  content_type: z.string(),
+  size_bytes: z.int(),
+  created_at: z.iso.datetime(),
+});
+
 const ticketDetailSchema = ticketSchema.extend({
   messages: z.array(messageSchema),
+  attachments: z.array(attachmentSchema),
+});
+
+const attachmentBody = z.object({
+  filename: z.string().min(1).max(200),
+  content: z
+    .string()
+    .min(1)
+    .max(70_000_000)
+    .describe('Base64-encoded file. The type is sniffed from the bytes, not the filename.'),
+});
+
+const downloadSchema = z.object({
+  url: z.string(),
+  expires_at: z.iso.datetime(),
 });
 
 const createBody = z.object({
@@ -96,6 +127,8 @@ export function presentedTicket(ticket: TicketRecord) {
   };
 }
 
+export const NO_STORE = { 'cache-control': 'no-store' };
+
 function presentedMessage(message: TicketMessage) {
   return {
     id: message.id,
@@ -112,6 +145,33 @@ export function signedIn(identity: { sub: string | null }): string {
 
 export function ensureTickets(enabled: boolean): void {
   if (!enabled) throw new ProblemError('SUPPORT_TICKETS_DISABLED');
+}
+
+async function visibleAttachments(ctx: Context, ticketId: string) {
+  if (!ctx.config.features.support.attachments.enabled) return [];
+  return listAttachments(ctx.db, ticketId);
+}
+
+export async function userTicketDetail(ctx: Context, ticket: TicketRecord) {
+  const [messages, attachments] = await Promise.all([
+    listTicketMessages(ctx.db, ticket.id),
+    visibleAttachments(ctx, ticket.id),
+  ]);
+  return {
+    ...presentedTicket(ticket),
+    messages: messages.map(presentedMessage),
+    attachments: attachments.map((row) => presentedAttachment(row)),
+  };
+}
+
+export function attachmentStore(ctx: Context) {
+  ensureTickets(ctx.config.features.support.tickets.enabled);
+  if (!ctx.config.features.support.attachments.enabled) {
+    throw new ProblemError('SUPPORT_ATTACHMENTS_DISABLED');
+  }
+  const store = objectStoreOf(ctx);
+  if (store == null) throw new ProblemError('SUPPORT_STORAGE_UNAVAILABLE');
+  return store;
 }
 
 async function ownedTicket(ctx: Context, ticketId: string, userId: string): Promise<TicketRecord> {
@@ -182,11 +242,7 @@ export function ticketRoutes(router: Router<Context>): void {
       supportMetrics(ctx.metrics).created(result.ticket.category_id);
       await refreshOpenTickets(ctx.db, ctx.metrics, ctx.config.support);
       await queueNewTicketStaff(ctx, result.ticket, categories);
-      const messages = await listTicketMessages(ctx.db, result.ticket.id);
-      return {
-        status: 201 as const,
-        body: { ...presentedTicket(result.ticket), messages: messages.map(presentedMessage) },
-      };
+      return { status: 201 as const, body: await userTicketDetail(ctx, result.ticket) };
     },
   });
 
@@ -228,11 +284,7 @@ export function ticketRoutes(router: Router<Context>): void {
       supportMetrics(ctx.metrics).created(result.ticket.category_id);
       await refreshOpenTickets(ctx.db, ctx.metrics, ctx.config.support);
       await queueNewTicketStaff(ctx, result.ticket, categories);
-      const messages = await listTicketMessages(ctx.db, result.ticket.id);
-      return {
-        status: 201 as const,
-        body: { ...presentedTicket(result.ticket), messages: messages.map(presentedMessage) },
-      };
+      return { status: 201 as const, body: await userTicketDetail(ctx, result.ticket) };
     },
   });
 
@@ -285,11 +337,7 @@ export function ticketRoutes(router: Router<Context>): void {
     handler: async ({ ctx, identity, params }) => {
       ensureTickets(ctx.config.features.support.tickets.enabled);
       const ticket = await ownedTicket(ctx, params.ticket_id, signedIn(identity));
-      const messages = await listTicketMessages(ctx.db, ticket.id);
-      return {
-        status: 200 as const,
-        body: { ...presentedTicket(ticket), messages: messages.map(presentedMessage) },
-      };
+      return { status: 200 as const, body: await userTicketDetail(ctx, ticket) };
     },
   });
 
@@ -327,11 +375,7 @@ export function ticketRoutes(router: Router<Context>): void {
       if (result.status === 'too_long') throw new ProblemError('SUPPORT_TICKET_INVALID');
       ctx.outbox.wake();
       await refreshOpenTickets(ctx.db, ctx.metrics, ctx.config.support);
-      const messages = await listTicketMessages(ctx.db, result.ticket.id);
-      return {
-        status: 200 as const,
-        body: { ...presentedTicket(result.ticket), messages: messages.map(presentedMessage) },
-      };
+      return { status: 200 as const, body: await userTicketDetail(ctx, result.ticket) };
     },
   });
 
@@ -431,6 +475,89 @@ export function ticketRoutes(router: Router<Context>): void {
       if (result.status === 'rated') throw new ProblemError('SUPPORT_TICKET_RATED');
       supportMetrics(ctx.metrics).csat(body.rating);
       return { status: 200 as const, body: presentedTicket(result.ticket) };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/support/tickets/:ticket_id/attachments',
+    operation_id: 'addTicketAttachment',
+    summary: 'Attach a file to your ticket',
+    description:
+      'Images, PDF and plain text only. The type is sniffed from the bytes. HTML, including a renamed .html file, is rejected.',
+    tags: ['support'],
+    auth: 'session',
+    allow_account_states: ['active', 'banned', 'locked'],
+    rate_limit: 'global',
+    request: { params: z.object({ ticket_id: z.uuid() }), body: attachmentBody },
+    responses: { 201: { description: 'The attachment', schema: attachmentSchema } },
+    errors: [
+      'SUPPORT_TICKETS_DISABLED',
+      'SUPPORT_ATTACHMENTS_DISABLED',
+      'SUPPORT_STORAGE_UNAVAILABLE',
+      'SUPPORT_TICKET_NOT_FOUND',
+      'SUPPORT_TICKET_CLOSED',
+      'SUPPORT_ATTACHMENT_INVALID',
+    ],
+    handler: async ({ ctx, identity, params, body }) => {
+      const store = attachmentStore(ctx);
+      await ownedTicket(ctx, params.ticket_id, signedIn(identity));
+      const result = await addAttachment(ctx.db, store, {
+        ticketId: params.ticket_id,
+        filename: body.filename,
+        content: body.content,
+        maxBytes: ctx.config.support.attachment_max_bytes,
+        now: new Date(),
+      });
+      if (result.status === 'not_found') throw new ProblemError('SUPPORT_TICKET_NOT_FOUND');
+      if (result.status === 'closed') throw new ProblemError('SUPPORT_TICKET_CLOSED');
+      if (result.status === 'invalid') throw new ProblemError('SUPPORT_ATTACHMENT_INVALID');
+      return {
+        status: 201 as const,
+        body: presentedAttachment(result.attachment),
+      };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/support/tickets/:ticket_id/attachments/:attachment_id/download',
+    operation_id: 'downloadTicketAttachment',
+    summary: 'Signed download URL for an attachment on your ticket',
+    description:
+      'The URL responds with Content-Disposition: attachment, so the browser downloads it.',
+    tags: ['support'],
+    auth: 'session',
+    allow_account_states: ['active', 'banned', 'locked'],
+    rate_limit: 'global',
+    request: {
+      params: z.object({ ticket_id: z.uuid(), attachment_id: z.uuid() }),
+    },
+    responses: { 200: { description: 'A short-lived download URL', schema: downloadSchema } },
+    errors: [
+      'SUPPORT_TICKETS_DISABLED',
+      'SUPPORT_ATTACHMENTS_DISABLED',
+      'SUPPORT_STORAGE_UNAVAILABLE',
+      'SUPPORT_TICKET_NOT_FOUND',
+      'SUPPORT_ATTACHMENT_NOT_FOUND',
+    ],
+    handler: async ({ ctx, identity, params }) => {
+      const store = attachmentStore(ctx);
+      const ticket = await ownedTicket(ctx, params.ticket_id, signedIn(identity));
+      const attachment = await getAttachment(ctx.db, params.attachment_id);
+      if (attachment?.ticket_id !== ticket.id)
+        throw new ProblemError('SUPPORT_ATTACHMENT_NOT_FOUND');
+      const signed = await signAttachmentDownload(
+        store,
+        attachment,
+        ctx.config.support.attachment_download_ttl,
+        new Date(),
+      );
+      return {
+        status: 200 as const,
+        headers: NO_STORE,
+        body: { url: signed.url, expires_at: signed.expiresAt.toISOString() },
+      };
     },
   });
 }

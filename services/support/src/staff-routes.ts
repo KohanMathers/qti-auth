@@ -9,6 +9,13 @@ import {
 } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
+import {
+  addAttachment,
+  getAttachment,
+  listAttachments,
+  presentedStaffAttachment,
+  signAttachmentDownload,
+} from './attachments.ts';
 import { loadCategories } from './categories.ts';
 import { TICKET_STATUSES } from './database.ts';
 import {
@@ -21,7 +28,7 @@ import {
 } from './macros.ts';
 import { refreshOpenTickets, supportMetrics } from './metrics.ts';
 import { queueUserReply, queueUserStatus } from './notify.ts';
-import { ensureTickets, presentedTicket, signedIn } from './routes.ts';
+import { attachmentStore, ensureTickets, NO_STORE, presentedTicket, signedIn } from './routes.ts';
 import type { Context } from './service.ts';
 import {
   addNote,
@@ -57,6 +64,7 @@ const staffTicketSchema = z.object({
   appeal: z.boolean(),
   action_id: z.uuid().nullable(),
   assigned_to: z.uuid().nullable(),
+  guest_email: z.string().nullable(),
   rating: z.int().min(1).max(5).nullable(),
   created_at: z.iso.datetime(),
   resolved_at: z.iso.datetime().nullable(),
@@ -77,9 +85,19 @@ const noteSchema = z.object({
   created_at: z.iso.datetime(),
 });
 
+const staffAttachmentSchema = z.object({
+  id: z.uuid(),
+  filename: z.string(),
+  content_type: z.string(),
+  size_bytes: z.int(),
+  created_at: z.iso.datetime(),
+  warning: z.boolean(),
+});
+
 const staffDetailSchema = staffTicketSchema.extend({
   messages: z.array(messageSchema),
   notes: z.array(noteSchema),
+  attachments: z.array(staffAttachmentSchema),
 });
 
 const replyBody = z.object({
@@ -128,12 +146,14 @@ const metricsSchema = z.object({
     }),
   ),
   by_agent: z.array(z.object({ agent_id: z.uuid(), closed: z.int() })),
+  guest_tickets: z.int(),
 });
 
 function presentedStaffTicket(ticket: TicketRecord) {
   return {
     ...presentedTicket(ticket),
     user_id: ticket.user_id,
+    guest_email: ticket.guest_email,
     assigned_to: ticket.assigned_to,
   };
 }
@@ -149,9 +169,12 @@ function presentedMacro(macro: MacroRecord) {
 }
 
 async function staffDetail(ctx: Context, ticket: TicketRecord) {
-  const [messages, notes] = await Promise.all([
+  const [messages, notes, attachments] = await Promise.all([
     listTicketMessages(ctx.db, ticket.id),
     listTicketNotes(ctx.db, ticket.id),
+    ctx.config.features.support.attachments.enabled
+      ? listAttachments(ctx.db, ticket.id)
+      : Promise.resolve([]),
   ]);
   return {
     ...presentedStaffTicket(ticket),
@@ -168,6 +191,7 @@ async function staffDetail(ctx: Context, ticket: TicketRecord) {
       body: note.body,
       created_at: note.created_at.toISOString(),
     })),
+    attachments: attachments.map((row) => presentedStaffAttachment(row)),
   };
 }
 
@@ -403,6 +427,93 @@ export function staffRoutes(router: Router<Context>): void {
       await refreshOpenTickets(ctx.db, ctx.metrics, ctx.config.support);
       await queueUserStatus(ctx, result.ticket);
       return { status: 200 as const, body: presentedStaffTicket(result.ticket) };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/admin/support/tickets/:ticket_id/attachments',
+    operation_id: 'addStaffAttachment',
+    summary: 'Attach a file to a ticket',
+    tags: ['support'],
+    auth: 'session',
+    permissions: ['support.tickets.staff'],
+    rate_limit: 'global',
+    request: {
+      params: z.object({ ticket_id: z.uuid() }),
+      body: z.object({
+        filename: z.string().min(1).max(200),
+        content: z.string().min(1).max(70_000_000),
+      }),
+    },
+    responses: { 201: { description: 'The attachment', schema: staffAttachmentSchema } },
+    errors: [
+      'SUPPORT_TICKETS_DISABLED',
+      'SUPPORT_ATTACHMENTS_DISABLED',
+      'SUPPORT_STORAGE_UNAVAILABLE',
+      'SUPPORT_TICKET_NOT_FOUND',
+      'SUPPORT_TICKET_CLOSED',
+      'SUPPORT_ATTACHMENT_INVALID',
+    ],
+    handler: async ({ ctx, params, body }) => {
+      const store = attachmentStore(ctx);
+      const result = await addAttachment(ctx.db, store, {
+        ticketId: params.ticket_id,
+        filename: body.filename,
+        content: body.content,
+        maxBytes: ctx.config.support.attachment_max_bytes,
+        now: new Date(),
+      });
+      if (result.status === 'not_found') throw new ProblemError('SUPPORT_TICKET_NOT_FOUND');
+      if (result.status === 'closed') throw new ProblemError('SUPPORT_TICKET_CLOSED');
+      if (result.status === 'invalid') throw new ProblemError('SUPPORT_ATTACHMENT_INVALID');
+      return { status: 201 as const, body: presentedStaffAttachment(result.attachment) };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/admin/support/tickets/:ticket_id/attachments/:attachment_id/download',
+    operation_id: 'downloadStaffAttachment',
+    summary: 'Signed download URL for an attachment',
+    description:
+      'Non-image files include warning: true on the ticket. The URL is always served as a download.',
+    tags: ['support'],
+    auth: 'session',
+    permissions: ['support.tickets.staff'],
+    rate_limit: 'global',
+    request: { params: z.object({ ticket_id: z.uuid(), attachment_id: z.uuid() }) },
+    responses: {
+      200: {
+        description: 'A short-lived download URL',
+        schema: z.object({ url: z.string(), expires_at: z.iso.datetime() }),
+      },
+    },
+    errors: [
+      'SUPPORT_TICKETS_DISABLED',
+      'SUPPORT_ATTACHMENTS_DISABLED',
+      'SUPPORT_STORAGE_UNAVAILABLE',
+      'SUPPORT_TICKET_NOT_FOUND',
+      'SUPPORT_ATTACHMENT_NOT_FOUND',
+    ],
+    handler: async ({ ctx, params }) => {
+      const store = attachmentStore(ctx);
+      const ticket = await getTicket(ctx.db, params.ticket_id);
+      if (!ticket) throw new ProblemError('SUPPORT_TICKET_NOT_FOUND');
+      const attachment = await getAttachment(ctx.db, params.attachment_id);
+      if (attachment?.ticket_id !== ticket.id)
+        throw new ProblemError('SUPPORT_ATTACHMENT_NOT_FOUND');
+      const signed = await signAttachmentDownload(
+        store,
+        attachment,
+        ctx.config.support.attachment_download_ttl,
+        new Date(),
+      );
+      return {
+        status: 200 as const,
+        headers: NO_STORE,
+        body: { url: signed.url, expires_at: signed.expiresAt.toISOString() },
+      };
     },
   });
 

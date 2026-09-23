@@ -1721,6 +1721,26 @@ export const support = z
       .max(SUPPORT_BODY_MAX)
       .default(SUPPORT_BODY_MAX)
       .describe('Longest ticket body, reply or internal note.'),
+    guest_code_ttl: duration(
+      '15m',
+      'An emailed guest-ticket code works for this long. A newer code replaces an unused one.',
+    ),
+    guest_link_ttl: duration(
+      '7d',
+      'A guest magic link works for this long. Later emails send a new link, and older links keep working until they expire.',
+    ),
+    attachment_max_bytes: z
+      .int()
+      .min(1)
+      .max(50_000_000)
+      .default(524_288)
+      .describe(
+        'Largest ticket attachment, in bytes. The upload is base64 in JSON, so gateway.http.max_body_size must be about a third larger than this.',
+      ),
+    attachment_download_ttl: duration(
+      '15m',
+      'A signed attachment download link works for this long. Downloads are sent as attachments, never displayed inline.',
+    ),
     categories: z
       .record(z.string().regex(SUPPORT_CATEGORY_ID, SUPPORT_CATEGORY_ID_MESSAGE), ticketCategory)
       .default({})

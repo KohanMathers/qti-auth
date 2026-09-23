@@ -34,3 +34,13 @@ export function ledgerObjectKey(userId: string): string {
 export function isHeldObjectKey(key: string): boolean {
   return key.startsWith(HELD_OBJECT_PREFIX);
 }
+
+export const ATTACHMENT_OBJECT_PREFIX = 'attachments/';
+
+export function attachmentObjectKey(ticketId: string, attachmentId: string): string {
+  return `${ATTACHMENT_OBJECT_PREFIX}${ticketId}/${attachmentId}`;
+}
+
+export function attachmentObjectPrefix(ticketId: string): string {
+  return `${ATTACHMENT_OBJECT_PREFIX}${ticketId}/`;
+}

@@ -165,5 +165,7 @@ describe('defineEmailTemplates', () => {
       category: 'support',
       priority: 'normal',
     });
+    expect(EMAIL_TEMPLATES.guest_code).toMatchObject({ category: 'support', priority: 'high' });
+    expect(EMAIL_TEMPLATES.guest_ticket).toMatchObject({ category: 'support', priority: 'high' });
   });
 });

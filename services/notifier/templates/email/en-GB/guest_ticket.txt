@@ -1,0 +1,11 @@
+Your support ticket
+
+Ticket #{{ number }} is open. Use this link to read it and reply. The link expires in {{ expires_in_days }} days.
+
+{{ link }}
+
+If you didn't open a ticket, you can ignore this email.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

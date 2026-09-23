@@ -10,6 +10,7 @@ export interface TicketCreatedData {
   category: string;
   priority: SupportPriority;
   appeal: boolean;
+  guest?: boolean;
   action_id?: string | null;
 }
 

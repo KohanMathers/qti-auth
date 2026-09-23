@@ -7,6 +7,7 @@ import {
   rpcRequest,
   serveRpc,
 } from '@qtiauth/bus';
+import { solveAltcha } from '@qtiauth/captcha';
 import { sections } from '@qtiauth/config';
 import { SUPPORT_EVENTS } from '@qtiauth/events';
 import { assertLogsScrubbed, captureLogs } from '@qtiauth/observability/testing';
@@ -24,6 +25,7 @@ import {
   identityHeaders,
   serveTestIdentityKeys,
 } from '@qtiauth/service-kit/testing';
+import { createMemoryStore } from '@qtiauth/storage';
 import { natsUrl, startNats, startPostgres } from '@qtiauth/testing';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -31,6 +33,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { type CapturedEmails, captureEmails } from '../../identity/src/testing.ts';
 import type { Database } from './database.ts';
 import { definition } from './service.ts';
+import { contentDisposition } from './sniff.ts';
 import { AUTO_CLOSE_JOB, supportService } from './start.ts';
 import { CREATE_APPEAL_METHOD, USER_TICKETS_METHOD } from './tickets.ts';
 
@@ -69,10 +72,15 @@ function config() {
       account: { hosts: ['account.example.com'] },
       support: { hosts: ['account.example.com'], base_path: '/support' },
     }),
-    features: sections.features.parse({}),
+    features: sections.features.parse({
+      support: { attachments: { enabled: true } },
+    }),
     support: sections.support.parse({}),
     retention: sections.retention.parse({}),
     email: sections.email.parse({ provider: 'console' }),
+    captcha: sections.captcha.parse({}),
+    accounts: sections.accounts.parse({}),
+    storage: sections.storage.parse({}),
   };
 }
 
@@ -100,6 +108,26 @@ function jsonHeaders(overrides: Parameters<typeof identityHeaders>[2] = {}) {
     'content-type': 'application/json',
   };
 }
+
+function guestHeaders(ip = '203.0.113.10') {
+  return {
+    ...jsonHeaders({
+      auth: 'none',
+      sub: null,
+      sid: null,
+      account_state: null,
+      age_band: null,
+      amr: [],
+      acr: null,
+    }),
+    'x-forwarded-for': ip,
+  };
+}
+
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 function userEmail(userId: string): string {
   return `${userId.slice(0, 8)}@example.com`;
@@ -166,7 +194,7 @@ describe('support service', () => {
 
   beforeAll(async () => {
     support = await startService(definition, {
-      ...supportService(),
+      ...supportService({ objectStore: createMemoryStore() }),
       config: config(),
       port: 0,
       tracing: false,
@@ -509,5 +537,229 @@ describe('support service', () => {
       csat: expect.any(Array) as unknown,
       by_category: expect.any(Array) as unknown,
     });
+  });
+
+  it('opens a guest ticket from an emailed code and follows it by magic link', async () => {
+    const headers = guestHeaders('203.0.113.20');
+    const categories = await fetch(`${support.url}/api/v1/support/guest/categories`, { headers });
+    expect(categories.status).toBe(200);
+    const listed = (await categories.json()) as { items: { id: string }[] };
+    expect(listed.items.map((item) => item.id).sort()).toEqual(['billing', 'other', 'technical']);
+
+    const refused = await fetch(`${support.url}/api/v1/support/guest/tickets`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: 'guest@example.com',
+        code: '000000',
+        category_id: 'account',
+        subject: 'Locked out',
+        body: 'I cannot sign in',
+      }),
+    });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ code: 'SUPPORT_CATEGORY_GUEST' });
+
+    const started = await fetch(`${support.url}/api/v1/support/guest/codes`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email: 'J.o.e+tag@gmail.com' }),
+    });
+    expect(started.status).toBe(202);
+    const mailed = await emails.nextJob('J.o.e+tag@gmail.com', 'guest_code');
+    const code = String(mailed.variables['code']);
+    expect(code).toMatch(/^\d{6}$/);
+
+    const opened = await fetch(`${support.url}/api/v1/support/guest/tickets`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: 'joe@gmail.com',
+        code,
+        category_id: 'billing',
+        subject: 'Charge',
+        body: BODY_MARKER,
+      }),
+    });
+    expect(opened.status).toBe(201);
+    const created = (await opened.json()) as { number: number };
+    expect(created.number).toBeGreaterThan(0);
+    const linkMail = await emails.nextJob('joe@gmail.com', 'guest_ticket');
+    expect(JSON.stringify(linkMail)).not.toContain(BODY_MARKER);
+    expect(JSON.stringify(linkMail)).not.toContain(code);
+    const token = new URL(String(linkMail.variables['link'])).searchParams.get('token') ?? '';
+    expect(token).not.toBe('');
+
+    const reused = await fetch(`${support.url}/api/v1/support/guest/tickets`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: 'joe@gmail.com',
+        code,
+        category_id: 'billing',
+        subject: 'Again',
+        body: 'nope',
+      }),
+    });
+    expect(reused.status).toBe(400);
+    expect(await reused.json()).toMatchObject({ code: 'SUPPORT_GUEST_CODE_INVALID' });
+
+    const view = await fetch(`${support.url}/api/v1/support/guest/tickets/view`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ token }),
+    });
+    expect(view.status).toBe(200);
+    const detail = (await view.json()) as {
+      id: string;
+      subject: string;
+      messages: { body: string }[];
+    };
+    expect(detail.subject).toBe('Charge');
+    expect(detail.messages[0]?.body).toBe(BODY_MARKER);
+
+    const reply = await fetch(`${support.url}/api/v1/support/guest/tickets/replies`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ token, body: 'Any update?' }),
+    });
+    expect(reply.status).toBe(200);
+
+    const staff = jsonHeaders({
+      sub: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      permissions: ['support.tickets.staff'],
+    });
+    const staffView = await fetch(`${support.url}/api/v1/admin/support/tickets/${detail.id}`, {
+      headers: staff,
+    });
+    expect(staffView.status).toBe(200);
+    expect(await staffView.json()).toMatchObject({ guest_email: 'joe@gmail.com' });
+
+    const staffReply = await fetch(
+      `${support.url}/api/v1/admin/support/tickets/${detail.id}/replies`,
+      {
+        method: 'POST',
+        headers: staff,
+        body: JSON.stringify({ body: 'Looking now' }),
+      },
+    );
+    expect(staffReply.status).toBe(200);
+    const followUp = await emails.nextJob('joe@gmail.com', 'ticket_reply');
+    const nextToken = new URL(String(followUp.variables['link'])).searchParams.get('token') ?? '';
+    const again = await fetch(`${support.url}/api/v1/support/guest/tickets/view`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ token: nextToken }),
+    });
+    expect(again.status).toBe(200);
+    assertLogsScrubbed(logs.lines, [code, token, nextToken, BODY_MARKER]);
+  });
+
+  it('asks for a CAPTCHA after the guest-ticket threshold', async () => {
+    const headers = guestHeaders('203.0.113.30');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const sent = await fetch(`${support.url}/api/v1/support/guest/codes`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email: `guest-${String(attempt)}@example.com` }),
+      });
+      expect(sent.status).toBe(202);
+      await emails.nextJob(`guest-${String(attempt)}@example.com`, 'guest_code');
+    }
+    const blocked = await fetch(`${support.url}/api/v1/support/guest/codes`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email: 'guest-next@example.com' }),
+    });
+    expect(blocked.status).toBe(403);
+    const problem = (await blocked.json()) as {
+      code: string;
+      challenge: Parameters<typeof solveAltcha>[0];
+    };
+    expect(problem.code).toBe('SUPPORT_CAPTCHA_REQUIRED');
+    const solved = await fetch(`${support.url}/api/v1/support/guest/codes`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: 'guest-next@example.com',
+        captcha: solveAltcha(problem.challenge),
+      }),
+    });
+    expect(solved.status).toBe(202);
+  });
+
+  it('rejects a renamed HTML upload and serves accepted files as downloads', async () => {
+    const userId = '99999999-8888-7777-6666-555555555555';
+    const headers = jsonHeaders({ sub: userId });
+    const opened = await fetch(`${support.url}/api/v1/support/tickets`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        category_id: 'technical',
+        subject: 'Screenshot',
+        body: 'See attached',
+      }),
+    });
+    expect(opened.status).toBe(201);
+    const ticket = (await opened.json()) as { id: string };
+    const html = await fetch(`${support.url}/api/v1/support/tickets/${ticket.id}/attachments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        filename: 'photo.png',
+        content: Buffer.from(
+          '<!DOCTYPE html><html><body><script>alert(1)</script></body></html>',
+        ).toString('base64'),
+      }),
+    });
+    expect(html.status).toBe(400);
+    expect(await html.json()).toMatchObject({ code: 'SUPPORT_ATTACHMENT_INVALID' });
+
+    const png = await fetch(`${support.url}/api/v1/support/tickets/${ticket.id}/attachments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        filename: 'page.html',
+        content: PNG.toString('base64'),
+      }),
+    });
+    expect(png.status).toBe(201);
+    const image = (await png.json()) as { id: string; content_type: string };
+    expect(image.content_type).toBe('image/png');
+
+    const pdf = await fetch(`${support.url}/api/v1/support/tickets/${ticket.id}/attachments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        filename: 'notes.pdf',
+        content: Buffer.from('%PDF-1.4\n').toString('base64'),
+      }),
+    });
+    expect(pdf.status).toBe(201);
+
+    const staff = jsonHeaders({
+      sub: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      permissions: ['support.tickets.staff'],
+    });
+    const detail = await fetch(`${support.url}/api/v1/admin/support/tickets/${ticket.id}`, {
+      headers: staff,
+    });
+    const body = (await detail.json()) as {
+      attachments: { id: string; content_type: string; warning: boolean; filename: string }[];
+    };
+    const imageRow = body.attachments.find((row) => row.id === image.id);
+    const pdfRow = body.attachments.find((row) => row.content_type === 'application/pdf');
+    expect(imageRow).toMatchObject({ warning: false, filename: 'page.html' });
+    expect(pdfRow?.warning).toBe(true);
+
+    const download = await fetch(
+      `${support.url}/api/v1/support/tickets/${ticket.id}/attachments/${image.id}/download`,
+      { method: 'POST', headers },
+    );
+    expect(download.status).toBe(200);
+    const signed = (await download.json()) as { url: string };
+    const params = new URLSearchParams(signed.url.slice(signed.url.indexOf('?') + 1));
+    expect(params.get('response-content-disposition')).toBe(contentDisposition('page.html'));
+    expect(params.get('response-content-type')).toBe('image/png');
   });
 });

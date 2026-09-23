@@ -2,7 +2,7 @@
   "name": "@qtiauth/support",
   "version": "0.0.0",
   "private": true,
-  "description": "Support tickets, appeals and staff macros",
+  "description": "Support tickets, guest tickets, attachments and staff macros",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@qtiauth/bus": "workspace:*",
+    "@qtiauth/captcha": "workspace:*",
     "@qtiauth/cli": "workspace:*",
     "@qtiauth/config": "workspace:*",
     "@qtiauth/db": "workspace:*",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@qtiauth/identity": "workspace:*",
+    "@qtiauth/storage": "workspace:*",
     "@qtiauth/testing": "workspace:*"
   }
 }

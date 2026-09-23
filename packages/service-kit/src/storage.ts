@@ -1,4 +1,7 @@
 export {
+  ATTACHMENT_OBJECT_PREFIX,
+  attachmentObjectKey,
+  attachmentObjectPrefix,
   eraseUserObjects,
   exportObjectKey,
   exportObjectPrefix,

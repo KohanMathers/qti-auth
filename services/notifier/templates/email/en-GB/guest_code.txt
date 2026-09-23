@@ -1,0 +1,11 @@
+Your support code
+
+Use this code to open a ticket. It expires in {{ expires_in_minutes }} minutes.
+
+{{ code }}
+
+If you didn't ask for a code, you can ignore this email.
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

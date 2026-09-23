@@ -26,6 +26,10 @@
       "description": "True when this ticket is an appeal against an enforcement action.",
       "type": "boolean"
     },
+    "guest": {
+      "description": "True when a signed-out guest opened the ticket.",
+      "type": "boolean"
+    },
     "action_id": {
       "description": "The Safety enforcement action being appealed, when present.",
       "type": ["string", "null"],

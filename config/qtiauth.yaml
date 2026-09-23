@@ -288,6 +288,10 @@ support:
   auto_close_after: 7d
   max_subject_length: 200
   max_body_length: 8000
+  guest_code_ttl: 15m
+  guest_link_ttl: 7d
+  attachment_max_bytes: 524288 # base64 JSON; gateway body limit must be about a third larger
+  attachment_download_ttl: 15m
   categories: {} # ids you set replace the built-in category of the same name; see docs/support.md
 
 safety:

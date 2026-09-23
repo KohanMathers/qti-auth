@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { writeEvent } from '@qtiauth/bus';
 import type { SupportPriority } from '@qtiauth/config';
 import type { EventActor } from '@qtiauth/events';
+import { attachmentObjectPrefix, type ObjectStore } from '@qtiauth/service-kit';
 import type { Kysely, Transaction } from 'kysely';
 
 import { appealCategory, type TicketCategory } from './categories.ts';
@@ -38,6 +39,7 @@ export interface TicketRecord {
   waiting_since: Date;
   reminder_sent_at: Date | null;
   resolved_at: Date | null;
+  guest_email: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -201,11 +203,12 @@ export async function userTickets(
   return { items };
 }
 
-async function insertTicket(
+export async function insertTicket(
   trx: Transaction<Database>,
   values: {
     id: string;
-    userId: string;
+    userId: string | null;
+    guestEmail: string | null;
     categoryId: string;
     subject: string;
     status: TicketStatus;
@@ -222,6 +225,7 @@ async function insertTicket(
     .values({
       id: values.id,
       user_id: values.userId,
+      guest_email: values.guestEmail,
       category_id: values.categoryId,
       subject: values.subject,
       status: values.status,
@@ -260,6 +264,7 @@ async function insertTicket(
         category: ticket.category_id,
         priority: ticket.priority,
         appeal: ticket.appeal,
+        guest: values.guestEmail !== null,
         action_id: ticket.action_id,
       },
       values.actor,
@@ -292,6 +297,7 @@ export async function createTicket(
     insertTicket(trx, {
       id: randomUUID(),
       userId: options.userId,
+      guestEmail: null,
       categoryId: category.id,
       subject: options.subject.trim(),
       status: 'open',
@@ -345,6 +351,7 @@ export async function createAppealTicket(
     insertTicket(trx, {
       id: randomUUID(),
       userId: options.userId,
+      guestEmail: null,
       categoryId: category.id,
       subject: category.name,
       status: 'open',
@@ -369,7 +376,7 @@ export async function replyToTicket(
   db: Kysely<Database>,
   options: {
     ticketId: string;
-    authorId: string;
+    authorId: string | null;
     staff: boolean;
     body: string;
     maxBody: number;
@@ -381,7 +388,10 @@ export async function replyToTicket(
   if (!ticket) return { status: 'not_found' };
   if (ticket.status === 'closed') return { status: 'closed' };
   const nextStatus: TicketStatus = options.staff ? 'pending' : 'open';
-  const actor: EventActor = { type: 'user', id: options.authorId };
+  const actor: EventActor =
+    options.authorId === null
+      ? { type: 'system', id: 'guest' }
+      : { type: 'user', id: options.authorId };
   const result = await db.transaction().execute(async (trx) => {
     const firstResponse =
       options.staff && ticket.first_response_at === null ? options.now : ticket.first_response_at;
@@ -532,10 +542,13 @@ export async function reopenTicket(
 
 export async function rateTicket(
   db: Kysely<Database>,
-  options: { ticketId: string; userId: string; rating: number; now: Date },
+  options: { ticketId: string; userId: string | null; rating: number; now: Date; guest?: boolean },
 ): Promise<RateResult> {
   const ticket = await getTicket(db, options.ticketId);
-  if (ticket?.user_id !== options.userId) return { status: 'not_found' };
+  if (!ticket) return { status: 'not_found' };
+  if (options.guest === true) {
+    if (ticket.guest_email === null) return { status: 'not_found' };
+  } else if (ticket.user_id !== options.userId) return { status: 'not_found' };
   if (ticket.status !== 'closed') return { status: 'open' };
   if (ticket.rating !== null) return { status: 'rated' };
   const updated = await db
@@ -682,6 +695,7 @@ export interface StaffMetrics {
   csat: { rating: number; count: number }[];
   by_category: { category_id: string; open: number; pending: number; closed: number }[];
   by_agent: { agent_id: string; closed: number }[];
+  guest_tickets: number;
 }
 
 export async function staffMetricsSnapshot(
@@ -738,18 +752,33 @@ export async function staffMetricsSnapshot(
       ...counts,
     })),
     by_agent: [...agents.entries()].map(([agent_id, closed]) => ({ agent_id, closed })),
+    guest_tickets: recent.filter((ticket) => ticket.guest_email !== null).length,
   };
 }
 
 export async function sweepClosedTickets(
   db: Kysely<Database>,
-  options: { retention: number; now: Date },
+  options: { retention: number; now: Date; store?: ObjectStore | null },
 ): Promise<number> {
   const cutoff = new Date(options.now.getTime() - options.retention);
-  const result = await db
-    .deleteFrom('tickets')
+  const doomed = await db
+    .selectFrom('tickets')
+    .select('id')
     .where('status', '=', 'closed')
     .where('resolved_at', '<', cutoff)
+    .execute();
+  if (doomed.length === 0) return 0;
+  if (options.store) {
+    for (const ticket of doomed)
+      await options.store.deletePrefix(attachmentObjectPrefix(ticket.id));
+  }
+  const result = await db
+    .deleteFrom('tickets')
+    .where(
+      'id',
+      'in',
+      doomed.map((ticket) => ticket.id),
+    )
     .executeTakeFirst();
   return Number(result.numDeletedRows);
 }
@@ -757,6 +786,7 @@ export async function sweepClosedTickets(
 export async function exportUserTickets(
   db: Kysely<Database>,
   userId: string,
+  store: ObjectStore | null = null,
 ): Promise<Record<string, unknown>[]> {
   const tickets = await db
     .selectFrom('tickets')
@@ -799,6 +829,32 @@ export async function exportUserTickets(
     });
     byTicket.set(message.ticket_id, list);
   }
+  const files =
+    tickets.length === 0
+      ? []
+      : await db
+          .selectFrom('ticket_attachments')
+          .selectAll()
+          .where(
+            'ticket_id',
+            'in',
+            tickets.map((row) => row.id),
+          )
+          .orderBy('created_at', 'asc')
+          .execute();
+  const filesByTicket = new Map<string, Record<string, unknown>[]>();
+  for (const file of files) {
+    const bytes = store === null ? undefined : await store.get(file.object_key);
+    const list = filesByTicket.get(file.ticket_id) ?? [];
+    list.push({
+      filename: file.filename,
+      content_type: file.content_type,
+      size_bytes: file.size_bytes,
+      created_at: file.created_at.toISOString(),
+      content_base64: bytes === undefined ? null : Buffer.from(bytes).toString('base64'),
+    });
+    filesByTicket.set(file.ticket_id, list);
+  }
   return tickets.map((ticket) => ({
     id: ticket.id,
     number: ticket.number,
@@ -812,10 +868,15 @@ export async function exportUserTickets(
     created_at: ticket.created_at.toISOString(),
     resolved_at: ticket.resolved_at?.toISOString() ?? null,
     messages: byTicket.get(ticket.id) ?? [],
+    attachments: filesByTicket.get(ticket.id) ?? [],
   }));
 }
 
-export async function eraseUserTickets(trx: Kysely<Database>, userId: string): Promise<void> {
+export async function eraseUserTickets(
+  trx: Kysely<Database>,
+  userId: string,
+  store: ObjectStore | null = null,
+): Promise<void> {
   const tickets = await trx
     .selectFrom('tickets')
     .select('id')
@@ -830,6 +891,10 @@ export async function eraseUserTickets(trx: Kysely<Database>, userId: string): P
       .where('staff', '=', false)
       .execute();
     await trx.updateTable('ticket_notes').set({ body: '' }).where('ticket_id', 'in', ids).execute();
+    if (store !== null) {
+      for (const id of ids) await store.deletePrefix(attachmentObjectPrefix(id));
+    }
+    await trx.deleteFrom('ticket_attachments').where('ticket_id', 'in', ids).execute();
   }
   await trx
     .updateTable('tickets')

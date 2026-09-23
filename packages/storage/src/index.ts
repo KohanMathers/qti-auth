@@ -1,6 +1,9 @@
 export { eraseUserObjects, openObjectStore, tryOpenObjectStore } from './client.ts';
 export { storageHealthCheck } from './health.ts';
 export {
+  ATTACHMENT_OBJECT_PREFIX,
+  attachmentObjectKey,
+  attachmentObjectPrefix,
   EXPORT_OBJECT_PREFIX,
   exportObjectKey,
   exportObjectPrefix,
@@ -16,4 +19,9 @@ export {
 } from './keys.ts';
 export { createMemoryStore } from './memory.ts';
 export { createS3Store, type StorageConfig } from './s3.ts';
-export { type ObjectStore, type StoredObject, StorageError } from './store.ts';
+export {
+  type ObjectStore,
+  type PresignGetOptions,
+  type StoredObject,
+  StorageError,
+} from './store.ts';

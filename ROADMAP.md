@@ -724,9 +724,9 @@ Spec: §6.3 (tickets)
 ### P6.2 Guest tickets and attachments — M
 Spec: §6.3
 
-- [ ] Guest tickets: email code verification, magic-link access, CAPTCHA and rate limits,
+- [x] Guest tickets: email code verification, magic-link access, CAPTCHA and rate limits,
       guest-allowed categories.
-- [ ] Attachments: type and size limits, content sniffing, signed download URLs with
+- [x] Attachments: type and size limits, content sniffing, signed download URLs with
       `Content-Disposition: attachment`, staff warning on non-images.
 
 **Done when:** a renamed `.html` upload is rejected or served as a download, never rendered.

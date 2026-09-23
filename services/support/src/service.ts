@@ -12,6 +12,7 @@ import {
 import packageJson from '../package.json' with { type: 'json' };
 import type { Database } from './database.ts';
 import { SUPPORT_ERRORS } from './errors.ts';
+import { guestRoutes } from './guest-routes.ts';
 import { ticketRoutes } from './routes.ts';
 import { staffRoutes } from './staff-routes.ts';
 
@@ -21,7 +22,17 @@ export const definition = defineService({
   name: 'support',
   version: packageJson.version,
   module: 'support',
-  sections: ['branding', 'surfaces', 'features', 'support', 'retention', 'email'],
+  sections: [
+    'branding',
+    'surfaces',
+    'features',
+    'support',
+    'retention',
+    'email',
+    'captcha',
+    'accounts',
+    'storage',
+  ],
   database: { schema: 'support', migrations: () => loadMigrations(MIGRATIONS_DIR) },
   permissions: definePermissions({
     'support.tickets.staff': {
@@ -46,4 +57,5 @@ export type SupportConfig = Context['config'];
 export const router = createServiceRouter<Context>(definition);
 
 ticketRoutes(router);
+guestRoutes(router);
 staffRoutes(router);

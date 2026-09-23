@@ -97,6 +97,8 @@ describe('qtiauth templates check', () => {
         { name: 'ticket_reply', locales: ['en-GB'] },
         { name: 'ticket_status', locales: ['en-GB'] },
         { name: 'ticket_reminder', locales: ['en-GB'] },
+        { name: 'guest_code', locales: ['en-GB'] },
+        { name: 'guest_ticket', locales: ['en-GB'] },
       ],
     });
   });

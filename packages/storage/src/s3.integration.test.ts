@@ -55,6 +55,16 @@ describe('S3 object store', () => {
     expect(fetched.status).toBe(200);
     expect(await fetched.text()).toBe('export-bytes');
 
+    const forced = await store.presignGet(key, 60, {
+      contentType: 'application/zip',
+      contentDisposition: 'attachment; filename="export.zip"',
+    });
+    const attached = await fetch(forced);
+    expect(attached.status).toBe(200);
+    expect(attached.headers.get('content-disposition')).toBe('attachment; filename="export.zip"');
+    expect(attached.headers.get('content-type')).toContain('application/zip');
+    expect(await attached.text()).toBe('export-bytes');
+
     const uploadKey = userObjectKey(USER_ID, 'upload.bin');
     const upload = await store.presignPut(uploadKey, 'application/octet-stream', 60);
     const put = await fetch(upload, {

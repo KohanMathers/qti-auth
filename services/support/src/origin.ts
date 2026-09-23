@@ -20,6 +20,17 @@ export function ticketUrl(
   return withBase(origin, surfaces.support.base_path, `/tickets/${encodeURIComponent(ticketId)}`);
 }
 
+export function guestTicketUrl(
+  surfaces: QtiauthConfig['surfaces'],
+  token: string,
+): string | undefined {
+  const origin = originOf(surfaces.support);
+  if (origin === undefined) return undefined;
+  const url = new URL(withBase(origin, surfaces.support.base_path, '/guest'));
+  url.searchParams.set('token', token);
+  return url.toString();
+}
+
 export function staffTicketUrl(
   surfaces: QtiauthConfig['surfaces'],
   ticketId: string,

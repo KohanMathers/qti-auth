@@ -8,6 +8,7 @@ import { countOpenByStatusAndCategory } from './tickets.ts';
 
 export interface SupportMetrics {
   created: (category: string) => void;
+  guest: () => void;
   firstResponse: (seconds: number) => void;
   resolution: (seconds: number) => void;
   csat: (rating: number) => void;
@@ -31,6 +32,10 @@ function prometheusSupportMetrics(metrics: Metrics): SupportMetrics {
     name: 'qtiauth_support_tickets_total',
     help: 'Support tickets opened, by category.',
     labelNames: ['category'],
+  });
+  const guests = metrics.counter({
+    name: 'qtiauth_support_guest_tickets_total',
+    help: 'Support tickets opened by signed-out guests.',
   });
   const first = metrics.histogram({
     name: 'qtiauth_support_first_response_seconds',
@@ -59,6 +64,9 @@ function prometheusSupportMetrics(metrics: Metrics): SupportMetrics {
   return {
     created: (category) => {
       opened.inc({ category });
+    },
+    guest: () => {
+      guests.inc();
     },
     firstResponse: (seconds) => {
       first.observe(seconds);

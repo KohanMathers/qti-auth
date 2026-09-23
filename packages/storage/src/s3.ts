@@ -14,7 +14,12 @@ import {
   signature,
   UNSIGNED,
 } from './sign.ts';
-import { type ObjectStore, type StoredObject, StorageError } from './store.ts';
+import {
+  type ObjectStore,
+  type PresignGetOptions,
+  type StoredObject,
+  StorageError,
+} from './store.ts';
 
 export type StorageConfig = QtiauthConfig['storage'];
 
@@ -154,16 +159,27 @@ export function createS3Store(
     }
   }
 
+  function responseQuery(response?: PresignGetOptions): Record<string, string> {
+    const query: Record<string, string> = {};
+    if (response?.contentType !== undefined) query['response-content-type'] = response.contentType;
+    if (response?.contentDisposition !== undefined) {
+      query['response-content-disposition'] = response.contentDisposition;
+    }
+    return query;
+  }
+
   function presign(
     method: string,
     key: string,
     expiresSeconds: number,
     headers: Record<string, string> = {},
+    response: Record<string, string> = {},
   ): string {
     const now = clock();
     const { date, datetime } = amzDate(now);
     const located = locate(config, key, {});
     const query: Record<string, string> = {
+      ...response,
       'X-Amz-Algorithm': ALGORITHM,
       'X-Amz-Credential': `${config.access_key}/${credentialScope(date, config.region)}`,
       'X-Amz-Date': datetime,
@@ -210,7 +226,8 @@ export function createS3Store(
       return objects.length;
     },
     list: (prefix) => listAll(prefix),
-    presignGet: (key, expiresSeconds) => Promise.resolve(presign('GET', key, expiresSeconds)),
+    presignGet: (key, expiresSeconds, response) =>
+      Promise.resolve(presign('GET', key, expiresSeconds, {}, responseQuery(response))),
     presignPut: (key, contentType, expiresSeconds) =>
       Promise.resolve(presign('PUT', key, expiresSeconds, { 'content-type': contentType })),
     async checkBucket() {

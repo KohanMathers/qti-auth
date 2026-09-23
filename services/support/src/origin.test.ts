@@ -1,7 +1,7 @@
 import { sections } from '@qtiauth/config';
 import { describe, expect, it } from 'vitest';
 
-import { staffTicketUrl, ticketUrl } from './origin.ts';
+import { guestTicketUrl, staffTicketUrl, ticketUrl } from './origin.ts';
 
 describe('support origins', () => {
   const surfaces = sections.surfaces.parse({
@@ -15,6 +15,9 @@ describe('support origins', () => {
     );
     expect(staffTicketUrl(surfaces, 'ticket-1')).toBe(
       'https://account.example.com/admin/support/tickets/ticket-1',
+    );
+    expect(guestTicketUrl(surfaces, 'token-1')).toBe(
+      'https://account.example.com/support/guest?token=token-1',
     );
   });
 });

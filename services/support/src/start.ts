@@ -1,12 +1,20 @@
 import { consumeCron, pruneBusTables, RpcError, serveRpc } from '@qtiauth/bus';
-import { type StartServiceOptions, type Stoppable, unwind } from '@qtiauth/service-kit';
+import {
+  type ObjectStore,
+  type StartServiceOptions,
+  type Stoppable,
+  storageHealthCheck,
+  unwind,
+} from '@qtiauth/service-kit';
 import * as z from 'zod';
 
 import { loadCategories } from './categories.ts';
 import type { Database } from './database.ts';
+import { sweepGuestSecrets } from './guest.ts';
 import { refreshOpenTickets, supportMetrics } from './metrics.ts';
 import { queueNewTicketStaff, queueUserReminder, queueUserStatus } from './notify.ts';
 import { type Context, type definition, router } from './service.ts';
+import { openObjectStore } from './storage-state.ts';
 import {
   CREATE_APPEAL_METHOD,
   createAppealTicket,
@@ -21,21 +29,32 @@ import {
 export const AUTO_CLOSE_JOB = 'support.auto_close';
 export const RETENTION_JOB = 'retention.sweep';
 
-export function supportService() {
+export function supportService(options: { objectStore?: ObjectStore | null } = {}) {
+  const storeOf = (ctx: Context) => openObjectStore(ctx, options.objectStore);
   return {
     router,
-    dataRights: ({ db }) => ({
+    readinessChecks: (ctx: Context) => {
+      const store = storeOf(ctx);
+      return store === null ? {} : { storage: storageHealthCheck(store) };
+    },
+    dataRights: (ctx: Context) => ({
       exportUser: async (userId) => ({
-        tickets: await exportUserTickets(db, userId),
+        tickets: await exportUserTickets(ctx.db, userId, storeOf(ctx)),
       }),
       eraseUser: async (userId, trx) => {
-        await eraseUserTickets(trx, userId);
+        await eraseUserTickets(trx, userId, storeOf(ctx));
       },
     }),
     start: async (ctx: Context) => {
       const { bus, db, log } = ctx;
       const stack: Stoppable[] = [];
+      const store = storeOf(ctx);
       try {
+        if (store !== null) {
+          if (ctx.config.storage.enabled && ctx.config.storage.create_bucket)
+            await store.ensureBucket();
+          stack.push({ stop: () => store.close() });
+        }
         stack.push(
           serveRpc(bus, {
             method: USER_TICKETS_METHOD,
@@ -144,13 +163,22 @@ export function supportService() {
             job: RETENTION_JOB,
             metrics: ctx.busMetrics,
             handler: async () => {
+              const now = new Date();
               const tickets = await sweepClosedTickets(db, {
                 retention: ctx.config.retention.closed_tickets,
-                now: new Date(),
+                now,
+                store,
+              });
+              const secrets = await sweepGuestSecrets(db, {
+                retention: ctx.config.retention.tokens,
+                now,
               });
               const pruned = await pruneBusTables(db, ctx.config.bus);
               log.info('retention sweep finished', {
                 tickets,
+                guest_codes: secrets.codes,
+                guest_links: secrets.links,
+                guest_attempts: secrets.attempts,
                 outbox: pruned.outbox,
                 processed_events: pruned.processedEvents,
               });
@@ -165,6 +193,8 @@ export function supportService() {
         log.info('support started', {
           categories: Object.keys(ctx.config.support.categories).length,
           tickets: ctx.config.features.support.tickets.enabled,
+          guest_tickets: ctx.config.features.support.guest_tickets.enabled,
+          attachments: ctx.config.features.support.attachments.enabled && store !== null,
         });
         return stack;
       } catch (error) {

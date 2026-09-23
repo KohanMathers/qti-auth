@@ -205,6 +205,9 @@ export {
 } from './routes.ts';
 export { closeServer, listen, unwind } from './server.ts';
 export {
+  ATTACHMENT_OBJECT_PREFIX,
+  attachmentObjectKey,
+  attachmentObjectPrefix,
   eraseUserObjects,
   exportObjectKey,
   exportObjectPrefix,

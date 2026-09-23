@@ -3379,6 +3379,31 @@
           "minimum": 1,
           "maximum": 8000
         },
+        "guest_code_ttl": {
+          "default": "15m",
+          "description": "An emailed guest-ticket code works for this long. A newer code replaces an unused one. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "guest_link_ttl": {
+          "default": "7d",
+          "description": "A guest magic link works for this long. Later emails send a new link, and older links keep working until they expire. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "attachment_max_bytes": {
+          "default": 524288,
+          "description": "Largest ticket attachment, in bytes. The upload is base64 in JSON, so gateway.http.max_body_size must be about a third larger than this.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50000000
+        },
+        "attachment_download_ttl": {
+          "default": "15m",
+          "description": "A signed attachment download link works for this long. Downloads are sent as attachments, never displayed inline. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
         "categories": {
           "description": "Ticket categories. Ids you set replace the built-in category of the same name, and other built-in categories stay as they are. Exactly one must have appeal: true.",
           "default": {},

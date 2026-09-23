@@ -13,9 +13,28 @@ import {
 
 import { categoryOf, type TicketCategory } from './categories.ts';
 import type { TicketStatus } from './database.ts';
-import { staffTicketUrl, ticketUrl } from './origin.ts';
+import { issueGuestLink } from './guest.ts';
+import { guestTicketUrl, staffTicketUrl, ticketUrl } from './origin.ts';
 import type { Context } from './service.ts';
 import type { TicketRecord } from './tickets.ts';
+
+function wholeMinutes(ms: number): number {
+  return Math.max(1, Math.round(ms / 60_000));
+}
+
+function wholeDays(ms: number): number {
+  return Math.max(1, Math.ceil(ms / 86_400_000));
+}
+
+async function guestLink(ctx: Context, ticket: TicketRecord): Promise<string | undefined> {
+  if (ticket.guest_email === null) return undefined;
+  const token = await issueGuestLink(ctx.db, {
+    ticketId: ticket.id,
+    ttl: ctx.config.support.guest_link_ttl,
+    now: new Date(),
+  });
+  return guestTicketUrl(ctx.config.surfaces, token);
+}
 
 async function userEmail(ctx: Context, userId: string): Promise<string | null> {
   const result = await rpcRequest<UserClaimsResponse>(
@@ -64,7 +83,50 @@ export async function queueNewTicketStaff(
   }
 }
 
+export async function queueGuestOpened(
+  ctx: Context,
+  ticket: TicketRecord,
+  token: string,
+): Promise<void> {
+  if (ticket.guest_email === null) return;
+  const link = guestTicketUrl(ctx.config.surfaces, token);
+  if (link === undefined) return;
+  await queueEmail(ctx.bus, {
+    template: 'guest_ticket',
+    to: { address: ticket.guest_email },
+    locale: ctx.config.email.default_locale,
+    variables: {
+      number: ticket.number,
+      link,
+      expires_in_days: wholeDays(ctx.config.support.guest_link_ttl),
+    },
+  });
+}
+
+export async function queueGuestCode(ctx: Context, email: string, code: string): Promise<void> {
+  await queueEmail(ctx.bus, {
+    template: 'guest_code',
+    to: { address: email },
+    locale: ctx.config.email.default_locale,
+    variables: {
+      code,
+      expires_in_minutes: wholeMinutes(ctx.config.support.guest_code_ttl),
+    },
+  });
+}
+
 export async function queueUserReply(ctx: Context, ticket: TicketRecord): Promise<void> {
+  if (ticket.guest_email !== null) {
+    const link = await guestLink(ctx, ticket);
+    if (link === undefined) return;
+    await queueEmail(ctx.bus, {
+      template: 'ticket_reply',
+      to: { address: ticket.guest_email },
+      locale: ctx.config.email.default_locale,
+      variables: { number: ticket.number, link },
+    });
+    return;
+  }
   if (ticket.user_id === null) return;
   if (!(await ticketUpdatesAllowed(ctx, ticket.user_id))) return;
   const link = ticketUrl(ctx.config.surfaces, ticket.id);
@@ -87,6 +149,17 @@ const STATUS_LABEL: Record<TicketStatus, string> = {
 };
 
 export async function queueUserStatus(ctx: Context, ticket: TicketRecord): Promise<void> {
+  if (ticket.guest_email !== null) {
+    const link = await guestLink(ctx, ticket);
+    if (link === undefined) return;
+    await queueEmail(ctx.bus, {
+      template: 'ticket_status',
+      to: { address: ticket.guest_email },
+      locale: ctx.config.email.default_locale,
+      variables: { number: ticket.number, status: STATUS_LABEL[ticket.status], link },
+    });
+    return;
+  }
   if (ticket.user_id === null) return;
   if (!(await ticketUpdatesAllowed(ctx, ticket.user_id))) return;
   const link = ticketUrl(ctx.config.surfaces, ticket.id);
@@ -107,6 +180,21 @@ export async function queueUserReminder(
   ticket: TicketRecord,
   closesInHours: number,
 ): Promise<void> {
+  if (ticket.guest_email !== null) {
+    const link = await guestLink(ctx, ticket);
+    if (link === undefined) return;
+    await queueEmail(ctx.bus, {
+      template: 'ticket_reminder',
+      to: { address: ticket.guest_email },
+      locale: ctx.config.email.default_locale,
+      variables: {
+        number: ticket.number,
+        closes_in_hours: Math.max(1, closesInHours),
+        link,
+      },
+    });
+    return;
+  }
   if (ticket.user_id === null) return;
   if (!(await ticketUpdatesAllowed(ctx, ticket.user_id))) return;
   const link = ticketUrl(ctx.config.surfaces, ticket.id);

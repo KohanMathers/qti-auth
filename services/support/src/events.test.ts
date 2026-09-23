@@ -40,6 +40,7 @@ describe('support event schemas', () => {
               category: 'account',
               priority: 'normal',
               appeal: false,
+              guest: true,
               action_id: null,
             },
             actor,

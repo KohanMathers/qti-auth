@@ -398,6 +398,25 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       link: z.url({ protocol: /^https?$/ }),
     }),
   },
+  guest_code: {
+    description: 'A code a signed-out person uses to open a guest support ticket',
+    category: 'support',
+    priority: 'high',
+    variables: z.object({
+      code: z.string().regex(/^\d{6}$/),
+      expires_in_minutes: z.int().min(1),
+    }),
+  },
+  guest_ticket: {
+    description: 'A magic link a guest uses to follow a support ticket they opened',
+    category: 'support',
+    priority: 'high',
+    variables: z.object({
+      number: z.int().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+      expires_in_days: z.int().min(1),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

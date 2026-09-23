@@ -11,6 +11,7 @@ describe('support service', () => {
     expect(migrations.map((migration) => migration.name)).toEqual([
       '0001_bus_tables',
       '0002_tickets',
+      '0003_guest_attachments',
     ]);
   });
 
@@ -24,17 +25,32 @@ describe('support service', () => {
       'GET /api/v1/admin/support/tickets',
       'GET /api/v1/admin/support/tickets/:ticket_id',
       'GET /api/v1/support/categories',
+      'GET /api/v1/support/guest/captcha',
+      'GET /api/v1/support/guest/categories',
       'GET /api/v1/support/tickets',
       'GET /api/v1/support/tickets/:ticket_id',
       'PATCH /api/v1/admin/support/macros/:macro_id',
       'PATCH /api/v1/admin/support/tickets/:ticket_id',
       'POST /api/v1/admin/support/macros',
+      'POST /api/v1/admin/support/tickets/:ticket_id/attachments',
+      'POST /api/v1/admin/support/tickets/:ticket_id/attachments/:attachment_id/download',
       'POST /api/v1/admin/support/tickets/:ticket_id/close',
       'POST /api/v1/admin/support/tickets/:ticket_id/notes',
       'POST /api/v1/admin/support/tickets/:ticket_id/reopen',
       'POST /api/v1/admin/support/tickets/:ticket_id/replies',
       'POST /api/v1/support/appeals',
+      'POST /api/v1/support/guest/attachments',
+      'POST /api/v1/support/guest/attachments/download',
+      'POST /api/v1/support/guest/codes',
+      'POST /api/v1/support/guest/tickets',
+      'POST /api/v1/support/guest/tickets/close',
+      'POST /api/v1/support/guest/tickets/rate',
+      'POST /api/v1/support/guest/tickets/reopen',
+      'POST /api/v1/support/guest/tickets/replies',
+      'POST /api/v1/support/guest/tickets/view',
       'POST /api/v1/support/tickets',
+      'POST /api/v1/support/tickets/:ticket_id/attachments',
+      'POST /api/v1/support/tickets/:ticket_id/attachments/:attachment_id/download',
       'POST /api/v1/support/tickets/:ticket_id/close',
       'POST /api/v1/support/tickets/:ticket_id/rate',
       'POST /api/v1/support/tickets/:ticket_id/reopen',
@@ -55,6 +71,14 @@ describe('support service', () => {
       routes.find((route) => route.path === '/api/v1/support/tickets' && route.method === 'POST')
         ?.allow_account_states,
     ).toEqual(['active']);
+    expect(routes.find((route) => route.path === '/api/v1/support/guest/codes')).toMatchObject({
+      auth: 'none',
+      rate_limit: 'guest_ticket',
+    });
+    expect(routes.find((route) => route.path === '/api/v1/support/guest/tickets')).toMatchObject({
+      auth: 'none',
+      rate_limit: 'guest_ticket',
+    });
     const document = openApiDocument(router) as { paths: Record<string, unknown> };
     expect(document.paths['/api/v1/support/tickets']).toBeDefined();
   });
