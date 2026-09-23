@@ -26,6 +26,7 @@ import {
   parental,
   safety,
   storage,
+  support,
   backups,
   webhooks,
 } from './sections.ts';
@@ -643,6 +644,55 @@ describe('safety', () => {
   });
 });
 
+describe('support', () => {
+  it('ships built-in categories with one appeal type and a 7-day auto-close', () => {
+    const parsed = support.parse({});
+    expect(parsed.auto_close_after).toBe(604_800_000);
+    expect(parsed.max_subject_length).toBe(200);
+    expect(parsed.max_body_length).toBe(8_000);
+    expect(parsed.categories['account']).toEqual({
+      name: 'Account',
+      guest_allowed: false,
+      appeal: false,
+    });
+    expect(parsed.categories['appeal']).toEqual({
+      name: 'Appeal',
+      guest_allowed: false,
+      appeal: true,
+    });
+    expect(Object.values(parsed.categories).filter((category) => category.appeal)).toHaveLength(1);
+  });
+
+  it('lets you replace a built-in category without dropping the rest', () => {
+    const parsed = support.parse({
+      categories: { billing: { name: 'Payments', guest_allowed: false } },
+    });
+    expect(parsed.categories['billing']).toEqual({
+      name: 'Payments',
+      guest_allowed: false,
+      appeal: false,
+    });
+    expect(parsed.categories['appeal']?.appeal).toBe(true);
+  });
+
+  it('refuses a catalog with no appeal category or more than one', () => {
+    expect(
+      messages(
+        support.safeParse({
+          categories: { appeal: { name: 'Appeal', appeal: false } },
+        }),
+      ),
+    ).toEqual(['categories: Exactly one category must be marked appeal']);
+    expect(
+      messages(
+        support.safeParse({
+          categories: { extra: { name: 'Ban appeal', appeal: true } },
+        }),
+      ),
+    ).toEqual(['categories: Exactly one category must be marked appeal']);
+  });
+});
+
 describe('retention', () => {
   it('keeps delivery logs and sessions for 30 days and tokens for a day by default', () => {
     expect(retention.parse({})).toEqual({
@@ -654,6 +704,7 @@ describe('retention', () => {
       audit: 63_072_000_000,
       oauth: 2_592_000_000,
       safety_reports: 63_072_000_000,
+      closed_tickets: 63_072_000_000,
       csea_evidence: 31_536_000_000,
       csea_nca_reference: 157_680_000_000,
     });

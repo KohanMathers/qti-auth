@@ -3354,6 +3354,69 @@
       },
       "additionalProperties": false
     },
+    "support": {
+      "description": "Support module (support profile): tickets and knowledge base.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "auto_close_after": {
+          "default": "7d",
+          "description": "Close tickets waiting on the user after this long. A reminder is sent at the halfway point. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "max_subject_length": {
+          "default": 200,
+          "description": "Longest ticket subject.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "max_body_length": {
+          "default": 8000,
+          "description": "Longest ticket body, reply or internal note.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000
+        },
+        "categories": {
+          "description": "Ticket categories. Ids you set replace the built-in category of the same name, and other built-in categories stay as they are. Exactly one must have appeal: true.",
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "description": "Name shown to users and staff."
+              },
+              "guest_allowed": {
+                "default": false,
+                "description": "Allow signed-out users to open tickets in this category (guest tickets).",
+                "type": "boolean"
+              },
+              "appeal": {
+                "default": false,
+                "description": "Use this category for appeals from banned or locked accounts. Exactly one category must be an appeal category.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "description": "A support ticket category."
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "rate_limits": {
       "description": "Named rate-limit policies, referenced by routes. Policies you set replace the built-in policy of the same name.",
       "type": "object",
@@ -3534,6 +3597,12 @@
         "safety_reports": {
           "default": "730d",
           "description": "Keep closed safety reports and their snapshots for this long. Open reports and reports under a legal hold are not swept. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "closed_tickets": {
+          "default": "730d",
+          "description": "Keep closed support tickets, messages and notes for this long after closing. Open tickets are not swept. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
         },

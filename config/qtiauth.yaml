@@ -284,6 +284,12 @@ legal:
   public_history: true
   documents_dir: legal
 
+support:
+  auto_close_after: 7d
+  max_subject_length: 200
+  max_body_length: 8000
+  categories: {} # ids you set replace the built-in category of the same name; see docs/support.md
+
 safety:
   reports:
     reporter_ack: true
@@ -380,6 +386,7 @@ retention:
   audit: 730d
   oauth: 30d
   safety_reports: 730d
+  closed_tickets: 730d
   csea_evidence: 365d
   csea_nca_reference: 1825d
 

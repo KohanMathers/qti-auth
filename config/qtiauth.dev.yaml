@@ -29,6 +29,9 @@ gateway:
 oidc:
   signing: { encryption_key: '${env:KEY_ENCRYPTION_KEY}' }
 
+safety:
+  csea: { encryption_key: '${env:APP_ENCRYPTION_KEY}' }
+
 observability:
   logs: { user_id_hash_key: '${env:LOG_USER_ID_HASH_KEY}' }
 

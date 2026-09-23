@@ -1,0 +1,34 @@
+{
+  "name": "@qtiauth/support",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Support tickets, appeals and staff macros",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./testing": "./src/testing.ts"
+  },
+  "bin": {
+    "qtiauth": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qtiauth/bus": "workspace:*",
+    "@qtiauth/cli": "workspace:*",
+    "@qtiauth/config": "workspace:*",
+    "@qtiauth/db": "workspace:*",
+    "@qtiauth/email": "workspace:*",
+    "@qtiauth/events": "workspace:*",
+    "@qtiauth/observability": "workspace:*",
+    "@qtiauth/service-kit": "workspace:*",
+    "kysely": "0.29.6",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@qtiauth/identity": "workspace:*",
+    "@qtiauth/testing": "workspace:*"
+  }
+}

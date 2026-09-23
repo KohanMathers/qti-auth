@@ -53,7 +53,7 @@ Spans record the route template (`/api/v1/users/:id`), never the full URL, and p
 
 Each service serves Prometheus metrics on `/metrics` on the internal network. Every metric is named `qtiauth_…` and has a `service` label. With `metrics.process_metrics`, Node.js CPU, memory, event loop and garbage collection metrics are included too.
 
-The gateway's request, rate-limit, session and key metrics are listed in [gateway.md](gateway.md#metrics), the scheduler's tick and job run metrics in [scheduler.md](scheduler.md#metrics), the notifier's email and webhook metrics in [notifier.md](notifier.md#metrics), identity's sign-in, session and account metrics in [identity.md](identity.md#metrics), and OIDC's authorization, token and key metrics in [oidc.md](oidc.md#metrics).
+The gateway's request, rate-limit, session and key metrics are listed in [gateway.md](gateway.md#metrics), the scheduler's tick and job run metrics in [scheduler.md](scheduler.md#metrics), the notifier's email and webhook metrics in [notifier.md](notifier.md#metrics), identity's sign-in, session and account metrics in [identity.md](identity.md#metrics), OIDC's authorization, token and key metrics in [oidc.md](oidc.md#metrics), Safety's report and CSEA metrics in [safety.md](safety.md), and Support's ticket metrics in [support.md](support.md#metrics).
 
 Labels never hold unbounded values. A service refuses to start if it defines a metric with a label named `id`, anything ending in `_id`, or `user`, `username`, `email`, `ip`, `ip_address`, `address`, `session`, `token`, `url`, `path`, `query` or `user_agent`.
 

@@ -1,0 +1,9 @@
+Update on your ticket
+
+Ticket #{{ number }} is now {{ status }}.
+
+Open it: {{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

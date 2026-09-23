@@ -1,0 +1,1 @@
+Reply on ticket #{{ number }} on {{ brand.product_name }}

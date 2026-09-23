@@ -359,6 +359,45 @@ export const EMAIL_TEMPLATES = defineEmailTemplates({
       link: z.url({ protocol: /^https?$/ }),
     }),
   },
+  ticket_opened_staff: {
+    description: 'Tell staff that a new support ticket was opened',
+    category: 'support',
+    priority: 'normal',
+    variables: z.object({
+      number: z.int().min(1),
+      category: z.string().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  ticket_reply: {
+    description: 'Tell a user that staff replied to their support ticket',
+    category: 'support',
+    priority: 'normal',
+    variables: z.object({
+      number: z.int().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  ticket_status: {
+    description: 'Tell a user that their support ticket’s status changed',
+    category: 'support',
+    priority: 'normal',
+    variables: z.object({
+      number: z.int().min(1),
+      status: z.string().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
+  ticket_reminder: {
+    description: 'Remind a user that their support ticket will close if they do not reply',
+    category: 'support',
+    priority: 'normal',
+    variables: z.object({
+      number: z.int().min(1),
+      closes_in_hours: z.int().min(1),
+      link: z.url({ protocol: /^https?$/ }),
+    }),
+  },
 });
 
 export type EmailTemplates = typeof EMAIL_TEMPLATES;

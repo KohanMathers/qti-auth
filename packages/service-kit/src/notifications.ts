@@ -75,3 +75,23 @@ export const notificationAllowedResponseSchema = z.strictObject({
 
 export type NotificationAllowedRequest = z.output<typeof notificationAllowedRequestSchema>;
 export type NotificationAllowedResponse = z.output<typeof notificationAllowedResponseSchema>;
+
+export const STAFF_ALERT_RECIPIENTS_SERVICE = 'identity';
+export const STAFF_ALERT_RECIPIENTS_METHOD = 'staff_alert_recipients';
+
+export const staffAlertRecipientsRequestSchema = z.strictObject({
+  category: z.string().min(1),
+});
+
+export const staffAlertRecipientsResponseSchema = z.strictObject({
+  recipients: z.array(
+    z.strictObject({
+      user_id: z.uuid(),
+      email: z.string().min(1),
+      locale: z.string().min(1).nullable(),
+    }),
+  ),
+});
+
+export type StaffAlertRecipientsRequest = z.output<typeof staffAlertRecipientsRequestSchema>;
+export type StaffAlertRecipientsResponse = z.output<typeof staffAlertRecipientsResponseSchema>;

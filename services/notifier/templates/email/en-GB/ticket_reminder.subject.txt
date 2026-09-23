@@ -1,0 +1,1 @@
+Ticket #{{ number }} will close soon on {{ brand.product_name }}

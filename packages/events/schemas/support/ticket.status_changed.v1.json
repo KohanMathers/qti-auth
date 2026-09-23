@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.support.ticket.status_changed.v1",
+  "title": "Ticket status changed",
+  "description": "A ticket's status changed. The subject is the ticket.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ticket_id", "number", "from", "to"],
+  "properties": {
+    "ticket_id": {
+      "description": "The ticket whose status changed.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "number": {
+      "description": "Sequential ticket number.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "from": {
+      "description": "Previous status.",
+      "enum": ["open", "pending", "closed"]
+    },
+    "to": {
+      "description": "New status.",
+      "enum": ["open", "pending", "closed"]
+    },
+    "auto": {
+      "description": "True when the ticket was closed by the waiting-on-user auto-close job.",
+      "type": "boolean"
+    }
+  }
+}

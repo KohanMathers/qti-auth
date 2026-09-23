@@ -1,0 +1,1 @@
+Ticket #{{ number }} is now {{ status }} on {{ brand.product_name }}

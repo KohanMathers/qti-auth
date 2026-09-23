@@ -22,6 +22,7 @@ export { newEventId } from './event-id.ts';
 export { IDENTITY_EVENTS, type IdentityEventType } from './identity.ts';
 export { OIDC_EVENTS, type OidcEventType } from './oidc.ts';
 export { SAFETY_EVENTS, type SafetyEventType } from './safety.ts';
+export { SUPPORT_EVENTS, type SupportEventType } from './support.ts';
 export {
   EVENT_SOURCES,
   type EventSource,

@@ -141,6 +141,12 @@ export {
   type NotificationCategoryDefinition,
   NotificationDefinitionError,
   type NotificationRegistry,
+  STAFF_ALERT_RECIPIENTS_METHOD,
+  STAFF_ALERT_RECIPIENTS_SERVICE,
+  type StaffAlertRecipientsRequest,
+  staffAlertRecipientsRequestSchema,
+  type StaffAlertRecipientsResponse,
+  staffAlertRecipientsResponseSchema,
 } from './notifications.ts';
 export {
   type DeclaredPermission,

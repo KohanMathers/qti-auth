@@ -1,0 +1,9 @@
+A new ticket is waiting
+
+Ticket #{{ number }} ({{ category }}) was opened.
+
+Open it: {{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

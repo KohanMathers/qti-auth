@@ -711,13 +711,13 @@ Depends on Phase 2b. Uses Phase 5 for appeal linking if present.
 ### P6.1 Tickets — L
 Spec: §6.3 (tickets)
 
-- [ ] Create, list, view, reply, close, reopen, rate. Sequential numbers.
-- [ ] Priority, status, assignment, internal notes. Categories from config.
-- [ ] Appeals from banned/locked accounts via route policy (one per enforcement action, linked to the
+- [x] Create, list, view, reply, close, reopen, rate. Sequential numbers.
+- [x] Priority, status, assignment, internal notes. Categories from config.
+- [x] Appeals from banned/locked accounts via route policy (one per enforcement action, linked to the
       Safety action when present).
-- [ ] Staff and user emails per preferences.
-- [ ] Canned responses, auto-close with a halfway reminder.
-- [ ] Staff metrics.
+- [x] Staff and user emails per preferences.
+- [x] Canned responses, auto-close with a halfway reminder.
+- [x] Staff metrics.
 
 **Done when:** a banned user can open exactly one appeal per action and nothing else.
 

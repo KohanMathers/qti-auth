@@ -1,0 +1,9 @@
+A reply on your ticket
+
+Staff replied to ticket #{{ number }}.
+
+Read it: {{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

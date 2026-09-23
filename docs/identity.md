@@ -557,7 +557,7 @@ Each running service can declare notification categories on its route manifest (
 
 Staff who have any permission also see staff alert categories: `support.new_tickets` and `safety.high_priority_reports`. Ordinary accounts do not. Support and Safety will honour these when they send mail.
 
-Other services ask `qtiauth.rpc.identity.notification_allowed` with `{ user_id, category }` and get `{ allowed }`. Unknown categories and required ones are always allowed.
+Other services ask `qtiauth.rpc.identity.notification_allowed` with `{ user_id, category }` and get `{ allowed }`. Staff-alert mailers ask `qtiauth.rpc.identity.staff_alert_recipients` with `{ category }` and get `{ recipients: [{ user_id, email, locale }] }`, honouring each recipient's preference when the category is disableable. Unknown categories and required ones are always allowed.
 
 | Endpoint                         | Does                                                                                             |
 | -------------------------------- | ------------------------------------------------------------------------------------------------ |

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.support.ticket.replied.v1",
+  "title": "Ticket replied",
+  "description": "A user or staff member replied on a ticket. The subject is the ticket. The reply body is never included.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ticket_id", "number", "staff"],
+  "properties": {
+    "ticket_id": {
+      "description": "The ticket that was replied to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "number": {
+      "description": "Sequential ticket number.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "staff": {
+      "description": "True when the reply was from staff.",
+      "type": "boolean"
+    }
+  }
+}

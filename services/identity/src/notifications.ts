@@ -185,3 +185,46 @@ export async function listStoredPreferences(
     .orderBy('category')
     .execute();
 }
+
+export interface StaffAlertRecipient {
+  user_id: string;
+  email: string;
+  locale: string | null;
+}
+
+export async function listStaffAlertRecipients(
+  db: Kysely<Database>,
+  options: {
+    category: string;
+    catalog: readonly DeclaredNotification[];
+  },
+): Promise<StaffAlertRecipient[]> {
+  const declared = options.catalog.find((category) => category.name === options.category);
+  if (declared?.audience !== 'staff') return [];
+
+  const staff = await db
+    .selectFrom('users')
+    .innerJoin('user_roles', 'user_roles.user_id', 'users.id')
+    .select(['users.id', 'users.email', 'users.locale'])
+    .where('users.state', '!=', 'deleted')
+    .distinct()
+    .execute();
+  if (staff.length === 0) return [];
+
+  const prefs = declared.disableable
+    ? await db
+        .selectFrom('notification_preferences')
+        .select(['user_id', 'enabled'])
+        .where('category', '=', options.category)
+        .where(
+          'user_id',
+          'in',
+          staff.map((row) => row.id),
+        )
+        .execute()
+    : [];
+  const enabled = new Map(prefs.map((row) => [row.user_id, row.enabled]));
+  return staff
+    .filter((row) => !declared.disableable || (enabled.get(row.id) ?? true))
+    .map((row) => ({ user_id: row.id, email: row.email, locale: row.locale }));
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.support.ticket.created.v1",
+  "title": "Ticket created",
+  "description": "A support ticket was opened. The subject is the ticket. The body and subject are never included.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ticket_id", "number", "category", "priority", "appeal"],
+  "properties": {
+    "ticket_id": { "description": "The new ticket.", "type": "string", "format": "uuid" },
+    "number": {
+      "description": "Sequential ticket number shown to users and staff.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "category": {
+      "description": "Ticket category id from config.",
+      "type": "string",
+      "minLength": 1
+    },
+    "priority": {
+      "description": "Priority when the ticket was opened.",
+      "enum": ["low", "normal", "high", "urgent"]
+    },
+    "appeal": {
+      "description": "True when this ticket is an appeal against an enforcement action.",
+      "type": "boolean"
+    },
+    "action_id": {
+      "description": "The Safety enforcement action being appealed, when present.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    }
+  }
+}

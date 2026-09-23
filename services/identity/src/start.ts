@@ -13,6 +13,8 @@ import {
   RESOLVE_SESSION_METHOD,
   resolveSessionRequestSchema,
   type ResolveSessionResponse,
+  STAFF_ALERT_RECIPIENTS_METHOD,
+  staffAlertRecipientsRequestSchema,
   type StartServiceOptions,
   type Stoppable,
   storageHealthCheck,
@@ -79,7 +81,11 @@ import {
 import { PURGE_JOB, purgeExpiredDeletions } from './lifecycle.ts';
 import { identityMetrics } from './metrics.ts';
 import { listedNotifications, openNotificationCatalog } from './notification-registry.ts';
-import { IDENTITY_NOTIFICATIONS, notificationAllowed } from './notifications.ts';
+import {
+  IDENTITY_NOTIFICATIONS,
+  listStaffAlertRecipients,
+  notificationAllowed,
+} from './notifications.ts';
 import { attachOauthStore, valkeyOauthStore } from './oauth-state.ts';
 import { EXPIRE_PENDING_JOB, expirePendingConsents } from './parental.ts';
 import { openPermissionCatalog } from './permission-registry.ts';
@@ -713,6 +719,24 @@ export function identityService(options: IdentityOptions = {}) {
             },
             onError: (error) => {
               log.error('notification preference rpc failed', { error });
+            },
+          }),
+        );
+        stack.push(
+          serveRpc(bus, {
+            method: STAFF_ALERT_RECIPIENTS_METHOD,
+            handler: async (request) => {
+              const parsed = staffAlertRecipientsRequestSchema.safeParse(request);
+              if (!parsed.success) throw new RpcError('bad_request', 'category is required');
+              return {
+                recipients: await listStaffAlertRecipients(db, {
+                  category: parsed.data.category,
+                  catalog: listedNotifications(ctx),
+                }),
+              };
+            },
+            onError: (error) => {
+              log.error('staff alert recipients rpc failed', { error });
             },
           }),
         );

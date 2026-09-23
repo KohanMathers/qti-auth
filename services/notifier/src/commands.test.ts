@@ -93,6 +93,10 @@ describe('qtiauth templates check', () => {
         { name: 'moderation_appeal_outcome', locales: ['en-GB'] },
         { name: 'guardian_moderation_action', locales: ['en-GB'] },
         { name: 'csea_case_opened', locales: ['en-GB'] },
+        { name: 'ticket_opened_staff', locales: ['en-GB'] },
+        { name: 'ticket_reply', locales: ['en-GB'] },
+        { name: 'ticket_status', locales: ['en-GB'] },
+        { name: 'ticket_reminder', locales: ['en-GB'] },
       ],
     });
   });

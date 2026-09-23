@@ -125,6 +125,11 @@ services:
 
   support:
     <<: *qtiauth-service
+    image: qtiauth/support:dev
+    build:
+      context: ..
+      dockerfile: services/support/Dockerfile
+    command: ['node', 'src/main.ts']
     profiles: [support]
 
   games:

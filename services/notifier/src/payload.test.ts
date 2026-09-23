@@ -14,8 +14,18 @@ describe('webhook payloads', () => {
         reporter_id: 'u1',
         body: 'secret',
         evidence: 'held',
+        number: 12,
+        category: 'account',
+        appeal: false,
       }),
-    ).toEqual({ reason: 'spam', trust: 'game', report_id: 'r1' });
+    ).toEqual({
+      reason: 'spam',
+      trust: 'game',
+      report_id: 'r1',
+      number: 12,
+      category: 'account',
+      appeal: false,
+    });
   });
 
   it('builds a Discord embed and a Slack message a human can read', () => {
@@ -32,6 +42,9 @@ describe('webhook payloads', () => {
     expect(payload.admin_url).toBe('https://me.example.com/admin/users/user-1');
     expect(adminPath('safety.report.created', { type: 'report', id: 'rep-1' })).toBe(
       '/admin/safety/reports/rep-1',
+    );
+    expect(adminPath('support.ticket.created', { type: 'ticket', id: 'tix-1' })).toBe(
+      '/admin/support/tickets/tix-1',
     );
 
     const discord = JSON.parse(discordBody(payload)) as {

@@ -1,0 +1,9 @@
+Your ticket will close soon
+
+Ticket #{{ number }} will close in about {{ closes_in_hours }} hours if you do not reply.
+
+Reply: {{ link }}
+
+Need help? Contact {{ brand.support_email }}.
+
+{{ brand.company_name }}

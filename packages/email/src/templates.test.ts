@@ -149,5 +149,21 @@ describe('defineEmailTemplates', () => {
       category: 'security',
       priority: 'high',
     });
+    expect(EMAIL_TEMPLATES.ticket_opened_staff).toMatchObject({
+      category: 'support',
+      priority: 'normal',
+    });
+    expect(EMAIL_TEMPLATES.ticket_reply).toMatchObject({
+      category: 'support',
+      priority: 'normal',
+    });
+    expect(EMAIL_TEMPLATES.ticket_status).toMatchObject({
+      category: 'support',
+      priority: 'normal',
+    });
+    expect(EMAIL_TEMPLATES.ticket_reminder).toMatchObject({
+      category: 'support',
+      priority: 'normal',
+    });
   });
 });

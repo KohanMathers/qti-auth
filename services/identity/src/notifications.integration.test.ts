@@ -14,6 +14,8 @@ import {
   type RunningService,
   SESSION_TOKEN_HEADER,
   serviceSchema,
+  STAFF_ALERT_RECIPIENTS_METHOD,
+  STAFF_ALERT_RECIPIENTS_SERVICE,
   startService,
   USER_DELETED_EVENT,
   type UserExport,
@@ -29,7 +31,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Database } from './database.ts';
 import { definition } from './service.ts';
 import { identityService } from './start.ts';
-import { type CapturedEmails, captureEmails } from './testing.ts';
+import { type CapturedEmails, captureEmails, grantUser } from './testing.ts';
 
 const HOST = 'me.example.com';
 const key = generateIdentityKey();
@@ -316,6 +318,52 @@ describe('notification preferences', () => {
     );
     expect(updated.status).toBe(200);
     expect(await allowed(user.userId, 'support.new_tickets')).toBe(false);
+  });
+
+  it('lists staff who have a staff alert category enabled', async () => {
+    const user = await signUp('prefs-staff-recipients@example.com');
+    const empty = await rpcRequest<{ recipients: { user_id: string }[] }>(
+      gateway,
+      STAFF_ALERT_RECIPIENTS_SERVICE,
+      STAFF_ALERT_RECIPIENTS_METHOD,
+      { category: 'support.new_tickets' },
+    );
+    expect(empty.status).toBe('ok');
+    if (empty.status === 'ok') {
+      expect(empty.data.recipients.some((row) => row.user_id === user.userId)).toBe(false);
+    }
+
+    await grantUser(identity.context.db, user.userId, ['users.read']);
+    const listed = await rpcRequest<{ recipients: { user_id: string; email: string }[] }>(
+      gateway,
+      STAFF_ALERT_RECIPIENTS_SERVICE,
+      STAFF_ALERT_RECIPIENTS_METHOD,
+      { category: 'support.new_tickets' },
+    );
+    expect(listed.status).toBe('ok');
+    if (listed.status === 'ok') {
+      expect(listed.data.recipients.some((row) => row.user_id === user.userId)).toBe(true);
+    }
+
+    expect(
+      (
+        await patch(
+          '/api/v1/me/notifications',
+          { categories: [{ id: 'support.new_tickets', enabled: false }] },
+          asUser(user, { permissions: ['users.read'] }),
+        )
+      ).status,
+    ).toBe(200);
+    const optedOut = await rpcRequest<{ recipients: { user_id: string }[] }>(
+      gateway,
+      STAFF_ALERT_RECIPIENTS_SERVICE,
+      STAFF_ALERT_RECIPIENTS_METHOD,
+      { category: 'support.new_tickets' },
+    );
+    expect(optedOut.status).toBe('ok');
+    if (optedOut.status === 'ok') {
+      expect(optedOut.data.recipients.some((row) => row.user_id === user.userId)).toBe(false);
+    }
   });
 
   it('erases stored preferences with the account', async () => {

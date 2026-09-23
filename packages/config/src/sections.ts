@@ -1566,7 +1566,7 @@ export const safety = z
         ),
         priority_1: duration(
           '15m',
-          'NCA submission window for priority 1 (immediate threat to a child\'s life or serious harm). SI 2026/268 says immediately.',
+          "NCA submission window for priority 1 (immediate threat to a child's life or serious harm). SI 2026/268 says immediately.",
         ),
         priority_2: duration(
           '4h',
@@ -1662,6 +1662,84 @@ export const safety = z
   })
   .prefault({})
   .describe('Safety module (safety profile): reporting, moderation, CSEA workflow.');
+
+export const SUPPORT_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type SupportPriority = (typeof SUPPORT_PRIORITIES)[number];
+
+export const SUPPORT_CATEGORY_ID = SAFETY_TAXONOMY_ID;
+export const SUPPORT_CATEGORY_ID_MESSAGE = 'Must be a lowercase slug like account';
+export const SUPPORT_LABEL_MAX = 80;
+export const SUPPORT_SUBJECT_MAX = 200;
+export const SUPPORT_BODY_MAX = 8_000;
+export const SUPPORT_NOTE_MAX = SUPPORT_BODY_MAX;
+export const SUPPORT_MACRO_NAME_MAX = 80;
+
+const ticketCategory = z
+  .strictObject({
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(SUPPORT_LABEL_MAX)
+      .describe('Name shown to users and staff.'),
+    guest_allowed: z
+      .boolean()
+      .default(false)
+      .describe('Allow signed-out users to open tickets in this category (guest tickets).'),
+    appeal: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Use this category for appeals from banned or locked accounts. Exactly one category must be an appeal category.',
+      ),
+  })
+  .describe('A support ticket category.');
+
+const DEFAULT_TICKET_CATEGORIES = {
+  account: { name: 'Account', guest_allowed: false, appeal: false },
+  billing: { name: 'Billing', guest_allowed: true, appeal: false },
+  technical: { name: 'Technical', guest_allowed: true, appeal: false },
+  other: { name: 'Other', guest_allowed: true, appeal: false },
+  appeal: { name: 'Appeal', guest_allowed: false, appeal: true },
+} as const;
+
+export const support = z
+  .strictObject({
+    auto_close_after: duration(
+      '7d',
+      'Close tickets waiting on the user after this long. A reminder is sent at the halfway point.',
+    ),
+    max_subject_length: z
+      .int()
+      .min(1)
+      .max(SUPPORT_SUBJECT_MAX)
+      .default(SUPPORT_SUBJECT_MAX)
+      .describe('Longest ticket subject.'),
+    max_body_length: z
+      .int()
+      .min(1)
+      .max(SUPPORT_BODY_MAX)
+      .default(SUPPORT_BODY_MAX)
+      .describe('Longest ticket body, reply or internal note.'),
+    categories: z
+      .record(z.string().regex(SUPPORT_CATEGORY_ID, SUPPORT_CATEGORY_ID_MESSAGE), ticketCategory)
+      .default({})
+      .transform((categories) => {
+        const merged = z.record(z.string(), ticketCategory).parse(DEFAULT_TICKET_CATEGORIES);
+        for (const [id, category] of Object.entries(categories)) merged[id] = category;
+        return merged;
+      })
+      .refine(
+        (categories) =>
+          Object.values(categories).filter((category) => category.appeal).length === 1,
+        { message: 'Exactly one category must be marked appeal' },
+      )
+      .describe(
+        'Ticket categories. Ids you set replace the built-in category of the same name, and other built-in categories stay as they are. Exactly one must have appeal: true.',
+      ),
+  })
+  .prefault({})
+  .describe('Support module (support profile): tickets and knowledge base.');
 
 export const OIDC_SIGNING_ALGORITHMS = ['ES256', 'RS256'] as const;
 export type OidcSigningAlgorithm = (typeof OIDC_SIGNING_ALGORITHMS)[number];
@@ -2501,6 +2579,10 @@ export const retention = z
       '730d',
       'Keep closed safety reports and their snapshots for this long. Open reports and reports under a legal hold are not swept.',
     ),
+    closed_tickets: duration(
+      '730d',
+      'Keep closed support tickets, messages and notes for this long after closing. Open tickets are not swept.',
+    ),
     csea_evidence: duration(
       '365d',
       'Keep encrypted CSEA evidence this long after the NCA report is sent, then destroy it with an audit record. SI 2026/268 regulation 8(1)(b): one year.',
@@ -2657,6 +2739,7 @@ export const sections = {
   legal,
   oidc,
   safety,
+  support,
   rate_limits: rateLimits,
   scheduler,
   retention,
