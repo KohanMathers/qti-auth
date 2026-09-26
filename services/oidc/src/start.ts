@@ -22,6 +22,16 @@ import {
 import { seedClients } from './clients.ts';
 import { eraseUser, exportUser } from './data-rights.ts';
 import type { Database } from './database.ts';
+import {
+  gameClientRequest,
+  provisionGameClient,
+  provisionGameClientRequest,
+  PROVISION_GAME_CLIENT_METHOD,
+  retireGameClient,
+  RETIRE_GAME_CLIENT_METHOD,
+  rotateGameClientSecret,
+  ROTATE_GAME_CLIENT_METHOD,
+} from './game-clients.ts';
 import { decideAppApproval, listConnectedApps, listPendingAppApprovals } from './guardian.ts';
 import { attachKeyring, kvKeySetStore, openKeyring } from './keys.ts';
 import {
@@ -159,6 +169,76 @@ export function oidcService(options: OidcOptions = {}) {
             },
             onError: (error) => {
               log.error('app approval decision failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          serveRpc(bus, {
+            method: PROVISION_GAME_CLIENT_METHOD,
+            handler: async (request) => {
+              const parsed = provisionGameClientRequest.safeParse(request);
+              if (!parsed.success) {
+                throw new RpcError('bad_request', 'game_id, name and actor are required');
+              }
+              const result = await provisionGameClient(db, {
+                gameId: parsed.data.game_id,
+                name: parsed.data.name,
+                actor: parsed.data.actor,
+                now: new Date(),
+                knownScopes: Object.keys(config.oidc.scopes),
+              });
+              if (result.status === 'invalid') {
+                throw new RpcError('invalid_scope', 'the game_server scope is not configured');
+              }
+              return result;
+            },
+            onError: (error) => {
+              log.error('game client provisioning failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          serveRpc(bus, {
+            method: ROTATE_GAME_CLIENT_METHOD,
+            handler: async (request) => {
+              const parsed = gameClientRequest.safeParse(request);
+              if (!parsed.success) {
+                throw new RpcError('bad_request', 'game_id and actor are required');
+              }
+              const result = await rotateGameClientSecret(db, {
+                gameId: parsed.data.game_id,
+                actor: parsed.data.actor,
+                now: new Date(),
+              });
+              if (result.status === 'not_found') {
+                throw new RpcError('not_found', 'no game server client for this game');
+              }
+              return result;
+            },
+            onError: (error) => {
+              log.error('game client rotation failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          serveRpc(bus, {
+            method: RETIRE_GAME_CLIENT_METHOD,
+            handler: async (request) => {
+              const parsed = gameClientRequest.safeParse(request);
+              if (!parsed.success) {
+                throw new RpcError('bad_request', 'game_id and actor are required');
+              }
+              return retireGameClient(db, {
+                gameId: parsed.data.game_id,
+                actor: parsed.data.actor,
+                now: new Date(),
+              });
+            },
+            onError: (error) => {
+              log.error('game client retirement failed', { error });
             },
           }),
         );

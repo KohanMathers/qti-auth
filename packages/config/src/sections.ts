@@ -1795,7 +1795,18 @@ export const DEFAULT_OIDC_SCOPES = {
   games: { consent: 'See which games you own', claims: [] as string[] },
   achievements: { consent: 'See your achievements', claims: [] as string[] },
   game_stats: { consent: 'See your game stats', claims: [] as string[] },
+  game_server: {
+    consent: 'Act as a game server on your behalf',
+    claims: [] as string[],
+  },
+  'games.entitlements.write': {
+    consent: 'Grant and revoke game products on this account',
+    claims: [] as string[],
+  },
 } as const;
+
+export const GAME_SERVER_SCOPE = 'game_server';
+export const GAMES_ENTITLEMENTS_WRITE_SCOPE = 'games.entitlements.write';
 
 const oidcScope = z
   .strictObject({
@@ -2037,6 +2048,47 @@ export const oidc = z
   .prefault({})
   .describe('OIDC provider: keys, token lifetimes, scopes and seeded clients.');
 
+export const GAME_STATUSES = ['draft', 'hidden', 'early_access', 'released', 'archived'] as const;
+export type GameStatus = (typeof GAME_STATUSES)[number];
+
+export const PRODUCT_TYPES = ['base', 'dlc', 'edition', 'beta_access', 'soundtrack'] as const;
+export type ProductType = (typeof PRODUCT_TYPES)[number];
+
+export const ENTITLEMENT_SOURCES = ['admin_grant', 'key_redemption', 'steam', 'api'] as const;
+export type EntitlementSource = (typeof ENTITLEMENT_SOURCES)[number];
+
+export const GAME_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+export const GAME_SLUG_MESSAGE = 'Must be a lowercase slug like my-game';
+export const GAME_NAME_MAX = 120;
+export const GAME_DESCRIPTION_MAX = 4_000;
+export const GAME_ART_MAX = 500;
+export const GAME_REVOKE_REASON_MAX = 500;
+
+export const games = z
+  .strictObject({
+    default_lease_duration: duration(
+      '20d',
+      'Default offline-play lease duration for a game that does not set its own.',
+    ),
+    default_cloud_save_quota_bytes: z
+      .int()
+      .min(0)
+      .max(1_099_511_627_776)
+      .default(104_857_600)
+      .describe('Default cloud-save quota per user per game, in bytes.'),
+    server_client_name_suffix: z
+      .string()
+      .trim()
+      .min(1)
+      .max(OIDC_CLIENT_NAME_MAX)
+      .default('server')
+      .describe(
+        'Suffix used to name a game server client, joined to the game name with a space. Kept short so the full client name stays within the limit.',
+      ),
+  })
+  .prefault({})
+  .describe('Games module (games profile): catalog, products and entitlements.');
+
 const CRON_JOB_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
 
 function isCronPattern(value: string): boolean {
@@ -2096,6 +2148,7 @@ const DEFAULT_CRON_JOBS: Record<string, CronJob> = {
   'achievements.recompute_rarity': { schedule: '0 2 * * *', enabled: true },
   'leaderboards.reset_periodic': { schedule: '* * * * *', enabled: true },
   'steam.ownership_sync': { schedule: '0 5 * * *', enabled: true },
+  'games.expire_entitlements': { schedule: '*/5 * * * *', enabled: true },
   'backup.run': { schedule: '30 2 * * *', enabled: true },
 };
 
@@ -2758,6 +2811,7 @@ export const sections = {
   usernames,
   legal,
   oidc,
+  games,
   safety,
   support,
   rate_limits: rateLimits,

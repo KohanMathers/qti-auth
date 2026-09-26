@@ -42,6 +42,7 @@ Schedules are cron patterns with five fields, `minute hour day-of-month month da
 | `achievements.recompute_rarity` | games                | `0 2 * * *`      | daily 02:00      |
 | `leaderboards.reset_periodic`   | games                | `* * * * *`      | every minute     |
 | `steam.ownership_sync`          | games                | `0 5 * * *`      | daily 05:00      |
+| `games.expire_entitlements`     | games                | `*/5 * * * *`    | every 5 min      |
 | `backup.run`                    | backup               | `30 2 * * *`     | daily 02:30      |
 
 `keys.rotate` only replaces a key once it's due, and `leaderboards.reset_periodic` only resets leaderboards whose period has ended, so ticking often costs little. A job whose owning service isn't running is ticked anyway, and the tick is thrown away.

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.entitlement.granted.v1",
+  "title": "Entitlement granted",
+  "description": "A user was granted a game product. The subject is the entitlement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["entitlement_id", "user_id", "game_id", "product_id", "source", "expires_at"],
+  "properties": {
+    "entitlement_id": { "description": "The entitlement.", "type": "string", "format": "uuid" },
+    "user_id": {
+      "description": "The account that received it.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "game_id": {
+      "description": "The game the product belongs to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "product_id": {
+      "description": "The product that was granted.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "description": "How the entitlement was granted.",
+      "enum": ["admin_grant", "key_redemption", "steam", "api"]
+    },
+    "expires_at": {
+      "description": "When the entitlement stops counting as owned. Null does not expire.",
+      "type": ["string", "null"],
+      "format": "date-time"
+    }
+  }
+}

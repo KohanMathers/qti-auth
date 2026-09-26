@@ -316,6 +316,11 @@ safety:
     name: ''
     role: ''
 
+games:
+  default_lease_duration: 20d
+  default_cloud_save_quota_bytes: 104857600
+  server_client_name_suffix: server
+
 oidc:
   issuer: null # null uses the api surface origin
   resource: null # access token audience; null uses the issuer
@@ -379,6 +384,7 @@ scheduler:
     achievements.recompute_rarity: { schedule: '0 2 * * *', enabled: true }
     leaderboards.reset_periodic: { schedule: '* * * * *', enabled: true }
     steam.ownership_sync: { schedule: '0 5 * * *', enabled: true }
+    games.expire_entitlements: { schedule: '*/5 * * * *', enabled: true }
     backup.run: { schedule: '30 2 * * *', enabled: true }
 
 retention:

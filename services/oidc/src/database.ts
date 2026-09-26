@@ -17,6 +17,7 @@ export interface ClientsTable {
   backchannel_logout_session_required: boolean;
   suspended_at: Date | null;
   owner_user_id: string | null;
+  game_id: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

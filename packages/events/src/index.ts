@@ -19,6 +19,7 @@ export {
   type EventSubject,
 } from './envelope.ts';
 export { newEventId } from './event-id.ts';
+export { GAMES_EVENTS, type GamesEventType } from './games.ts';
 export { IDENTITY_EVENTS, type IdentityEventType } from './identity.ts';
 export { OIDC_EVENTS, type OidcEventType } from './oidc.ts';
 export { SAFETY_EVENTS, type SafetyEventType } from './safety.ts';

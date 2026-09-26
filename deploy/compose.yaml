@@ -134,6 +134,11 @@ services:
 
   games:
     <<: *qtiauth-service
+    image: qtiauth/games:dev
+    build:
+      context: ..
+      dockerfile: services/games/Dockerfile
+    command: ['node', 'src/main.ts']
     profiles: [games]
 
   minio:

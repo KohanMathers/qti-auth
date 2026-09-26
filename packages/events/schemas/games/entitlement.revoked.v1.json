@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.entitlement.revoked.v1",
+  "title": "Entitlement revoked",
+  "description": "A game product entitlement was revoked, including when a timed grant expired. The subject is the entitlement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["entitlement_id", "user_id", "game_id", "product_id", "source", "reason"],
+  "properties": {
+    "entitlement_id": { "description": "The entitlement.", "type": "string", "format": "uuid" },
+    "user_id": { "description": "The account that held it.", "type": "string", "format": "uuid" },
+    "game_id": {
+      "description": "The game the product belongs to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "product_id": {
+      "description": "The product that was revoked.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "description": "How the entitlement was granted.",
+      "enum": ["admin_grant", "key_redemption", "steam", "api"]
+    },
+    "reason": {
+      "description": "Why it was revoked. expired means a timed grant reached its expiry.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

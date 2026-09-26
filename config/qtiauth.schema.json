@@ -3024,6 +3024,34 @@
       },
       "additionalProperties": false
     },
+    "games": {
+      "description": "Games module (games profile): catalog, products and entitlements.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "default_lease_duration": {
+          "default": "20d",
+          "description": "Default offline-play lease duration for a game that does not set its own. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "default_cloud_save_quota_bytes": {
+          "default": 104857600,
+          "description": "Default cloud-save quota per user per game, in bytes.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1099511627776
+        },
+        "server_client_name_suffix": {
+          "default": "server",
+          "description": "Suffix used to name a game server client, joined to the game name with a space. Kept short so the full client name stays within the limit.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "additionalProperties": false
+    },
     "safety": {
       "description": "Safety module (safety profile): reporting, moderation, CSEA workflow.",
       "default": {},

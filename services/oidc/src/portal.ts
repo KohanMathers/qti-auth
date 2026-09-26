@@ -216,6 +216,7 @@ export async function createClient(
         backchannel_logout_session_required: options.backchannel_logout_session_required,
         suspended_at: null,
         owner_user_id: options.ownerUserId,
+        game_id: null,
         created_at: options.now,
         updated_at: options.now,
       })

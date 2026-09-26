@@ -15,6 +15,7 @@ describe('oidc service', () => {
       '0004_logout',
       '0005_portal',
       '0006_guardian',
+      '0007_game_clients',
     ]);
   });
 

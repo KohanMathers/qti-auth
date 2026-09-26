@@ -751,14 +751,14 @@ content.
 
 Depends on Phases 2b and 4 (tokens, `client_credentials`, device flow).
 
-### P7.1 Catalog, products, entitlements — L
+### P7.1 Catalog, products, entitlements — L ✅
 Spec: §7.1, §7.2
 
-- [ ] Games with statuses and full CRUD.
-- [ ] Automatic game server client per game, with secret rotation.
-- [ ] Products and entitlements with sources, expiry and revocation.
-- [ ] Admin grant/revoke and the external grant API.
-- [ ] Owned endpoints.
+- [x] Games with statuses and full CRUD.
+- [x] Automatic game server client per game, with secret rotation.
+- [x] Products and entitlements with sources, expiry and revocation.
+- [x] Admin grant/revoke and the external grant API.
+- [x] Owned endpoints.
 
 **Done when:** a timed beta entitlement expires on schedule and disappears from `owned`.
 

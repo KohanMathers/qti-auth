@@ -142,6 +142,7 @@ export async function seedClients(
         backchannel_logout_session_required: definition.backchannel_logout_session_required,
         suspended_at: null,
         owner_user_id: null,
+        game_id: null,
         created_at: now,
         updated_at: now,
       })
