@@ -54,4 +54,20 @@ export const SUPPORT_ERRORS = defineErrors({
   SUPPORT_ATTACHMENT_INVALID: { status: 400, title: 'This file cannot be attached' },
   SUPPORT_ATTACHMENT_NOT_FOUND: { status: 404, title: 'No such attachment' },
   SUPPORT_STORAGE_UNAVAILABLE: { status: 503, title: 'Object storage is not available' },
+  SUPPORT_KB_DISABLED: { status: 404, title: 'The knowledge base is not enabled here' },
+  SUPPORT_KB_ARTICLE_NOT_FOUND: { status: 404, title: 'No such article' },
+  SUPPORT_KB_CATEGORY_NOT_FOUND: { status: 404, title: 'No such category' },
+  SUPPORT_KB_CATEGORY_IN_USE: {
+    status: 409,
+    title: 'This category still has articles',
+  },
+  SUPPORT_KB_SLUG_TAKEN: { status: 409, title: 'That slug is already in use' },
+  SUPPORT_KB_INVALID: { status: 400, title: 'This article or category is not valid' },
+  SUPPORT_KB_REVISION_NOT_FOUND: { status: 404, title: 'No such revision' },
+  SUPPORT_KB_SESSION_REQUIRED: {
+    status: 401,
+    title: 'A session is required to vote on knowledge-base articles',
+  },
+  SUPPORT_KB_IMAGE_NOT_FOUND: { status: 404, title: 'No such image' },
+  SUPPORT_KB_IMAGE_INVALID: { status: 400, title: 'That image cannot be uploaded' },
 });

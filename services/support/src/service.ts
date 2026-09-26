@@ -13,6 +13,8 @@ import packageJson from '../package.json' with { type: 'json' };
 import type { Database } from './database.ts';
 import { SUPPORT_ERRORS } from './errors.ts';
 import { guestRoutes } from './guest-routes.ts';
+import { kbRoutes } from './kb-routes.ts';
+import { kbStaffRoutes } from './kb-staff-routes.ts';
 import { ticketRoutes } from './routes.ts';
 import { staffRoutes } from './staff-routes.ts';
 
@@ -38,6 +40,9 @@ export const definition = defineService({
     'support.tickets.staff': {
       description: 'Read and answer every ticket',
     },
+    'support.kb.edit': {
+      description: 'Create, edit and publish knowledge-base articles and categories',
+    },
   }),
   notifications: defineNotificationCategories({
     'support.ticket_updates': {
@@ -59,3 +64,5 @@ export const router = createServiceRouter<Context>(definition);
 ticketRoutes(router);
 guestRoutes(router);
 staffRoutes(router);
+kbRoutes(router);
+kbStaffRoutes(router);

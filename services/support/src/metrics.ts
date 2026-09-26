@@ -14,6 +14,8 @@ export interface SupportMetrics {
   csat: (rating: number) => void;
   autoClosed: () => void;
   openTickets: (status: string, category: string, count: number) => void;
+  view: () => void;
+  feedback: (helpful: boolean) => void;
 }
 
 const created = new WeakMap<Metrics, SupportMetrics>();
@@ -61,6 +63,15 @@ function prometheusSupportMetrics(metrics: Metrics): SupportMetrics {
     help: 'Open and pending tickets, by status and category.',
     labelNames: ['status', 'category'],
   });
+  const views = metrics.counter({
+    name: 'qtiauth_support_kb_views_total',
+    help: 'Knowledge-base article views.',
+  });
+  const votes = metrics.counter({
+    name: 'qtiauth_support_kb_feedback_total',
+    help: 'Knowledge-base article feedback votes, by outcome.',
+    labelNames: ['helpful'],
+  });
   return {
     created: (category) => {
       opened.inc({ category });
@@ -82,6 +93,12 @@ function prometheusSupportMetrics(metrics: Metrics): SupportMetrics {
     },
     openTickets: (status, category, count) => {
       open.set({ status, category }, count);
+    },
+    view: () => {
+      views.inc();
+    },
+    feedback: (helpful) => {
+      votes.inc({ helpful: helpful ? 'yes' : 'no' });
     },
   };
 }

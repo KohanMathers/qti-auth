@@ -26,11 +26,13 @@
     "@qtiauth/observability": "workspace:*",
     "@qtiauth/service-kit": "workspace:*",
     "kysely": "0.29.6",
+    "markdown-it": "14.1.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@qtiauth/identity": "workspace:*",
     "@qtiauth/storage": "workspace:*",
-    "@qtiauth/testing": "workspace:*"
+    "@qtiauth/testing": "workspace:*",
+    "@types/markdown-it": "14.1.2"
   }
 }
