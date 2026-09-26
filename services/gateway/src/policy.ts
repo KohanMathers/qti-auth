@@ -1,3 +1,4 @@
+import { GAME_SERVER_SCOPE } from '@qtiauth/config';
 import {
   type Identity,
   type KitErrorCode,
@@ -17,6 +18,11 @@ export interface PolicyDenial {
 export interface PolicyOptions {
   stepUpWindow: number;
   now: number;
+}
+
+export interface GameAuthority {
+  server: ResolvedAccessToken;
+  player: ResolvedAccessToken;
 }
 
 const STATE_ERRORS: Partial<Record<ResolvedSession['account_state'], GatewayErrorCode>> = {
@@ -44,6 +50,7 @@ export function checkPolicy(
   session: ResolvedSession | null,
   options: PolicyOptions,
   oauth: ResolvedAccessToken | null = null,
+  authority: GameAuthority | null = null,
 ): PolicyDenial | null {
   const { route } = table;
   if (route.auth === 'none') return null;
@@ -65,7 +72,25 @@ export function checkPolicy(
     }
     return null;
   }
-  if (route.auth !== 'session' || session === null) return { code: 'AUTHENTICATION_REQUIRED' };
+  if (route.auth === 'game_authoritative') {
+    if (authority === null) return { code: 'AUTHENTICATION_REQUIRED' };
+    const { server, player } = authority;
+    if (server.auth !== 'service' || !server.scopes.includes(GAME_SERVER_SCOPE)) {
+      return { code: 'AUTHENTICATION_REQUIRED' };
+    }
+    if (player.auth !== 'oauth') return { code: 'AUTHENTICATION_REQUIRED' };
+    if (server.game_id === null || player.game_id === null || server.game_id !== player.game_id) {
+      return { code: 'GAME_AUTHORITY_MISMATCH' };
+    }
+    const state = accountStateDenial(route, player.account_state);
+    if (state) return state;
+    const missing = route.scopes.filter((scope) => !player.scopes.includes(scope));
+    if (missing.length > 0) {
+      return { code: 'INSUFFICIENT_SCOPE', extensions: { missing_scopes: missing } };
+    }
+    return null;
+  }
+  if (session === null) return { code: 'AUTHENTICATION_REQUIRED' };
 
   const state = accountStateDenial(route, session.account_state);
   if (state) return state;
@@ -118,6 +143,11 @@ export function impliedGatewayErrors(table: TableRoute): (GatewayErrorCode | Kit
     if (route.scopes.length > 0) codes.push('INSUFFICIENT_SCOPE');
     return codes;
   }
+  if (route.auth === 'game_authoritative') {
+    codes.push('GAME_AUTHORITY_MISMATCH');
+    if (route.scopes.length > 0) codes.push('INSUFFICIENT_SCOPE');
+    return codes;
+  }
   if (!route.allow_pending_parental_consent) codes.push('PARENTAL_CONSENT_PENDING');
   if (!route.allow_pending_legal) codes.push('LEGAL_ACCEPTANCE_REQUIRED');
   if (!route.allow_pending_2fa_enrolment) codes.push('TWO_FACTOR_ENROLMENT_REQUIRED');
@@ -131,6 +161,7 @@ export function identityFor(
   session: ResolvedSession | null,
   requestId: string,
   oauth: ResolvedAccessToken | null = null,
+  authority: GameAuthority | null = null,
 ): Identity {
   if (table.route.auth === 'oauth' && oauth !== null && oauth.auth === 'oauth') {
     return {
@@ -139,6 +170,7 @@ export function identityFor(
       sub: oauth.sub,
       sid: oauth.sid,
       client_id: oauth.client_id,
+      game_id: oauth.game_id,
       scopes: oauth.scopes,
       permissions: [],
       account_state: oauth.account_state,
@@ -156,6 +188,7 @@ export function identityFor(
       sub: null,
       sid: null,
       client_id: oauth.client_id,
+      game_id: oauth.game_id,
       scopes: oauth.scopes,
       permissions: [],
       account_state: null,
@@ -166,6 +199,25 @@ export function identityFor(
       acr: null,
     };
   }
+  if (table.route.auth === 'game_authoritative' && authority !== null) {
+    const { player } = authority;
+    return {
+      request_id: requestId,
+      auth: 'game_authoritative',
+      sub: player.sub,
+      sid: player.sid,
+      client_id: player.client_id,
+      game_id: player.game_id,
+      scopes: player.scopes,
+      permissions: [],
+      account_state: player.account_state,
+      restrictions: player.restrictions,
+      age_band: player.age_band,
+      parental_controls: player.parental_controls,
+      amr: player.amr,
+      acr: player.acr,
+    };
+  }
   const signedIn = table.route.auth === 'session' && session !== null;
   return {
     request_id: requestId,
@@ -173,6 +225,7 @@ export function identityFor(
     sub: signedIn ? session.user_id : null,
     sid: session?.session_id ?? null,
     client_id: null,
+    game_id: null,
     scopes: [],
     permissions: signedIn ? session.permissions : [],
     account_state: signedIn ? session.account_state : null,

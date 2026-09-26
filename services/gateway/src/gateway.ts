@@ -9,6 +9,7 @@ import {
   IDENTITY_HEADER,
   isJsonRequest,
   parseInput,
+  PLAYER_TOKEN_HEADER,
   problemDetails,
   ProblemError,
   problemResponse,
@@ -38,7 +39,7 @@ import { applyCors, isPreflight, isStateChanging, preflightResponse } from './co
 import { ERRORS } from './errors.ts';
 import { applySecurityHeaders } from './headers.ts';
 import type { GatewayMetrics } from './metrics.ts';
-import { checkPolicy, identityFor } from './policy.ts';
+import { checkPolicy, type GameAuthority, identityFor } from './policy.ts';
 import {
   type ForwardResult,
   forward,
@@ -396,6 +397,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
 
       let session: ResolvedSession | null = null;
       let oauth: ResolvedAccessToken | null = null;
+      let authority: GameAuthority | null = null;
       const token = readCookie(request.headers.get('cookie'), cookieName);
       // Identity needs the caller's session id even on routes that do not take a
       // session, to restore a challenged session and to bind a linking flow.
@@ -430,7 +432,28 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         }
       }
 
-      const refused = await limit(route.rate_limit, session, read.body, oauth);
+      if (route.auth === 'game_authoritative' && options.accessTokens) {
+        const bearer = bearerAccessToken(request);
+        const player = request.headers.get(PLAYER_TOKEN_HEADER);
+        if (bearer !== null && player !== null) {
+          const [serverResult, playerResult] = await Promise.all([
+            options.accessTokens.resolve(bearer),
+            options.accessTokens.resolve(player),
+          ]);
+          if (serverResult.status === 'unavailable' || playerResult.status === 'unavailable') {
+            return problem('SERVICE_UNAVAILABLE');
+          }
+          if (serverResult.status === 'ok' && playerResult.status === 'ok') {
+            authority = { server: serverResult.token, player: playerResult.token };
+            if (playerResult.token.auth === 'oauth') {
+              requestLog = requestLog.child({ user_id: playerResult.token.sub });
+            }
+          }
+        }
+      }
+
+      const rateLimitOauth = oauth ?? authority?.player ?? null;
+      const refused = await limit(route.rate_limit, session, read.body, rateLimitOauth);
       if (refused) return refused;
 
       if (isStateChanging(request.method)) {
@@ -447,6 +470,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
           now: now(),
         },
         oauth,
+        authority,
       );
       if (denial) {
         const redirectable =
@@ -481,7 +505,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
         });
       }
 
-      const identity = identityFor(entry, session, requestId, oauth);
+      const identity = identityFor(entry, session, requestId, oauth, authority);
       if (entry.service === GATEWAY_SERVICE) {
         const local = localRoutes.get(`${route.method} ${route.path}`);
         if (!local) return problem('NOT_FOUND');

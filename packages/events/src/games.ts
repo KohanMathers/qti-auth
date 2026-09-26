@@ -4,3 +4,6 @@ export const GAMES_EVENTS = {
 } as const;
 
 export type GamesEventType = (typeof GAMES_EVENTS)[keyof typeof GAMES_EVENTS];
+
+export const GAME_TRUST_LEVELS = ['player', 'game'] as const;
+export type GameTrustLevel = (typeof GAME_TRUST_LEVELS)[number];

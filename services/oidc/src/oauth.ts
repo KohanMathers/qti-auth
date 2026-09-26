@@ -567,7 +567,9 @@ async function refreshGrant(
   if (form['scope'] !== undefined) {
     const parsed = parseScopeString(form['scope']);
     const narrowed =
-      parsed === undefined ? undefined : requestedScopes(parsed, ctx.config.oidc.scopes, scopes);
+      parsed === undefined
+        ? undefined
+        : requestedScopes(parsed, ctx.config.oidc.scopes, scopes, client.game_id);
     if (narrowed === undefined) {
       oidcMetrics(ctx.metrics).tokenGrant('refresh_token', 'error');
       return oauthJson('invalid_scope');
@@ -627,7 +629,12 @@ async function clientCredentialsGrant(
     oidcMetrics(ctx.metrics).tokenGrant('client_credentials', 'error');
     return oauthJson('invalid_scope');
   }
-  const scopes = requestedScopes(parsed, ctx.config.oidc.scopes, client.allowed_scopes);
+  const scopes = requestedScopes(
+    parsed,
+    ctx.config.oidc.scopes,
+    client.allowed_scopes,
+    client.game_id,
+  );
   if (scopes === undefined) {
     oidcMetrics(ctx.metrics).tokenGrant('client_credentials', 'error');
     return oauthJson('invalid_scope');
@@ -873,6 +880,7 @@ export async function resolveAccessToken(
       auth: 'service',
       sub: client.client_id,
       client_id: client.client_id,
+      game_id: client.game_id,
       scopes: row.scopes,
       sid: null,
       account_state: 'active',
@@ -890,6 +898,7 @@ export async function resolveAccessToken(
     auth: 'oauth',
     sub: row.user_id,
     client_id: client.client_id,
+    game_id: client.game_id,
     scopes: row.scopes,
     sid: row.session_id,
     account_state: user.account_state,

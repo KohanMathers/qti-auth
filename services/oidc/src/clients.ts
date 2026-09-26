@@ -24,6 +24,7 @@ export interface ClientRecord {
   backchannel_logout_session_required: boolean;
   suspended_at: Date | null;
   owner_user_id: string | null;
+  game_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -65,6 +66,7 @@ export function presentedClient(row: ClientRow): ClientRecord {
     backchannel_logout_session_required: row.backchannel_logout_session_required,
     suspended_at: row.suspended_at,
     owner_user_id: row.owner_user_id,
+    game_id: row.game_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

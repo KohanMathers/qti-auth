@@ -5,7 +5,15 @@
   "description": "A user was granted a game product. The subject is the entitlement.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["entitlement_id", "user_id", "game_id", "product_id", "source", "expires_at"],
+  "required": [
+    "entitlement_id",
+    "user_id",
+    "game_id",
+    "product_id",
+    "source",
+    "trust",
+    "expires_at"
+  ],
   "properties": {
     "entitlement_id": { "description": "The entitlement.", "type": "string", "format": "uuid" },
     "user_id": {
@@ -26,6 +34,10 @@
     "source": {
       "description": "How the entitlement was granted.",
       "enum": ["admin_grant", "key_redemption", "steam", "api"]
+    },
+    "trust": {
+      "description": "The trust level the write was accepted at. Entitlements are always game-trust, so nothing built-in acts on player-trust events.",
+      "enum": ["game"]
     },
     "expires_at": {
       "description": "When the entitlement stops counting as owned. Null does not expire.",

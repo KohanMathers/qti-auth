@@ -25,6 +25,17 @@ describe('scopes', () => {
     expect(requestedScopes(['openid', 'email'], configured, ['openid'])).toBeUndefined();
   });
 
+  it("reserves write-through scopes for the game's own client", () => {
+    expect(requestedScopes(['achievements.write'], configured, null, null)).toBeUndefined();
+    expect(requestedScopes(['achievements.write'], configured, null, 'g1')).toEqual([
+      'achievements.write',
+    ]);
+    expect(requestedScopes(['game_stats.write'], configured, null, null)).toBeUndefined();
+    expect(requestedScopes(['game_stats.write'], configured, null, 'g1')).toEqual([
+      'game_stats.write',
+    ]);
+  });
+
   it('lists the claims a set of scopes releases', () => {
     expect(claimsFor(['openid', 'email'], configured).sort()).toEqual(['email', 'email_verified']);
     expect(includesOfflineAccess(['openid', 'offline_access'])).toBe(true);

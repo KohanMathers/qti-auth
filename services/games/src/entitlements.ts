@@ -10,6 +10,7 @@ import type { Database } from './database.ts';
 import {
   type AuditRecordedData,
   auditRecordedEvent,
+  ENTITLEMENT_TRUST,
   type EntitlementGrantedData,
   entitlementGrantedEvent,
   type EntitlementRevokedData,
@@ -99,6 +100,7 @@ async function writeGranted(
     game_id: row.game_id,
     product_id: row.product_id,
     source: row.source,
+    trust: ENTITLEMENT_TRUST,
     expires_at: row.expires_at?.toISOString() ?? null,
   };
   await writeEvent<Database, EntitlementGrantedData>(
@@ -120,6 +122,7 @@ async function writeRevoked(
     game_id: row.game_id,
     product_id: row.product_id,
     source: row.source,
+    trust: ENTITLEMENT_TRUST,
     reason,
   };
   await writeEvent<Database, EntitlementRevokedData>(

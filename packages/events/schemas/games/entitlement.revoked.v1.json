@@ -5,7 +5,7 @@
   "description": "A game product entitlement was revoked, including when a timed grant expired. The subject is the entitlement.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["entitlement_id", "user_id", "game_id", "product_id", "source", "reason"],
+  "required": ["entitlement_id", "user_id", "game_id", "product_id", "source", "trust", "reason"],
   "properties": {
     "entitlement_id": { "description": "The entitlement.", "type": "string", "format": "uuid" },
     "user_id": { "description": "The account that held it.", "type": "string", "format": "uuid" },
@@ -22,6 +22,10 @@
     "source": {
       "description": "How the entitlement was granted.",
       "enum": ["admin_grant", "key_redemption", "steam", "api"]
+    },
+    "trust": {
+      "description": "The trust level the write was accepted at. Entitlements are always game-trust, so nothing built-in acts on player-trust events.",
+      "enum": ["game"]
     },
     "reason": {
       "description": "Why it was revoked. expired means a timed grant reached its expiry.",

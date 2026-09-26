@@ -1794,7 +1794,15 @@ export const DEFAULT_OIDC_SCOPES = {
   restrictions: { consent: 'See restrictions on this account', claims: ['restrictions'] },
   games: { consent: 'See which games you own', claims: [] as string[] },
   achievements: { consent: 'See your achievements', claims: [] as string[] },
+  'achievements.write': {
+    consent: 'Unlock achievements and update progress in this game',
+    claims: [] as string[],
+  },
   game_stats: { consent: 'See your game stats', claims: [] as string[] },
+  'game_stats.write': {
+    consent: 'Record stats and playtime for this game',
+    claims: [] as string[],
+  },
   game_server: {
     consent: 'Act as a game server on your behalf',
     claims: [] as string[],
@@ -1807,6 +1815,13 @@ export const DEFAULT_OIDC_SCOPES = {
 
 export const GAME_SERVER_SCOPE = 'game_server';
 export const GAMES_ENTITLEMENTS_WRITE_SCOPE = 'games.entitlements.write';
+export const ACHIEVEMENTS_WRITE_SCOPE = 'achievements.write';
+export const GAME_STATS_WRITE_SCOPE = 'game_stats.write';
+
+export const GAME_CLIENT_ONLY_SCOPES: readonly string[] = [
+  ACHIEVEMENTS_WRITE_SCOPE,
+  GAME_STATS_WRITE_SCOPE,
+];
 
 const oidcScope = z
   .strictObject({

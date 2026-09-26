@@ -56,7 +56,7 @@ export function readAuthorizationParams(
   }
   const parsed = parseScopeString(query.scope);
   if (parsed === undefined) return { error: 'invalid_scope' };
-  const scopes = requestedScopes(parsed, configured, client.allowed_scopes);
+  const scopes = requestedScopes(parsed, configured, client.allowed_scopes, client.game_id);
   if (scopes === undefined) return { error: 'invalid_scope' };
   return {
     client,

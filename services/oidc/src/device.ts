@@ -84,7 +84,12 @@ export async function startDeviceAuthorization(
     oidcMetrics(ctx.metrics).authorization(client.type, 'error');
     return oauthJson('invalid_scope');
   }
-  const scopes = requestedScopes(parsed, ctx.config.oidc.scopes, client.allowed_scopes);
+  const scopes = requestedScopes(
+    parsed,
+    ctx.config.oidc.scopes,
+    client.allowed_scopes,
+    client.game_id,
+  );
   if (scopes === undefined) {
     oidcMetrics(ctx.metrics).authorization(client.type, 'error');
     return oauthJson('invalid_scope');

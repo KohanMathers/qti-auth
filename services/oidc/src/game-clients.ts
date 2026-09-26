@@ -1,7 +1,12 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
-import { GAME_SERVER_SCOPE, OIDC_CLIENT_NAME_MAX } from '@qtiauth/config';
+import {
+  ACHIEVEMENTS_WRITE_SCOPE,
+  GAME_SERVER_SCOPE,
+  GAME_STATS_WRITE_SCOPE,
+  OIDC_CLIENT_NAME_MAX,
+} from '@qtiauth/config';
 import { AUDIT_EVENTS, type EventActor } from '@qtiauth/events';
 import type { Kysely } from 'kysely';
 import * as z from 'zod';
@@ -77,7 +82,8 @@ export async function provisionGameClient(
     knownScopes: readonly string[];
   },
 ): Promise<ProvisionGameClientResult | { status: 'invalid' }> {
-  if (!options.knownScopes.includes(GAME_SERVER_SCOPE)) return { status: 'invalid' };
+  const required = [GAME_SERVER_SCOPE, ACHIEVEMENTS_WRITE_SCOPE, GAME_STATS_WRITE_SCOPE];
+  if (required.some((scope) => !options.knownScopes.includes(scope))) return { status: 'invalid' };
   const existing = await clientForGame(db, options.gameId);
   if (existing) return { status: 'exists', client_id: existing.client_id };
 
@@ -98,7 +104,7 @@ export async function provisionGameClient(
         first_party: false,
         verified: false,
         redirect_uris: [],
-        allowed_scopes: [GAME_SERVER_SCOPE],
+        allowed_scopes: [GAME_SERVER_SCOPE, ACHIEVEMENTS_WRITE_SCOPE, GAME_STATS_WRITE_SCOPE],
         require_par: false,
         backchannel_logout_uri: null,
         backchannel_logout_session_required: false,

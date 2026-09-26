@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { sections } from '@qtiauth/config';
 import { openApiDocument } from '@qtiauth/service-kit';
 import { describe, expect, it } from 'vitest';
@@ -65,5 +68,11 @@ describe('games service', () => {
     const { routes } = router.manifest();
     const rotate = routes.find((r) => r.path === '/api/v1/admin/games/:slug/server-client/rotate');
     expect(rotate?.step_up).toBe(true);
+  });
+
+  it('never grants entitlements or keys from a bus event, keeping to the trust-model rule', () => {
+    const source = readFileSync(join(import.meta.dirname, 'start.ts'), 'utf8');
+    expect(source).not.toMatch(/\bconsumeEvents\s*\(/);
+    expect(source).not.toMatch(/\bconsumeIdempotentEvents\s*\(/);
   });
 });

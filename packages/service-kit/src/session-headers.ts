@@ -1,3 +1,4 @@
+export const PLAYER_TOKEN_HEADER = 'X-QTIAuth-Player-Token';
 export const SESSION_TOKEN_HEADER = 'X-QTIAuth-Session-Token';
 export const SESSION_EXPIRES_HEADER = 'X-QTIAuth-Session-Expires';
 export const SESSION_CLEAR_HEADER = 'X-QTIAuth-Session-Clear';

@@ -1,6 +1,8 @@
 import type { NewEvent } from '@qtiauth/bus';
 import type { EntitlementSource } from '@qtiauth/config';
-import { AUDIT_EVENTS, type EventActor, GAMES_EVENTS } from '@qtiauth/events';
+import { AUDIT_EVENTS, type EventActor, type GameTrustLevel, GAMES_EVENTS } from '@qtiauth/events';
+
+export const ENTITLEMENT_TRUST: GameTrustLevel = 'game';
 
 export interface EntitlementGrantedData {
   entitlement_id: string;
@@ -8,6 +10,7 @@ export interface EntitlementGrantedData {
   game_id: string;
   product_id: string;
   source: EntitlementSource;
+  trust: GameTrustLevel;
   expires_at: string | null;
 }
 
@@ -17,6 +20,7 @@ export interface EntitlementRevokedData {
   game_id: string;
   product_id: string;
   source: EntitlementSource;
+  trust: GameTrustLevel;
   reason: string;
 }
 

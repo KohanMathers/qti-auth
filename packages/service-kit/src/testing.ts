@@ -32,6 +32,7 @@ export function testIdentity(overrides: Partial<Identity> = {}): Identity {
     sub: randomUUID(),
     sid: randomUUID(),
     client_id: null,
+    game_id: null,
     scopes: [],
     permissions: [],
     account_state: 'active',

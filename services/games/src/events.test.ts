@@ -1,7 +1,7 @@
-import { GAMES_EVENTS, loadEventCatalog } from '@qtiauth/events';
+import { GAME_TRUST_LEVELS, GAMES_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { describe, expect, it } from 'vitest';
 
-import { entitlementGrantedEvent, entitlementRevokedEvent } from './events.ts';
+import { ENTITLEMENT_TRUST, entitlementGrantedEvent, entitlementRevokedEvent } from './events.ts';
 
 interface EventInput {
   type: string;
@@ -37,6 +37,7 @@ describe('games event schemas', () => {
         game_id: ID,
         product_id: ID,
         source: 'admin_grant',
+        trust: ENTITLEMENT_TRUST,
         expires_at: '2026-10-01T00:00:00.000Z',
       },
       actor,
@@ -49,6 +50,7 @@ describe('games event schemas', () => {
         game_id: ID,
         product_id: ID,
         source: 'api',
+        trust: ENTITLEMENT_TRUST,
         reason: 'expired',
       },
       { type: 'system', id: 'games' },
@@ -56,5 +58,24 @@ describe('games event schemas', () => {
     expect(catalog.validate(envelope(granted)).valid).toBe(true);
     expect(catalog.validate(envelope(revoked)).valid).toBe(true);
     expect(GAMES_EVENTS.entitlementGranted).toBe(granted.type);
+  });
+
+  it('never emits entitlement events at player trust', () => {
+    expect(GAME_TRUST_LEVELS).toContain('player');
+    expect(ENTITLEMENT_TRUST).toBe('game');
+    const granted = entitlementGrantedEvent(
+      ID,
+      {
+        entitlement_id: ID,
+        user_id: ID,
+        game_id: ID,
+        product_id: ID,
+        source: 'admin_grant',
+        trust: ENTITLEMENT_TRUST,
+        expires_at: null,
+      },
+      { type: 'system', id: 'games' },
+    );
+    expect(granted.data.trust).toBe('game');
   });
 });

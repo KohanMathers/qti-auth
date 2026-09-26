@@ -14,6 +14,7 @@ export const resolvedAccessTokenSchema = z.strictObject({
   auth: z.enum(['oauth', 'service']),
   sub: z.string().min(1),
   client_id: z.string().min(1),
+  game_id: z.string().min(1).nullable(),
   scopes: z.array(z.string().min(1)),
   sid: z.string().min(1).nullable(),
   account_state: z.enum(ACCOUNT_STATES),

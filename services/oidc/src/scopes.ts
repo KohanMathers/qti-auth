@@ -1,4 +1,4 @@
-import type { QtiauthConfig } from '@qtiauth/config';
+import { GAME_CLIENT_ONLY_SCOPES, type QtiauthConfig } from '@qtiauth/config';
 
 export type ScopeConfig = QtiauthConfig['oidc']['scopes'];
 
@@ -16,10 +16,14 @@ export function requestedScopes(
   requested: readonly string[],
   configured: ScopeConfig,
   allowed: readonly string[] | null,
+  gameId: string | null = null,
 ): string[] | undefined {
   const known = new Set(Object.keys(configured));
   const permitted = allowed === null ? known : new Set(allowed);
   if (requested.some((scope) => !known.has(scope) || !permitted.has(scope))) return undefined;
+  if (gameId === null && requested.some((scope) => GAME_CLIENT_ONLY_SCOPES.includes(scope))) {
+    return undefined;
+  }
   return [...requested];
 }
 

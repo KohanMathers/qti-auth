@@ -762,14 +762,14 @@ Spec: §7.1, §7.2
 
 **Done when:** a timed beta entitlement expires on schedule and disappears from `owned`.
 
-### P7.2 Trust model and game auth — M
+### P7.2 Trust model and game auth — M ✅
 Spec: §7.0, §7.5 (game-authoritative writes)
 
-- [ ] `auth: game_authoritative` in the gateway: both tokens required, both issued for the same game,
+- [x] `auth: game_authoritative` in the gateway: both tokens required, both issued for the same game,
       act on the player token's `sub`.
-- [ ] `achievements.write` and `game_stats.write` scopes, grantable only to the game's own client.
-- [ ] `trust` field on every game event and webhook payload.
-- [ ] **Guard test:** no built-in automation grants entitlements or keys from `trust: player` events.
+- [x] `achievements.write` and `game_stats.write` scopes, grantable only to the game's own client.
+- [x] `trust` field on every game event and webhook payload.
+- [x] **Guard test:** no built-in automation grants entitlements or keys from `trust: player` events.
 
 **Done when:**
 - A player token alone is rejected on game-authoritative routes, as is a server token alone, and so

@@ -63,6 +63,7 @@ function accessToken(overrides: Partial<ResolvedAccessToken> = {}): ResolvedAcce
     auth: 'oauth',
     sub: 'u1',
     client_id: 'game',
+    game_id: null,
     scopes: ['openid'],
     sid: 's1',
     account_state: 'active',
@@ -129,8 +130,65 @@ describe('checkPolicy', () => {
     });
   });
 
-  it('refuses game_authoritative routes until they have a verifier', () => {
-    expect(code(table({ auth: 'game_authoritative' }), session())).toBe('AUTHENTICATION_REQUIRED');
+  it('needs matching game server and player tokens for game_authoritative routes', () => {
+    const route = table({ auth: 'game_authoritative', scopes: ['achievements.write'] });
+    const server = accessToken({
+      auth: 'service',
+      sub: 'game-server',
+      client_id: 'game-server',
+      game_id: 'g1',
+      scopes: ['game_server'],
+      sid: null,
+    });
+    const player = accessToken({
+      auth: 'oauth',
+      sub: 'u1',
+      client_id: 'game-server',
+      game_id: 'g1',
+      scopes: ['achievements.write'],
+    });
+
+    expect(code(route, session())).toBe('AUTHENTICATION_REQUIRED');
+    expect(checkPolicy(route, null, options, null, { server, player })).toBeNull();
+
+    expect(
+      checkPolicy(route, null, options, null, { server, player: { ...player, auth: 'service' } }),
+    ).toEqual({ code: 'AUTHENTICATION_REQUIRED' });
+    expect(
+      checkPolicy(route, null, options, null, {
+        server: { ...server, scopes: ['games'] },
+        player,
+      }),
+    ).toEqual({ code: 'AUTHENTICATION_REQUIRED' });
+    expect(
+      checkPolicy(route, null, options, null, {
+        server: { ...server, auth: 'oauth' },
+        player,
+      }),
+    ).toEqual({ code: 'AUTHENTICATION_REQUIRED' });
+
+    expect(
+      checkPolicy(route, null, options, null, { server, player: { ...player, game_id: 'g2' } }),
+    ).toEqual({ code: 'GAME_AUTHORITY_MISMATCH' });
+    expect(
+      checkPolicy(route, null, options, null, { server: { ...server, game_id: null }, player }),
+    ).toEqual({ code: 'GAME_AUTHORITY_MISMATCH' });
+
+    expect(
+      checkPolicy(route, null, options, null, {
+        server,
+        player: { ...player, scopes: ['openid'] },
+      }),
+    ).toEqual({
+      code: 'INSUFFICIENT_SCOPE',
+      extensions: { missing_scopes: ['achievements.write'] },
+    });
+    expect(
+      checkPolicy(route, null, options, null, {
+        server,
+        player: { ...player, account_state: 'banned' },
+      }),
+    ).toEqual({ code: 'ACCOUNT_BANNED', extensions: { account_state: 'banned' } });
   });
 
   it('returns a specific code for each account state', () => {
@@ -197,6 +255,7 @@ describe('identityFor', () => {
       sub: 'u1',
       sid: 's1',
       client_id: null,
+      game_id: null,
       scopes: [],
       permissions: ['users.read'],
       account_state: 'active',
@@ -232,6 +291,7 @@ describe('identityFor', () => {
       sub: null,
       sid: null,
       client_id: 'game',
+      game_id: null,
       scopes: ['games'],
       permissions: [],
       account_state: null,
@@ -252,7 +312,50 @@ describe('identityFor', () => {
       sub: 'u1',
       sid: 's1',
       client_id: 'game',
+      game_id: null,
       scopes: ['openid'],
+      permissions: [],
+      account_state: 'active',
+      restrictions: [],
+      age_band: 'adult',
+      parental_controls: null,
+      amr: ['email'],
+      acr: 'aal1',
+    });
+  });
+
+  it('describes the player as the acting subject on game_authoritative routes', () => {
+    const server = accessToken({
+      auth: 'service',
+      sub: 'game-server',
+      client_id: 'game-server',
+      game_id: 'g1',
+      scopes: ['game_server'],
+      sid: null,
+    });
+    const player = accessToken({
+      auth: 'oauth',
+      sub: 'u1',
+      client_id: 'game-server',
+      game_id: 'g1',
+      scopes: ['game_stats.write'],
+    });
+    expect(
+      identityFor(
+        table({ auth: 'game_authoritative', scopes: ['game_stats.write'] }),
+        null,
+        'req-5',
+        null,
+        { server, player },
+      ),
+    ).toEqual({
+      request_id: 'req-5',
+      auth: 'game_authoritative',
+      sub: 'u1',
+      sid: 's1',
+      client_id: 'game-server',
+      game_id: 'g1',
+      scopes: ['game_stats.write'],
       permissions: [],
       account_state: 'active',
       restrictions: [],
@@ -300,6 +403,16 @@ describe('impliedGatewayErrors', () => {
     );
     expect(impliedGatewayErrors(table({ auth: 'service', scopes: ['games'] }))).not.toContain(
       'ACCOUNT_BANNED',
+    );
+    expect(
+      impliedGatewayErrors(table({ auth: 'game_authoritative', scopes: ['achievements.write'] })),
+    ).toEqual(
+      expect.arrayContaining([
+        'AUTHENTICATION_REQUIRED',
+        'ACCOUNT_BANNED',
+        'GAME_AUTHORITY_MISMATCH',
+        'INSUFFICIENT_SCOPE',
+      ]),
     );
   });
 });
