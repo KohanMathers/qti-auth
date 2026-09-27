@@ -14,7 +14,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createGame, createProduct } from './catalog.ts';
 import type { Database } from './database.ts';
 import { grantEntitlement } from './entitlements.ts';
+import { createKeyBatch, hashCode, normalizeCode } from './keys.ts';
 import { definition } from './service.ts';
+import { gamesEncryptionKey } from './settings.ts';
 import { gamesService } from './start.ts';
 
 const HOST = 'me.example.com';
@@ -58,6 +60,8 @@ beforeAll(async () => {
         logs: { user_id_hash_key: 'games-integration' },
         metrics: { process_metrics: false },
       },
+      security: { encryption_key: Buffer.alloc(32, 5).toString('base64') },
+      captcha: { provider: 'altcha', after: 2 },
       surfaces: { account: { hosts: [HOST] } },
       branding: { product_name: 'Example Account' },
     }),
@@ -218,5 +222,94 @@ describe('games service', () => {
       .execute();
     expect(rows[0]?.revoke_reason).toBe('expired');
     expect(await outboxTypes()).toContain('qtiauth.games.entitlement.revoked.v1');
+  });
+
+  it('brute-forcing keys from one IP hits CAPTCHA, then rate limits', async () => {
+    const now = new Date();
+    const gameCreate = await createGame(games.context.db, {
+      slug: 'keyed-game',
+      name: 'Keyed Game',
+      description: '',
+      icon: null,
+      art: null,
+      status: 'released',
+      lease_duration_seconds: null,
+      cloud_save_quota_bytes: null,
+      steam_app_id: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (gameCreate.status !== 'ok') throw new Error('game create failed');
+    const dlc = await createProduct(games.context.db, {
+      gameId: gameCreate.game.id,
+      slug: 'key-pack',
+      name: 'Key Pack',
+      description: '',
+      type: 'dlc',
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (dlc.status !== 'ok') throw new Error('product create failed');
+    const batchId = '44444444-4444-4444-8444-444444444444';
+    const { codes } = await createKeyBatch(games.context.db, {
+      id: batchId,
+      gameId: gameCreate.game.id,
+      productId: dlc.product.id,
+      label: 'test',
+      format: { charset: 'ABCDEFGH', group_length: 4, groups: 2 },
+      count: 1,
+      expiresAt: null,
+      createdBy: ADMIN_ID,
+      encryptionKey: gamesEncryptionKey(games.context.config),
+      now,
+    });
+    const buyer = '55555555-5555-4555-8555-555555555555';
+    const attemptIp = '203.0.113.55';
+
+    const brute = async (code: string, captcha?: string): Promise<Response> =>
+      fetch(`${games.url}/api/v1/games/keys/redeem`, {
+        method: 'POST',
+        headers: {
+          ...identityHeaders(key, 'games', { sub: buyer }),
+          'x-forwarded-for': attemptIp,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(captcha === undefined ? { code } : { code, captcha }),
+      });
+
+    const wrong = 'AAAA-AAAA';
+    const first = await brute(wrong);
+    expect(first.status).toBe(404);
+    const second = await brute(wrong);
+    expect(second.status).toBe(404);
+    const third = await brute(wrong);
+    expect(third.status).toBe(403);
+    const problem = (await third.json()) as { code: string };
+    expect(problem.code).toBe('GAMES_CAPTCHA_REQUIRED');
+
+    const success = await fetch(`${games.url}/api/v1/games/keys/redeem`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'games', { sub: buyer }),
+        'x-forwarded-for': '203.0.113.99',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ code: codes[0] }),
+    });
+    expect(success.status).toBe(200);
+    const body = (await success.json()) as { game_slug: string; product_slug: string };
+    expect(body.game_slug).toBe('keyed-game');
+    expect(body.product_slug).toBe('key-pack');
+
+    const stored = await games.context.db
+      .selectFrom('game_keys')
+      .select(['redeemed_by_user_id', 'code_hash'])
+      .where('batch_id', '=', batchId)
+      .executeTakeFirstOrThrow();
+    expect(stored.redeemed_by_user_id).toBe(buyer);
+    expect(Buffer.from(stored.code_hash).toString('hex')).toBe(
+      Buffer.from(hashCode(normalizeCode(codes[0] ?? ''))).toString('hex'),
+    );
+    expect(await outboxTypes()).toContain('qtiauth.games.entitlement.granted.v1');
   });
 });

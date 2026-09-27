@@ -320,6 +320,11 @@ games:
   default_lease_duration: 20d
   default_cloud_save_quota_bytes: 104857600
   server_client_name_suffix: server
+  keys:
+    charset: ABCDEFGHJKMNPQRSTUVWXYZ23456789
+    group_length: 4
+    groups: 4
+    max_batch: 10000
 
 oidc:
   issuer: null # null uses the api surface origin

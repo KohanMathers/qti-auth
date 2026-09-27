@@ -14,6 +14,7 @@ import {
 } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
+import { clientIp, inspectCaptcha, recordRedeemAttempt, requireCaptcha } from './captcha.ts';
 import {
   type GameRecord,
   getGameBySlug,
@@ -30,6 +31,7 @@ import {
   type OwnedProduct,
   revokeEntitlementById,
 } from './entitlements.ts';
+import { normalizeCode, redeemKey } from './keys.ts';
 import { gamesMetrics } from './metrics.ts';
 import type { Context } from './service.ts';
 import { accountExists } from './users.ts';
@@ -68,6 +70,24 @@ const grantBody = z.object({
 
 const revokeBody = z.object({
   reason: z.string().trim().min(1).max(GAME_REVOKE_REASON_MAX),
+});
+
+const redeemBody = z.object({
+  code: z.string().min(4).max(120),
+  captcha: z.string().max(10_000).optional(),
+});
+
+const redeemResponseSchema = z.object({
+  entitlement_id: z.uuid(),
+  game_slug: z.string(),
+  product_slug: z.string(),
+});
+
+const captchaStateSchema = z.object({
+  required: z.boolean(),
+  provider: z.string(),
+  site_key: z.string().nullable(),
+  challenge: z.unknown().nullable(),
 });
 
 const grantResponseSchema = z.object({
@@ -383,6 +403,86 @@ export function routes(router: Router<Context>): void {
           product_slug: product?.slug ?? '',
         }),
       };
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: '/api/v1/games/keys/captcha',
+    operation_id: 'gamesKeyCaptcha',
+    summary: 'Whether a CAPTCHA is required to redeem a key from this IP',
+    tags: ['games'],
+    auth: 'session',
+    rate_limit: 'global',
+    responses: {
+      200: {
+        description: 'Whether a CAPTCHA is required, and how to solve it',
+        schema: captchaStateSchema,
+      },
+    },
+    errors: ['GAMES_KEYS_DISABLED'],
+    handler: async ({ ctx, request }) => {
+      if (!ctx.config.features.games.keys.enabled) throw new ProblemError('GAMES_KEYS_DISABLED');
+      return { status: 200 as const, body: await inspectCaptcha(ctx, request) };
+    },
+  });
+
+  router.route({
+    method: 'POST',
+    path: '/api/v1/games/keys/redeem',
+    operation_id: 'redeemGameKey',
+    summary: 'Redeem a product key',
+    description:
+      'Grants the batch product to the signed-in user. A CAPTCHA is required after captcha.after failed attempts from this IP. The route is limited by the key_redeem policy.',
+    tags: ['games'],
+    auth: 'session',
+    rate_limit: 'key_redeem',
+    request: { body: redeemBody },
+    responses: { 200: { description: 'The new entitlement', schema: redeemResponseSchema } },
+    errors: [
+      'GAMES_KEYS_DISABLED',
+      'GAMES_CAPTCHA_REQUIRED',
+      'GAMES_CAPTCHA_INVALID',
+      'GAMES_KEY_INVALID',
+      'GAMES_KEY_REVOKED',
+      'GAMES_KEY_EXPIRED',
+      'GAMES_KEY_ALREADY_REDEEMED',
+      'GAMES_KEY_ALREADY_OWNED',
+    ],
+    handler: async ({ ctx, identity, body, request }) => {
+      if (!ctx.config.features.games.keys.enabled) throw new ProblemError('GAMES_KEYS_DISABLED');
+      const userId = signedIn(identity);
+      await requireCaptcha(ctx, request, body.captcha);
+      const ip = clientIp(request);
+      const now = new Date();
+      const outcome = await redeemKey(ctx.db, {
+        code: normalizeCode(body.code),
+        userId,
+        ip,
+        actor: { type: 'user', id: userId },
+        now,
+      });
+      const metrics = gamesMetrics(ctx.metrics);
+      if (outcome.status === 'ok') {
+        ctx.outbox.wake();
+        metrics.granted('key_redemption');
+        metrics.keyRedeemed('redeemed');
+        return {
+          status: 200 as const,
+          body: {
+            entitlement_id: outcome.entitlement_id,
+            game_slug: outcome.game_slug,
+            product_slug: outcome.product_slug,
+          },
+        };
+      }
+      await recordRedeemAttempt(ctx.db, { ip, now });
+      metrics.keyRedeemed(outcome.status);
+      if (outcome.status === 'invalid') throw new ProblemError('GAMES_KEY_INVALID');
+      if (outcome.status === 'revoked') throw new ProblemError('GAMES_KEY_REVOKED');
+      if (outcome.status === 'expired') throw new ProblemError('GAMES_KEY_EXPIRED');
+      if (outcome.status === 'already_owned') throw new ProblemError('GAMES_KEY_ALREADY_OWNED');
+      throw new ProblemError('GAMES_KEY_ALREADY_REDEEMED');
     },
   });
 }

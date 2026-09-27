@@ -776,12 +776,12 @@ Spec: §7.0, §7.5 (game-authoritative writes)
   are tokens from two different games.
 - The guard test passes.
 
-### P7.3 Key redemption — M
+### P7.3 Key redemption — M ✅
 Spec: §7.3
 
-- [ ] Batch generation, labels, expiry.
-- [ ] Redemption on web and via API, with limits, failure tracking and CAPTCHA.
-- [ ] CSV export (step-up), batch revoke with optional entitlement revocation.
+- [x] Batch generation, labels, expiry.
+- [x] Redemption on web and via API, with limits, failure tracking and CAPTCHA.
+- [x] CSV export (step-up), batch revoke with optional entitlement revocation.
 
 **Done when:** brute-forcing keys from one IP hits CAPTCHA, then rate limits.
 

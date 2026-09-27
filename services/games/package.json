@@ -17,10 +17,12 @@
   },
   "dependencies": {
     "@qtiauth/bus": "workspace:*",
+    "@qtiauth/captcha": "workspace:*",
     "@qtiauth/cli": "workspace:*",
     "@qtiauth/config": "workspace:*",
     "@qtiauth/db": "workspace:*",
     "@qtiauth/events": "workspace:*",
+    "@qtiauth/keys": "workspace:*",
     "@qtiauth/observability": "workspace:*",
     "@qtiauth/service-kit": "workspace:*",
     "kysely": "0.29.6",

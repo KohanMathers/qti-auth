@@ -473,6 +473,9 @@ importers:
       '@qtiauth/bus':
         specifier: workspace:*
         version: link:../../packages/bus
+      '@qtiauth/captcha':
+        specifier: workspace:*
+        version: link:../../packages/captcha
       '@qtiauth/cli':
         specifier: workspace:*
         version: link:../../packages/cli
@@ -485,6 +488,9 @@ importers:
       '@qtiauth/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@qtiauth/keys':
+        specifier: workspace:*
+        version: link:../../packages/keys
       '@qtiauth/observability':
         specifier: workspace:*
         version: link:../../packages/observability

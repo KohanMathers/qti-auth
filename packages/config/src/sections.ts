@@ -2078,6 +2078,16 @@ export const GAME_NAME_MAX = 120;
 export const GAME_DESCRIPTION_MAX = 4_000;
 export const GAME_ART_MAX = 500;
 export const GAME_REVOKE_REASON_MAX = 500;
+export const GAME_KEY_LABEL_MAX = 80;
+export const GAME_KEY_CHARSET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export const GAME_KEY_CHARSET_MESSAGE =
+  'Must be at least eight distinct ASCII characters and no whitespace';
+
+function isKeyCharset(value: string): boolean {
+  if (value.length < 8) return false;
+  if (/\s/.test(value)) return false;
+  return new Set(value).size === value.length;
+}
 
 export const games = z
   .strictObject({
@@ -2100,9 +2110,34 @@ export const games = z
       .describe(
         'Suffix used to name a game server client, joined to the game name with a space. Kept short so the full client name stays within the limit.',
       ),
+    keys: z
+      .strictObject({
+        charset: z
+          .string()
+          .refine(isKeyCharset, GAME_KEY_CHARSET_MESSAGE)
+          .default(GAME_KEY_CHARSET)
+          .describe(
+            'Characters used to generate keys. Distinct, no whitespace. The default is Crockford-flavoured, without letters that look like digits.',
+          ),
+        group_length: z
+          .int()
+          .min(3)
+          .max(12)
+          .default(4)
+          .describe('Number of characters per hyphen-separated group.'),
+        groups: z.int().min(2).max(8).default(4).describe('Number of groups per key.'),
+        max_batch: z
+          .int()
+          .min(1)
+          .max(1_000_000)
+          .default(10_000)
+          .describe('Largest batch that can be generated in one call.'),
+      })
+      .prefault({})
+      .describe('Key redemption defaults and limits.'),
   })
   .prefault({})
-  .describe('Games module (games profile): catalog, products and entitlements.');
+  .describe('Games module (games profile): catalog, products, entitlements and keys.');
 
 const CRON_JOB_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
 

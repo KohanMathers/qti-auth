@@ -12,6 +12,7 @@ import packageJson from '../package.json' with { type: 'json' };
 import { adminRoutes } from './admin-routes.ts';
 import type { Database } from './database.ts';
 import { GAMES_ERRORS } from './errors.ts';
+import { keyAdminRoutes } from './key-admin-routes.ts';
 import { routes } from './routes.ts';
 
 export const MIGRATIONS_DIR = join(import.meta.dirname, 'migrations');
@@ -20,7 +21,7 @@ export const definition = defineService({
   name: 'games',
   version: packageJson.version,
   module: 'games',
-  sections: ['branding', 'surfaces', 'features', 'games', 'retention'],
+  sections: ['branding', 'surfaces', 'features', 'games', 'captcha', 'security', 'retention'],
   database: { schema: 'games', migrations: () => loadMigrations(MIGRATIONS_DIR) },
   permissions: definePermissions({
     'games.catalog.manage': {
@@ -28,6 +29,9 @@ export const definition = defineService({
     },
     'games.entitlements.manage': {
       description: 'Grant and revoke game entitlements from the admin UI',
+    },
+    'games.keys.manage': {
+      description: 'Generate, list, export and revoke key batches',
     },
   }),
   errors: GAMES_ERRORS,
@@ -40,3 +44,4 @@ export const router = createServiceRouter<Context>(definition);
 
 routes(router);
 adminRoutes(router);
+keyAdminRoutes(router);

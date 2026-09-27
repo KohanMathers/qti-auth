@@ -14,6 +14,7 @@ describe('games service', () => {
     expect(migrations.map((migration) => migration.name)).toEqual([
       '0001_bus_tables',
       '0002_catalog',
+      '0003_keys',
     ]);
   });
 
@@ -26,10 +27,14 @@ describe('games service', () => {
       'GET /api/v1/admin/entitlements',
       'GET /api/v1/admin/games',
       'GET /api/v1/admin/games/:slug',
+      'GET /api/v1/admin/games/:slug/key-batches',
       'GET /api/v1/admin/games/:slug/products',
+      'GET /api/v1/admin/key-batches/:batch_id',
+      'GET /api/v1/admin/key-batches/:batch_id/keys.csv',
       'GET /api/v1/games',
       'GET /api/v1/games/:slug',
       'GET /api/v1/games/:slug/owned',
+      'GET /api/v1/games/keys/captcha',
       'GET /api/v1/games/owned',
       'PATCH /api/v1/admin/games/:slug',
       'PATCH /api/v1/admin/games/:slug/products/:product_slug',
@@ -37,9 +42,12 @@ describe('games service', () => {
       'POST /api/v1/admin/games',
       'POST /api/v1/admin/games/:slug/products',
       'POST /api/v1/admin/games/:slug/products/:product_slug/entitlements',
+      'POST /api/v1/admin/games/:slug/products/:product_slug/key-batches',
       'POST /api/v1/admin/games/:slug/server-client/rotate',
+      'POST /api/v1/admin/key-batches/:batch_id/revoke',
       'POST /api/v1/games/entitlements',
       'POST /api/v1/games/entitlements/:entitlement_id/revoke',
+      'POST /api/v1/games/keys/redeem',
     ]);
     for (const route of routes) {
       expect(policies).toContain(route.rate_limit);
@@ -47,6 +55,7 @@ describe('games service', () => {
     expect(permissions.map((permission) => permission.name).sort()).toEqual([
       'games.catalog.manage',
       'games.entitlements.manage',
+      'games.keys.manage',
     ]);
     const document = openApiDocument(router) as { paths: Record<string, unknown> };
     expect(document.paths['/api/v1/games']).toBeDefined();
@@ -68,6 +77,20 @@ describe('games service', () => {
     const { routes } = router.manifest();
     const rotate = routes.find((r) => r.path === '/api/v1/admin/games/:slug/server-client/rotate');
     expect(rotate?.step_up).toBe(true);
+  });
+
+  it('requires step-up for the batch CSV export', () => {
+    const { routes } = router.manifest();
+    const csv = routes.find((r) => r.path === '/api/v1/admin/key-batches/:batch_id/keys.csv');
+    expect(csv?.step_up).toBe(true);
+    expect(csv?.permissions).toContain('games.keys.manage');
+  });
+
+  it('rate-limits key redemption with the key_redeem policy', () => {
+    const { routes } = router.manifest();
+    const redeem = routes.find((r) => r.path === '/api/v1/games/keys/redeem');
+    expect(redeem?.rate_limit).toBe('key_redeem');
+    expect(redeem?.auth).toBe('session');
   });
 
   it('never grants entitlements or keys from a bus event, keeping to the trust-model rule', () => {

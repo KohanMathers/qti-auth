@@ -3025,7 +3025,7 @@
       "additionalProperties": false
     },
     "games": {
-      "description": "Games module (games profile): catalog, products and entitlements.",
+      "description": "Games module (games profile): catalog, products, entitlements and keys.",
       "default": {},
       "type": "object",
       "properties": {
@@ -3048,6 +3048,40 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 80
+        },
+        "keys": {
+          "description": "Key redemption defaults and limits.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "charset": {
+              "default": "ABCDEFGHJKMNPQRSTUVWXYZ23456789",
+              "description": "Characters used to generate keys. Distinct, no whitespace. The default is Crockford-flavoured, without letters that look like digits.",
+              "type": "string"
+            },
+            "group_length": {
+              "default": 4,
+              "description": "Number of characters per hyphen-separated group.",
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 12
+            },
+            "groups": {
+              "default": 4,
+              "description": "Number of groups per key.",
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 8
+            },
+            "max_batch": {
+              "default": 10000,
+              "description": "Largest batch that can be generated in one call.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

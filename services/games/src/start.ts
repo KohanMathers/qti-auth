@@ -7,6 +7,7 @@ import {
   expireEntitlements,
   exportUserEntitlements,
 } from './entitlements.ts';
+import { eraseUserKeys, exportUserKeys, sweepRedeemAttempts } from './keys.ts';
 import { gamesMetrics } from './metrics.ts';
 import { type Context, type definition, router } from './service.ts';
 
@@ -19,9 +20,11 @@ export function gamesService() {
     dataRights: ({ db }) => ({
       exportUser: async (userId) => ({
         entitlements: await exportUserEntitlements(db, userId),
+        keys: await exportUserKeys(db, userId),
       }),
       eraseUser: async (userId, trx) => {
         await eraseUserEntitlements(trx, userId);
+        await eraseUserKeys(trx, userId);
       },
     }),
     start: async (ctx: Context) => {
@@ -52,11 +55,17 @@ export function gamesService() {
             job: RETENTION_JOB,
             metrics: ctx.busMetrics,
             handler: async () => {
+              const now = new Date();
               const pruned = await pruneBusTables(db, ctx.config.bus);
-              if (pruned.outbox > 0 || pruned.processedEvents > 0) {
+              const attempts = await sweepRedeemAttempts(db, {
+                retention: ctx.config.retention.tokens,
+                now,
+              });
+              if (pruned.outbox > 0 || pruned.processedEvents > 0 || attempts > 0) {
                 log.info('retention sweep finished', {
                   outbox: pruned.outbox,
                   processed_events: pruned.processedEvents,
+                  redeem_attempts: attempts,
                 });
               }
             },
