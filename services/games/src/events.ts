@@ -109,6 +109,25 @@ export interface LicenseLeaseRevokedData {
   reason: string;
 }
 
+export interface CloudSaveCommittedData {
+  slot_id: string;
+  user_id: string;
+  game_id: string;
+  slot: string;
+  version: number;
+  version_id: string;
+  size_bytes: number;
+  committed_at: string;
+}
+
+export interface CloudSaveDeletedData {
+  slot_id: string;
+  user_id: string;
+  game_id: string;
+  slot: string;
+  reason: string;
+}
+
 export function achievementUnlockedEvent(
   data: AchievementUnlockedData,
   actor: EventActor,
@@ -239,6 +258,30 @@ export function licenseLeaseRevokedEvent(
     type: GAMES_EVENTS.licenseLeaseRevoked,
     actor,
     subject: { type: 'license_lease', id: data.lease_id },
+    data,
+  };
+}
+
+export function cloudSaveCommittedEvent(
+  data: CloudSaveCommittedData,
+  actor: EventActor,
+): NewEvent<CloudSaveCommittedData> {
+  return {
+    type: GAMES_EVENTS.cloudSaveCommitted,
+    actor,
+    subject: { type: 'cloud_save_slot', id: data.slot_id },
+    data,
+  };
+}
+
+export function cloudSaveDeletedEvent(
+  data: CloudSaveDeletedData,
+  actor: EventActor,
+): NewEvent<CloudSaveDeletedData> {
+  return {
+    type: GAMES_EVENTS.cloudSaveDeleted,
+    actor,
+    subject: { type: 'cloud_save_slot', id: data.slot_id },
     data,
   };
 }

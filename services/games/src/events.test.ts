@@ -1,7 +1,13 @@
 import { GAME_TRUST_LEVELS, GAMES_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { describe, expect, it } from 'vitest';
 
-import { ENTITLEMENT_TRUST, entitlementGrantedEvent, entitlementRevokedEvent } from './events.ts';
+import {
+  cloudSaveCommittedEvent,
+  cloudSaveDeletedEvent,
+  ENTITLEMENT_TRUST,
+  entitlementGrantedEvent,
+  entitlementRevokedEvent,
+} from './events.ts';
 
 interface EventInput {
   type: string;
@@ -77,5 +83,37 @@ describe('games event schemas', () => {
       { type: 'system', id: 'games' },
     );
     expect(granted.data.trust).toBe('game');
+  });
+
+  it('validates cloud save events against the shipped schemas', async () => {
+    const catalog = await loadEventCatalog();
+    const actor = { type: 'user' as const, id: ID };
+    const committed = cloudSaveCommittedEvent(
+      {
+        slot_id: ID,
+        user_id: ID,
+        game_id: ID,
+        slot: 'slot-1',
+        version: 2,
+        version_id: ID,
+        size_bytes: 1_024,
+        committed_at: '2026-10-01T00:00:00.000Z',
+      },
+      actor,
+    );
+    const deleted = cloudSaveDeletedEvent(
+      {
+        slot_id: ID,
+        user_id: ID,
+        game_id: ID,
+        slot: 'slot-1',
+        reason: 'user_deleted',
+      },
+      actor,
+    );
+    expect(catalog.validate(envelope(committed)).valid).toBe(true);
+    expect(catalog.validate(envelope(deleted)).valid).toBe(true);
+    expect(GAMES_EVENTS.cloudSaveCommitted).toBe(committed.type);
+    expect(GAMES_EVENTS.cloudSaveDeleted).toBe(deleted.type);
   });
 });

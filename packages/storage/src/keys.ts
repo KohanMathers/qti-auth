@@ -44,3 +44,22 @@ export function attachmentObjectKey(ticketId: string, attachmentId: string): str
 export function attachmentObjectPrefix(ticketId: string): string {
   return `${ATTACHMENT_OBJECT_PREFIX}${ticketId}/`;
 }
+
+export const CLOUD_SAVE_OBJECT_PREFIX = 'cloud-saves/';
+
+export function cloudSaveObjectKey(
+  userId: string,
+  gameId: string,
+  slot: string,
+  versionId: string,
+): string {
+  return `${CLOUD_SAVE_OBJECT_PREFIX}${userId}/${gameId}/${slot}/${versionId}`;
+}
+
+export function cloudSaveUserPrefix(userId: string): string {
+  return `${CLOUD_SAVE_OBJECT_PREFIX}${userId}/`;
+}
+
+export function cloudSaveSlotPrefix(userId: string, gameId: string, slot: string): string {
+  return `${CLOUD_SAVE_OBJECT_PREFIX}${userId}/${gameId}/${slot}/`;
+}

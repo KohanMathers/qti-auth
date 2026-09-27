@@ -2087,6 +2087,9 @@ export const GAME_ACHIEVEMENT_DESCRIPTION_MAX = 500;
 export const GAME_KEY_CHARSET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const GAME_KEY_CHARSET_MESSAGE =
   'Must be at least eight distinct ASCII characters and no whitespace';
+export const CLOUD_SAVE_SLOT = /^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$/;
+export const CLOUD_SAVE_SLOT_MESSAGE = 'Must be a lowercase slug like slot-1';
+export const CLOUD_SAVE_CONTENT_TYPE_MAX = 120;
 
 function isKeyCharset(value: string): boolean {
   if (value.length < 8) return false;
@@ -2179,6 +2182,38 @@ export const games = z
       })
       .prefault({})
       .describe('Offline licensing: signed leases proving ownership for offline play.'),
+    cloud_saves: z
+      .strictObject({
+        max_slots_per_game: z
+          .int()
+          .min(1)
+          .max(1_000)
+          .default(20)
+          .describe('How many named save slots a user may keep per game.'),
+        versions_per_slot: z
+          .int()
+          .min(1)
+          .max(50)
+          .default(5)
+          .describe(
+            'How many past versions to keep per slot. Older versions are pruned after a successful commit.',
+          ),
+        max_object_bytes: z
+          .int()
+          .min(1)
+          .max(1_073_741_824)
+          .default(52_428_800)
+          .describe('Largest allowed size for a single save version, in bytes.'),
+        upload_ttl: duration(
+          '10m',
+          'How long a presigned upload URL is valid for. Uploads not committed within this window are cleaned up.',
+        ),
+        download_ttl: duration('10m', 'How long a presigned download URL is valid for.'),
+      })
+      .prefault({})
+      .describe(
+        'Cloud saves: per-slot version history with base_version conflict detection, backed by object storage.',
+      ),
   })
   .prefault({})
   .describe('Games module (games profile): catalog, products, entitlements and keys.');

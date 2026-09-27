@@ -216,6 +216,28 @@ export interface PlaytimeDailyTable {
   updated_at: Date;
 }
 
+export interface CloudSaveSlotsTable {
+  id: string;
+  user_id: string;
+  game_id: string;
+  slot: string;
+  current_version_id: string | null;
+  size_bytes: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CloudSaveVersionsTable {
+  id: string;
+  slot_id: string;
+  version: number;
+  size_bytes: string;
+  object_key: string;
+  content_type: string;
+  committed_at: Date | null;
+  created_at: Date;
+}
+
 export interface Database {
   games: GamesTable;
   products: ProductsTable;
@@ -235,4 +257,6 @@ export interface Database {
   playtime_daily: PlaytimeDailyTable;
   license_leases: LicenseLeasesTable;
   license_revocations: LicenseRevocationsTable;
+  cloud_save_slots: CloudSaveSlotsTable;
+  cloud_save_versions: CloudSaveVersionsTable;
 }

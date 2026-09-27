@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.cloud_save.deleted.v1",
+  "title": "Cloud save slot deleted",
+  "description": "A cloud save slot and all of its versions were deleted, either by the user or on account erasure. The subject is the slot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["slot_id", "user_id", "game_id", "slot", "reason"],
+  "properties": {
+    "slot_id": {
+      "description": "The slot that was deleted.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "user_id": {
+      "description": "The account that owned the slot.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "game_id": {
+      "description": "The game the slot belonged to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "slot": {
+      "description": "The slot slug that was deleted.",
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "description": "Why the slot was deleted.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

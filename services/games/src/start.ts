@@ -1,7 +1,14 @@
 import { consumeCron, pruneBusTables } from '@qtiauth/bus';
-import { type StartServiceOptions, type Stoppable, unwind } from '@qtiauth/service-kit';
+import {
+  type ObjectStore,
+  type StartServiceOptions,
+  type Stoppable,
+  storageHealthCheck,
+  unwind,
+} from '@qtiauth/service-kit';
 
 import { eraseUserAchievements, exportUserAchievements, recomputeRarity } from './achievements.ts';
+import { eraseUserCloudSaves, exportUserCloudSaves, sweepStalePending } from './cloud-saves.ts';
 import type { Database } from './database.ts';
 import {
   eraseUserEntitlements,
@@ -27,6 +34,7 @@ import {
   exportUserStats,
   resetDueLeaderboards,
 } from './stats.ts';
+import { openObjectStore } from './storage-state.ts';
 
 const STALE_PLAYTIME_SECONDS = 300;
 
@@ -38,20 +46,27 @@ export const LICENSE_KEY_ROTATION_JOB = 'keys.rotate';
 
 export interface GamesOptions {
   licensingKeyStore?: LicensingKeySetStore;
+  objectStore?: ObjectStore | null;
 }
 
 export function gamesService(options: GamesOptions = {}) {
+  const storeOf = (ctx: Context) => openObjectStore(ctx, options.objectStore);
   return {
     router,
-    dataRights: ({ db }) => ({
+    readinessChecks: (ctx: Context) => {
+      const store = storeOf(ctx);
+      return store === null ? {} : { storage: storageHealthCheck(store) };
+    },
+    dataRights: (ctx: Context) => ({
       exportUser: async (userId) => ({
-        entitlements: await exportUserEntitlements(db, userId),
-        keys: await exportUserKeys(db, userId),
-        achievements: await exportUserAchievements(db, userId),
-        stats: await exportUserStats(db, userId),
-        custom_data: await exportUserCustomData(db, userId),
-        playtime: await exportUserPlaytime(db, userId),
-        license_leases: await exportUserLeases(db, userId),
+        entitlements: await exportUserEntitlements(ctx.db, userId),
+        keys: await exportUserKeys(ctx.db, userId),
+        achievements: await exportUserAchievements(ctx.db, userId),
+        stats: await exportUserStats(ctx.db, userId),
+        custom_data: await exportUserCustomData(ctx.db, userId),
+        playtime: await exportUserPlaytime(ctx.db, userId),
+        license_leases: await exportUserLeases(ctx.db, userId),
+        cloud_saves: await exportUserCloudSaves(ctx.db, userId),
       }),
       eraseUser: async (userId, trx) => {
         await eraseUserEntitlements(trx, userId);
@@ -59,13 +74,20 @@ export function gamesService(options: GamesOptions = {}) {
         await eraseUserAchievements(trx, userId);
         await eraseUserStats(trx, userId);
         await eraseUserLeases(trx, userId);
+        await eraseUserCloudSaves(trx, userId, storeOf(ctx));
       },
     }),
     start: async (ctx: Context) => {
       const { bus, config, db, log } = ctx;
       const metrics = gamesMetrics(ctx.metrics);
       const stack: Stoppable[] = [];
+      const store = storeOf(ctx);
       try {
+        if (store !== null) {
+          if (ctx.config.storage.enabled && ctx.config.storage.create_bucket)
+            await store.ensureBucket();
+          stack.push({ stop: () => store.close() });
+        }
         if (config.features.games.licensing.enabled) {
           const keyring = await openLicensingKeyring({
             store: options.licensingKeyStore ?? (await openLicensingKeyStore(bus)),
@@ -188,17 +210,22 @@ export function gamesService(options: GamesOptions = {}) {
                 now,
               });
               const revocations = await sweepExpiredRevocations(db, now);
+              const stalePending = await sweepStalePending(db, store, {
+                olderThan: new Date(now.getTime() - config.games.cloud_saves.upload_ttl),
+              });
               if (
                 pruned.outbox > 0 ||
                 pruned.processedEvents > 0 ||
                 attempts > 0 ||
-                revocations > 0
+                revocations > 0 ||
+                stalePending.deleted > 0
               ) {
                 log.info('retention sweep finished', {
                   outbox: pruned.outbox,
                   processed_events: pruned.processedEvents,
                   redeem_attempts: attempts,
                   license_revocations: revocations,
+                  cloud_save_pending: stalePending.deleted,
                 });
               }
             },
@@ -208,7 +235,10 @@ export function gamesService(options: GamesOptions = {}) {
           }),
         );
 
-        log.info('games started');
+        log.info('games started', {
+          licensing: config.features.games.licensing.enabled,
+          cloud_saves: config.features.games.cloud_saves.enabled && store !== null,
+        });
         return stack;
       } catch (error) {
         await unwind(stack.splice(0).map((task) => () => task.stop())).catch(

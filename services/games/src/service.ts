@@ -12,6 +12,7 @@ import packageJson from '../package.json' with { type: 'json' };
 import { achievementAdminRoutes } from './achievement-admin-routes.ts';
 import { achievementRoutes } from './achievement-routes.ts';
 import { adminRoutes } from './admin-routes.ts';
+import { cloudSaveRoutes } from './cloud-save-routes.ts';
 import type { Database } from './database.ts';
 import { GAMES_ERRORS } from './errors.ts';
 import { keyAdminRoutes } from './key-admin-routes.ts';
@@ -26,7 +27,16 @@ export const definition = defineService({
   name: 'games',
   version: packageJson.version,
   module: 'games',
-  sections: ['branding', 'surfaces', 'features', 'games', 'captcha', 'security', 'retention'],
+  sections: [
+    'branding',
+    'surfaces',
+    'features',
+    'games',
+    'captcha',
+    'security',
+    'retention',
+    'storage',
+  ],
   database: { schema: 'games', migrations: () => loadMigrations(MIGRATIONS_DIR) },
   permissions: definePermissions({
     'games.catalog.manage': {
@@ -65,3 +75,4 @@ achievementAdminRoutes(router);
 statRoutes(router);
 statAdminRoutes(router);
 licensingRoutes(router);
+cloudSaveRoutes(router);

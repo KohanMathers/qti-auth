@@ -821,12 +821,12 @@ Spec: §7.7
 **Done when:** the sample verifier validates a lease with the network disabled and rejects it after
 pulling a revocation list that contains its `jti`.
 
-### P7.7 Cloud saves — M
+### P7.7 Cloud saves — M ✅
 Spec: §7.6
 
-- [ ] Slots, presigned uploads and downloads, version history, `base_version` conflict detection,
+- [x] Slots, presigned uploads and downloads, version history, `base_version` conflict detection,
       per-game quotas.
-- [ ] Export and erasure handlers.
+- [x] Export and erasure handlers.
 
 **Done when:** two clients writing from the same base version produce one success and one conflict.
 

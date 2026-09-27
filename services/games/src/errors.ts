@@ -83,4 +83,35 @@ export const GAMES_ERRORS = defineErrors({
     status: 503,
     title: 'The licensing signing key is not loaded',
   },
+  GAMES_CLOUD_SAVES_DISABLED: { status: 409, title: 'Cloud saves are disabled' },
+  GAMES_CLOUD_SAVES_UNAVAILABLE: {
+    status: 503,
+    title: 'Cloud save storage is not available',
+  },
+  GAMES_CLOUD_SAVE_SLOT_LIMIT: {
+    status: 409,
+    title: 'You have reached the cloud save slot limit for this game',
+  },
+  GAMES_CLOUD_SAVE_QUOTA: { status: 413, title: 'Cloud save quota exceeded' },
+  GAMES_CLOUD_SAVE_TOO_LARGE: {
+    status: 413,
+    title: 'Cloud save version exceeds the size limit',
+  },
+  GAMES_CLOUD_SAVE_CONFLICT: {
+    status: 409,
+    title: 'The base_version does not match the current version',
+  },
+  GAMES_CLOUD_SAVE_NOT_FOUND: { status: 404, title: 'No such cloud save' },
+  GAMES_CLOUD_SAVE_VERSION_NOT_FOUND: {
+    status: 404,
+    title: 'No such cloud save version',
+  },
+  GAMES_CLOUD_SAVE_NOT_COMMITTED: {
+    status: 409,
+    title: 'This cloud save version has not been committed',
+  },
+  GAMES_CLOUD_SAVE_ALREADY_COMMITTED: {
+    status: 409,
+    title: 'This cloud save version is already committed',
+  },
 });

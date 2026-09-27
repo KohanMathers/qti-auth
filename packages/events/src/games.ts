@@ -9,6 +9,8 @@ export const GAMES_EVENTS = {
   playtimeSessionEnded: 'qtiauth.games.playtime.ended.v1',
   licenseLeaseIssued: 'qtiauth.games.license_lease.issued.v1',
   licenseLeaseRevoked: 'qtiauth.games.license_lease.revoked.v1',
+  cloudSaveCommitted: 'qtiauth.games.cloud_save.committed.v1',
+  cloudSaveDeleted: 'qtiauth.games.cloud_save.deleted.v1',
 } as const;
 
 export type GamesEventType = (typeof GAMES_EVENTS)[keyof typeof GAMES_EVENTS];

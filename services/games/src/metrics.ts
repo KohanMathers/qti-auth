@@ -28,6 +28,9 @@ export type LicenseIssueOutcome = (typeof LICENSE_ISSUE_OUTCOMES)[number];
 export const LICENSE_VERIFY_OUTCOMES = ['valid', 'invalid', 'revoked'] as const;
 export type LicenseVerifyOutcome = (typeof LICENSE_VERIFY_OUTCOMES)[number];
 
+export const CLOUD_SAVE_UPLOAD_OUTCOMES = ['ok', 'slot_limit', 'quota', 'conflict'] as const;
+export type CloudSaveUploadOutcome = (typeof CLOUD_SAVE_UPLOAD_OUTCOMES)[number];
+
 export interface GamesMetrics {
   granted: (source: EntitlementSource) => void;
   revoked: (source: EntitlementSource) => void;
@@ -46,6 +49,10 @@ export interface GamesMetrics {
   licenseVerified: (outcome: LicenseVerifyOutcome) => void;
   licenseKeyLoaded: (createdAt: number) => void;
   licenseKeyRotated: () => void;
+  cloudSaveUpload: (outcome: CloudSaveUploadOutcome) => void;
+  cloudSaveCommitted: (sizeBytes: number) => void;
+  cloudSaveDownloaded: () => void;
+  cloudSaveDeleted: () => void;
 }
 
 const created = new WeakMap<Metrics, GamesMetrics>();
@@ -137,6 +144,27 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     name: 'qtiauth_games_license_key_rotations_total',
     help: 'Licence signing key rotations completed by this replica.',
   });
+  const cloudSaveUploads = metrics.counter({
+    name: 'qtiauth_games_cloud_save_uploads_total',
+    help: 'Cloud save upload requests, by outcome.',
+    labelNames: ['outcome'],
+  });
+  const cloudSaveCommits = metrics.counter({
+    name: 'qtiauth_games_cloud_save_commits_total',
+    help: 'Cloud save versions that became the current version of a slot.',
+  });
+  const cloudSaveBytes = metrics.counter({
+    name: 'qtiauth_games_cloud_save_committed_bytes_total',
+    help: 'Bytes stored in committed cloud save versions.',
+  });
+  const cloudSaveDownloads = metrics.counter({
+    name: 'qtiauth_games_cloud_save_downloads_total',
+    help: 'Cloud save download URLs presigned.',
+  });
+  const cloudSaveDeletes = metrics.counter({
+    name: 'qtiauth_games_cloud_save_deletes_total',
+    help: 'Cloud save slots deleted by the owner.',
+  });
   return {
     granted: (source) => {
       grants.inc({ source });
@@ -188,6 +216,19 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     },
     licenseKeyRotated: () => {
       licenseKeyRotations.inc();
+    },
+    cloudSaveUpload: (outcome) => {
+      cloudSaveUploads.inc({ outcome });
+    },
+    cloudSaveCommitted: (sizeBytes) => {
+      cloudSaveCommits.inc();
+      if (sizeBytes > 0) cloudSaveBytes.inc(sizeBytes);
+    },
+    cloudSaveDownloaded: () => {
+      cloudSaveDownloads.inc();
+    },
+    cloudSaveDeleted: () => {
+      cloudSaveDeletes.inc();
     },
   };
 }

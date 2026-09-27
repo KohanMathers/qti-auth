@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.cloud_save.committed.v1",
+  "title": "Cloud save version committed",
+  "description": "A new cloud save version was uploaded and became the current version of its slot. The subject is the slot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "slot_id",
+    "user_id",
+    "game_id",
+    "slot",
+    "version",
+    "version_id",
+    "size_bytes",
+    "committed_at"
+  ],
+  "properties": {
+    "slot_id": {
+      "description": "The slot the version was committed against.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "user_id": {
+      "description": "The account that owns the slot.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "game_id": {
+      "description": "The game the slot belongs to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "slot": {
+      "description": "The slot slug the user chose.",
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "description": "The new current version number for the slot, monotonically increasing.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "version_id": {
+      "description": "The stored version. Also the object storage key suffix.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "size_bytes": {
+      "description": "How large the committed version is, in bytes.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "committed_at": {
+      "description": "When the version became current.",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

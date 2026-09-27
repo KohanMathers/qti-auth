@@ -18,6 +18,7 @@ describe('games service', () => {
       '0004_achievements',
       '0005_stats',
       '0006_licensing',
+      '0007_cloud_saves',
     ]);
   });
 
@@ -30,6 +31,8 @@ describe('games service', () => {
       'DELETE /api/v1/admin/games/:slug/products/:product_slug',
       'DELETE /api/v1/admin/games/:slug/stats/:key',
       'DELETE /api/v1/admin/leaderboards/:leaderboard_id',
+      'DELETE /api/v1/games/:slug/cloud-saves/:slot',
+      'DELETE /api/v1/games/:slug/cloud-saves/:slot/uploads/:version_id',
       'DELETE /api/v1/games/:slug/licensing/devices/:lease_id',
       'GET /.well-known/qtiauth-license-keys.json',
       'GET /api/v1/admin/entitlements',
@@ -46,6 +49,10 @@ describe('games service', () => {
       'GET /api/v1/games',
       'GET /api/v1/games/:slug',
       'GET /api/v1/games/:slug/achievements',
+      'GET /api/v1/games/:slug/cloud-saves',
+      'GET /api/v1/games/:slug/cloud-saves/:slot',
+      'GET /api/v1/games/:slug/cloud-saves/:slot/download',
+      'GET /api/v1/games/:slug/cloud-saves/:slot/versions',
       'GET /api/v1/games/:slug/custom-data',
       'GET /api/v1/games/:slug/leaderboards/:stat/:board',
       'GET /api/v1/games/:slug/licensing/devices',
@@ -76,6 +83,8 @@ describe('games service', () => {
       'POST /api/v1/admin/licenses/:lease_id/revoke',
       'POST /api/v1/games/:slug/achievements/progress',
       'POST /api/v1/games/:slug/achievements/unlock',
+      'POST /api/v1/games/:slug/cloud-saves/:slot/commit',
+      'POST /api/v1/games/:slug/cloud-saves/:slot/uploads',
       'POST /api/v1/games/:slug/leaderboards/:stat/:board/visibility',
       'POST /api/v1/games/:slug/licensing/leases',
       'POST /api/v1/games/:slug/playtime/:session_id/end',

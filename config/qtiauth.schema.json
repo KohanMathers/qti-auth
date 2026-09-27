@@ -3139,6 +3139,47 @@
             }
           },
           "additionalProperties": false
+        },
+        "cloud_saves": {
+          "description": "Cloud saves: per-slot version history with base_version conflict detection, backed by object storage.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "max_slots_per_game": {
+              "default": 20,
+              "description": "How many named save slots a user may keep per game.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "versions_per_slot": {
+              "default": 5,
+              "description": "How many past versions to keep per slot. Older versions are pruned after a successful commit.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "max_object_bytes": {
+              "default": 52428800,
+              "description": "Largest allowed size for a single save version, in bytes.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1073741824
+            },
+            "upload_ttl": {
+              "default": "10m",
+              "description": "How long a presigned upload URL is valid for. Uploads not committed within this window are cleaned up. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "download_ttl": {
+              "default": "10m",
+              "description": "How long a presigned download URL is valid for. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

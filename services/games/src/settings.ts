@@ -23,3 +23,10 @@ export function leaseDurationMs(
   if (game.lease_duration_seconds !== null) return game.lease_duration_seconds * 1_000;
   return config.games.default_lease_duration;
 }
+
+export function cloudSaveQuotaBytes(
+  config: Context['config'],
+  game: { cloud_save_quota_bytes: number | null },
+): number {
+  return game.cloud_save_quota_bytes ?? config.games.default_cloud_save_quota_bytes;
+}
