@@ -794,16 +794,16 @@ Spec: §7.4
 
 **Done when:** a token from a different authorized app can't unlock another game's achievement.
 
-### P7.5 Stats, leaderboards, playtime — L
+### P7.5 Stats, leaderboards, playtime — L ✅
 Spec: §7.5
 
-- [ ] Stat definitions with `authority: player | game`, max-delta bounds, `custom_data`.
-- [ ] Leaderboards with reset periods and history.
-- [ ] `require_game_authority` global and per-game toggle, enforced at leaderboard definition time.
-- [ ] Visibility, including under-18 hidden by default and guardian/teen opt-in. Admin entry removal.
-- [ ] Playtime sessions and heartbeats, remaining-time endpoint for `daily_playtime_minutes`.
+- [x] Stat definitions with `authority: player | game`, max-delta bounds, `custom_data`.
+- [x] Leaderboards with reset periods and history.
+- [x] `require_game_authority` global and per-game toggle, enforced at leaderboard definition time.
+- [x] Visibility, including under-18 hidden by default and guardian/teen opt-in. Admin entry removal.
+- [x] Playtime sessions and heartbeats, remaining-time endpoint for `daily_playtime_minutes`.
       Feeds the guardian summary (completes P3.2).
-- [ ] Developer docs include the **"what game authority does and doesn't protect against"** note.
+- [x] Developer docs include the **"what game authority does and doesn't protect against"** note.
 
 **Done when:** with `require_game_authority: true` a leaderboard can't be created on a player-authority
 stat, and a weekly board resets while keeping history.

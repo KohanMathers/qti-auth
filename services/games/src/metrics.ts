@@ -26,6 +26,10 @@ export interface GamesMetrics {
   achievementUnlocked: (trust: AchievementTrustLevel) => void;
   achievementProgressed: (trust: AchievementTrustLevel) => void;
   achievementRevoked: () => void;
+  statUpdated: (trust: AchievementTrustLevel) => void;
+  leaderboardEntryRemoved: () => void;
+  playtimeHeartbeat: () => void;
+  playtimeEnded: () => void;
 }
 
 const created = new WeakMap<Metrics, GamesMetrics>();
@@ -78,6 +82,23 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     name: 'qtiauth_games_achievement_revokes_total',
     help: 'Achievement unlocks revoked by an admin.',
   });
+  const statUpdates = metrics.counter({
+    name: 'qtiauth_games_stat_updates_total',
+    help: 'Stat updates that changed a value, by trust level.',
+    labelNames: ['trust'],
+  });
+  const leaderboardRemovals = metrics.counter({
+    name: 'qtiauth_games_leaderboard_removals_total',
+    help: 'Leaderboard entries removed by an admin.',
+  });
+  const playtimeHeartbeats = metrics.counter({
+    name: 'qtiauth_games_playtime_heartbeats_total',
+    help: 'Playtime heartbeat writes.',
+  });
+  const playtimeEndings = metrics.counter({
+    name: 'qtiauth_games_playtime_endings_total',
+    help: 'Playtime sessions ended, either by the game or by heartbeat lapse.',
+  });
   return {
     granted: (source) => {
       grants.inc({ source });
@@ -102,6 +123,18 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     },
     achievementRevoked: () => {
       achievementRevokes.inc();
+    },
+    statUpdated: (trust) => {
+      statUpdates.inc({ trust });
+    },
+    leaderboardEntryRemoved: () => {
+      leaderboardRemovals.inc();
+    },
+    playtimeHeartbeat: () => {
+      playtimeHeartbeats.inc();
+    },
+    playtimeEnded: () => {
+      playtimeEndings.inc();
     },
   };
 }

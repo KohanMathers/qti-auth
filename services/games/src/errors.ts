@@ -41,4 +41,26 @@ export const GAMES_ERRORS = defineErrors({
     status: 409,
     title: 'This achievement is not currently unlocked',
   },
+  GAMES_STAT_NOT_FOUND: { status: 404, title: 'No such stat' },
+  GAMES_STAT_KEY_TAKEN: { status: 409, title: 'That stat key is already in use' },
+  GAMES_STAT_INVALID: { status: 400, title: 'This stat is not valid' },
+  GAMES_STAT_AUTHORITY_MISMATCH: {
+    status: 403,
+    title: 'This stat needs a game-authoritative write',
+  },
+  GAMES_STAT_DELTA_TOO_LARGE: { status: 400, title: 'The change exceeds the stat max delta' },
+  GAMES_LEADERBOARD_NOT_FOUND: { status: 404, title: 'No such leaderboard' },
+  GAMES_LEADERBOARD_SLUG_TAKEN: { status: 409, title: 'That leaderboard slug is already in use' },
+  GAMES_LEADERBOARD_REQUIRES_GAME_AUTHORITY: {
+    status: 409,
+    title: 'This leaderboard needs a stat with authority: game',
+  },
+  GAMES_LEADERBOARD_ENTRY_NOT_FOUND: { status: 404, title: 'No such leaderboard entry' },
+  GAMES_PLAYTIME_DISABLED: { status: 409, title: 'Playtime tracking is disabled' },
+  GAMES_PLAYTIME_SESSION_NOT_FOUND: { status: 404, title: 'No such playtime session' },
+  GAMES_PLAYTIME_LIMIT_REACHED: {
+    status: 409,
+    title: 'The daily playtime limit for this account has been reached',
+  },
+  GAMES_CUSTOM_DATA_TOO_LARGE: { status: 413, title: 'Custom data exceeds the size limit' },
 });

@@ -62,6 +62,36 @@ export interface AchievementRevokedData {
   reason: string;
 }
 
+export interface StatUpdatedData {
+  stat_id: string;
+  user_id: string;
+  game_id: string;
+  stat_key: string;
+  trust: GameTrustLevel;
+  authority: GameTrustLevel;
+  value: number;
+  updated_at: string;
+}
+
+export interface LeaderboardEntryRemovedData {
+  leaderboard_id: string;
+  stat_id: string;
+  user_id: string;
+  game_id: string;
+  leaderboard_slug: string;
+  period_started_at: string;
+  reason: string;
+}
+
+export interface PlaytimeEndedData {
+  session_id: string;
+  user_id: string;
+  game_id: string;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+}
+
 export function achievementUnlockedEvent(
   data: AchievementUnlockedData,
   actor: EventActor,
@@ -94,6 +124,42 @@ export function achievementRevokedEvent(
     type: GAMES_EVENTS.achievementRevoked,
     actor,
     subject: { type: 'achievement_unlock', id: data.unlock_id },
+    data,
+  };
+}
+
+export function statUpdatedEvent(
+  data: StatUpdatedData,
+  actor: EventActor,
+): NewEvent<StatUpdatedData> {
+  return {
+    type: GAMES_EVENTS.statUpdated,
+    actor,
+    subject: { type: 'stat', id: data.stat_id },
+    data,
+  };
+}
+
+export function leaderboardEntryRemovedEvent(
+  data: LeaderboardEntryRemovedData,
+  actor: EventActor,
+): NewEvent<LeaderboardEntryRemovedData> {
+  return {
+    type: GAMES_EVENTS.leaderboardEntryRemoved,
+    actor,
+    subject: { type: 'leaderboard', id: data.leaderboard_id },
+    data,
+  };
+}
+
+export function playtimeEndedEvent(
+  data: PlaytimeEndedData,
+  actor: EventActor,
+): NewEvent<PlaytimeEndedData> {
+  return {
+    type: GAMES_EVENTS.playtimeSessionEnded,
+    actor,
+    subject: { type: 'playtime_session', id: data.session_id },
     data,
   };
 }

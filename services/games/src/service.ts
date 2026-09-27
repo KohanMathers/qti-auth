@@ -16,6 +16,8 @@ import type { Database } from './database.ts';
 import { GAMES_ERRORS } from './errors.ts';
 import { keyAdminRoutes } from './key-admin-routes.ts';
 import { routes } from './routes.ts';
+import { statAdminRoutes } from './stat-admin-routes.ts';
+import { statRoutes } from './stat-routes.ts';
 
 export const MIGRATIONS_DIR = join(import.meta.dirname, 'migrations');
 
@@ -38,6 +40,10 @@ export const definition = defineService({
     'games.achievements.manage': {
       description: 'Create, edit and delete achievement definitions and revoke unlocks',
     },
+    'games.stats.manage': {
+      description:
+        'Create, edit and delete stat definitions and leaderboards, and remove leaderboard entries',
+    },
   }),
   errors: GAMES_ERRORS,
 });
@@ -52,3 +58,5 @@ adminRoutes(router);
 keyAdminRoutes(router);
 achievementRoutes(router);
 achievementAdminRoutes(router);
+statRoutes(router);
+statAdminRoutes(router);

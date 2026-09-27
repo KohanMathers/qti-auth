@@ -4,6 +4,9 @@ export const GAMES_EVENTS = {
   achievementUnlocked: 'qtiauth.games.achievement.unlocked.v1',
   achievementProgressed: 'qtiauth.games.achievement.progressed.v1',
   achievementRevoked: 'qtiauth.games.achievement.revoked.v1',
+  statUpdated: 'qtiauth.games.stat.updated.v1',
+  leaderboardEntryRemoved: 'qtiauth.games.leaderboard_entry.removed.v1',
+  playtimeSessionEnded: 'qtiauth.games.playtime.ended.v1',
 } as const;
 
 export type GamesEventType = (typeof GAMES_EVENTS)[keyof typeof GAMES_EVENTS];

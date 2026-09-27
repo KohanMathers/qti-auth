@@ -19,6 +19,7 @@ import { createKeyBatch, hashCode, normalizeCode } from './keys.ts';
 import { definition } from './service.ts';
 import { gamesEncryptionKey } from './settings.ts';
 import { gamesService } from './start.ts';
+import { createLeaderboard, createStat, readLeaderboard } from './stats.ts';
 
 const HOST = 'me.example.com';
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
@@ -393,6 +394,211 @@ describe('games service', () => {
     });
     expect(rightToken.status).toBe(200);
     expect(await outboxTypes()).toContain('qtiauth.games.achievement.unlocked.v1');
+  });
+
+  it('records player stats, feeds a leaderboard and hides under-18 entries by default', async () => {
+    const now = new Date();
+    const created = await createGame(games.context.db, {
+      slug: 'stat-game',
+      name: 'Stat Game',
+      description: '',
+      icon: null,
+      art: null,
+      status: 'released',
+      lease_duration_seconds: null,
+      cloud_save_quota_bytes: null,
+      steam_app_id: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (created.status !== 'ok') throw new Error('stat-game create failed');
+    const gameId = created.game.id;
+    const stat = await createStat(games.context.db, {
+      gameId,
+      key: 'score',
+      type: 'int',
+      aggregation: 'max',
+      authority: 'player',
+      max_delta_per_update: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (stat.status !== 'ok') throw new Error('stat create failed');
+    const board = await createLeaderboard(games.context.db, {
+      gameId,
+      statKey: 'score',
+      slug: 'top-scores',
+      name: 'Top Scores',
+      sort: 'desc',
+      reset_period: 'never',
+      requireGameAuthority: false,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (board.status !== 'ok') throw new Error('leaderboard create failed');
+
+    const adult = '99999999-9999-4999-8999-999999999999';
+    const teen = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    async function submit(
+      player: string,
+      ageBand: 'under_13' | '13_to_15' | '16_to_17' | 'adult',
+      value: number,
+    ): Promise<Response> {
+      return fetch(`${games.url}/api/v1/games/stat-game/stats/score/update`, {
+        method: 'POST',
+        headers: {
+          ...identityHeaders(key, 'games', {
+            auth: 'oauth',
+            sub: player,
+            scopes: ['game_stats.write'],
+            game_id: gameId,
+            client_id: 'stat-client',
+            age_band: ageBand,
+          }),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ value }),
+      });
+    }
+    expect((await submit(adult, 'adult', 100)).status).toBe(200);
+    expect((await submit(teen, '13_to_15', 200)).status).toBe(200);
+    expect(await outboxTypes()).toContain('qtiauth.games.stat.updated.v1');
+
+    const entries = await readLeaderboard(games.context.db, {
+      leaderboardId: board.leaderboard.id,
+      period_started_at: board.leaderboard.period_started_at,
+      sort: 'desc',
+      limit: 10,
+    });
+    expect(entries.map((row) => row.user_id)).toEqual([teen, adult]);
+    expect(entries[0]?.hidden).toBe(true);
+    expect(entries[1]?.hidden).toBe(false);
+
+    const anon = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const view = await fetch(`${games.url}/api/v1/games/stat-game/leaderboards/score/top-scores`, {
+      headers: identityHeaders(key, 'games', { sub: anon }),
+    });
+    expect(view.status).toBe(200);
+    const body = (await view.json()) as {
+      items: { rank: number; user_id: string | null; display_name: string }[];
+    };
+    expect(body.items).toHaveLength(2);
+    expect(body.items[0]?.user_id).toBeNull();
+    expect(body.items[0]?.display_name).toBe('Hidden player');
+    expect(body.items[1]?.user_id).toBe(adult);
+  });
+
+  it('rejects a player-authority write on a game-authority stat', async () => {
+    const now = new Date();
+    const authGame = await createGame(games.context.db, {
+      slug: 'auth-game',
+      name: 'Authority Game',
+      description: '',
+      icon: null,
+      art: null,
+      status: 'released',
+      lease_duration_seconds: null,
+      cloud_save_quota_bytes: null,
+      steam_app_id: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (authGame.status !== 'ok') throw new Error('auth-game create failed');
+    const stat = await createStat(games.context.db, {
+      gameId: authGame.game.id,
+      key: 'ranked-elo',
+      type: 'float',
+      aggregation: 'latest',
+      authority: 'game',
+      max_delta_per_update: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    expect(stat.status).toBe('ok');
+    const player = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const response = await fetch(`${games.url}/api/v1/games/auth-game/stats/ranked-elo/update`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'games', {
+          auth: 'oauth',
+          sub: player,
+          scopes: ['game_stats.write'],
+          game_id: authGame.game.id,
+          client_id: 'auth-client',
+        }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ value: 1500 }),
+    });
+    expect(response.status).toBe(403);
+    const problem = (await response.json()) as { code: string };
+    expect(problem.code).toBe('GAMES_STAT_AUTHORITY_MISMATCH');
+  });
+
+  it('tracks a playtime session end-to-end and reports remaining time', async () => {
+    const now = new Date();
+    const created = await createGame(games.context.db, {
+      slug: 'play-game',
+      name: 'Play Game',
+      description: '',
+      icon: null,
+      art: null,
+      status: 'released',
+      lease_duration_seconds: null,
+      cloud_save_quota_bytes: null,
+      steam_app_id: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (created.status !== 'ok') throw new Error('play-game create failed');
+    const player = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const headers = {
+      ...identityHeaders(key, 'games', {
+        auth: 'oauth',
+        sub: player,
+        scopes: ['game_stats.write'],
+        game_id: created.game.id,
+        client_id: 'play-client',
+      }),
+      'content-type': 'application/json',
+    };
+
+    const started = await fetch(`${games.url}/api/v1/games/play-game/playtime/start`, {
+      method: 'POST',
+      headers,
+    });
+    expect(started.status).toBe(201);
+    const startBody = (await started.json()) as {
+      session_id: string;
+      remaining_seconds: number | null;
+    };
+    expect(startBody.remaining_seconds).toBeNull();
+
+    const heartbeat = await fetch(
+      `${games.url}/api/v1/games/play-game/playtime/${startBody.session_id}/heartbeat`,
+      { method: 'POST', headers },
+    );
+    expect(heartbeat.status).toBe(200);
+
+    const ended = await fetch(
+      `${games.url}/api/v1/games/play-game/playtime/${startBody.session_id}/end`,
+      { method: 'POST', headers },
+    );
+    expect(ended.status).toBe(200);
+    const endBody = (await ended.json()) as { duration_seconds: number };
+    expect(endBody.duration_seconds).toBeGreaterThanOrEqual(0);
+    expect(await outboxTypes()).toContain('qtiauth.games.playtime.ended.v1');
+
+    const remaining = await fetch(`${games.url}/api/v1/games/play-game/playtime/remaining`, {
+      headers,
+    });
+    expect(remaining.status).toBe(200);
+    const remainingBody = (await remaining.json()) as {
+      remaining_seconds: number | null;
+      used_seconds: number;
+    };
+    expect(remainingBody.remaining_seconds).toBeNull();
+    expect(remainingBody.used_seconds).toBeGreaterThanOrEqual(0);
   });
 
   it('recomputes rarity across owners of a game', async () => {

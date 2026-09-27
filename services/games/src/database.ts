@@ -108,6 +108,83 @@ export interface AchievementRarityTable {
   computed_at: Date;
 }
 
+export type StatType = 'int' | 'float' | 'duration';
+export type StatAggregation = 'sum' | 'max' | 'min' | 'latest';
+export type StatAuthority = 'player' | 'game';
+export type LeaderboardSort = 'asc' | 'desc';
+export type LeaderboardResetPeriod = 'never' | 'daily' | 'weekly' | 'monthly' | `season:${string}`;
+
+export interface StatDefinitionsTable {
+  id: string;
+  game_id: string;
+  key: string;
+  type: StatType;
+  aggregation: StatAggregation;
+  authority: StatAuthority;
+  max_delta_per_update: number | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface StatValuesTable {
+  stat_id: string;
+  user_id: string;
+  value: number;
+  updates: number;
+  updated_at: Date;
+  created_at: Date;
+}
+
+export interface StatCustomDataTable {
+  game_id: string;
+  user_id: string;
+  data: Record<string, unknown>;
+  updated_at: Date;
+}
+
+export interface LeaderboardsTable {
+  id: string;
+  stat_id: string;
+  slug: string;
+  name: string;
+  sort: LeaderboardSort;
+  reset_period: LeaderboardResetPeriod;
+  period_started_at: Date;
+  period_ends_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface LeaderboardEntriesTable {
+  leaderboard_id: string;
+  period_started_at: Date;
+  user_id: string;
+  score: number;
+  hidden: boolean;
+  removed_at: Date | null;
+  removed_reason: string | null;
+  updated_at: Date;
+}
+
+export interface PlaytimeSessionsTable {
+  id: string;
+  user_id: string;
+  game_id: string;
+  started_at: Date;
+  last_heartbeat_at: Date;
+  ended_at: Date | null;
+  duration_seconds: number;
+  created_at: Date;
+}
+
+export interface PlaytimeDailyTable {
+  user_id: string;
+  game_id: string;
+  day: Date;
+  seconds: number;
+  updated_at: Date;
+}
+
 export interface Database {
   games: GamesTable;
   products: ProductsTable;
@@ -118,4 +195,11 @@ export interface Database {
   achievements: AchievementsTable;
   achievement_unlocks: AchievementUnlocksTable;
   achievement_rarity: AchievementRarityTable;
+  stat_definitions: StatDefinitionsTable;
+  stat_values: StatValuesTable;
+  stat_custom_data: StatCustomDataTable;
+  leaderboards: LeaderboardsTable;
+  leaderboard_entries: LeaderboardEntriesTable;
+  playtime_sessions: PlaytimeSessionsTable;
+  playtime_daily: PlaytimeDailyTable;
 }

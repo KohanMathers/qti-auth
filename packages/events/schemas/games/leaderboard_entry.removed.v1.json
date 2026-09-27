@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.leaderboard_entry.removed.v1",
+  "title": "Leaderboard entry removed",
+  "description": "An admin removed a player's leaderboard entry, for example after a cheating investigation. The subject is the leaderboard.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "leaderboard_id",
+    "stat_id",
+    "user_id",
+    "game_id",
+    "leaderboard_slug",
+    "period_started_at",
+    "reason"
+  ],
+  "properties": {
+    "leaderboard_id": {
+      "description": "The leaderboard definition.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "stat_id": {
+      "description": "The stat the leaderboard is defined on.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "user_id": {
+      "description": "The account that held the entry.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "game_id": {
+      "description": "The game the leaderboard belongs to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "leaderboard_slug": {
+      "description": "Stable per-stat identifier for the leaderboard.",
+      "type": "string",
+      "minLength": 1
+    },
+    "period_started_at": {
+      "description": "Which period the removed entry belongs to.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "reason": {
+      "description": "Why the entry was removed.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

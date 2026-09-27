@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.stat.updated.v1",
+  "title": "Game stat updated",
+  "description": "A player's value for a game stat changed. The subject is the stat definition.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stat_id",
+    "user_id",
+    "game_id",
+    "stat_key",
+    "trust",
+    "authority",
+    "value",
+    "updated_at"
+  ],
+  "properties": {
+    "stat_id": { "description": "The stat definition.", "type": "string", "format": "uuid" },
+    "user_id": {
+      "description": "The account whose value changed.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "game_id": {
+      "description": "The game the stat belongs to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "stat_key": {
+      "description": "Stable per-game identifier for the stat.",
+      "type": "string",
+      "minLength": 1
+    },
+    "trust": {
+      "description": "The trust level the write was accepted at. player means the player's own token wrote it; game means a game-authoritative write did.",
+      "enum": ["player", "game"]
+    },
+    "authority": {
+      "description": "The stat's declared authority.",
+      "enum": ["player", "game"]
+    },
+    "value": {
+      "description": "The player's value after this update.",
+      "type": "number"
+    },
+    "updated_at": {
+      "description": "When the value changed, in the service's clock.",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

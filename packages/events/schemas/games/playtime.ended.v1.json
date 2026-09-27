@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.playtime.ended.v1",
+  "title": "Playtime session ended",
+  "description": "A playtime session finished, either because the game reported an end or because the heartbeat lapsed. The subject is the session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["session_id", "user_id", "game_id", "started_at", "ended_at", "duration_seconds"],
+  "properties": {
+    "session_id": { "description": "The session record.", "type": "string", "format": "uuid" },
+    "user_id": {
+      "description": "The account the session belongs to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "game_id": {
+      "description": "The game the session belongs to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "started_at": {
+      "description": "When the session started.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "ended_at": {
+      "description": "When the session ended.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_seconds": {
+      "description": "How long the session lasted, in whole seconds.",
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

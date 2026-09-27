@@ -11,10 +11,21 @@ import {
 import { eraseUserKeys, exportUserKeys, sweepRedeemAttempts } from './keys.ts';
 import { gamesMetrics } from './metrics.ts';
 import { type Context, type definition, router } from './service.ts';
+import {
+  closeStalePlaytimeSessions,
+  eraseUserStats,
+  exportUserCustomData,
+  exportUserPlaytime,
+  exportUserStats,
+  resetDueLeaderboards,
+} from './stats.ts';
+
+const STALE_PLAYTIME_SECONDS = 300;
 
 export const RETENTION_JOB = 'retention.sweep';
 export const EXPIRE_ENTITLEMENTS_JOB = 'games.expire_entitlements';
 export const RECOMPUTE_RARITY_JOB = 'achievements.recompute_rarity';
+export const RESET_LEADERBOARDS_JOB = 'leaderboards.reset_periodic';
 
 export function gamesService() {
   return {
@@ -24,11 +35,15 @@ export function gamesService() {
         entitlements: await exportUserEntitlements(db, userId),
         keys: await exportUserKeys(db, userId),
         achievements: await exportUserAchievements(db, userId),
+        stats: await exportUserStats(db, userId),
+        custom_data: await exportUserCustomData(db, userId),
+        playtime: await exportUserPlaytime(db, userId),
       }),
       eraseUser: async (userId, trx) => {
         await eraseUserEntitlements(trx, userId);
         await eraseUserKeys(trx, userId);
         await eraseUserAchievements(trx, userId);
+        await eraseUserStats(trx, userId);
       },
     }),
     start: async (ctx: Context) => {
@@ -69,6 +84,31 @@ export function gamesService() {
             },
             onError: (error) => {
               log.error('achievement rarity recompute failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: RESET_LEADERBOARDS_JOB,
+            metrics: ctx.busMetrics,
+            handler: async () => {
+              const now = new Date();
+              const summary = await resetDueLeaderboards(db, now);
+              const closed = await closeStalePlaytimeSessions(db, {
+                staleAfterSeconds: STALE_PLAYTIME_SECONDS,
+                now,
+              });
+              if (summary.boards > 0 || closed.closed > 0) {
+                log.info('leaderboards rolled and stale sessions closed', {
+                  boards: summary.boards,
+                  playtime_sessions: closed.closed,
+                });
+                if (closed.closed > 0) ctx.outbox.wake();
+              }
+            },
+            onError: (error) => {
+              log.error('leaderboard reset failed', { error });
             },
           }),
         );
