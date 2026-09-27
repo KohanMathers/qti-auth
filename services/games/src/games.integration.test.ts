@@ -11,6 +11,7 @@ import { natsUrl, startNats, startPostgres } from '@qtiauth/testing';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { createAchievement, recomputeRarity } from './achievements.ts';
 import { createGame, createProduct } from './catalog.ts';
 import type { Database } from './database.ts';
 import { grantEntitlement } from './entitlements.ts';
@@ -311,5 +312,126 @@ describe('games service', () => {
       Buffer.from(hashCode(normalizeCode(codes[0] ?? ''))).toString('hex'),
     );
     expect(await outboxTypes()).toContain('qtiauth.games.entitlement.granted.v1');
+  });
+
+  it('rejects an unlock from a token issued to another game', async () => {
+    const now = new Date();
+    const home = await createGame(games.context.db, {
+      slug: 'home-game',
+      name: 'Home Game',
+      description: '',
+      icon: null,
+      art: null,
+      status: 'released',
+      lease_duration_seconds: null,
+      cloud_save_quota_bytes: null,
+      steam_app_id: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (home.status !== 'ok') throw new Error('home game create failed');
+    const other = await createGame(games.context.db, {
+      slug: 'other-game',
+      name: 'Other Game',
+      description: '',
+      icon: null,
+      art: null,
+      status: 'released',
+      lease_duration_seconds: null,
+      cloud_save_quota_bytes: null,
+      steam_app_id: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (other.status !== 'ok') throw new Error('other game create failed');
+    const created = await createAchievement(games.context.db, {
+      gameId: home.game.id,
+      slug: 'first-clear',
+      name: 'First Clear',
+      description: 'Finish the tutorial',
+      icon: null,
+      points: 10,
+      hidden: false,
+      progress_target: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    expect(created.status).toBe('ok');
+
+    const player = '66666666-6666-4666-8666-666666666666';
+    const wrongToken = await fetch(`${games.url}/api/v1/games/home-game/achievements/unlock`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'games', {
+          auth: 'oauth',
+          sub: player,
+          scopes: ['achievements.write'],
+          game_id: other.game.id,
+          client_id: 'other-client',
+        }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ slug: 'first-clear' }),
+    });
+    expect(wrongToken.status).toBe(403);
+    const problem = (await wrongToken.json()) as { code: string };
+    expect(problem.code).toBe('GAMES_ACHIEVEMENT_WRONG_GAME');
+
+    const rightToken = await fetch(`${games.url}/api/v1/games/home-game/achievements/unlock`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'games', {
+          auth: 'oauth',
+          sub: player,
+          scopes: ['achievements.write'],
+          game_id: home.game.id,
+          client_id: 'home-client',
+        }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ slug: 'first-clear' }),
+    });
+    expect(rightToken.status).toBe(200);
+    expect(await outboxTypes()).toContain('qtiauth.games.achievement.unlocked.v1');
+  });
+
+  it('recomputes rarity across owners of a game', async () => {
+    const home = await games.context.db
+      .selectFrom('games')
+      .select(['id'])
+      .where('slug', '=', 'home-game')
+      .executeTakeFirstOrThrow();
+    const base = await games.context.db
+      .selectFrom('products')
+      .select(['id'])
+      .where('game_id', '=', home.id)
+      .where('slug', '=', 'base')
+      .executeTakeFirstOrThrow();
+    for (const uid of [
+      '77777777-7777-4777-8777-777777777777',
+      '88888888-8888-4888-8888-888888888888',
+    ]) {
+      const grant = await grantEntitlement(games.context.db, {
+        userId: uid,
+        productId: base.id,
+        gameId: home.id,
+        source: 'admin_grant',
+        grantedBy: ADMIN_ID,
+        expiresAt: null,
+        actor: { type: 'user', id: ADMIN_ID },
+        now: new Date(),
+      });
+      expect(grant.status).toBe('ok');
+    }
+    const summary = await recomputeRarity(games.context.db, new Date());
+    expect(summary.achievements).toBeGreaterThan(0);
+    const stored = await games.context.db
+      .selectFrom('achievement_rarity')
+      .innerJoin('achievements', 'achievements.id', 'achievement_rarity.achievement_id')
+      .select(['achievement_rarity.owners', 'achievement_rarity.rarity'])
+      .where('achievements.game_id', '=', home.id)
+      .execute();
+    expect(stored.length).toBeGreaterThan(0);
+    for (const row of stored) expect(row.owners).toBeGreaterThanOrEqual(2);
   });
 });

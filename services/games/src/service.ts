@@ -9,6 +9,8 @@ import {
 } from '@qtiauth/service-kit';
 
 import packageJson from '../package.json' with { type: 'json' };
+import { achievementAdminRoutes } from './achievement-admin-routes.ts';
+import { achievementRoutes } from './achievement-routes.ts';
 import { adminRoutes } from './admin-routes.ts';
 import type { Database } from './database.ts';
 import { GAMES_ERRORS } from './errors.ts';
@@ -33,6 +35,9 @@ export const definition = defineService({
     'games.keys.manage': {
       description: 'Generate, list, export and revoke key batches',
     },
+    'games.achievements.manage': {
+      description: 'Create, edit and delete achievement definitions and revoke unlocks',
+    },
   }),
   errors: GAMES_ERRORS,
 });
@@ -45,3 +50,5 @@ export const router = createServiceRouter<Context>(definition);
 routes(router);
 adminRoutes(router);
 keyAdminRoutes(router);
+achievementRoutes(router);
+achievementAdminRoutes(router);

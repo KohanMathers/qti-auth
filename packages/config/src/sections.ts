@@ -2079,6 +2079,8 @@ export const GAME_DESCRIPTION_MAX = 4_000;
 export const GAME_ART_MAX = 500;
 export const GAME_REVOKE_REASON_MAX = 500;
 export const GAME_KEY_LABEL_MAX = 80;
+export const GAME_ACHIEVEMENT_NAME_MAX = 120;
+export const GAME_ACHIEVEMENT_DESCRIPTION_MAX = 500;
 export const GAME_KEY_CHARSET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const GAME_KEY_CHARSET_MESSAGE =
   'Must be at least eight distinct ASCII characters and no whitespace';

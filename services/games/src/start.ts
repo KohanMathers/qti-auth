@@ -1,6 +1,7 @@
 import { consumeCron, pruneBusTables } from '@qtiauth/bus';
 import { type StartServiceOptions, type Stoppable, unwind } from '@qtiauth/service-kit';
 
+import { eraseUserAchievements, exportUserAchievements, recomputeRarity } from './achievements.ts';
 import type { Database } from './database.ts';
 import {
   eraseUserEntitlements,
@@ -13,6 +14,7 @@ import { type Context, type definition, router } from './service.ts';
 
 export const RETENTION_JOB = 'retention.sweep';
 export const EXPIRE_ENTITLEMENTS_JOB = 'games.expire_entitlements';
+export const RECOMPUTE_RARITY_JOB = 'achievements.recompute_rarity';
 
 export function gamesService() {
   return {
@@ -21,10 +23,12 @@ export function gamesService() {
       exportUser: async (userId) => ({
         entitlements: await exportUserEntitlements(db, userId),
         keys: await exportUserKeys(db, userId),
+        achievements: await exportUserAchievements(db, userId),
       }),
       eraseUser: async (userId, trx) => {
         await eraseUserEntitlements(trx, userId);
         await eraseUserKeys(trx, userId);
+        await eraseUserAchievements(trx, userId);
       },
     }),
     start: async (ctx: Context) => {
@@ -46,6 +50,25 @@ export function gamesService() {
             },
             onError: (error) => {
               log.error('entitlement expiry sweep failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          await consumeCron(bus, {
+            job: RECOMPUTE_RARITY_JOB,
+            metrics: ctx.busMetrics,
+            handler: async () => {
+              const summary = await recomputeRarity(db, new Date());
+              if (summary.achievements > 0) {
+                log.info('achievement rarity recomputed', {
+                  achievements: summary.achievements,
+                  owners: summary.owners,
+                });
+              }
+            },
+            onError: (error) => {
+              log.error('achievement rarity recompute failed', { error });
             },
           }),
         );

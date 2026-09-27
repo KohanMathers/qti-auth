@@ -74,6 +74,40 @@ export interface KeyRedeemAttemptsTable {
   updated_at: Date;
 }
 
+export interface AchievementsTable {
+  id: string;
+  game_id: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon: string | null;
+  points: number;
+  hidden: boolean;
+  progress_target: number | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface AchievementUnlocksTable {
+  id: string;
+  achievement_id: string;
+  user_id: string;
+  progress: number;
+  unlocked_at: Date | null;
+  revoked_at: Date | null;
+  revoke_reason: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface AchievementRarityTable {
+  achievement_id: string;
+  owners: number;
+  unlocks: number;
+  rarity: number;
+  computed_at: Date;
+}
+
 export interface Database {
   games: GamesTable;
   products: ProductsTable;
@@ -81,4 +115,7 @@ export interface Database {
   key_batches: KeyBatchesTable;
   game_keys: GameKeysTable;
   key_redeem_attempts: KeyRedeemAttemptsTable;
+  achievements: AchievementsTable;
+  achievement_unlocks: AchievementUnlocksTable;
+  achievement_rarity: AchievementRarityTable;
 }

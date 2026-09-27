@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.achievement.progressed.v1",
+  "title": "Achievement progress recorded",
+  "description": "A player progressed a progress achievement without unlocking it. Emitted alongside qtiauth.games.achievement.unlocked.v1 when the progress hits the target.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "unlock_id",
+    "achievement_id",
+    "user_id",
+    "game_id",
+    "achievement_slug",
+    "trust",
+    "progress",
+    "progress_target"
+  ],
+  "properties": {
+    "unlock_id": { "description": "The unlock record.", "type": "string", "format": "uuid" },
+    "achievement_id": {
+      "description": "The achievement definition.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "user_id": {
+      "description": "The account that progressed it.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "game_id": {
+      "description": "The game the achievement belongs to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "achievement_slug": {
+      "description": "Stable per-game identifier for the achievement.",
+      "type": "string",
+      "minLength": 1
+    },
+    "trust": {
+      "description": "The trust level the write was accepted at.",
+      "enum": ["player", "game"]
+    },
+    "progress": {
+      "description": "The player's current progress after this update.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "progress_target": {
+      "description": "The target at which the achievement unlocks.",
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

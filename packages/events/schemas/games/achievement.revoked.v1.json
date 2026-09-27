@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.achievement.revoked.v1",
+  "title": "Achievement unlock revoked",
+  "description": "An admin revoked an achievement unlock, for example after a cheating investigation. The subject is the unlock.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unlock_id", "achievement_id", "user_id", "game_id", "achievement_slug", "reason"],
+  "properties": {
+    "unlock_id": { "description": "The unlock record.", "type": "string", "format": "uuid" },
+    "achievement_id": {
+      "description": "The achievement definition.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "user_id": { "description": "The account that held it.", "type": "string", "format": "uuid" },
+    "game_id": {
+      "description": "The game the achievement belongs to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "achievement_slug": {
+      "description": "Stable per-game identifier for the achievement.",
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "description": "Why the unlock was revoked.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

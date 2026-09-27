@@ -785,12 +785,12 @@ Spec: §7.3
 
 **Done when:** brute-forcing keys from one IP hits CAPTCHA, then rate limits.
 
-### P7.4 Achievements — M
+### P7.4 Achievements — M ✅
 Spec: §7.4
 
-- [ ] Definitions, hidden achievements, progress achievements with auto-unlock.
-- [ ] Trust-based unlock and progress with the game's player token.
-- [ ] Nightly rarity. Admin revoke.
+- [x] Definitions, hidden achievements, progress achievements with auto-unlock.
+- [x] Trust-based unlock and progress with the game's player token.
+- [x] Nightly rarity. Admin revoke.
 
 **Done when:** a token from a different authorized app can't unlock another game's achievement.
 

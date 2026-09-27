@@ -25,4 +25,20 @@ export const GAMES_ERRORS = defineErrors({
   GAMES_KEY_BATCH_INVALID: { status: 400, title: 'This key batch is not valid' },
   GAMES_CAPTCHA_REQUIRED: { status: 403, title: 'Complete the CAPTCHA to continue' },
   GAMES_CAPTCHA_INVALID: { status: 400, title: 'The CAPTCHA was not accepted' },
+  GAMES_ACHIEVEMENT_NOT_FOUND: { status: 404, title: 'No such achievement' },
+  GAMES_ACHIEVEMENT_SLUG_TAKEN: { status: 409, title: 'That achievement slug is already in use' },
+  GAMES_ACHIEVEMENT_INVALID: { status: 400, title: 'This achievement is not valid' },
+  GAMES_ACHIEVEMENT_NOT_PROGRESS: {
+    status: 409,
+    title: 'This achievement is not a progress achievement',
+  },
+  GAMES_ACHIEVEMENT_WRONG_GAME: {
+    status: 403,
+    title: 'This token cannot act on that game',
+  },
+  GAMES_ACHIEVEMENT_UNLOCK_NOT_FOUND: { status: 404, title: 'No such achievement unlock' },
+  GAMES_ACHIEVEMENT_UNLOCK_NOT_UNLOCKED: {
+    status: 409,
+    title: 'This achievement is not currently unlocked',
+  },
 });

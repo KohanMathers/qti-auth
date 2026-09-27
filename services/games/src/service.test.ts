@@ -15,6 +15,7 @@ describe('games service', () => {
       '0001_bus_tables',
       '0002_catalog',
       '0003_keys',
+      '0004_achievements',
     ]);
   });
 
@@ -23,28 +24,36 @@ describe('games service', () => {
     const { routes, permissions } = router.manifest();
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
       'DELETE /api/v1/admin/games/:slug',
+      'DELETE /api/v1/admin/games/:slug/achievements/:achievement_slug',
       'DELETE /api/v1/admin/games/:slug/products/:product_slug',
       'GET /api/v1/admin/entitlements',
       'GET /api/v1/admin/games',
       'GET /api/v1/admin/games/:slug',
+      'GET /api/v1/admin/games/:slug/achievements',
       'GET /api/v1/admin/games/:slug/key-batches',
       'GET /api/v1/admin/games/:slug/products',
       'GET /api/v1/admin/key-batches/:batch_id',
       'GET /api/v1/admin/key-batches/:batch_id/keys.csv',
       'GET /api/v1/games',
       'GET /api/v1/games/:slug',
+      'GET /api/v1/games/:slug/achievements',
       'GET /api/v1/games/:slug/owned',
       'GET /api/v1/games/keys/captcha',
       'GET /api/v1/games/owned',
       'PATCH /api/v1/admin/games/:slug',
+      'PATCH /api/v1/admin/games/:slug/achievements/:achievement_slug',
       'PATCH /api/v1/admin/games/:slug/products/:product_slug',
+      'POST /api/v1/admin/achievement-unlocks/:unlock_id/revoke',
       'POST /api/v1/admin/entitlements/:entitlement_id/revoke',
       'POST /api/v1/admin/games',
+      'POST /api/v1/admin/games/:slug/achievements',
       'POST /api/v1/admin/games/:slug/products',
       'POST /api/v1/admin/games/:slug/products/:product_slug/entitlements',
       'POST /api/v1/admin/games/:slug/products/:product_slug/key-batches',
       'POST /api/v1/admin/games/:slug/server-client/rotate',
       'POST /api/v1/admin/key-batches/:batch_id/revoke',
+      'POST /api/v1/games/:slug/achievements/progress',
+      'POST /api/v1/games/:slug/achievements/unlock',
       'POST /api/v1/games/entitlements',
       'POST /api/v1/games/entitlements/:entitlement_id/revoke',
       'POST /api/v1/games/keys/redeem',
@@ -53,6 +62,7 @@ describe('games service', () => {
       expect(policies).toContain(route.rate_limit);
     }
     expect(permissions.map((permission) => permission.name).sort()).toEqual([
+      'games.achievements.manage',
       'games.catalog.manage',
       'games.entitlements.manage',
       'games.keys.manage',

@@ -32,6 +32,72 @@ export interface AuditRecordedData {
 
 export const SYSTEM_ACTOR: EventActor = { type: 'system', id: 'games' };
 
+export interface AchievementUnlockedData {
+  unlock_id: string;
+  achievement_id: string;
+  user_id: string;
+  game_id: string;
+  achievement_slug: string;
+  trust: GameTrustLevel;
+  unlocked_at: string;
+}
+
+export interface AchievementProgressedData {
+  unlock_id: string;
+  achievement_id: string;
+  user_id: string;
+  game_id: string;
+  achievement_slug: string;
+  trust: GameTrustLevel;
+  progress: number;
+  progress_target: number;
+}
+
+export interface AchievementRevokedData {
+  unlock_id: string;
+  achievement_id: string;
+  user_id: string;
+  game_id: string;
+  achievement_slug: string;
+  reason: string;
+}
+
+export function achievementUnlockedEvent(
+  data: AchievementUnlockedData,
+  actor: EventActor,
+): NewEvent<AchievementUnlockedData> {
+  return {
+    type: GAMES_EVENTS.achievementUnlocked,
+    actor,
+    subject: { type: 'achievement_unlock', id: data.unlock_id },
+    data,
+  };
+}
+
+export function achievementProgressedEvent(
+  data: AchievementProgressedData,
+  actor: EventActor,
+): NewEvent<AchievementProgressedData> {
+  return {
+    type: GAMES_EVENTS.achievementProgressed,
+    actor,
+    subject: { type: 'achievement_unlock', id: data.unlock_id },
+    data,
+  };
+}
+
+export function achievementRevokedEvent(
+  data: AchievementRevokedData,
+  actor: EventActor,
+): NewEvent<AchievementRevokedData> {
+  return {
+    type: GAMES_EVENTS.achievementRevoked,
+    actor,
+    subject: { type: 'achievement_unlock', id: data.unlock_id },
+    data,
+  };
+}
+
 export function entitlementGrantedEvent(
   entitlementId: string,
   data: EntitlementGrantedData,

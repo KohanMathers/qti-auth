@@ -14,12 +14,18 @@ export type KeyRedemptionOutcome = (typeof KEY_REDEMPTION_OUTCOMES)[number];
 export const CAPTCHA_RESULTS = ['shown', 'solved', 'failed'] as const;
 export type CaptchaResult = (typeof CAPTCHA_RESULTS)[number];
 
+export const ACHIEVEMENT_TRUST_LEVELS = ['player', 'game'] as const;
+export type AchievementTrustLevel = (typeof ACHIEVEMENT_TRUST_LEVELS)[number];
+
 export interface GamesMetrics {
   granted: (source: EntitlementSource) => void;
   revoked: (source: EntitlementSource) => void;
   keyRedeemed: (outcome: KeyRedemptionOutcome) => void;
   keysGenerated: (count: number) => void;
   captcha: (result: CaptchaResult) => void;
+  achievementUnlocked: (trust: AchievementTrustLevel) => void;
+  achievementProgressed: (trust: AchievementTrustLevel) => void;
+  achievementRevoked: () => void;
 }
 
 const created = new WeakMap<Metrics, GamesMetrics>();
@@ -58,6 +64,20 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     help: 'CAPTCHA prompts on key redemption, by result: shown, solved or failed.',
     labelNames: ['result'],
   });
+  const achievementUnlocks = metrics.counter({
+    name: 'qtiauth_games_achievement_unlocks_total',
+    help: 'Achievement unlocks, by trust level.',
+    labelNames: ['trust'],
+  });
+  const achievementProgress = metrics.counter({
+    name: 'qtiauth_games_achievement_progress_total',
+    help: 'Achievement progress updates that did not unlock, by trust level.',
+    labelNames: ['trust'],
+  });
+  const achievementRevokes = metrics.counter({
+    name: 'qtiauth_games_achievement_revokes_total',
+    help: 'Achievement unlocks revoked by an admin.',
+  });
   return {
     granted: (source) => {
       grants.inc({ source });
@@ -73,6 +93,15 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     },
     captcha: (result) => {
       captcha.inc({ result });
+    },
+    achievementUnlocked: (trust) => {
+      achievementUnlocks.inc({ trust });
+    },
+    achievementProgressed: (trust) => {
+      achievementProgress.inc({ trust });
+    },
+    achievementRevoked: () => {
+      achievementRevokes.inc();
     },
   };
 }
