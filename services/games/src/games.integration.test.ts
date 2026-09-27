@@ -601,6 +601,221 @@ describe('games service', () => {
     expect(remainingBody.used_seconds).toBeGreaterThanOrEqual(0);
   });
 
+  it('issues a lease listing every owned product, verifies it and revokes it', async () => {
+    const now = new Date();
+    const created = await createGame(games.context.db, {
+      slug: 'licensed-game',
+      name: 'Licensed Game',
+      description: '',
+      icon: null,
+      art: null,
+      status: 'released',
+      lease_duration_seconds: 120,
+      cloud_save_quota_bytes: null,
+      steam_app_id: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (created.status !== 'ok') throw new Error('licensed-game create failed');
+    const dlc = await createProduct(games.context.db, {
+      gameId: created.game.id,
+      slug: 'season-one',
+      name: 'Season One',
+      description: '',
+      type: 'dlc',
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (dlc.status !== 'ok') throw new Error('licensed-game dlc create failed');
+    const player = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    for (const productSlug of ['base', 'season-one']) {
+      const product = await games.context.db
+        .selectFrom('products')
+        .select(['id'])
+        .where('game_id', '=', created.game.id)
+        .where('slug', '=', productSlug)
+        .executeTakeFirstOrThrow();
+      const grant = await grantEntitlement(games.context.db, {
+        userId: player,
+        productId: product.id,
+        gameId: created.game.id,
+        source: 'admin_grant',
+        grantedBy: ADMIN_ID,
+        expiresAt: null,
+        actor: { type: 'user', id: ADMIN_ID },
+        now,
+      });
+      expect(grant.status).toBe('ok');
+    }
+
+    const issue = await fetch(`${games.url}/api/v1/games/licensed-game/licensing/leases`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'games', { sub: player }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+    expect(issue.status).toBe(201);
+    const issued = (await issue.json()) as {
+      lease_id: string;
+      token: string;
+      products: { slug: string }[];
+    };
+    expect(issued.products.map((product) => product.slug).sort()).toEqual(['base', 'season-one']);
+    expect(await outboxTypes()).toContain('qtiauth.games.license_lease.issued.v1');
+
+    const verify = await fetch(`${games.url}/api/v1/games/licensing/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: issued.token }),
+    });
+    expect(verify.status).toBe(200);
+    const verified = (await verify.json()) as { valid: boolean; reason: string | null };
+    expect(verified.valid).toBe(true);
+
+    const revoke = await fetch(`${games.url}/api/v1/admin/licenses/${issued.lease_id}/revoke`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'games', {
+          sub: ADMIN_ID,
+          permissions: ['games.licensing.manage'],
+        }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ reason: 'admin decision' }),
+    });
+    expect(revoke.status).toBe(200);
+    expect(await outboxTypes()).toContain('qtiauth.games.license_lease.revoked.v1');
+
+    const afterRevoke = await fetch(`${games.url}/api/v1/games/licensing/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: issued.token }),
+    });
+    const revokedBody = (await afterRevoke.json()) as { valid: boolean; reason: string | null };
+    expect(revokedBody.valid).toBe(false);
+    expect(revokedBody.reason).toBe('revoked');
+
+    const revocations = await fetch(
+      `${games.url}/api/v1/games/licensing/revocations?game_slug=licensed-game`,
+    );
+    expect(revocations.status).toBe(200);
+    const list = (await revocations.json()) as { revocations: { jti: string }[]; token: string };
+    expect(list.revocations.map((row) => row.jti)).toContain(issued.lease_id);
+    expect(list.token.split('.').length).toBe(3);
+  });
+
+  it('publishes a jwks under the well-known path', async () => {
+    const response = await fetch(`${games.url}/.well-known/qtiauth-license-keys.json`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { keys: { kid: string; alg: string }[] };
+    expect(body.keys.length).toBeGreaterThan(0);
+    expect(body.keys[0]?.alg).toBe('EdDSA');
+  });
+
+  it('enforces the device limit when a game requires device binding', async () => {
+    const now = new Date();
+    const created = await createGame(games.context.db, {
+      slug: 'device-game',
+      name: 'Device Game',
+      description: '',
+      icon: null,
+      art: null,
+      status: 'released',
+      lease_duration_seconds: 120,
+      cloud_save_quota_bytes: null,
+      steam_app_id: null,
+      licensing_device_binding: true,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    if (created.status !== 'ok') throw new Error('device-game create failed');
+    const player = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    const base = await games.context.db
+      .selectFrom('products')
+      .select(['id'])
+      .where('game_id', '=', created.game.id)
+      .where('slug', '=', 'base')
+      .executeTakeFirstOrThrow();
+    const grant = await grantEntitlement(games.context.db, {
+      userId: player,
+      productId: base.id,
+      gameId: created.game.id,
+      source: 'admin_grant',
+      grantedBy: ADMIN_ID,
+      expiresAt: null,
+      actor: { type: 'user', id: ADMIN_ID },
+      now,
+    });
+    expect(grant.status).toBe('ok');
+
+    const missingDevice = await fetch(`${games.url}/api/v1/games/device-game/licensing/leases`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'games', { sub: player }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+    expect(missingDevice.status).toBe(400);
+    const missingBody = (await missingDevice.json()) as { code: string };
+    expect(missingBody.code).toBe('GAMES_LICENSING_DEVICE_REQUIRED');
+
+    const limit = games.context.config.games.licensing.max_devices;
+    for (let deviceIndex = 0; deviceIndex < limit; deviceIndex++) {
+      const response = await fetch(`${games.url}/api/v1/games/device-game/licensing/leases`, {
+        method: 'POST',
+        headers: {
+          ...identityHeaders(key, 'games', { sub: player }),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ device_id: `device-${String(deviceIndex)}` }),
+      });
+      expect(response.status).toBe(201);
+    }
+    const overLimit = await fetch(`${games.url}/api/v1/games/device-game/licensing/leases`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'games', { sub: player }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ device_id: 'device-overflow' }),
+    });
+    expect(overLimit.status).toBe(409);
+    const overBody = (await overLimit.json()) as { code: string };
+    expect(overBody.code).toBe('GAMES_LICENSING_DEVICE_LIMIT');
+
+    const devices = await fetch(`${games.url}/api/v1/games/device-game/licensing/devices`, {
+      headers: identityHeaders(key, 'games', { sub: player }),
+    });
+    const devicesBody = (await devices.json()) as { items: { lease_id: string }[] };
+    expect(devicesBody.items).toHaveLength(limit);
+    const revokeMine = await fetch(
+      `${games.url}/api/v1/games/device-game/licensing/devices/${devicesBody.items[0]?.lease_id ?? ''}`,
+      {
+        method: 'DELETE',
+        headers: identityHeaders(key, 'games', { sub: player }),
+      },
+    );
+    expect(revokeMine.status).toBe(204);
+  });
+
+  it('rejects a lease issuance for a user who does not own the game', async () => {
+    const stranger = '12121212-1212-4121-8121-121212121212';
+    const response = await fetch(`${games.url}/api/v1/games/licensed-game/licensing/leases`, {
+      method: 'POST',
+      headers: {
+        ...identityHeaders(key, 'games', { sub: stranger }),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { code: string };
+    expect(body.code).toBe('GAMES_LICENSING_NOT_OWNED');
+  });
+
   it('recomputes rarity across owners of a game', async () => {
     const home = await games.context.db
       .selectFrom('games')

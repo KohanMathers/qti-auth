@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.license_lease.revoked.v1",
+  "title": "Licence lease revoked",
+  "description": "An offline-play licence lease was revoked before its expiry. The subject is the lease.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lease_id", "user_id", "game_id", "reason"],
+  "properties": {
+    "lease_id": {
+      "description": "The lease. Also the lease token's jti, which appears in the revocation list.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "user_id": {
+      "description": "The account the lease was issued to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "game_id": {
+      "description": "The game the lease covered.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "description": "Why the lease was revoked.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

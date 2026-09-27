@@ -17,6 +17,7 @@ describe('games service', () => {
       '0003_keys',
       '0004_achievements',
       '0005_stats',
+      '0006_licensing',
     ]);
   });
 
@@ -29,12 +30,15 @@ describe('games service', () => {
       'DELETE /api/v1/admin/games/:slug/products/:product_slug',
       'DELETE /api/v1/admin/games/:slug/stats/:key',
       'DELETE /api/v1/admin/leaderboards/:leaderboard_id',
+      'DELETE /api/v1/games/:slug/licensing/devices/:lease_id',
+      'GET /.well-known/qtiauth-license-keys.json',
       'GET /api/v1/admin/entitlements',
       'GET /api/v1/admin/games',
       'GET /api/v1/admin/games/:slug',
       'GET /api/v1/admin/games/:slug/achievements',
       'GET /api/v1/admin/games/:slug/key-batches',
       'GET /api/v1/admin/games/:slug/leaderboards',
+      'GET /api/v1/admin/games/:slug/licenses',
       'GET /api/v1/admin/games/:slug/products',
       'GET /api/v1/admin/games/:slug/stats',
       'GET /api/v1/admin/key-batches/:batch_id',
@@ -44,11 +48,13 @@ describe('games service', () => {
       'GET /api/v1/games/:slug/achievements',
       'GET /api/v1/games/:slug/custom-data',
       'GET /api/v1/games/:slug/leaderboards/:stat/:board',
+      'GET /api/v1/games/:slug/licensing/devices',
       'GET /api/v1/games/:slug/owned',
       'GET /api/v1/games/:slug/playtime/remaining',
       'GET /api/v1/games/:slug/stats',
       'GET /api/v1/games/:slug/stats/values',
       'GET /api/v1/games/keys/captcha',
+      'GET /api/v1/games/licensing/revocations',
       'GET /api/v1/games/owned',
       'PATCH /api/v1/admin/games/:slug',
       'PATCH /api/v1/admin/games/:slug/achievements/:achievement_slug',
@@ -67,9 +73,11 @@ describe('games service', () => {
       'POST /api/v1/admin/games/:slug/stats',
       'POST /api/v1/admin/key-batches/:batch_id/revoke',
       'POST /api/v1/admin/leaderboards/:leaderboard_id/entries/:user_id/remove',
+      'POST /api/v1/admin/licenses/:lease_id/revoke',
       'POST /api/v1/games/:slug/achievements/progress',
       'POST /api/v1/games/:slug/achievements/unlock',
       'POST /api/v1/games/:slug/leaderboards/:stat/:board/visibility',
+      'POST /api/v1/games/:slug/licensing/leases',
       'POST /api/v1/games/:slug/playtime/:session_id/end',
       'POST /api/v1/games/:slug/playtime/:session_id/heartbeat',
       'POST /api/v1/games/:slug/playtime/start',
@@ -77,6 +85,7 @@ describe('games service', () => {
       'POST /api/v1/games/entitlements',
       'POST /api/v1/games/entitlements/:entitlement_id/revoke',
       'POST /api/v1/games/keys/redeem',
+      'POST /api/v1/games/licensing/verify',
       'PUT /api/v1/games/:slug/custom-data',
     ]);
     for (const route of routes) {
@@ -87,6 +96,7 @@ describe('games service', () => {
       'games.catalog.manage',
       'games.entitlements.manage',
       'games.keys.manage',
+      'games.licensing.manage',
       'games.stats.manage',
     ]);
     const document = openApiDocument(router) as { paths: Record<string, unknown> };

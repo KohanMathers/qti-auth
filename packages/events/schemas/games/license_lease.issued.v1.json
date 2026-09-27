@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qtiauth:event:qtiauth.games.license_lease.issued.v1",
+  "title": "Licence lease issued",
+  "description": "An offline-play licence lease was signed for a user and a game. The subject is the lease.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lease_id",
+    "user_id",
+    "game_id",
+    "device_bound",
+    "product_count",
+    "issued_at",
+    "expires_at"
+  ],
+  "properties": {
+    "lease_id": {
+      "description": "The lease. Also the lease token's jti.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "user_id": {
+      "description": "The account the lease was issued to.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "game_id": {
+      "description": "The game this lease covers.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "device_bound": {
+      "description": "Whether the lease is bound to a device hash.",
+      "type": "boolean"
+    },
+    "product_count": {
+      "description": "How many owned products the lease lists.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "issued_at": {
+      "description": "When the lease was signed.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "description": "When the lease stops verifying.",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

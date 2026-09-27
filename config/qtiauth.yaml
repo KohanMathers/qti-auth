@@ -325,6 +325,14 @@ games:
     group_length: 4
     groups: 4
     max_batch: 10000
+  licensing:
+    signing:
+      algorithm: EdDSA
+      rotate_after: 90d
+      retain_after_rotation: 30d
+      refresh: 30s
+    max_devices: 5
+    revocation_list_ttl: 5m
 
 oidc:
   issuer: null # null uses the api surface origin

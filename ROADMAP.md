@@ -808,15 +808,15 @@ Spec: §7.5
 **Done when:** with `require_game_authority: true` a leaderboard can't be created on a player-authority
 stat, and a weekly board resets while keeping history.
 
-### P7.6 Licensing — M
+### P7.6 Licensing — M ✅
 Spec: §7.7
 
-- [ ] Leases with `jti`, per-game duration and all owned products.
-- [ ] Dedicated licensing keys at `/.well-known/qtiauth-license-keys.json`.
-- [ ] Online verify endpoint, signed revocation list.
-- [ ] Optional device binding with `max_devices` and a self-service device list.
-- [ ] Admin revoke.
-- [ ] **Sample offline verifier** (small TypeScript and C# snippets) in the docs.
+- [x] Leases with `jti`, per-game duration and all owned products.
+- [x] Dedicated licensing keys at `/.well-known/qtiauth-license-keys.json`.
+- [x] Online verify endpoint, signed revocation list.
+- [x] Optional device binding with `max_devices` and a self-service device list.
+- [x] Admin revoke.
+- [x] **Sample offline verifier** (small TypeScript and C# snippets) in the docs.
 
 **Done when:** the sample verifier validates a lease with the network disabled and rejects it after
 pulling a revocation list that contains its `jti`.

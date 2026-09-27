@@ -17,6 +17,17 @@ export type CaptchaResult = (typeof CAPTCHA_RESULTS)[number];
 export const ACHIEVEMENT_TRUST_LEVELS = ['player', 'game'] as const;
 export type AchievementTrustLevel = (typeof ACHIEVEMENT_TRUST_LEVELS)[number];
 
+export const LICENSE_ISSUE_OUTCOMES = [
+  'ok',
+  'not_owned',
+  'device_required',
+  'device_limit',
+] as const;
+export type LicenseIssueOutcome = (typeof LICENSE_ISSUE_OUTCOMES)[number];
+
+export const LICENSE_VERIFY_OUTCOMES = ['valid', 'invalid', 'revoked'] as const;
+export type LicenseVerifyOutcome = (typeof LICENSE_VERIFY_OUTCOMES)[number];
+
 export interface GamesMetrics {
   granted: (source: EntitlementSource) => void;
   revoked: (source: EntitlementSource) => void;
@@ -30,6 +41,11 @@ export interface GamesMetrics {
   leaderboardEntryRemoved: () => void;
   playtimeHeartbeat: () => void;
   playtimeEnded: () => void;
+  licenseIssued: (outcome: LicenseIssueOutcome) => void;
+  licenseRevoked: () => void;
+  licenseVerified: (outcome: LicenseVerifyOutcome) => void;
+  licenseKeyLoaded: (createdAt: number) => void;
+  licenseKeyRotated: () => void;
 }
 
 const created = new WeakMap<Metrics, GamesMetrics>();
@@ -99,6 +115,28 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     name: 'qtiauth_games_playtime_endings_total',
     help: 'Playtime sessions ended, either by the game or by heartbeat lapse.',
   });
+  const licenseIssues = metrics.counter({
+    name: 'qtiauth_games_license_leases_issued_total',
+    help: 'Licence lease issuance attempts, by outcome.',
+    labelNames: ['outcome'],
+  });
+  const licenseRevokes = metrics.counter({
+    name: 'qtiauth_games_license_leases_revoked_total',
+    help: 'Licence leases revoked before expiry.',
+  });
+  const licenseVerifies = metrics.counter({
+    name: 'qtiauth_games_license_verifications_total',
+    help: 'Online licence verifications, by outcome.',
+    labelNames: ['outcome'],
+  });
+  const licenseKey = metrics.gauge({
+    name: 'qtiauth_games_license_key_created_at_seconds',
+    help: 'When the active licence signing key was created.',
+  });
+  const licenseKeyRotations = metrics.counter({
+    name: 'qtiauth_games_license_key_rotations_total',
+    help: 'Licence signing key rotations completed by this replica.',
+  });
   return {
     granted: (source) => {
       grants.inc({ source });
@@ -135,6 +173,21 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     },
     playtimeEnded: () => {
       playtimeEndings.inc();
+    },
+    licenseIssued: (outcome) => {
+      licenseIssues.inc({ outcome });
+    },
+    licenseRevoked: () => {
+      licenseRevokes.inc();
+    },
+    licenseVerified: (outcome) => {
+      licenseVerifies.inc({ outcome });
+    },
+    licenseKeyLoaded: (createdAt) => {
+      licenseKey.set(Math.floor(createdAt / 1_000));
+    },
+    licenseKeyRotated: () => {
+      licenseKeyRotations.inc();
     },
   };
 }

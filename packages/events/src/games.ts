@@ -7,6 +7,8 @@ export const GAMES_EVENTS = {
   statUpdated: 'qtiauth.games.stat.updated.v1',
   leaderboardEntryRemoved: 'qtiauth.games.leaderboard_entry.removed.v1',
   playtimeSessionEnded: 'qtiauth.games.playtime.ended.v1',
+  licenseLeaseIssued: 'qtiauth.games.license_lease.issued.v1',
+  licenseLeaseRevoked: 'qtiauth.games.license_lease.revoked.v1',
 } as const;
 
 export type GamesEventType = (typeof GAMES_EVENTS)[keyof typeof GAMES_EVENTS];

@@ -92,6 +92,23 @@ export interface PlaytimeEndedData {
   duration_seconds: number;
 }
 
+export interface LicenseLeaseIssuedData {
+  lease_id: string;
+  user_id: string;
+  game_id: string;
+  device_bound: boolean;
+  product_count: number;
+  issued_at: string;
+  expires_at: string;
+}
+
+export interface LicenseLeaseRevokedData {
+  lease_id: string;
+  user_id: string;
+  game_id: string;
+  reason: string;
+}
+
 export function achievementUnlockedEvent(
   data: AchievementUnlockedData,
   actor: EventActor,
@@ -198,6 +215,30 @@ export function auditRecordedEvent(
     type: AUDIT_EVENTS.recorded,
     actor,
     subject: { type: data.target_type, id: data.target_id },
+    data,
+  };
+}
+
+export function licenseLeaseIssuedEvent(
+  data: LicenseLeaseIssuedData,
+  actor: EventActor,
+): NewEvent<LicenseLeaseIssuedData> {
+  return {
+    type: GAMES_EVENTS.licenseLeaseIssued,
+    actor,
+    subject: { type: 'license_lease', id: data.lease_id },
+    data,
+  };
+}
+
+export function licenseLeaseRevokedEvent(
+  data: LicenseLeaseRevokedData,
+  actor: EventActor,
+): NewEvent<LicenseLeaseRevokedData> {
+  return {
+    type: GAMES_EVENTS.licenseLeaseRevoked,
+    actor,
+    subject: { type: 'license_lease', id: data.lease_id },
     data,
   };
 }

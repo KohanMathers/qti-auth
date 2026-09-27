@@ -15,6 +15,7 @@ import { adminRoutes } from './admin-routes.ts';
 import type { Database } from './database.ts';
 import { GAMES_ERRORS } from './errors.ts';
 import { keyAdminRoutes } from './key-admin-routes.ts';
+import { licensingRoutes } from './licensing-routes.ts';
 import { routes } from './routes.ts';
 import { statAdminRoutes } from './stat-admin-routes.ts';
 import { statRoutes } from './stat-routes.ts';
@@ -44,6 +45,9 @@ export const definition = defineService({
       description:
         'Create, edit and delete stat definitions and leaderboards, and remove leaderboard entries',
     },
+    'games.licensing.manage': {
+      description: 'List and revoke offline licence leases for a game',
+    },
   }),
   errors: GAMES_ERRORS,
 });
@@ -60,3 +64,4 @@ achievementRoutes(router);
 achievementAdminRoutes(router);
 statRoutes(router);
 statAdminRoutes(router);
+licensingRoutes(router);

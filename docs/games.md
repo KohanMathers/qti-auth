@@ -16,6 +16,14 @@ games:
     group_length: 4
     groups: 4
     max_batch: 10000
+  licensing:
+    signing:
+      algorithm: EdDSA
+      rotate_after: 90d
+      retain_after_rotation: 30d
+      refresh: 30s
+    max_devices: 5
+    revocation_list_ttl: 5m
 
 features:
   games:
@@ -119,6 +127,98 @@ single-write jumps, but the game is responsible for the rest. A game without its
 write `authority: game` stats at all, because a server key shipped inside the client can be
 extracted.
 
+## Offline licensing
+
+With `features.games.licensing.enabled: true`, players can pull a signed lease that lists every product they own for a game. Leases sign with a dedicated key set (separate from the OIDC keys) so publishing the JWKS at `/.well-known/qtiauth-license-keys.json` gives game clients enough to verify offline. The `lease_duration_seconds` column on each game overrides `games.default_lease_duration`; a null value uses the default.
+
+Signing keys rotate on the `keys.rotate` cron job. Retired keys stay in the JWKS for `licensing.signing.retain_after_rotation` so leases signed just before rotation still verify. Every lease carries a `jti`, and revoking one adds it to the `license_revocations` table until the lease would have expired anyway. `GET /api/v1/games/licensing/revocations` returns a signed list of live revocations, optionally filtered by `game_slug` and a `since` timestamp.
+
+| Route                                                    | Auth                              |
+| -------------------------------------------------------- | --------------------------------- |
+| `GET /.well-known/qtiauth-license-keys.json`             | none                              |
+| `POST /api/v1/games/:slug/licensing/leases`              | session                           |
+| `POST /api/v1/games/licensing/verify`                    | none                              |
+| `GET /api/v1/games/licensing/revocations`                | none                              |
+| `GET /api/v1/games/:slug/licensing/devices`              | session                           |
+| `DELETE /api/v1/games/:slug/licensing/devices/:lease_id` | session                           |
+| `GET /api/v1/admin/games/:slug/licenses`                 | session, `games.licensing.manage` |
+| `POST /api/v1/admin/licenses/:lease_id/revoke`           | session, `games.licensing.manage` |
+
+### Device binding
+
+`licensing_device_binding: true` on a game makes the lease include a hash of a client-generated device id, and requires clients to send that same id back on the online verify endpoint. Each user has at most `licensing.max_devices` live leases per game. Existing leases for the same device id are auto-revoked when a new lease is issued for it, so re-issuing on the same device does not consume a slot. Players manage their own devices at `GET /api/v1/games/:slug/licensing/devices` and can revoke one with `DELETE /api/v1/games/:slug/licensing/devices/:lease_id`.
+
+### Sample offline verifier (TypeScript)
+
+```ts
+import { createHash, createPublicKey, verify } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
+const jwks = JSON.parse(readFileSync('license-keys.json', 'utf8')) as {
+  keys: { kid: string; alg: string; kty: string; crv?: string; x?: string; y?: string }[];
+};
+
+export function verifyLease(token: string, revoked: ReadonlySet<string>): boolean {
+  const [headerSegment, payloadSegment, signatureSegment] = token.split('.');
+  if (!headerSegment || !payloadSegment || !signatureSegment) return false;
+  const header = JSON.parse(Buffer.from(headerSegment, 'base64url').toString()) as {
+    alg: string;
+    kid: string;
+    typ: string;
+  };
+  if (header.typ !== 'qtiauth-license+jwt') return false;
+  const jwk = jwks.keys.find((entry) => entry.kid === header.kid && entry.alg === header.alg);
+  if (!jwk) return false;
+  const key = createPublicKey({ key: jwk, format: 'jwk' });
+  const signingInput = Buffer.from(`${headerSegment}.${payloadSegment}`);
+  const signature = Buffer.from(signatureSegment, 'base64url');
+  if (!verify(null, signingInput, key, signature)) return false;
+  const payload = JSON.parse(Buffer.from(payloadSegment, 'base64url').toString()) as {
+    jti: string;
+    iss: string;
+    exp: number;
+    game_slug: string;
+  };
+  if (payload.iss !== 'qtiauth-games-licensing') return false;
+  if (payload.exp * 1_000 <= Date.now()) return false;
+  if (revoked.has(payload.jti)) return false;
+  return true;
+}
+
+export function hashDeviceId(deviceId: string): string {
+  return createHash('sha256').update(deviceId).digest('base64url');
+}
+```
+
+### Sample offline verifier (C#)
+
+```csharp
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+
+public static bool VerifyLease(string token, IReadOnlyDictionary<string, string> jwksByKid, IReadOnlySet<string> revoked)
+{
+    var parts = token.Split('.');
+    if (parts.Length != 3) return false;
+    var header = JsonSerializer.Deserialize<Dictionary<string, string>>(FromBase64Url(parts[0]));
+    if (header is null || header["typ"] != "qtiauth-license+jwt") return false;
+    if (!jwksByKid.TryGetValue(header["kid"], out var publicKeyPem)) return false;
+    var key = Ed25519.FromPem(publicKeyPem);
+    var signingInput = Encoding.UTF8.GetBytes($"{parts[0]}.{parts[1]}");
+    var signature = FromBase64UrlBytes(parts[2]);
+    if (!key.Verify(signingInput, signature)) return false;
+    var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(FromBase64Url(parts[1]));
+    if (payload is null) return false;
+    if (payload["iss"].GetString() != "qtiauth-games-licensing") return false;
+    if (payload["exp"].GetInt64() * 1000 <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) return false;
+    if (revoked.Contains(payload["jti"].GetString()!)) return false;
+    return true;
+}
+```
+
+Both snippets are intentionally minimal — real integrations should also check `aud` matches the game slug they run for, cache the parsed JWKS, and pull `GET /api/v1/games/licensing/revocations` on a schedule (typically every `licensing.revocation_list_ttl`) to keep the revocation set fresh.
+
 ## Events
 
 - `qtiauth.games.entitlement.granted.v1` — a user was granted a product. Subject is the entitlement.
@@ -129,5 +229,7 @@ extracted.
 - `qtiauth.games.stat.updated.v1` — a player stat value changed. Subject is the stat definition.
 - `qtiauth.games.leaderboard_entry.removed.v1` — an admin removed a leaderboard entry. Subject is the leaderboard.
 - `qtiauth.games.playtime.ended.v1` — a playtime session finished. Subject is the session.
+- `qtiauth.games.license_lease.issued.v1` — a licence lease was issued. Subject is the lease.
+- `qtiauth.games.license_lease.revoked.v1` — a licence lease was revoked before expiry. Subject is the lease.
 
 The entitlement events include `source`, `game_id`, `product_id` and `user_id`; the revoked variant also carries a `reason` (`expired`, an admin-supplied reason, or `revoked` from the external API).

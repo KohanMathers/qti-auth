@@ -63,4 +63,24 @@ export const GAMES_ERRORS = defineErrors({
     title: 'The daily playtime limit for this account has been reached',
   },
   GAMES_CUSTOM_DATA_TOO_LARGE: { status: 413, title: 'Custom data exceeds the size limit' },
+  GAMES_LICENSING_DISABLED: { status: 409, title: 'Offline licensing is disabled' },
+  GAMES_LICENSING_NOT_OWNED: {
+    status: 403,
+    title: 'Only owners of this game can issue a licence lease',
+  },
+  GAMES_LICENSING_DEVICE_REQUIRED: {
+    status: 400,
+    title: 'This game requires a device_id when issuing a lease',
+  },
+  GAMES_LICENSING_DEVICE_LIMIT: {
+    status: 409,
+    title: 'You have reached the device limit for this game',
+  },
+  GAMES_LICENSING_LEASE_NOT_FOUND: { status: 404, title: 'No such licence lease' },
+  GAMES_LICENSING_LEASE_REVOKED: { status: 409, title: 'This licence lease is already revoked' },
+  GAMES_LICENSING_INVALID: { status: 400, title: 'The lease token is not valid' },
+  GAMES_LICENSING_KEY_UNAVAILABLE: {
+    status: 503,
+    title: 'The licensing signing key is not loaded',
+  },
 });

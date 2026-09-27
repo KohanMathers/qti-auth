@@ -12,8 +12,39 @@ export interface GamesTable {
   cloud_save_quota_bytes: string | null;
   steam_app_id: number | null;
   server_client_id: string | null;
+  licensing_device_binding: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface LeasedProduct {
+  slug: string;
+  type: ProductType;
+  expires_at: string | null;
+}
+
+export interface LicenseLeasesTable {
+  id: string;
+  user_id: string;
+  game_id: string;
+  device_hash: string | null;
+  device_label: string | null;
+  products: LeasedProduct[];
+  issued_at: Date;
+  expires_at: Date;
+  revoked_at: Date | null;
+  revoke_reason: string | null;
+  last_seen_at: Date | null;
+  created_at: Date;
+}
+
+export interface LicenseRevocationsTable {
+  lease_id: string;
+  game_id: string;
+  user_id: string;
+  revoked_at: Date;
+  expires_at: Date;
+  reason: string | null;
 }
 
 export interface ProductsTable {
@@ -202,4 +233,6 @@ export interface Database {
   leaderboard_entries: LeaderboardEntriesTable;
   playtime_sessions: PlaytimeSessionsTable;
   playtime_daily: PlaytimeDailyTable;
+  license_leases: LicenseLeasesTable;
+  license_revocations: LicenseRevocationsTable;
 }

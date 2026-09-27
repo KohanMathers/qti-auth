@@ -1764,6 +1764,9 @@ export const support = z
 export const OIDC_SIGNING_ALGORITHMS = ['ES256', 'RS256'] as const;
 export type OidcSigningAlgorithm = (typeof OIDC_SIGNING_ALGORITHMS)[number];
 
+export const LICENSE_SIGNING_ALGORITHMS = ['EdDSA', 'ES256', 'RS256'] as const;
+export type LicenseSigningAlgorithm = (typeof LICENSE_SIGNING_ALGORITHMS)[number];
+
 export const OIDC_CLIENT_TYPES = ['public', 'confidential'] as const;
 export type OidcClientType = (typeof OIDC_CLIENT_TYPES)[number];
 
@@ -2137,6 +2140,45 @@ export const games = z
       })
       .prefault({})
       .describe('Key redemption defaults and limits.'),
+    licensing: z
+      .strictObject({
+        signing: z
+          .strictObject({
+            algorithm: z
+              .enum(LICENSE_SIGNING_ALGORITHMS)
+              .default('EdDSA')
+              .describe(
+                'Lease signing algorithm. EdDSA is smallest and fastest for offline verification.',
+              ),
+            rotate_after: duration('90d', 'Replace the licensing signing key once it is this old.'),
+            retain_after_rotation: duration(
+              '30d',
+              'Keep publishing a replaced licensing key for this long, so leases it signed can still be checked offline.',
+            ),
+            refresh: duration(
+              '30s',
+              'Reload licensing keys from the store this often, so other games replicas pick up a rotation.',
+            ),
+          })
+          .prefault({})
+          .describe(
+            'Dedicated signing keys for offline licensing leases, separate from the OIDC key set.',
+          ),
+        max_devices: z
+          .int()
+          .min(1)
+          .max(1_000)
+          .default(5)
+          .describe(
+            'How many devices a user may bind concurrently per game when device binding is on.',
+          ),
+        revocation_list_ttl: duration(
+          '5m',
+          'How long a signed revocation list is fresh for. Clients may cache it for this long.',
+        ),
+      })
+      .prefault({})
+      .describe('Offline licensing: signed leases proving ownership for offline play.'),
   })
   .prefault({})
   .describe('Games module (games profile): catalog, products, entitlements and keys.');

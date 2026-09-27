@@ -29,6 +29,7 @@ export interface GameRecord {
   cloud_save_quota_bytes: number | null;
   steam_app_id: number | null;
   server_client_id: string | null;
+  licensing_device_binding: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -57,6 +58,7 @@ export interface GameFields {
   lease_duration_seconds?: number | null;
   cloud_save_quota_bytes?: number | null;
   steam_app_id?: number | null;
+  licensing_device_binding?: boolean;
 }
 
 function quota(value: string | null): number | null {
@@ -78,6 +80,7 @@ function gameRecord(row: Selectable<GamesTable>): GameRecord {
     cloud_save_quota_bytes: quota(row.cloud_save_quota_bytes),
     steam_app_id: row.steam_app_id,
     server_client_id: row.server_client_id,
+    licensing_device_binding: row.licensing_device_binding,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -208,6 +211,7 @@ export async function createGame(
     lease_duration_seconds: number | null;
     cloud_save_quota_bytes: number | null;
     steam_app_id: number | null;
+    licensing_device_binding?: boolean;
     actor: EventActor;
     now: Date;
   },
@@ -237,6 +241,7 @@ export async function createGame(
           options.cloud_save_quota_bytes === null ? null : String(options.cloud_save_quota_bytes),
         steam_app_id: options.steam_app_id,
         server_client_id: null,
+        licensing_device_binding: options.licensing_device_binding ?? false,
         created_at: options.now,
         updated_at: options.now,
       })
@@ -315,6 +320,9 @@ async function applyGamePatch(
       options.cloud_save_quota_bytes === null ? null : String(options.cloud_save_quota_bytes);
   }
   if (options.steam_app_id !== undefined) patch.steam_app_id = options.steam_app_id;
+  if (options.licensing_device_binding !== undefined) {
+    patch.licensing_device_binding = options.licensing_device_binding;
+  }
   await trx.updateTable('games').set(patch).where('id', '=', current.id).execute();
   await writeAudit(trx, options.actor, 'games.game.updated', 'game', current.id);
   const game = await trx

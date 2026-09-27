@@ -61,6 +61,8 @@ export {
   type GameStatus,
   GEOIP_SOURCES,
   type GeoipSource,
+  LICENSE_SIGNING_ALGORITHMS,
+  type LicenseSigningAlgorithm,
   LOG_LEVELS,
   MODULES,
   oidc,

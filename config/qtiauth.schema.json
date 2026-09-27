@@ -3082,6 +3082,63 @@
             }
           },
           "additionalProperties": false
+        },
+        "licensing": {
+          "description": "Offline licensing: signed leases proving ownership for offline play.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "signing": {
+              "description": "Dedicated signing keys for offline licensing leases, separate from the OIDC key set.",
+              "default": {},
+              "type": "object",
+              "properties": {
+                "algorithm": {
+                  "default": "EdDSA",
+                  "description": "Lease signing algorithm. EdDSA is smallest and fastest for offline verification.",
+                  "type": "string",
+                  "enum": [
+                    "EdDSA",
+                    "ES256",
+                    "RS256"
+                  ]
+                },
+                "rotate_after": {
+                  "default": "90d",
+                  "description": "Replace the licensing signing key once it is this old. Written as <integer><unit> (ms, s, m, h, d, w).",
+                  "type": "string",
+                  "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+                },
+                "retain_after_rotation": {
+                  "default": "30d",
+                  "description": "Keep publishing a replaced licensing key for this long, so leases it signed can still be checked offline. Written as <integer><unit> (ms, s, m, h, d, w).",
+                  "type": "string",
+                  "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+                },
+                "refresh": {
+                  "default": "30s",
+                  "description": "Reload licensing keys from the store this often, so other games replicas pick up a rotation. Written as <integer><unit> (ms, s, m, h, d, w).",
+                  "type": "string",
+                  "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "max_devices": {
+              "default": 5,
+              "description": "How many devices a user may bind concurrently per game when device binding is on.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "revocation_list_ttl": {
+              "default": "5m",
+              "description": "How long a signed revocation list is fresh for. Clients may cache it for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
