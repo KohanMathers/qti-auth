@@ -61,6 +61,7 @@ export const definition = defineService({
     'valkey',
     'storage',
     'backups',
+    'games',
   ],
   database: { schema: 'identity', migrations: () => loadMigrations(MIGRATIONS_DIR) },
   permissions: definePermissions({

@@ -458,6 +458,12 @@ export interface UserRestrictionsTable {
   created_at: Date;
 }
 
+export interface SteamUnlinksTable {
+  steam_id: string;
+  unlinked_at: Date;
+  cooldown_until: Date;
+}
+
 export interface Database {
   users: UsersTable;
   identities: IdentitiesTable;
@@ -493,4 +499,5 @@ export interface Database {
   deletion_ledger_outbox: DeletionLedgerOutboxTable;
   notification_preferences: NotificationPreferencesTable;
   user_restrictions: UserRestrictionsTable;
+  steam_unlinks: SteamUnlinksTable;
 }

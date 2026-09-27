@@ -255,6 +255,21 @@ export {
   userClaimsSchema,
 } from './user-claims.ts';
 export {
+  STEAM_IDENTITIES_PAGE_METHOD,
+  STEAM_IDENTITIES_SERVICE,
+  STEAM_LOOKUP_METHOD,
+  type SteamIdentitiesPageRequest,
+  steamIdentitiesPageRequestSchema,
+  type SteamIdentitiesPageResponse,
+  steamIdentitiesPageResponseSchema,
+  type SteamIdentityItem,
+  steamIdentityItemSchema,
+  type SteamLookupRequest,
+  steamLookupRequestSchema,
+  type SteamLookupResponse,
+  steamLookupResponseSchema,
+} from './steam-identities.ts';
+export {
   hashSessionToken,
   RESOLVE_SESSION_METHOD,
   RESOLVE_SESSION_SERVICE,

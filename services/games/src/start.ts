@@ -34,19 +34,25 @@ import {
   exportUserStats,
   resetDueLeaderboards,
 } from './stats.ts';
+import { createSteamWebClient, type SteamWebClient } from './steam.ts';
+import { attachSteamClient } from './steam-state.ts';
+import { fetchSteamLinksPage, syncUserOwnership } from './steam-sync.ts';
 import { openObjectStore } from './storage-state.ts';
 
 const STALE_PLAYTIME_SECONDS = 300;
+const STEAM_LINKS_PAGE = 100;
 
 export const RETENTION_JOB = 'retention.sweep';
 export const EXPIRE_ENTITLEMENTS_JOB = 'games.expire_entitlements';
 export const RECOMPUTE_RARITY_JOB = 'achievements.recompute_rarity';
 export const RESET_LEADERBOARDS_JOB = 'leaderboards.reset_periodic';
 export const LICENSE_KEY_ROTATION_JOB = 'keys.rotate';
+export const STEAM_OWNERSHIP_SYNC_JOB = 'steam.ownership_sync';
 
 export interface GamesOptions {
   licensingKeyStore?: LicensingKeySetStore;
   objectStore?: ObjectStore | null;
+  steamClient?: SteamWebClient;
 }
 
 export function gamesService(options: GamesOptions = {}) {
@@ -82,6 +88,21 @@ export function gamesService(options: GamesOptions = {}) {
       const metrics = gamesMetrics(ctx.metrics);
       const stack: Stoppable[] = [];
       const store = storeOf(ctx);
+      const steam = config.features.games.steam.enabled;
+      if (steam && !config.games.steam.publisher_key) {
+        throw new Error(
+          'features.games.steam.enabled is true but games.steam.publisher_key is empty',
+        );
+      }
+      const steamClient: SteamWebClient | null = steam
+        ? (options.steamClient ??
+          createSteamWebClient({
+            host: config.games.steam.web_api_host,
+            publisherKey: config.games.steam.publisher_key,
+            timeoutMs: config.games.steam.request_timeout,
+          }))
+        : null;
+      if (steamClient !== null) attachSteamClient(ctx, steamClient);
       try {
         if (store !== null) {
           if (ctx.config.storage.enabled && ctx.config.storage.create_bucket)
@@ -235,9 +256,62 @@ export function gamesService(options: GamesOptions = {}) {
           }),
         );
 
+        if (steamClient !== null) {
+          stack.push(
+            await consumeCron(bus, {
+              job: STEAM_OWNERSHIP_SYNC_JOB,
+              metrics: ctx.busMetrics,
+              handler: async () => {
+                const now = new Date();
+                let after: string | null = null;
+                let more = true;
+                let totalGranted = 0;
+                let totalRevoked = 0;
+                let totalErrors = 0;
+                while (more) {
+                  const page = await fetchSteamLinksPage(ctx, after, STEAM_LINKS_PAGE);
+                  if (page.status !== 'ok') {
+                    log.warn('steam ownership sync: identity page unavailable');
+                    break;
+                  }
+                  for (const { user_id, steam_id } of page.items) {
+                    const outcome = await syncUserOwnership(ctx, {
+                      userId: user_id,
+                      steamId: steam_id,
+                      apps: config.games.steam.apps,
+                      steamClient,
+                      now,
+                    });
+                    totalGranted += outcome.granted;
+                    totalRevoked += outcome.revoked;
+                    totalErrors += outcome.errors;
+                  }
+                  if (page.next === null) more = false;
+                  else after = page.next;
+                }
+                for (let i = 0; i < totalGranted; i += 1) metrics.steamOwnershipSync('granted');
+                for (let i = 0; i < totalRevoked; i += 1) metrics.steamOwnershipSync('revoked');
+                for (let i = 0; i < totalErrors; i += 1) metrics.steamOwnershipSync('error');
+                if (totalGranted > 0 || totalRevoked > 0 || totalErrors > 0) {
+                  log.info('steam ownership sync finished', {
+                    granted: totalGranted,
+                    revoked: totalRevoked,
+                    errors: totalErrors,
+                  });
+                  if (totalGranted > 0 || totalRevoked > 0) ctx.outbox.wake();
+                }
+              },
+              onError: (error) => {
+                log.error('steam ownership sync failed', { error });
+              },
+            }),
+          );
+        }
+
         log.info('games started', {
           licensing: config.features.games.licensing.enabled,
           cloud_saves: config.features.games.cloud_saves.enabled && store !== null,
+          steam: steamClient !== null,
         });
         return stack;
       } catch (error) {

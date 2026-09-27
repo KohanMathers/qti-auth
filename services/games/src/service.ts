@@ -20,6 +20,7 @@ import { licensingRoutes } from './licensing-routes.ts';
 import { routes } from './routes.ts';
 import { statAdminRoutes } from './stat-admin-routes.ts';
 import { statRoutes } from './stat-routes.ts';
+import { steamRoutes } from './steam-routes.ts';
 
 export const MIGRATIONS_DIR = join(import.meta.dirname, 'migrations');
 
@@ -76,3 +77,4 @@ statRoutes(router);
 statAdminRoutes(router);
 licensingRoutes(router);
 cloudSaveRoutes(router);
+steamRoutes(router);

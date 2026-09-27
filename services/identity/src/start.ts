@@ -15,6 +15,12 @@ import {
   type ResolveSessionResponse,
   STAFF_ALERT_RECIPIENTS_METHOD,
   staffAlertRecipientsRequestSchema,
+  STEAM_IDENTITIES_PAGE_METHOD,
+  STEAM_LOOKUP_METHOD,
+  steamIdentitiesPageRequestSchema,
+  type SteamIdentitiesPageResponse,
+  steamLookupRequestSchema,
+  type SteamLookupResponse,
   type StartServiceOptions,
   type Stoppable,
   storageHealthCheck,
@@ -96,6 +102,7 @@ import { sweepSecurityEvents } from './security.ts';
 import { type Context, definition, router } from './service.ts';
 import { countActiveSessions, resolveSession, sweepSessions } from './sessions.ts';
 import { accountOrigin, encryptionKey, sessionSecuritySettings } from './settings.ts';
+import { findSteamLink, listSteamLinksPage, sweepSteamUnlinks } from './steam-identities.ts';
 import { sharedObjectStore } from './storage-state.ts';
 import { userClaims } from './user-claims.ts';
 
@@ -293,6 +300,43 @@ export function identityService(options: IdentityOptions = {}) {
         );
 
         stack.push(
+          serveRpc<unknown, SteamLookupResponse>(bus, {
+            method: STEAM_LOOKUP_METHOD,
+            handler: async (request) => {
+              const parsed = steamLookupRequestSchema.safeParse(request);
+              if (!parsed.success) throw new RpcError('bad_request', 'steam_id is required');
+              const row = await findSteamLink(db, parsed.data.steam_id);
+              return { user_id: row?.user_id ?? null };
+            },
+            onError: (error) => {
+              log.error('steam lookup failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
+          serveRpc<unknown, SteamIdentitiesPageResponse>(bus, {
+            method: STEAM_IDENTITIES_PAGE_METHOD,
+            handler: async (request) => {
+              const parsed = steamIdentitiesPageRequestSchema.safeParse(request);
+              if (!parsed.success) throw new RpcError('bad_request', 'invalid request');
+              const items = await listSteamLinksPage(db, {
+                after: parsed.data.after,
+                limit: parsed.data.limit,
+              });
+              const next =
+                items.length < parsed.data.limit
+                  ? null
+                  : (items[items.length - 1]?.steam_id ?? null);
+              return { items, next };
+            },
+            onError: (error) => {
+              log.error('steam identities page failed', { error });
+            },
+          }),
+        );
+
+        stack.push(
           await consumeCron(bus, {
             job: RETENTION_JOB,
             metrics: ctx.busMetrics,
@@ -334,6 +378,7 @@ export function identityService(options: IdentityOptions = {}) {
                 ttl: config.accounts.export_ttl,
                 now,
               });
+              const steamUnlinks = await sweepSteamUnlinks(db, now);
               const pruned = await pruneBusTables(db, config.bus);
               log.info('retention sweep finished', {
                 sessions,
@@ -345,6 +390,7 @@ export function identityService(options: IdentityOptions = {}) {
                 filter_decisions: filterDecisions,
                 audit,
                 data_exports: exports,
+                steam_unlinks: steamUnlinks,
                 outbox: pruned.outbox,
                 processed_events: pruned.processedEvents,
               });

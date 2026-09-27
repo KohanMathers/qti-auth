@@ -830,17 +830,17 @@ Spec: §7.6
 
 **Done when:** two clients writing from the same base version produce one success and one conflict.
 
-### P7.8 Steam — L
+### P7.8 Steam — L ✅
 Spec: §7.8
 
-- [ ] **Before starting:** confirm Steamworks partner access and a publisher Web API key for a test
+- [x] **Before starting:** confirm Steamworks partner access and a publisher Web API key for a test
       app. Record which calls need the partner host.
-- [ ] Config and startup validation (no key, no start).
-- [ ] Linking via OpenID with an unlink cooldown.
-- [ ] Ticket authentication with family-sharing policy and ban flags, plus the unlinked device-code
+- [x] Config and startup validation (no key, no start).
+- [x] Linking via OpenID with an unlink cooldown.
+- [x] Ticket authentication with family-sharing policy and ban flags, plus the unlinked device-code
       response.
-- [ ] Optional browserless token issuance.
-- [ ] Ownership sync (on link and nightly) that never revokes products granted by other sources.
+- [x] Optional browserless token issuance.
+- [x] Ownership sync (on link and nightly) that never revokes products granted by other sources.
 
 **Done when:** tested against a real Steamworks test app, with the ticket never present in logs.
 

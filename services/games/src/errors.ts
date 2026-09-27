@@ -114,4 +114,12 @@ export const GAMES_ERRORS = defineErrors({
     status: 409,
     title: 'This cloud save version is already committed',
   },
+  GAMES_STEAM_DISABLED: { status: 409, title: 'Steam integration is disabled' },
+  GAMES_STEAM_UNAVAILABLE: { status: 502, title: 'The Steam Web API could not be reached' },
+  GAMES_STEAM_APP_UNKNOWN: { status: 404, title: 'That Steam AppID is not configured' },
+  GAMES_STEAM_TICKET_REJECTED: { status: 401, title: 'Steam did not accept the ticket' },
+  GAMES_STEAM_FAMILY_DENIED: {
+    status: 403,
+    title: 'Family sharing is not allowed for this game',
+  },
 });

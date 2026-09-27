@@ -499,6 +499,14 @@ async function socialResultPage(
         title: 'Already connected',
         body: paragraph('This sign-in method is already connected to another account.'),
       });
+    case 'unlink_cooldown':
+      return page(ctx, {
+        status: 409,
+        title: 'Try again later',
+        body: paragraph(
+          `This Steam account was unlinked recently. It can be linked again after ${result.retryAfter.toISOString()}.`,
+        ),
+      });
     case 'account_limit':
       return page(ctx, {
         status: 409,

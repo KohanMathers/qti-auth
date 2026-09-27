@@ -810,6 +810,7 @@ async function noteSocialComplete(
     case 'parental_consent_required':
     case 'guardian_email_required':
     case 'guardian_email_invalid':
+    case 'unlink_cooldown':
       log.info('social sign-in refused', { provider: providerId, reason: result.status });
       break;
     case 'linked':

@@ -95,6 +95,7 @@ describe('games service', () => {
       'POST /api/v1/games/entitlements/:entitlement_id/revoke',
       'POST /api/v1/games/keys/redeem',
       'POST /api/v1/games/licensing/verify',
+      'POST /api/v1/games/steam/authenticate',
       'PUT /api/v1/games/:slug/custom-data',
     ]);
     for (const route of routes) {

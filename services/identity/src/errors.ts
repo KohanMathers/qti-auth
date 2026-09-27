@@ -51,6 +51,10 @@ export const IDENTITY_ERRORS = defineErrors({
     title: 'This sign-in method is already connected to another account',
   },
   IDENTITY_NOT_FOUND: { status: 404, title: 'No such connected sign-in method' },
+  STEAM_UNLINK_COOLDOWN: {
+    status: 409,
+    title: 'This Steam account was unlinked recently and cannot be linked again yet',
+  },
   EMAIL_UNCHANGED: { status: 400, title: 'That is already this account’s email address' },
   EMAIL_CHANGE_INVALID: {
     status: 400,

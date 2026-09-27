@@ -2091,6 +2091,13 @@ export const CLOUD_SAVE_SLOT = /^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$/;
 export const CLOUD_SAVE_SLOT_MESSAGE = 'Must be a lowercase slug like slot-1';
 export const CLOUD_SAVE_CONTENT_TYPE_MAX = 120;
 
+export const STEAM_FAMILY_SHARING_POLICIES = ['allow', 'deny', 'allow_no_entitlement'] as const;
+export type SteamFamilySharingPolicy = (typeof STEAM_FAMILY_SHARING_POLICIES)[number];
+
+export const STEAM_TICKET_IDENTITY = /^[A-Za-z0-9_-]{1,32}$/;
+export const STEAM_TICKET_IDENTITY_MESSAGE =
+  'Must be 1 to 32 letters, digits, underscore or hyphen, matching the string passed to GetAuthTicketForWebApi';
+
 function isKeyCharset(value: string): boolean {
   if (value.length < 8) return false;
   if (/\s/.test(value)) return false;
@@ -2213,6 +2220,69 @@ export const games = z
       .prefault({})
       .describe(
         'Cloud saves: per-slot version history with base_version conflict detection, backed by object storage.',
+      ),
+    steam: z
+      .strictObject({
+        publisher_key: z
+          .string()
+          .default('')
+          .describe(
+            'Steamworks publisher Web API key. Required when Steam is enabled. Reference a secret.',
+          ),
+        web_api_host: z
+          .string()
+          .min(1)
+          .default('partner.steam-api.com')
+          .describe(
+            'Host that serves the Steamworks partner Web API. Ticket authentication and ownership checks go here.',
+          ),
+        request_timeout: duration('5s', 'Deadline for a single Steam Web API call.'),
+        unlink_cooldown: duration(
+          '7d',
+          'Once a Steam account is unlinked, the same SteamID64 cannot be linked to any account for this long.',
+        ),
+        apps: z
+          .array(
+            z
+              .strictObject({
+                app_id: z.int().min(1).max(2_147_483_647).describe('Steam AppID for this game.'),
+                game_slug: z
+                  .string()
+                  .regex(GAME_SLUG, GAME_SLUG_MESSAGE)
+                  .describe('QTIAuth game slug the AppID belongs to.'),
+                ticket_identity: z
+                  .string()
+                  .regex(STEAM_TICKET_IDENTITY, STEAM_TICKET_IDENTITY_MESSAGE)
+                  .describe(
+                    'Identity string the client passes to GetAuthTicketForWebApi. The Steam check uses the same value.',
+                  ),
+                family_sharing: z
+                  .enum(STEAM_FAMILY_SHARING_POLICIES)
+                  .default('allow')
+                  .describe(
+                    'How to treat tickets where the owner differs from the player. allow trusts the family-sharing owner, deny rejects the ticket, allow_no_entitlement lets the player in without owner entitlements.',
+                  ),
+                sync_ownership: z
+                  .boolean()
+                  .default(true)
+                  .describe(
+                    'Sync the base product entitlement from Steam ownership, on link and nightly. Never revokes products granted by another source.',
+                  ),
+              })
+              .describe('One Steam AppID mapped to a QTIAuth game.'),
+          )
+          .default([])
+          .refine((list) => new Set(list.map((app) => app.app_id)).size === list.length, {
+            message: 'app_id values must be unique',
+          })
+          .refine((list) => new Set(list.map((app) => app.game_slug)).size === list.length, {
+            message: 'game_slug values must be unique',
+          })
+          .describe('Steam AppIDs this deployment recognises.'),
+      })
+      .prefault({})
+      .describe(
+        'Steam integration: ticket authentication, ownership sync and browserless sign-in for linked players.',
       ),
   })
   .prefault({})

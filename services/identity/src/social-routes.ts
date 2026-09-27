@@ -109,6 +109,10 @@ function completeResponse(
       throw new ProblemError('PROVIDER_UNAVAILABLE');
     case 'identity_in_use':
       throw new ProblemError('IDENTITY_IN_USE');
+    case 'unlink_cooldown':
+      throw new ProblemError('STEAM_UNLINK_COOLDOWN', {
+        extensions: { retry_after: result.retryAfter.toISOString() },
+      });
     case 'account_limit':
       throw new ProblemError('ACCOUNT_LIMIT_REACHED');
     case 'parental_consent_required':
@@ -413,7 +417,12 @@ export function socialRoutes(router: Router<Context>): void {
       ) {
         throw lastSignInMethodError();
       }
-      const deleted = await deleteSocialIdentity(ctx.db, { id: params.identity_id, userId });
+      const deleted = await deleteSocialIdentity(ctx.db, {
+        id: params.identity_id,
+        userId,
+        steamUnlinkCooldownMs: ctx.config.games.steam.unlink_cooldown,
+        now: new Date(),
+      });
       if (!deleted) throw new ProblemError('IDENTITY_NOT_FOUND');
       return { status: 204, headers: NO_STORE };
     },

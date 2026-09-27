@@ -31,6 +31,19 @@ export type LicenseVerifyOutcome = (typeof LICENSE_VERIFY_OUTCOMES)[number];
 export const CLOUD_SAVE_UPLOAD_OUTCOMES = ['ok', 'slot_limit', 'quota', 'conflict'] as const;
 export type CloudSaveUploadOutcome = (typeof CLOUD_SAVE_UPLOAD_OUTCOMES)[number];
 
+export const STEAM_AUTH_OUTCOMES = [
+  'ok_linked_entitled',
+  'ok_linked_unentitled',
+  'ok_unlinked',
+  'ticket_rejected',
+  'family_denied',
+  'steam_unavailable',
+] as const;
+export type SteamAuthOutcome = (typeof STEAM_AUTH_OUTCOMES)[number];
+
+export const STEAM_SYNC_OUTCOMES = ['granted', 'revoked', 'error'] as const;
+export type SteamSyncOutcome = (typeof STEAM_SYNC_OUTCOMES)[number];
+
 export interface GamesMetrics {
   granted: (source: EntitlementSource) => void;
   revoked: (source: EntitlementSource) => void;
@@ -53,6 +66,8 @@ export interface GamesMetrics {
   cloudSaveCommitted: (sizeBytes: number) => void;
   cloudSaveDownloaded: () => void;
   cloudSaveDeleted: () => void;
+  steamAuthenticate: (outcome: SteamAuthOutcome) => void;
+  steamOwnershipSync: (outcome: SteamSyncOutcome) => void;
 }
 
 const created = new WeakMap<Metrics, GamesMetrics>();
@@ -165,6 +180,16 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     name: 'qtiauth_games_cloud_save_deletes_total',
     help: 'Cloud save slots deleted by the owner.',
   });
+  const steamAuthentications = metrics.counter({
+    name: 'qtiauth_games_steam_authenticate_total',
+    help: 'Steam ticket authentication attempts, by outcome.',
+    labelNames: ['outcome'],
+  });
+  const steamOwnershipSyncs = metrics.counter({
+    name: 'qtiauth_games_steam_ownership_sync_total',
+    help: 'Steam ownership sync entitlement changes, by outcome.',
+    labelNames: ['outcome'],
+  });
   return {
     granted: (source) => {
       grants.inc({ source });
@@ -229,6 +254,12 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     },
     cloudSaveDeleted: () => {
       cloudSaveDeletes.inc();
+    },
+    steamAuthenticate: (outcome) => {
+      steamAuthentications.inc({ outcome });
+    },
+    steamOwnershipSync: (outcome) => {
+      steamOwnershipSyncs.inc({ outcome });
     },
   };
 }

@@ -62,6 +62,11 @@ import {
   type SessionSettings,
 } from './sessions.ts';
 import { steamAuthorizationUrl, steamReturnTo, verifySteamAssertion } from './steam.ts';
+import {
+  recordSteamUnlink,
+  STEAM_IDENTITY_TYPE,
+  steamUnlinkCooldownEnd,
+} from './steam-identities.ts';
 import { hashToken, newToken } from './tokens.ts';
 
 export const SOCIAL_SIGNUP_KIND = 'social_signup' as const;
@@ -108,6 +113,7 @@ export type CompleteSocialResult =
   | { status: 'parental_consent_required' }
   | { status: 'guardian_email_required' }
   | { status: 'guardian_email_invalid' }
+  | { status: 'unlink_cooldown'; retryAfter: Date }
   | { status: 'linked'; identityId: string; userId: string }
   | {
       status: 'signup_required';
@@ -272,6 +278,14 @@ export async function completeSocial(
     });
   } catch {
     return { status: 'provider_unavailable' };
+  }
+
+  if (provider.type === STEAM_IDENTITY_TYPE) {
+    const cooldownEnd = await steamUnlinkCooldownEnd(db, {
+      steamId: profile.subject,
+      now: options.now,
+    });
+    if (cooldownEnd !== null) return { status: 'unlink_cooldown', retryAfter: cooldownEnd };
   }
 
   if (stored.intent === 'link') {
@@ -703,15 +717,38 @@ export async function socialIdentityCount(db: Kysely<Database>, userId: string):
 
 export async function deleteSocialIdentity(
   db: Kysely<Database>,
-  options: { id: string; userId: string },
+  options: { id: string; userId: string; steamUnlinkCooldownMs?: number; now: Date },
 ): Promise<boolean> {
-  const result = await db
-    .deleteFrom('identities')
-    .where('id', '=', options.id)
-    .where('user_id', '=', options.userId)
-    .where(isSocial)
-    .executeTakeFirst();
-  return deletedRows(result) === 1;
+  return db.transaction().execute(async (trx) => {
+    const row = await trx
+      .selectFrom('identities')
+      .select(['type', 'subject'])
+      .where('id', '=', options.id)
+      .where('user_id', '=', options.userId)
+      .where(isSocial)
+      .executeTakeFirst();
+    if (row === undefined) return false;
+    const result = await trx
+      .deleteFrom('identities')
+      .where('id', '=', options.id)
+      .where('user_id', '=', options.userId)
+      .where(isSocial)
+      .executeTakeFirst();
+    if (deletedRows(result) !== 1) return false;
+    if (
+      row.type === STEAM_IDENTITY_TYPE &&
+      row.subject !== null &&
+      options.steamUnlinkCooldownMs !== undefined &&
+      options.steamUnlinkCooldownMs > 0
+    ) {
+      await recordSteamUnlink(trx, {
+        steamId: row.subject,
+        cooldownMs: options.steamUnlinkCooldownMs,
+        now: options.now,
+      });
+    }
+    return true;
+  });
 }
 
 export async function findSocialIdentity(

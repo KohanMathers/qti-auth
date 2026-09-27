@@ -3180,6 +3180,85 @@
             }
           },
           "additionalProperties": false
+        },
+        "steam": {
+          "description": "Steam integration: ticket authentication, ownership sync and browserless sign-in for linked players.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "publisher_key": {
+              "default": "",
+              "description": "Steamworks publisher Web API key. Required when Steam is enabled. Reference a secret.",
+              "type": "string"
+            },
+            "web_api_host": {
+              "default": "partner.steam-api.com",
+              "description": "Host that serves the Steamworks partner Web API. Ticket authentication and ownership checks go here.",
+              "type": "string",
+              "minLength": 1
+            },
+            "request_timeout": {
+              "default": "5s",
+              "description": "Deadline for a single Steam Web API call. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "unlink_cooldown": {
+              "default": "7d",
+              "description": "Once a Steam account is unlinked, the same SteamID64 cannot be linked to any account for this long. Written as <integer><unit> (ms, s, m, h, d, w).",
+              "type": "string",
+              "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+            },
+            "apps": {
+              "default": [],
+              "description": "Steam AppIDs this deployment recognises.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "app_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647,
+                    "description": "Steam AppID for this game."
+                  },
+                  "game_slug": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$",
+                    "description": "QTIAuth game slug the AppID belongs to."
+                  },
+                  "ticket_identity": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,32}$",
+                    "description": "Identity string the client passes to GetAuthTicketForWebApi. The Steam check uses the same value."
+                  },
+                  "family_sharing": {
+                    "default": "allow",
+                    "description": "How to treat tickets where the owner differs from the player. allow trusts the family-sharing owner, deny rejects the ticket, allow_no_entitlement lets the player in without owner entitlements.",
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "deny",
+                      "allow_no_entitlement"
+                    ]
+                  },
+                  "sync_ownership": {
+                    "default": true,
+                    "description": "Sync the base product entitlement from Steam ownership, on link and nightly. Never revokes products granted by another source.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "app_id",
+                  "game_slug",
+                  "ticket_identity"
+                ],
+                "additionalProperties": false,
+                "description": "One Steam AppID mapped to a QTIAuth game."
+              }
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
