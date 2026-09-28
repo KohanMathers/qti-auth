@@ -429,3 +429,12 @@ backups:
   destination: directory # directory | storage
   directory: /var/lib/qtiauth/backups
   retention: 35d
+  encryption_key: '${env:BACKUP_ENCRYPTION_KEY}' # base64 32-byte key; keep a copy outside the stack
+  admin_user: postgres
+  admin_password: '${env:POSTGRES_PASSWORD}'
+  pg_dump: pg_dump
+  pg_restore: pg_restore
+  psql: psql
+  scratch_database: qtiauth_scratch
+  dump_timeout: 1h
+  chunk_size: 1048576

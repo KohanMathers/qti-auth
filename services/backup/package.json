@@ -1,0 +1,30 @@
+{
+  "name": "@qtiauth/backup",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Encrypted scheduled backups of every service schema and the object-storage key manifest",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "qtiauth": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qtiauth/bus": "workspace:*",
+    "@qtiauth/cli": "workspace:*",
+    "@qtiauth/config": "workspace:*",
+    "@qtiauth/db": "workspace:*",
+    "@qtiauth/keys": "workspace:*",
+    "@qtiauth/observability": "workspace:*",
+    "@qtiauth/service-kit": "workspace:*",
+    "@qtiauth/storage": "workspace:*",
+    "kysely": "0.29.6",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@qtiauth/testing": "workspace:*"
+  }
+}

@@ -468,6 +468,43 @@ importers:
         specifier: workspace:*
         version: link:../testing
 
+  services/backup:
+    dependencies:
+      '@qtiauth/bus':
+        specifier: workspace:*
+        version: link:../../packages/bus
+      '@qtiauth/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@qtiauth/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@qtiauth/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@qtiauth/keys':
+        specifier: workspace:*
+        version: link:../../packages/keys
+      '@qtiauth/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@qtiauth/service-kit':
+        specifier: workspace:*
+        version: link:../../packages/service-kit
+      '@qtiauth/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      kysely:
+        specifier: 0.29.6
+        version: 0.29.6
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@qtiauth/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
   services/games:
     dependencies:
       '@qtiauth/bus':

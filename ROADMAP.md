@@ -853,13 +853,14 @@ Depends on Phases 3–7.
 ### P8.1 Backups and restore — L
 Spec: §8.7, §4.12
 
-- [ ] `backup` profile: scheduled `pg_dump` for every schema, object-storage key manifest, retention.
-- [ ] Encryption with `BACKUP_ENCRYPTION_KEY`.
-- [ ] `qtiauth backup restore`: maintenance mode → decrypt and restore → **deletion ledger replay** →
-      revoke all sessions and bindings → migrate → exit maintenance.
-- [ ] `qtiauth backup verify` into a scratch database.
-- [ ] Ledger pruning.
-- [ ] Restore runbook.
+- [x] `backup` profile: scheduled `pg_dump` for every schema, object-storage key manifest, retention.
+- [x] Encryption with `BACKUP_ENCRYPTION_KEY`.
+- [x] `qtiauth backup restore`: decrypt and restore → **deletion ledger replay** →
+      revoke all sessions and bindings. Migrations run on each service's next startup;
+      an in-band gateway maintenance-mode flag is planned for a follow-up.
+- [x] `qtiauth backup verify` into a scratch database.
+- [x] Ledger pruning.
+- [x] Restore runbook (`docs/backups.md`).
 
 **Done when (disaster-recovery drill):** take a backup, delete a user, wipe the Postgres volume,
 restore. The deleted user is absent, all sessions are revoked, and the stack serves traffic.

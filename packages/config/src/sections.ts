@@ -2876,7 +2876,7 @@ export const backups = z
       .enum(BACKUP_DESTINATIONS)
       .default('directory')
       .describe(
-        'Where backups and the deletion ledger are written. directory is a mounted volume. storage is the S3 bucket. Restore replay is a later release.',
+        'Where backups and the deletion ledger are written. directory is a mounted volume. storage is the S3 bucket.',
       ),
     directory: z
       .string()
@@ -2887,6 +2887,53 @@ export const backups = z
       '35d',
       'How long backups are kept. The deletion ledger is kept this long plus 30 days.',
     ),
+    encryption_key: z
+      .string()
+      .default('')
+      .describe(
+        'Base64-encoded 32-byte key that encrypts backups. Empty disables the backup service. Reference a secret. Keep a copy outside the stack: backups cannot be restored without it.',
+      ),
+    admin_user: z
+      .string()
+      .min(1)
+      .default('postgres')
+      .describe(
+        'Postgres role used to read every schema for pg_dump and to create the scratch database.',
+      ),
+    admin_password: z
+      .string()
+      .default('')
+      .describe('Password for backups.admin_user. Reference a secret. Empty disables backups.'),
+    pg_dump: z
+      .string()
+      .min(1)
+      .default('pg_dump')
+      .describe('pg_dump binary the backup service invokes. Path or command on PATH.'),
+    pg_restore: z
+      .string()
+      .min(1)
+      .default('pg_restore')
+      .describe('pg_restore binary the restore command invokes.'),
+    psql: z
+      .string()
+      .min(1)
+      .default('psql')
+      .describe('psql binary used for maintenance mode and scratch-database restore.'),
+    scratch_database: z
+      .string()
+      .min(1)
+      .default('qtiauth_scratch')
+      .describe('Database name qtiauth backup verify creates for the integrity check.'),
+    dump_timeout: duration('1h', 'How long each schema dump may run before it is killed.'),
+    chunk_size: z
+      .number()
+      .int()
+      .min(65_536)
+      .max(16_777_216)
+      .default(1_048_576)
+      .describe(
+        'Bytes of dump plaintext per AES-GCM chunk. Larger uses less overhead, smaller lowers peak memory.',
+      ),
   })
   .prefault({})
   .describe('Encrypted backups and the deletion ledger destination.');

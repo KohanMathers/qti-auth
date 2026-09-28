@@ -3969,7 +3969,7 @@
       "properties": {
         "destination": {
           "default": "directory",
-          "description": "Where backups and the deletion ledger are written. directory is a mounted volume. storage is the S3 bucket. Restore replay is a later release.",
+          "description": "Where backups and the deletion ledger are written. directory is a mounted volume. storage is the S3 bucket.",
           "type": "string",
           "enum": [
             "directory",
@@ -3987,6 +3987,59 @@
           "description": "How long backups are kept. The deletion ledger is kept this long plus 30 days. Written as <integer><unit> (ms, s, m, h, d, w).",
           "type": "string",
           "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "encryption_key": {
+          "default": "",
+          "description": "Base64-encoded 32-byte key that encrypts backups. Empty disables the backup service. Reference a secret. Keep a copy outside the stack: backups cannot be restored without it.",
+          "type": "string"
+        },
+        "admin_user": {
+          "default": "postgres",
+          "description": "Postgres role used to read every schema for pg_dump and to create the scratch database.",
+          "type": "string",
+          "minLength": 1
+        },
+        "admin_password": {
+          "default": "",
+          "description": "Password for backups.admin_user. Reference a secret. Empty disables backups.",
+          "type": "string"
+        },
+        "pg_dump": {
+          "default": "pg_dump",
+          "description": "pg_dump binary the backup service invokes. Path or command on PATH.",
+          "type": "string",
+          "minLength": 1
+        },
+        "pg_restore": {
+          "default": "pg_restore",
+          "description": "pg_restore binary the restore command invokes.",
+          "type": "string",
+          "minLength": 1
+        },
+        "psql": {
+          "default": "psql",
+          "description": "psql binary used for maintenance mode and scratch-database restore.",
+          "type": "string",
+          "minLength": 1
+        },
+        "scratch_database": {
+          "default": "qtiauth_scratch",
+          "description": "Database name qtiauth backup verify creates for the integrity check.",
+          "type": "string",
+          "minLength": 1
+        },
+        "dump_timeout": {
+          "default": "1h",
+          "description": "How long each schema dump may run before it is killed. Written as <integer><unit> (ms, s, m, h, d, w).",
+          "type": "string",
+          "pattern": "^(\\d+)(ms|s|m|h|d|w)$"
+        },
+        "chunk_size": {
+          "default": 1048576,
+          "description": "Bytes of dump plaintext per AES-GCM chunk. Larger uses less overhead, smaller lowers peak memory.",
+          "type": "integer",
+          "minimum": 65536,
+          "maximum": 16777216
         }
       },
       "additionalProperties": false

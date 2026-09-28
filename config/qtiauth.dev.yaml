@@ -58,3 +58,7 @@ email:
 storage:
   access_key: '${env:S3_ACCESS_KEY}'
   secret_key: '${env:S3_SECRET_KEY}'
+
+backups:
+  encryption_key: '${env:BACKUP_ENCRYPTION_KEY}'
+  admin_password: '${env:POSTGRES_PASSWORD}'

@@ -1,0 +1,230 @@
+import { spawn } from 'node:child_process';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import {
+  type Command,
+  CommandExit,
+  configOptionsUsage,
+  EXIT_FAILURE,
+  EXIT_OK,
+  loadCommandConfig,
+} from '@qtiauth/cli';
+import { serviceSchema } from '@qtiauth/service-kit';
+
+import { backupDestination, readBackup } from './destination.ts';
+import { pgSslMode } from './dump.ts';
+import { decodeJson, storageManifestSchema } from './manifest.ts';
+import { openArchive } from './reader.ts';
+import { type Context, definition } from './service.ts';
+import { backupEncryptionKey } from './settings.ts';
+import { attachStorage } from './start.ts';
+import { splitArgs } from './verify.ts';
+
+export const backupRestoreUsage = `Usage: qtiauth backup restore <archive-id> [--config <path>] [--env-file <path>] [--skip-ledger-replay]
+
+Puts the stack into maintenance mode (stop every service but the gateway before running this), drops each service schema, restores from the backup, replays the deletion ledger over the restored data, and revokes every restored session and binding. Migrations run again the next time each service starts.
+
+Options:
+  --skip-ledger-replay  Skip the deletion-ledger replay. Only use when the ledger is unavailable.
+${configOptionsUsage}
+`;
+
+type BackupConfig = Context['config'];
+
+export const backupRestore: Command = async (args, io) => {
+  const parsed = splitArgs(args, backupRestoreUsage);
+  if (parsed.flags.help) {
+    io.stdout(backupRestoreUsage);
+    return EXIT_OK;
+  }
+  if (parsed.archiveId === undefined) {
+    throw new CommandExit(EXIT_FAILURE, `Missing <archive-id>\n\n${backupRestoreUsage}`);
+  }
+  const skipLedger = args.includes('--skip-ledger-replay');
+
+  const loaded = await loadCommandConfig(serviceSchema(definition), parsed.flags, io);
+  const config = loaded.config as BackupConfig;
+  if (config.backups.admin_password === '') {
+    throw new CommandExit(EXIT_FAILURE, 'backups.admin_password is empty');
+  }
+  const key = backupEncryptionKey(config);
+  const store = attachStorage(config);
+  const destination = backupDestination(config.backups, config.storage, store);
+  try {
+    const bytes = await readBackup(destination, parsed.archiveId);
+    const opened = openArchive(bytes, key);
+    io.stdout(`Restoring backup ${opened.manifest.archive_id}\n`);
+
+    const tempDir = await mkdtemp(join(tmpdir(), 'qtiauth-restore-'));
+    try {
+      for (const entry of opened.manifest.schemas) {
+        await psql(config, config.database.name, [
+          '-c',
+          `drop schema if exists "${entry.schema}" cascade`,
+        ]);
+        const dumpPath = join(tempDir, `${entry.schema}.dump`);
+        await writeFile(dumpPath, opened.readBlob(entry.path));
+        await pgRestore(config, dumpPath, entry.schema);
+        io.stdout(`  ${entry.schema} restored\n`);
+      }
+
+      if (!skipLedger) {
+        const userIds = await collectLedgerUserIds(config);
+        if (userIds.length > 0) {
+          await runSqlBatch(config, buildLedgerReplaySql(userIds));
+        }
+        io.stdout(`Deletion ledger replayed: ${String(userIds.length)} user(s) re-erased\n`);
+      }
+
+      await runSqlBatch(config, [
+        `update identity.sessions set revoked_at = now(), revoke_reason = 'backup_restore' where revoked_at is null`,
+        `delete from identity.session_bindings`,
+      ]);
+      io.stdout('Sessions and bindings revoked.\n');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+    io.stdout(`Backup ${opened.manifest.archive_id} restored.\n`);
+    return EXIT_OK;
+  } finally {
+    if (store) await store.close();
+  }
+};
+
+async function collectLedgerUserIds(config: BackupConfig): Promise<string[]> {
+  const store = attachStorage(config);
+  const dir = join(config.backups.directory, 'deletion-ledger');
+  const userIds: string[] = [];
+  try {
+    if (store) {
+      const objects = await store.list('deletion-ledger/');
+      for (const object of objects) {
+        const body = await store.get(object.key);
+        if (body) userIds.push(parseUserId(Buffer.from(body)));
+      }
+      return userIds;
+    }
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      return userIds;
+    }
+    for (const name of names) {
+      if (!name.endsWith('.json')) continue;
+      userIds.push(parseUserId(await readFile(join(dir, name))));
+    }
+    return userIds;
+  } finally {
+    if (store) await store.close();
+  }
+}
+
+function parseUserId(body: Buffer): string {
+  const value = decodeJson(body) as { user_id?: unknown };
+  if (typeof value.user_id !== 'string' || value.user_id === '') {
+    throw new CommandExit(EXIT_FAILURE, 'Deletion ledger entry is missing user_id');
+  }
+  return value.user_id;
+}
+
+function buildLedgerReplaySql(userIds: readonly string[]): string[] {
+  const values = userIds.map(quoteLiteral).join(',');
+  return [
+    `delete from identity.users where id in (${values})`,
+    `delete from identity.sessions where user_id in (${values})`,
+    `delete from identity.session_bindings where session_id in (select id from identity.sessions where user_id in (${values}))`,
+  ];
+}
+
+function quoteLiteral(value: string): string {
+  if (!/^[0-9A-Za-z-]+$/.test(value)) {
+    throw new CommandExit(EXIT_FAILURE, `Invalid user id in deletion ledger: ${value}`);
+  }
+  return `'${value}'`;
+}
+
+async function runSqlBatch(config: BackupConfig, statements: readonly string[]): Promise<void> {
+  const body = statements.map((statement) => `${statement};`).join('\n');
+  const tempDir = await mkdtemp(join(tmpdir(), 'qtiauth-restore-sql-'));
+  try {
+    const file = join(tempDir, 'batch.sql');
+    await writeFile(file, body);
+    await psql(config, config.database.name, ['--file', file]);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function psql(config: BackupConfig, database: string, extra: string[]): Promise<void> {
+  await runBinary(
+    config.backups.psql,
+    [
+      `--host=${config.database.host}`,
+      `--port=${String(config.database.port)}`,
+      `--username=${config.backups.admin_user}`,
+      '--no-psqlrc',
+      '--set=ON_ERROR_STOP=1',
+      `--dbname=${database}`,
+      ...extra,
+    ],
+    {
+      PGPASSWORD: config.backups.admin_password,
+      PGSSLMODE: pgSslMode(config.database.ssl),
+    },
+  );
+}
+
+async function pgRestore(config: BackupConfig, path: string, schema: string): Promise<void> {
+  await runBinary(
+    config.backups.pg_restore,
+    [
+      `--host=${config.database.host}`,
+      `--port=${String(config.database.port)}`,
+      `--username=${config.backups.admin_user}`,
+      `--dbname=${config.database.name}`,
+      '--no-owner',
+      '--no-privileges',
+      '--exit-on-error',
+      '--single-transaction',
+      `--schema=${schema}`,
+      path,
+    ],
+    {
+      PGPASSWORD: config.backups.admin_password,
+      PGSSLMODE: pgSslMode(config.database.ssl),
+    },
+  );
+}
+
+function runBinary(binary: string, args: string[], env: Record<string, string>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(binary, args, {
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'inherit', 'pipe'],
+    });
+    const stderr: Buffer[] = [];
+    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const message = Buffer.concat(stderr).toString('utf8').trim();
+      reject(
+        new CommandExit(
+          EXIT_FAILURE,
+          `${binary} exited with code ${String(code ?? -1)}${message ? `: ${message}` : ''}`,
+        ),
+      );
+    });
+  });
+}
+
+export function readStorageManifest(bytes: Buffer) {
+  return storageManifestSchema.parse(decodeJson(bytes));
+}

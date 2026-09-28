@@ -867,6 +867,15 @@ describe('backups', () => {
       destination: 'directory',
       directory: '/var/lib/qtiauth/backups',
       retention: 35 * 24 * 60 * 60 * 1000,
+      encryption_key: '',
+      admin_user: 'postgres',
+      admin_password: '',
+      pg_dump: 'pg_dump',
+      pg_restore: 'pg_restore',
+      psql: 'psql',
+      scratch_database: 'qtiauth_scratch',
+      dump_timeout: 60 * 60 * 1000,
+      chunk_size: 1_048_576,
     });
   });
 });

@@ -177,7 +177,15 @@ services:
     profiles: [edge]
 
   backup:
-    <<: *placeholder
+    <<: *qtiauth-service
+    image: qtiauth/backup:dev
+    build:
+      context: ..
+      dockerfile: services/backup/Dockerfile
+    command: ['node', 'src/main.ts']
+    volumes:
+      - ../config:/srv/app/config:ro
+      - backups:/var/lib/qtiauth/backups
     profiles: [backup]
 
   prometheus:

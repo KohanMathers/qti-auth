@@ -12,6 +12,18 @@ import {
   pruneLedgerDestination,
 } from './ledger.ts';
 
+const backupDefaults = {
+  encryption_key: '',
+  admin_user: 'postgres',
+  admin_password: '',
+  pg_dump: 'pg_dump',
+  pg_restore: 'pg_restore',
+  psql: 'psql',
+  scratch_database: 'qtiauth_scratch',
+  dump_timeout: 60 * 60 * 1000,
+  chunk_size: 1_048_576,
+} as const;
+
 let dir: string | undefined;
 
 afterEach(async () => {
@@ -29,7 +41,10 @@ describe('deletion ledger', () => {
   it('writes to a directory destination and prunes storage objects by age', async () => {
     dir = await mkdtemp(join(tmpdir(), 'qtiauth-ledger-'));
     expect(
-      ledgerDestination({ destination: 'directory', directory: dir, retention: 1 }, null),
+      ledgerDestination(
+        { destination: 'directory', directory: dir, retention: 1, ...backupDefaults },
+        null,
+      ),
     ).toEqual({ kind: 'directory', directory: dir });
     let now = new Date('2020-01-01T00:00:00Z');
     const store = createMemoryStore(() => now);
@@ -70,7 +85,10 @@ describe('deletion ledger', () => {
 
   it('refuses a storage destination without a store', () => {
     expect(() =>
-      ledgerDestination({ destination: 'storage', directory: '/tmp', retention: 1 }, null),
+      ledgerDestination(
+        { destination: 'storage', directory: '/tmp', retention: 1, ...backupDefaults },
+        null,
+      ),
     ).toThrow(/storage is not enabled/);
   });
 });
