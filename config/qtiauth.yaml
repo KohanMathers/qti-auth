@@ -24,7 +24,7 @@ cors:
   allowed_origins: [] # surface origins are added automatically
 
 network:
-  trusted_proxies: []
+  trusted_proxies: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
 
 geoip:
   source: dbip_lite # dbip_lite | maxmind | header | none

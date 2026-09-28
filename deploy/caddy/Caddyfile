@@ -1,0 +1,11 @@
+{
+	email {$EDGE_ACME_EMAIL}
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$EDGE_HOSTS} {
+	encode zstd gzip
+	reverse_proxy gateway:8000
+}

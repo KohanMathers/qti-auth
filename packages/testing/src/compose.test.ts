@@ -61,7 +61,10 @@ const QTIAUTH_SERVICES = [
   'games',
 ];
 
-const PUBLIC_SERVICES: Record<string, string[]> = { gateway: ['8000:8000'] };
+const PUBLIC_SERVICES: Record<string, string[]> = {
+  gateway: ['8000:8000'],
+  caddy: ['80:80', '443:443', '443:443/udp'],
+};
 
 function servicesByProfile(compose: ComposeFile): Record<string, string[]> {
   const byProfile: Record<string, string[]> = {};
@@ -106,7 +109,7 @@ describe('deploy/compose.yaml', () => {
     }
   });
 
-  it('publishes ports only for the gateway', () => {
+  it('publishes ports only for the gateway and the edge proxy', () => {
     for (const [name, service] of Object.entries(base.services)) {
       expect(service.ports, name).toEqual(PUBLIC_SERVICES[name]);
     }

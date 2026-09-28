@@ -20,14 +20,21 @@ describe('shipped config', () => {
     expect(config.branding.company_name).toBe('Example Ltd');
   });
 
-  it('config/qtiauth.yaml sets nothing the defaults would not', async () => {
+  it('config/qtiauth.yaml sets nothing the defaults would not, apart from trusted proxies for the shipped Docker stack', async () => {
     const env = parseEnv(readFileSync(join(root, '.env.example'), 'utf8'));
     const shipped = await loadConfig(qtiauthConfigSchema, {
       path: join(root, 'config/qtiauth.yaml'),
       env,
     });
     const defaults = qtiauthConfigSchema.parse({});
-    expect({ ...shipped, surfaces: defaults.surfaces }).toEqual(defaults);
+    expect({ ...shipped, surfaces: defaults.surfaces, network: defaults.network }).toEqual(
+      defaults,
+    );
+    expect(shipped.network.trusted_proxies).toEqual([
+      '10.0.0.0/8',
+      '172.16.0.0/12',
+      '192.168.0.0/16',
+    ]);
   });
 
   it('config/qtiauth.dev.yaml only switches email to the console provider and adds local origins', async () => {

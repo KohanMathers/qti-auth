@@ -58,7 +58,30 @@ Services that haven't been built yet (`games`) run as empty placeholder containe
 
 ## Networking
 
-Everything runs on the `internal` network, which has no route in or out of the host. Only the gateway is also on the `public` network, and only it publishes a port: `8000`, for surfaces bound to hosts (see [gateway.md](gateway.md)). Put your TLS-terminating reverse proxy in front of it, or use the `edge` profile once it's available. If you bind surfaces to their own `ports`, publish those as well.
+Everything runs on the `internal` network, which has no route in or out of the host. Only the gateway is also on the `public` network, and only it publishes a port: `8000`, for surfaces bound to hosts (see [gateway.md](gateway.md)). Put your TLS-terminating reverse proxy in front of it, or use the `edge` profile (see below). If you bind surfaces to their own `ports`, publish those as well.
+
+## Edge profile
+
+The `edge` profile runs a Caddy container that terminates TLS in front of the gateway and gets certificates from Let's Encrypt automatically. It's the fastest way to give a fresh VPS valid HTTPS: point your DNS records at the host, fill in `.env`, and start the stack.
+
+Set the hosts Caddy serves and an ACME contact address in `.env`:
+
+```sh
+EDGE_HOSTS='me.example.com www.example.com'
+EDGE_ACME_EMAIL=ops@example.com
+```
+
+`EDGE_HOSTS` is a space-separated list of every hostname the gateway answers on, matching the `hosts` values in `surfaces` in `qtiauth.yaml`. `EDGE_ACME_EMAIL` receives Let's Encrypt renewal notices.
+
+Then bring the stack up with the `edge` profile:
+
+```sh
+docker compose --env-file .env -f deploy/compose.yaml --profile edge up -d --wait
+```
+
+Caddy publishes ports `80`, `443` and `443/udp` (for HTTP/3) on the host, and proxies to `gateway:8000` on the `internal` network. Certificates and ACME state live in the `caddy_data` volume, so restarts don't re-issue them. Only leave port `8000` published on the host if you need direct access to the gateway; otherwise remove the `ports` entry from `gateway` so all inbound traffic goes through Caddy.
+
+Caddy sets `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` on every proxied request. The shipped `network.trusted_proxies` covers the private IP ranges Docker assigns, so the gateway trusts Caddy's forwarded headers out of the box. Narrow the list to Caddy's exact address if you place the stack on a shared network.
 
 ## Data
 

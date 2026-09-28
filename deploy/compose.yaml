@@ -8,10 +8,6 @@ x-empty: &empty
   user: '65534:65534'
   cap_drop: [ALL]
 
-x-placeholder: &placeholder
-  <<: *empty
-  network_mode: none
-
 x-qtiauth-service: &qtiauth-service
   <<: *empty
   networks: [internal]
@@ -173,8 +169,26 @@ services:
     restart: unless-stopped
 
   caddy:
-    <<: *placeholder
+    image: caddy:2.11.1-alpine
+    command: ['caddy', 'run', '--config', '/etc/caddy/Caddyfile']
+    environment:
+      EDGE_HOSTS: ${EDGE_HOSTS:?Set EDGE_HOSTS in .env}
+      EDGE_ACME_EMAIL: ${EDGE_ACME_EMAIL:?Set EDGE_ACME_EMAIL in .env}
+    volumes:
+      - ../deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [internal, public]
+    ports: ['80:80', '443:443', '443:443/udp']
+    depends_on:
+      gateway: { condition: service_started }
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:2019/config/']
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
     profiles: [edge]
+    restart: unless-stopped
 
   backup:
     <<: *qtiauth-service
@@ -270,6 +284,8 @@ volumes:
   geoip:
   minio:
   backups:
+  caddy_data:
+  caddy_config:
   prometheus:
   grafana:
   tempo:

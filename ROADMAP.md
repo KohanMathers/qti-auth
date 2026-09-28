@@ -877,10 +877,10 @@ Spec: §8.6
 **Done when:** the coverage audit is complete, and each alert rule has been triggered once in a test
 environment.
 
-### P8.3 Edge profile — S
+### P8.3 Edge profile — S ✅
 Spec: §2.6
 
-- [ ] Caddy with automatic HTTPS in front of the gateway, with trusted-proxy config preset.
+- [x] Caddy with automatic HTTPS in front of the gateway, with trusted-proxy config preset.
 
 **Done when:** a fresh VPS gets valid certificates with only DNS records and `.env` filled in.
 
