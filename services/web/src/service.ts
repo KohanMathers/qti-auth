@@ -104,6 +104,34 @@ router.route({
 
 router.route({
   method: 'GET',
+  path: '/client.js',
+  operation_id: 'clientScript',
+  summary: 'Typed API client for the account surface',
+  tags: ['web'],
+  auth: 'none',
+  rate_limit: 'global',
+  responses: jsOk,
+  errors: ['ASSET_NOT_FOUND'],
+  handler: ({ ctx, request }) =>
+    Promise.resolve(serveAsset(requireWebState(ctx), request, 'client.js')),
+});
+
+router.route({
+  method: 'GET',
+  path: '/pages.js',
+  operation_id: 'pagesScript',
+  summary: 'Page registry for the account surface',
+  tags: ['web'],
+  auth: 'none',
+  rate_limit: 'global',
+  responses: jsOk,
+  errors: ['ASSET_NOT_FOUND'],
+  handler: ({ ctx, request }) =>
+    Promise.resolve(serveAsset(requireWebState(ctx), request, 'pages.js')),
+});
+
+router.route({
+  method: 'GET',
   path: '/locales/:locale',
   operation_id: 'localeCatalogue',
   summary: 'Translated strings for a locale',

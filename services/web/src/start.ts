@@ -6,7 +6,13 @@ import { assertKitCoverage } from './problems.ts';
 import { type Context, type definition, router } from './service.ts';
 import { attachWebState } from './web-state.ts';
 
-export const REQUIRED_ASSETS = ['app.js', 'problems.js', 'styles.css'] as const;
+export const REQUIRED_ASSETS = [
+  'app.js',
+  'client.js',
+  'pages.js',
+  'problems.js',
+  'styles.css',
+] as const;
 
 export class WebStartError extends Error {
   constructor(message: string) {

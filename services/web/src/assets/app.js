@@ -1,9 +1,13 @@
+import { apiClient, ProblemFetchError } from './client.js';
+import { availablePages, clear, element, matchPage, PAGES } from './pages.js';
 import { messageFor } from './problems.js';
 
 const BOOTSTRAP_SELECTOR = '#qtiauth-bootstrap';
 const APP_SELECTOR = '#qtiauth-app';
 const MAIN_SELECTOR = '#qtiauth-main';
 const LIVE_SELECTOR = '#qtiauth-live';
+
+export { ProblemFetchError };
 
 function readBootstrap() {
   const node = document.querySelector(BOOTSTRAP_SELECTOR);
@@ -36,14 +40,6 @@ async function fetchJson(url, init) {
     });
   }
   return response.json();
-}
-
-export class ProblemFetchError extends Error {
-  constructor(problem) {
-    super(problem.title ?? 'Request failed');
-    this.name = 'ProblemFetchError';
-    this.problem = problem;
-  }
 }
 
 function metaEndpoint(bootstrap, path) {
@@ -101,6 +97,7 @@ export function availableRoutes(features, current) {
   }
   if (features.modules.games) routes.push({ id: 'games', path: '/games', surface: 'account' });
   if (features.modules.oidc) routes.push({ id: 'apps', path: '/apps', surface: 'account' });
+  if (features.modules.admin) routes.push({ id: 'admin', path: '/admin', surface: 'account' });
   if (features.modules.support) {
     routes.push({ id: 'support', path: '/support', surface: 'support' });
   }
@@ -109,21 +106,6 @@ export function availableRoutes(features, current) {
     href: surfaceHref(features, current, route.surface, route.path),
     cross_surface: route.surface !== current,
   }));
-}
-
-function noop() {
-  return undefined;
-}
-
-function element(tag, props = {}, children = []) {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(props)) {
-    if (key === 'text') node.textContent = value;
-    else if (key === 'attrs') for (const [k, v] of Object.entries(value)) node.setAttribute(k, v);
-    else node[key] = value;
-  }
-  for (const child of children) node.appendChild(child);
-  return node;
 }
 
 function announce(text) {
@@ -182,40 +164,21 @@ function renderProblem(main, t, problem) {
   announce(heading.textContent);
 }
 
-function renderRoute(main, t, features, route) {
-  const heading = element('h2', { text: t(`routes.${route.id}.title`, route.id) });
-  const body = element('p', {
-    text: t(`routes.${route.id}.body`, `Screen: ${route.id}`),
-  });
-  main.append(heading, body);
-  if (route.id === 'sign-in' && features.auth.social.length > 0) {
-    const list = element('ul');
-    for (const provider of features.auth.social) {
-      const item = element('li', { text: provider.name });
-      list.appendChild(item);
-    }
-    main.appendChild(list);
-  }
-}
-
-function clear(node) {
-  while (node.firstChild !== null) node.removeChild(node.firstChild);
-}
-
 function currentPath(bootstrap, location) {
   const base = bootstrap.basePath === '/' ? '' : bootstrap.basePath;
   if (base === '' || !location.pathname.startsWith(base)) return location.pathname;
   return location.pathname.slice(base.length) || '/';
 }
 
-function match(routes, path) {
-  return routes.find((route) => route.path === path) ?? null;
+function absoluteHref(bootstrap, path) {
+  return joinBase(bootstrap.basePath, path);
 }
 
 export async function bootstrap(config) {
   const bootstrapData = config?.bootstrap ?? readBootstrap();
   const fetcher = config?.fetch ?? fetchJson;
   const location = config?.location ?? window.location;
+  const history = config?.history ?? window.history;
   const app = document.querySelector(APP_SELECTOR);
   const main = document.querySelector(MAIN_SELECTOR);
   if (app === null || main === null) return;
@@ -234,22 +197,37 @@ export async function bootstrap(config) {
   const t = translator(catalogue);
   const current = currentSurface(features, location);
   const routes = availableRoutes(features, current);
-  const initialPath = currentPath(bootstrapData, location);
-  const initial = match(routes, initialPath);
-  clear(main);
-  renderHeading(main, t, features.branding.product_name);
-  renderNav(main, routes, t, (route) => {
-    window.history.pushState({}, '', route.href);
+  const pages = availablePages(features);
+  const api = apiClient(bootstrapData);
+  const ctx = {
+    features,
+    api,
+    apiBase: bootstrapData.metaOrigin ?? bootstrapData.basePath.replace(/\/$/, ''),
+    location,
+    bootstrap: bootstrapData,
+    href: (path) => absoluteHref(bootstrapData, path),
+    navigate: (path) => {
+      history.pushState({}, '', absoluteHref(bootstrapData, path));
+      renderCurrent(path);
+    },
+  };
+  const renderCurrent = (path) => {
     clear(main);
     renderHeading(main, t, features.branding.product_name);
-    renderNav(main, routes, t, noop);
-    renderRoute(main, t, features, route);
+    renderNav(main, routes, t, (route) => ctx.navigate(route.path));
+    const match = matchPage(pages, path);
+    if (match !== null) {
+      match.page.render(main, t, ctx, match.params);
+      announce(t(`routes.${match.page.id}.title`, match.page.id));
+    }
     main.focus();
-    announce(t(`routes.${route.id}.title`, route.id));
-  });
-  if (initial !== null) renderRoute(main, t, features, initial);
+  };
+  window.addEventListener('popstate', () => renderCurrent(currentPath(bootstrapData, location)));
+  renderCurrent(currentPath(bootstrapData, location));
   app.setAttribute('aria-busy', 'false');
 }
+
+export { availablePages, matchPage, PAGES };
 
 if (typeof window !== 'undefined' && document.readyState !== 'loading') {
   bootstrap();

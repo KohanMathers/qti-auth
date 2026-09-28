@@ -51,6 +51,7 @@ describe('availableRoutes', () => {
     const routes = app.availableRoutes(features, 'account');
     expect(routes.map((route) => route.id).sort()).toEqual([
       'account',
+      'admin',
       'apps',
       'games',
       'sign-in',

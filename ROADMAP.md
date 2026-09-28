@@ -935,16 +935,16 @@ and are replaced by the web app in Phase 9. They're not a frontend and get no de
 - [x] Problem Details error-code → message catalogue.
 - [x] Accessibility baseline (WCAG 2.2 AA) and automated accessibility tests.
 
-### P9.2 Account surface — XL
+### P9.2 Account surface — XL ✅
 
-- [ ] Sign up, sign in (every method), verification, reset, 2FA/passkeys/recovery.
-- [ ] Session list, security settings, connected sign-in methods, change email.
-- [ ] Profile, username, notification preferences, legal acceptance, data export, deletion.
-- [ ] Family dashboard and child waiting page.
-- [ ] Consent screen, device-code entry, authorized apps, developer portal.
-- [ ] Games: owned games, key redemption, achievements, stats, leaderboards, devices.
-- [ ] Report user/content.
-- [ ] Admin: users, roles, audit, webhooks, text filter tuning, moderation queue, CSEA cases,
+- [x] Sign up, sign in (every method), verification, reset, 2FA/passkeys/recovery.
+- [x] Session list, security settings, connected sign-in methods, change email.
+- [x] Profile, username, notification preferences, legal acceptance, data export, deletion.
+- [x] Family dashboard and child waiting page.
+- [x] Consent screen, device-code entry, authorized apps, developer portal.
+- [x] Games: owned games, key redemption, achievements, stats, leaderboards, devices.
+- [x] Report user/content.
+- [x] Admin: users, roles, audit, webhooks, text filter tuning, moderation queue, CSEA cases,
       OAuth client verification, games management, health page.
 
 ### P9.3 Support surface — L

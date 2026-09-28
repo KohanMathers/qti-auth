@@ -9,7 +9,9 @@ describe('web service', () => {
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual([
       'GET /',
       'GET /app.js',
+      'GET /client.js',
       'GET /locales/:locale',
+      'GET /pages.js',
       'GET /problems.js',
       'GET /styles.css',
       'GET /theme.css',

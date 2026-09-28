@@ -124,6 +124,127 @@ nav ul {
   gap: 0.5rem 1rem;
 }
 
+form {
+  display: block;
+  margin: 0 0 1.5rem;
+}
+
+.qtiauth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0 0 1rem;
+}
+
+.qtiauth-field label {
+  color: var(--qtiauth-color-muted);
+  font-size: 0.9rem;
+}
+
+.qtiauth-field input {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--qtiauth-color-border);
+  border-radius: 0.25rem;
+  background: var(--qtiauth-color-bg);
+  color: var(--qtiauth-color-fg);
+  font: inherit;
+}
+
+.qtiauth-field input:focus {
+  border-color: var(--qtiauth-color-primary);
+}
+
+.qtiauth-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.qtiauth-success {
+  border: 1px solid var(--qtiauth-color-primary);
+  background: var(--qtiauth-color-surface);
+  color: var(--qtiauth-color-fg);
+  padding: 0.75rem 1rem;
+  border-radius: 0.25rem;
+  margin: 0 0 1rem;
+}
+
+.qtiauth-lede {
+  color: var(--qtiauth-color-muted);
+}
+
+.qtiauth-empty,
+.qtiauth-muted {
+  color: var(--qtiauth-color-muted);
+}
+
+.qtiauth-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.qtiauth-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--qtiauth-color-border);
+  border-radius: 0.25rem;
+  background: var(--qtiauth-color-surface);
+}
+
+.qtiauth-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.qtiauth-details dt {
+  color: var(--qtiauth-color-muted);
+}
+
+.qtiauth-details dd {
+  margin: 0;
+}
+
+.qtiauth-button-ghost {
+  background: transparent;
+  color: var(--qtiauth-color-primary);
+}
+
+.qtiauth-button-danger {
+  background: var(--qtiauth-color-danger);
+  border-color: var(--qtiauth-color-danger);
+}
+
+.qtiauth-social {
+  margin: 1.5rem 0;
+}
+
+.qtiauth-social-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.qtiauth-status {
+  margin: 0 0 1rem;
+}
+
+[aria-busy='true'] {
+  opacity: 0.7;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
