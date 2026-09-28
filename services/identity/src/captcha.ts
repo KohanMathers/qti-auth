@@ -168,15 +168,23 @@ export async function inspectCaptcha(
   };
 }
 
-export function captchaMarkup(widget: CaptchaWidget): string {
+export interface CaptchaRender {
+  html: string;
+  sources: readonly string[];
+}
+
+const EMPTY: CaptchaRender = { html: '', sources: [] };
+
+export function captchaMarkup(widget: CaptchaWidget, nonce: string): CaptchaRender {
   switch (widget.provider) {
     case 'none':
-      return '';
+      return EMPTY;
     case 'altcha': {
-      if (widget.challenge === undefined) return '';
+      if (widget.challenge === undefined) return EMPTY;
       const payload = JSON.stringify(widget.challenge).replaceAll('<', '\\u003c');
-      return `<input type="hidden" name="captcha" id="captcha" value="">
-<script>
+      return {
+        html: `<input type="hidden" name="captcha" id="captcha" value="">
+<script nonce="${nonce}">
 (async () => {
   const challenge = ${payload};
   const encoder = new TextEncoder();
@@ -189,16 +197,27 @@ export function captchaMarkup(widget: CaptchaWidget): string {
     }
   }
 })();
-</script>`;
+</script>`,
+        sources: [],
+      };
     }
     case 'turnstile':
-      return `<div class="cf-turnstile" data-sitekey="${escapeHtml(widget.site_key ?? '')}"></div>
-<script src="${TURNSTILE_SCRIPT_URL}" async defer></script>`;
+      return {
+        html: `<div class="cf-turnstile" data-sitekey="${escapeHtml(widget.site_key ?? '')}"></div>
+<script src="${TURNSTILE_SCRIPT_URL}" async defer></script>`,
+        sources: [TURNSTILE_SCRIPT_URL],
+      };
     case 'hcaptcha':
-      return `<div class="h-captcha" data-sitekey="${escapeHtml(widget.site_key ?? '')}"></div>
-<script src="${HCAPTCHA_SCRIPT_URL}" async defer></script>`;
+      return {
+        html: `<div class="h-captcha" data-sitekey="${escapeHtml(widget.site_key ?? '')}"></div>
+<script src="${HCAPTCHA_SCRIPT_URL}" async defer></script>`,
+        sources: [HCAPTCHA_SCRIPT_URL],
+      };
     case 'friendly_captcha':
-      return `<div class="frc-captcha" data-sitekey="${escapeHtml(widget.site_key ?? '')}"></div>
-<script type="module" src="${FRIENDLY_CAPTCHA_SCRIPT_URL}" async defer></script>`;
+      return {
+        html: `<div class="frc-captcha" data-sitekey="${escapeHtml(widget.site_key ?? '')}"></div>
+<script type="module" src="${FRIENDLY_CAPTCHA_SCRIPT_URL}" async defer></script>`,
+        sources: [FRIENDLY_CAPTCHA_SCRIPT_URL],
+      };
   }
 }

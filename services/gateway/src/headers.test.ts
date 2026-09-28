@@ -49,4 +49,28 @@ describe('applySecurityHeaders', () => {
       "script-src 'nonce-abc'; frame-ancestors 'none'",
     );
   });
+
+  it('audits every response for the SPEC §8.9 headers', () => {
+    const headers = new Headers();
+    applySecurityHeaders(headers, hsts);
+    for (const name of [
+      'strict-transport-security',
+      'x-content-type-options',
+      'referrer-policy',
+      'permissions-policy',
+      'content-security-policy',
+    ]) {
+      expect(headers.get(name), name).not.toBeNull();
+    }
+    expect(headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+    expect(headers.get('x-content-type-options')).toBe('nosniff');
+    expect(headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+  });
+
+  it('strips server fingerprints even when nothing else is set', () => {
+    const headers = new Headers({ Server: 'nginx', 'X-Powered-By': 'Express' });
+    applySecurityHeaders(headers, hsts);
+    expect(headers.get('server')).toBeNull();
+    expect(headers.get('x-powered-by')).toBeNull();
+  });
 });

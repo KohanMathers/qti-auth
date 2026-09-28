@@ -50,7 +50,7 @@ import {
   verify,
 } from './flows.ts';
 import { NO_STORE, revokedHeaders, sessionHeaders, signedOutHeaders } from './headers.ts';
-import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse } from './html.ts';
+import { escapeHtml, hiddenInput, type HtmlPage, htmlResponse, newNonce } from './html.ts';
 import {
   currentLegalVersions,
   findCurrentLegalVersion,
@@ -406,9 +406,12 @@ function passwordMessage(ctx: Context, reason: PasswordPolicyReason): string {
   }
 }
 
-function captchaBlock(widget: CaptchaWidget | undefined): string {
-  if (widget === undefined) return '';
-  return captchaMarkup(widget);
+function captchaBlock(
+  widget: CaptchaWidget | undefined,
+  nonce: string,
+): { html: string; sources: readonly string[] } {
+  if (widget === undefined) return { html: '', sources: [] };
+  return captchaMarkup(widget, nonce);
 }
 
 function socialButtons(ctx: Context, kind: 'signin' | 'signup', returnTo?: string | null): string {
@@ -547,6 +550,8 @@ function registerForm(
   error?: string,
   widget?: CaptchaWidget,
 ): Response {
+  const nonce = newNonce();
+  const captcha = captchaBlock(widget, nonce);
   return page(ctx, {
     status: error === undefined ? 200 : 400,
     title: 'Sign up with a password',
@@ -559,10 +564,11 @@ function registerForm(
 <p><label for="date_of_birth">Date of birth</label><br>
 <input id="date_of_birth" name="date_of_birth" type="date" required value="${escapeHtml(values.dateOfBirth ?? '')}"></p>
 ${guardianEmailField(ctx, values.guardianEmail)}
-${captchaBlock(widget)}
+${captcha.html}
 <p><button type="submit">Create account</button></p>
 </form>
 <p><a href="signup">Other ways to sign up</a></p>`,
+    scripts: { nonce, sources: captcha.sources },
   });
 }
 
@@ -575,6 +581,8 @@ function loginForm(
   returnTo?: string | null,
 ): Response {
   const bounce = returnTo ? `${hiddenInput('return_to', returnTo)}\n` : '';
+  const nonce = newNonce();
+  const captcha = captchaBlock(widget, nonce);
   return page(ctx, {
     status: status ?? (error === undefined ? 200 : 401),
     title: `Sign in to ${ctx.config.branding.product_name}`,
@@ -584,12 +592,13 @@ ${bounce}<p><label for="email">Email</label><br>
 <input id="email" name="email" type="email" autocomplete="username" required value="${escapeHtml(email)}"></p>
 <p><label for="password">Password</label><br>
 <input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required></p>
-${captchaBlock(widget)}
+${captcha.html}
 <p><button type="submit">Sign in</button></p>
 </form>
 ${passkeysEnabled(ctx) ? '<p><a href="passkey">Sign in with a passkey</a></p>' : ''}
 ${socialButtons(ctx, 'signin', returnTo)}
 <p><a href="forgot-password">Forgot password</a></p>`,
+    scripts: { nonce, sources: captcha.sources },
   });
 }
 
@@ -709,6 +718,8 @@ function magicLinkStartForm(
   error?: string,
   widget?: CaptchaWidget,
 ): Response {
+  const nonce = newNonce();
+  const captcha = captchaBlock(widget, nonce);
   return page(ctx, {
     status: error === undefined ? 200 : 400,
     title: `Sign in to ${ctx.config.branding.product_name}`,
@@ -716,9 +727,10 @@ function magicLinkStartForm(
 <form method="post" action="start">
 <p><label for="email">Email</label><br>
 <input id="email" name="email" type="email" autocomplete="username" required value="${escapeHtml(email)}"></p>
-${captchaBlock(widget)}
+${captcha.html}
 <p><button type="submit">Email me a link</button></p>
 </form>`,
+    scripts: { nonce, sources: captcha.sources },
   });
 }
 

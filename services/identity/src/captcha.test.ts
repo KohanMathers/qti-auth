@@ -23,21 +23,31 @@ describe('captchaFromForm', () => {
 });
 
 describe('captchaMarkup', () => {
-  it('embeds an Altcha solver and vendor widgets', () => {
-    const altcha = captchaMarkup({
-      provider: 'altcha',
-      site_key: null,
-      challenge: {
-        algorithm: 'SHA-256',
-        challenge: 'abc',
-        salt: 'salt?expires=1',
-        signature: 'sig',
-        maxnumber: 10,
+  it('embeds an Altcha solver and vendor widgets, tagging inline scripts with the nonce', () => {
+    const altcha = captchaMarkup(
+      {
+        provider: 'altcha',
+        site_key: null,
+        challenge: {
+          algorithm: 'SHA-256',
+          challenge: 'abc',
+          salt: 'salt?expires=1',
+          signature: 'sig',
+          maxnumber: 10,
+        },
       },
+      'n1',
+    );
+    expect(altcha.html).toContain('name="captcha"');
+    expect(altcha.html).toContain('maxnumber');
+    expect(altcha.html).toContain('nonce="n1"');
+    expect(altcha.sources).toEqual([]);
+    expect(captchaMarkup({ provider: 'none', site_key: null }, 'n2')).toEqual({
+      html: '',
+      sources: [],
     });
-    expect(altcha).toContain('name="captcha"');
-    expect(altcha).toContain('maxnumber');
-    expect(captchaMarkup({ provider: 'none', site_key: null })).toBe('');
-    expect(captchaMarkup({ provider: 'turnstile', site_key: 'site' })).toContain('cf-turnstile');
+    const turnstile = captchaMarkup({ provider: 'turnstile', site_key: 'site' }, 'n3');
+    expect(turnstile.html).toContain('cf-turnstile');
+    expect(turnstile.sources).toEqual(['https://challenges.cloudflare.com/turnstile/v0/api.js']);
   });
 });

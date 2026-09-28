@@ -884,14 +884,14 @@ Spec: §2.6
 
 **Done when:** a fresh VPS gets valid certificates with only DNS records and `.env` filled in.
 
-### P8.4 Security hardening — L
+### P8.4 Security hardening — L ✅
 Spec: §8.9, §2.7
 
-- [ ] Strict nonce-based CSP, HSTS, headers audit.
-- [ ] Non-root, read-only images. Only `gateway`/`caddy` publish ports.
-- [ ] Threat model document per service.
-- [ ] Fuzzing of the text filter, OIDC parameters and webhook URL validation.
-- [ ] Load test of the gateway and auth routes with rate-limit behaviour under load.
+- [x] Strict nonce-based CSP, HSTS, headers audit.
+- [x] Non-root, read-only images. Only `gateway`/`caddy` publish ports.
+- [x] Threat model document per service.
+- [x] Fuzzing of the text filter, OIDC parameters and webhook URL validation.
+- [x] Load test of the gateway and auth routes with rate-limit behaviour under load.
 - [ ] **External security review or penetration test** before v1.0. Fix every high and critical
       finding.
 

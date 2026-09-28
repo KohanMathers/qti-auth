@@ -18,6 +18,9 @@ interface ComposeService {
   healthcheck?: { test: string[] };
   environment?: Record<string, string>;
   depends_on?: Record<string, { condition: string }>;
+  read_only?: boolean;
+  user?: string;
+  cap_drop?: string[];
 }
 
 interface ComposeFile {
@@ -114,6 +117,18 @@ describe('deploy/compose.yaml', () => {
       expect(service.ports, name).toEqual(PUBLIC_SERVICES[name]);
     }
   });
+
+  it('runs every QTIAuth service as a non-root user with a read-only root FS and no capabilities', () => {
+    for (const name of QTIAUTH_SERVICES) {
+      const service = base.services[name];
+      expect(service?.read_only, name).toBe(true);
+      expect(service?.user, name).toBe('65534:65534');
+      expect(service?.cap_drop, name).toEqual(['ALL']);
+    }
+    const geoip = base.services['geoip-updater'];
+    expect(geoip?.read_only).toBe(true);
+    expect(geoip?.cap_drop).toEqual(['ALL']);
+  });
 });
 
 describe('deploy/compose.dev.yaml', () => {
@@ -146,5 +161,36 @@ describe('.env.example', () => {
     );
     expect(used.length).toBeGreaterThan(0);
     expect(documented).toEqual(expect.arrayContaining(used));
+  });
+});
+
+describe('service Dockerfiles', () => {
+  const DOCKERFILES = [
+    'templates/service/Dockerfile',
+    ...QTIAUTH_SERVICES.map((name) => `services/${name}/Dockerfile`),
+    'services/backup/Dockerfile',
+  ];
+
+  it('drops root before running the service', () => {
+    for (const path of DOCKERFILES) {
+      const text = readText(path);
+      expect(text, path).toMatch(/^USER node$/m);
+    }
+  });
+});
+
+describe('docs/threat-models', () => {
+  const THREAT_MODELS = [...QTIAUTH_SERVICES, 'backup', 'infra'];
+
+  it('has a threat model page for every service and one for shared infra', () => {
+    for (const name of THREAT_MODELS) {
+      const text = readText(`docs/threat-models/${name}.md`);
+      expect(text, name).toMatch(/^# Threat model: /m);
+      expect(text, name).toContain('## Assets');
+      expect(text, name).toContain('## Trust boundaries');
+      expect(text, name).toContain('## Threats');
+      expect(text, name).toContain('## Mitigations');
+    }
+    expect(readText('docs/threat-models/README.md')).toContain('One page per service');
   });
 });
