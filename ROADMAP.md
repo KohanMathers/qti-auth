@@ -926,14 +926,14 @@ and are replaced by the web app in Phase 9. They're not a frontend and get no de
 
 ### P9.1 Web foundation — L
 
-- [ ] Framework and build (to be chosen at the start of this phase), i18n from day one (`en-GB`),
+- [x] Framework and build (to be chosen at the start of this phase), i18n from day one (`en-GB`),
       theming from branding config.
-- [ ] Surface-aware routing driven by `meta/features`: modules, sub-features and auth methods are never
+- [x] Surface-aware routing driven by `meta/features`: modules, sub-features and auth methods are never
       hardcoded.
-- [ ] Cross-site surface handling: link to the other surface instead of loading its data inline when a
+- [x] Cross-site surface handling: link to the other surface instead of loading its data inline when a
       pair isn't same-site.
-- [ ] Problem Details error-code → message catalogue.
-- [ ] Accessibility baseline (WCAG 2.2 AA) and automated accessibility tests.
+- [x] Problem Details error-code → message catalogue.
+- [x] Accessibility baseline (WCAG 2.2 AA) and automated accessibility tests.
 
 ### P9.2 Account surface — XL
 
@@ -984,5 +984,5 @@ These don't block the roadmap, but must be resolved at the milestone listed.
 | SI 2026/268 report fields, timeframes and retention | P5.3 — see docs/compliance/csea.md |
 | NCA CSEA-IRP registration for each deployment operator | P5.3 |
 | Steamworks partner access and publisher key | P7.8 |
-| Web app framework choice | P9.1 |
+| Web app framework choice | ~~P9.1~~ Vanilla HTML/CSS/ES modules; no framework and no build step. |
 | Legacy data migration scope (P10.1 table) | before P10.1 |

@@ -882,6 +882,25 @@ importers:
         specifier: 14.1.2
         version: 14.1.2
 
+  services/web:
+    dependencies:
+      '@qtiauth/email':
+        specifier: workspace:*
+        version: link:../../packages/email
+      '@qtiauth/service-kit':
+        specifier: workspace:*
+        version: link:../../packages/service-kit
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@qtiauth/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@qtiauth/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
   templates/service:
     dependencies:
       '@qtiauth/service-kit':

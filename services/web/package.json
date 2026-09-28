@@ -1,0 +1,24 @@
+{
+  "name": "@qtiauth/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Static web app shell for the account and support surfaces, driven by /meta/features",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "qtiauth": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qtiauth/email": "workspace:*",
+    "@qtiauth/service-kit": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@qtiauth/config": "workspace:*",
+    "@qtiauth/testing": "workspace:*"
+  }
+}

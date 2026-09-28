@@ -29,6 +29,10 @@ export default defineConfig(
     extends: [tseslint.configs.disableTypeChecked],
   },
   {
+    files: ['services/web/src/assets/**/*.js'],
+    languageOptions: { globals: globals.browser },
+  },
+  {
     files: ['scripts/**/*.ts'],
     rules: { 'no-console': 'off' },
   },
