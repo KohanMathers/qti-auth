@@ -897,15 +897,17 @@ Spec: §8.9, §2.7
 
 **Done when:** the review report has no open high or critical findings.
 
-### P8.5 Operator documentation — M
+### P8.5 Operator documentation — M ✅
 
-- [ ] Install guide (single host, split hosts, cross-site hosts, ports).
-- [ ] Full config reference generated from JSON Schema.
-- [ ] Runbooks: upgrades and migrations, key rotation, backup and restore, incident response, CSEA
-      case handling, NCA registration.
-- [ ] Online Safety Act guide for operators, based on §9 (clearly marked not legal advice).
-- [ ] Developer docs for game integration: tokens, device flow, trust model, leaderboards note, leases,
-      Steam.
+- [x] Install guide (single host, split hosts, cross-site hosts, ports) (`docs/install.md`).
+- [x] Full config reference generated from JSON Schema (`docs/config-reference.md`,
+      `pnpm config:reference`).
+- [x] Runbooks: upgrades and migrations, key rotation, backup and restore, incident response, CSEA
+      case handling, NCA registration (`docs/runbooks/`).
+- [x] Online Safety Act guide for operators, based on §9 (clearly marked not legal advice)
+      (`docs/online-safety-act.md`).
+- [x] Developer docs for game integration: tokens, device flow, trust model, leaderboards note, leases,
+      Steam (`docs/game-integration.md`).
 
 **Done when:** someone who didn't build it installs a working stack using only the docs.
 

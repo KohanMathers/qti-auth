@@ -30,6 +30,7 @@
     "check:hardcoded": "node scripts/check-hardcoded.ts",
     "check:imports": "node scripts/check-import-order.ts",
     "config:schema": "pnpm --filter @qtiauth/config schema",
+    "config:reference": "node scripts/generate-config-reference.ts",
     "qtiauth": "node packages/cli/src/main.ts",
     "stack:dev": "docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.dev.yaml",
     "changeset": "changeset",
