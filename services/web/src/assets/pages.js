@@ -4,11 +4,16 @@ import {
   auth,
   family,
   games,
+  guestSupport,
+  kb,
   me,
   oauth,
   ProblemFetchError,
   reports,
   sessions,
+  staffKb,
+  staffSupport,
+  support,
 } from './client.js';
 import { messageFor } from './problems.js';
 
@@ -1061,6 +1066,807 @@ function pageReport(main, t, ctx) {
   );
 }
 
+function pageSupportHome(main, t, ctx) {
+  heading(main, t, 'routes.support.title', 'Support', 'support.lede');
+  const sections = [
+    ['/support/kb', 'support.section.kb'],
+    ['/support/kb/search', 'support.section.search'],
+    ['/support/tickets', 'support.section.tickets'],
+    ['/support/tickets/new', 'support.section.newTicket'],
+    ['/support/appeals/new', 'support.section.appeal'],
+    ['/support/guest/start', 'support.section.guest'],
+  ];
+  main.appendChild(
+    list(sections, ([path, label]) => {
+      const item = element('li');
+      item.appendChild(
+        element('a', {
+          href: ctx.href(path),
+          text: t(label, path),
+          onclick: (event) => {
+            event.preventDefault();
+            ctx.navigate(path);
+          },
+        }),
+      );
+      return item;
+    }),
+  );
+}
+
+function pageKbHome(main, t, ctx) {
+  heading(main, t, 'routes.kb.title', 'Help centre', 'kb.lede');
+  const k = kb(ctx.api);
+  const wrap = element('div');
+  main.appendChild(wrap);
+  void k.categories().then((data) => {
+    const items = data?.items ?? [];
+    if (items.length === 0) {
+      wrap.appendChild(empty(t, 'kb.empty', 'No articles have been published yet.'));
+      return;
+    }
+    wrap.appendChild(
+      list(items, (category) => {
+        const item = element('li');
+        item.appendChild(
+          element('a', {
+            href: ctx.href(`/support/kb/categories/${encodeURIComponent(category.slug)}`),
+            text: category.name,
+            onclick: (event) => {
+              event.preventDefault();
+              ctx.navigate(`/support/kb/categories/${encodeURIComponent(category.slug)}`);
+            },
+          }),
+        );
+        return item;
+      }),
+    );
+  });
+}
+
+function pageKbCategory(main, t, ctx, params) {
+  heading(main, t, 'routes.kb.category.title', 'Category');
+  const k = kb(ctx.api);
+  const wrap = element('div');
+  main.appendChild(wrap);
+  void k.category(params.slug).then((data) => {
+    const name = data?.name ?? params.slug;
+    main.querySelector('h2').textContent = name;
+    const articles = data?.articles?.items ?? [];
+    if (articles.length === 0) {
+      wrap.appendChild(empty(t, 'kb.category.empty', 'No articles in this category.'));
+      return;
+    }
+    wrap.appendChild(
+      list(articles, (article) => {
+        const item = element('li');
+        item.appendChild(
+          element('a', {
+            href: ctx.href(`/support/kb/articles/${encodeURIComponent(article.slug)}`),
+            text: article.title,
+            onclick: (event) => {
+              event.preventDefault();
+              ctx.navigate(`/support/kb/articles/${encodeURIComponent(article.slug)}`);
+            },
+          }),
+        );
+        return item;
+      }),
+    );
+  });
+}
+
+function pageKbSearch(main, t, ctx) {
+  heading(main, t, 'routes.kb.search.title', 'Search the help centre', 'kb.search.lede');
+  const k = kb(ctx.api);
+  const results = element('div');
+  main.appendChild(
+    form(
+      [{ name: 'q', label: 'field.query', autocomplete: 'off' }],
+      t,
+      'kb.search.submit',
+      async (values) => {
+        clear(results);
+        const data = await k.search(values.q);
+        const items = data?.items ?? [];
+        if (items.length === 0) {
+          results.appendChild(empty(t, 'kb.search.empty', 'No matching articles.'));
+          return;
+        }
+        results.appendChild(
+          list(items, (article) => {
+            const item = element('li');
+            item.appendChild(
+              element('a', {
+                href: ctx.href(`/support/kb/articles/${encodeURIComponent(article.slug)}`),
+                text: article.title,
+                onclick: (event) => {
+                  event.preventDefault();
+                  ctx.navigate(`/support/kb/articles/${encodeURIComponent(article.slug)}`);
+                },
+              }),
+            );
+            return item;
+          }),
+        );
+      },
+    ),
+  );
+  main.appendChild(results);
+}
+
+function pageKbArticle(main, t, ctx, params) {
+  heading(main, t, 'routes.kb.article.title', 'Article');
+  const k = kb(ctx.api);
+  const body = element('div', { className: 'qtiauth-article' });
+  const meta = element('p', { className: 'qtiauth-muted' });
+  const feedback = element('div', { className: 'qtiauth-status' });
+  main.append(meta, body, feedback);
+  void k.article(params.slug).then((data) => {
+    if (data === null) {
+      body.appendChild(empty(t, 'kb.article.missing', 'That article is not available.'));
+      return;
+    }
+    main.querySelector('h2').textContent = data.title;
+    meta.textContent = `${data.category?.name ?? ''} — ${data.updated_at}`;
+    body.innerHTML = data.html;
+    const yes = element('button', {
+      type: 'button',
+      text: t('kb.feedback.yes', 'Yes, this helped'),
+      onclick: () => {
+        void k.feedback(params.slug, true).then(() => {
+          clear(feedback);
+          feedback.appendChild(successRow(t, 'kb.feedback.thanks'));
+        });
+      },
+    });
+    const no = element('button', {
+      type: 'button',
+      className: 'qtiauth-button qtiauth-button-ghost',
+      text: t('kb.feedback.no', 'No, this did not help'),
+      onclick: () => {
+        void k.feedback(params.slug, false).then(() => {
+          clear(feedback);
+          feedback.appendChild(successRow(t, 'kb.feedback.thanks'));
+        });
+      },
+    });
+    const buttons = element('p', { className: 'qtiauth-actions' });
+    buttons.append(yes, no);
+    main.appendChild(buttons);
+  });
+}
+
+function pageMyTickets(main, t, ctx) {
+  heading(main, t, 'routes.tickets.title', 'Your tickets', 'tickets.lede');
+  const s = support(ctx.api);
+  const wrap = element('div');
+  main.appendChild(wrap);
+  void s.listTickets().then((data) => {
+    const items = data?.items ?? [];
+    if (items.length === 0) {
+      wrap.appendChild(empty(t, 'tickets.empty', 'You have not opened any tickets.'));
+      return;
+    }
+    wrap.appendChild(
+      list(items, (ticket) => {
+        const item = element('li');
+        item.appendChild(
+          element('a', {
+            href: ctx.href(`/support/tickets/${encodeURIComponent(ticket.id)}`),
+            text: `#${ticket.number} — ${ticket.subject} (${ticket.status})`,
+            onclick: (event) => {
+              event.preventDefault();
+              ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
+            },
+          }),
+        );
+        return item;
+      }),
+    );
+  });
+}
+
+function pageNewTicket(main, t, ctx) {
+  heading(main, t, 'routes.tickets.new.title', 'Open a support ticket', 'tickets.new.lede');
+  const s = support(ctx.api);
+  const categories = element('select', { name: 'category_id', required: true });
+  categories.appendChild(
+    element('option', { value: '', text: t('tickets.new.pickCategory', 'Choose a category') }),
+  );
+  void s.categories().then((data) => {
+    const items = data?.items ?? [];
+    for (const category of items) {
+      categories.appendChild(element('option', { value: category.id, text: category.name }));
+    }
+  });
+  const feedback = element('div', {
+    className: 'qtiauth-feedback',
+    attrs: { 'aria-live': 'polite' },
+  });
+  const el = element('form', { noValidate: true });
+  const categoryWrap = element('p', { className: 'qtiauth-field' });
+  categoryWrap.append(
+    element('label', { htmlFor: 'qtiauth-f-category', text: t('field.category', 'Category') }),
+    categories,
+  );
+  categories.id = 'qtiauth-f-category';
+  el.appendChild(categoryWrap);
+  const subject = element('input', { type: 'text', name: 'subject', required: true });
+  subject.id = 'qtiauth-f-subject';
+  const subjectWrap = element('p', { className: 'qtiauth-field' });
+  subjectWrap.append(
+    element('label', { htmlFor: 'qtiauth-f-subject', text: t('field.subject', 'Subject') }),
+    subject,
+  );
+  el.appendChild(subjectWrap);
+  const body = element('textarea', { name: 'body', required: true, rows: 6 });
+  body.id = 'qtiauth-f-body';
+  const bodyWrap = element('p', { className: 'qtiauth-field' });
+  bodyWrap.append(
+    element('label', { htmlFor: 'qtiauth-f-body', text: t('field.message', 'Message') }),
+    body,
+  );
+  el.appendChild(bodyWrap);
+  el.appendChild(submitRow(t, 'tickets.new.submit'));
+  el.appendChild(feedback);
+  el.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void runForm(el, feedback, t, async () => {
+      const ticket = await s.createTicket({
+        category_id: categories.value,
+        subject: subject.value,
+        body: body.value,
+      });
+      ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
+    });
+  });
+  main.appendChild(el);
+}
+
+function renderTicketDetail(main, t, ctx, ticket, api) {
+  main.querySelector('h2').textContent = `#${ticket.number} — ${ticket.subject}`;
+  const meta = element('p', { className: 'qtiauth-muted' });
+  meta.textContent = `${ticket.status} — ${ticket.priority} — ${ticket.created_at}`;
+  main.appendChild(meta);
+  const thread = element('ol', { className: 'qtiauth-thread' });
+  for (const message of ticket.messages ?? []) {
+    const item = element('li', {
+      className: message.staff ? 'qtiauth-message qtiauth-message-staff' : 'qtiauth-message',
+    });
+    item.append(
+      element('p', {
+        className: 'qtiauth-muted',
+        text: `${message.staff ? t('tickets.staff', 'Staff') : t('tickets.you', 'You')} — ${message.created_at}`,
+      }),
+      element('p', { text: message.body }),
+    );
+    thread.appendChild(item);
+  }
+  main.appendChild(thread);
+  const attachments = ticket.attachments ?? [];
+  if (attachments.length > 0) {
+    main.appendChild(element('h3', { text: t('tickets.attachments', 'Attachments') }));
+    main.appendChild(
+      list(attachments, (attachment) => {
+        const item = element('li');
+        item.append(
+          element('span', { text: `${attachment.filename} (${attachment.content_type})` }),
+          element('button', {
+            type: 'button',
+            text: t('tickets.download', 'Download'),
+            onclick: () => {
+              void api.downloadAttachment(ticket.id, attachment.id).then((result) => {
+                if (result?.url) window.open(result.url, '_blank', 'noopener');
+              });
+            },
+          }),
+        );
+        return item;
+      }),
+    );
+  }
+  if (ticket.status !== 'closed') {
+    main.appendChild(element('h3', { text: t('tickets.reply.heading', 'Reply') }));
+    main.appendChild(
+      form(
+        [{ name: 'body', label: 'field.message' }],
+        t,
+        'tickets.reply.submit',
+        async (values, { feedback }) => {
+          await api.reply(ticket.id, values.body);
+          feedback.appendChild(successRow(t, 'tickets.reply.success'));
+          ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
+        },
+      ),
+    );
+    main.appendChild(
+      element('button', {
+        type: 'button',
+        className: 'qtiauth-button qtiauth-button-ghost',
+        text: t('tickets.close', 'Close ticket'),
+        onclick: () => {
+          void api.close(ticket.id).then(() => ctx.navigate('/support/tickets'));
+        },
+      }),
+    );
+  } else {
+    main.appendChild(
+      element('button', {
+        type: 'button',
+        text: t('tickets.reopen', 'Reopen ticket'),
+        onclick: () => {
+          void api.reopen(ticket.id).then(() => {
+            ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
+          });
+        },
+      }),
+    );
+    if (ticket.rating === null) {
+      main.appendChild(element('h3', { text: t('tickets.rate.heading', 'Rate this ticket') }));
+      const rating = element('div', { className: 'qtiauth-actions' });
+      for (const score of [1, 2, 3, 4, 5]) {
+        rating.appendChild(
+          element('button', {
+            type: 'button',
+            text: String(score),
+            onclick: () => {
+              void api.rate(ticket.id, score).then(() => {
+                ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
+              });
+            },
+          }),
+        );
+      }
+      main.appendChild(rating);
+    }
+  }
+}
+
+function pageTicket(main, t, ctx, params) {
+  heading(main, t, 'routes.tickets.detail.title', 'Ticket');
+  const s = support(ctx.api);
+  void s.getTicket(params.id).then((ticket) => renderTicketDetail(main, t, ctx, ticket, s));
+}
+
+function pageAppeal(main, t, ctx) {
+  heading(main, t, 'routes.appeals.title', 'Appeal a decision', 'appeals.lede');
+  const s = support(ctx.api);
+  main.appendChild(
+    form(
+      [
+        { name: 'action_id', label: 'field.actionId', required: false },
+        { name: 'body', label: 'field.message' },
+      ],
+      t,
+      'appeals.submit',
+      async (values, { feedback }) => {
+        const ticket = await s.createAppeal({
+          action_id: values.action_id === '' ? undefined : values.action_id,
+          body: values.body,
+        });
+        feedback.appendChild(successRow(t, 'appeals.success'));
+        ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
+      },
+    ),
+  );
+}
+
+function pageGuestStart(main, t, ctx) {
+  heading(main, t, 'routes.guest.title', 'Contact support without signing in', 'guest.lede');
+  const g = guestSupport(ctx.api);
+  main.appendChild(
+    form(
+      [{ name: 'email', type: 'email', label: 'field.email', autocomplete: 'email' }],
+      t,
+      'guest.code.submit',
+      async (values, { feedback }) => {
+        await g.requestCode(values.email, undefined);
+        feedback.appendChild(successRow(t, 'guest.code.sent'));
+        ctx.navigate(`/support/guest/verify?email=${encodeURIComponent(values.email)}`);
+      },
+    ),
+  );
+}
+
+function pageGuestVerify(main, t, ctx) {
+  heading(main, t, 'routes.guest.verify.title', 'Open a guest ticket', 'guest.verify.lede');
+  const g = guestSupport(ctx.api);
+  const query = new URLSearchParams(ctx.location.search);
+  const emailFromQuery = query.get('email') ?? '';
+  const categories = element('select', { name: 'category_id', required: true });
+  categories.id = 'qtiauth-f-category';
+  categories.appendChild(
+    element('option', { value: '', text: t('tickets.new.pickCategory', 'Choose a category') }),
+  );
+  void g.categories().then((data) => {
+    for (const category of data?.items ?? []) {
+      categories.appendChild(element('option', { value: category.id, text: category.name }));
+    }
+  });
+  const feedback = element('div', {
+    className: 'qtiauth-feedback',
+    attrs: { 'aria-live': 'polite' },
+  });
+  const el = element('form', { noValidate: true });
+  const inputs = new Map();
+  for (const spec of [
+    { name: 'email', type: 'email', label: 'field.email', value: emailFromQuery },
+    { name: 'code', label: 'field.code' },
+    { name: 'subject', label: 'field.subject' },
+    { name: 'body', label: 'field.message' },
+  ]) {
+    const { wrap, input } = field(t, spec);
+    el.appendChild(wrap);
+    inputs.set(spec.name, input);
+  }
+  const categoryWrap = element('p', { className: 'qtiauth-field' });
+  categoryWrap.append(
+    element('label', { htmlFor: 'qtiauth-f-category', text: t('field.category', 'Category') }),
+    categories,
+  );
+  el.insertBefore(categoryWrap, el.children[2] ?? null);
+  el.appendChild(submitRow(t, 'guest.verify.submit'));
+  el.appendChild(feedback);
+  el.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void runForm(el, feedback, t, async () => {
+      const result = await g.createTicket({
+        email: inputs.get('email').value,
+        code: inputs.get('code').value,
+        category_id: categories.value,
+        subject: inputs.get('subject').value,
+        body: inputs.get('body').value,
+      });
+      feedback.appendChild(
+        element('p', {
+          className: 'qtiauth-success',
+          attrs: { role: 'status' },
+          text: t('guest.verify.success', `Ticket #${result?.number ?? ''} opened.`),
+        }),
+      );
+    });
+  });
+  main.appendChild(el);
+}
+
+function pageGuestView(main, t, ctx) {
+  heading(main, t, 'routes.guest.view.title', 'Follow a guest ticket', 'guest.view.lede');
+  const g = guestSupport(ctx.api);
+  const detail = element('div');
+  main.appendChild(
+    form([{ name: 'token', label: 'field.token' }], t, 'guest.view.submit', async (values) => {
+      clear(detail);
+      const ticket = await g.viewTicket(values.token);
+      renderTicketDetail(detail, t, ctx, ticket, {
+        reply: (id, body) => g.reply(values.token, body),
+        close: () => g.close(values.token),
+        reopen: () => g.reopen(values.token),
+        rate: (id, rating) => g.rate(values.token, rating),
+        downloadAttachment: (_id, attachmentId) => g.downloadAttachment(values.token, attachmentId),
+      });
+    }),
+  );
+  detail.appendChild(element('h3', { text: t('guest.view.ticket', 'Ticket') }));
+  main.appendChild(detail);
+}
+
+function pageStaffSupport(main, t, ctx) {
+  heading(main, t, 'routes.support.staff.title', 'Support staff', 'support.staff.lede');
+  const sections = [
+    ['/support/staff/tickets', 'support.staff.section.queue'],
+    ['/support/staff/macros', 'support.staff.section.macros'],
+    ['/support/staff/metrics', 'support.staff.section.metrics'],
+    ['/support/staff/kb', 'support.staff.section.kb'],
+  ];
+  main.appendChild(
+    list(sections, ([path, label]) => {
+      const item = element('li');
+      item.appendChild(
+        element('a', {
+          href: ctx.href(path),
+          text: t(label, path),
+          onclick: (event) => {
+            event.preventDefault();
+            ctx.navigate(path);
+          },
+        }),
+      );
+      return item;
+    }),
+  );
+}
+
+function pageStaffQueue(main, t, ctx) {
+  heading(main, t, 'routes.support.staff.queue.title', 'Support queue');
+  const s = staffSupport(ctx.api);
+  const wrap = element('div');
+  main.appendChild(wrap);
+  void s.tickets().then((data) => {
+    const items = data?.items ?? [];
+    if (items.length === 0) {
+      wrap.appendChild(empty(t, 'support.staff.queue.empty', 'No tickets in the queue.'));
+      return;
+    }
+    wrap.appendChild(
+      list(items, (ticket) => {
+        const item = element('li');
+        item.appendChild(
+          element('a', {
+            href: ctx.href(`/support/staff/tickets/${encodeURIComponent(ticket.id)}`),
+            text: `#${ticket.number} — ${ticket.subject} (${ticket.status}, ${ticket.priority})`,
+            onclick: (event) => {
+              event.preventDefault();
+              ctx.navigate(`/support/staff/tickets/${encodeURIComponent(ticket.id)}`);
+            },
+          }),
+        );
+        return item;
+      }),
+    );
+  });
+}
+
+function pageStaffTicket(main, t, ctx, params) {
+  heading(main, t, 'routes.support.staff.ticket.title', 'Ticket');
+  const s = staffSupport(ctx.api);
+  const detail = element('div');
+  main.appendChild(detail);
+  void s.ticket(params.id).then((ticket) => {
+    clear(detail);
+    detail.appendChild(element('h3', { text: `#${ticket.number} — ${ticket.subject}` }));
+    detail.appendChild(
+      element('p', {
+        className: 'qtiauth-muted',
+        text: `${ticket.status} — ${ticket.priority} — ${ticket.created_at}`,
+      }),
+    );
+    const thread = element('ol', { className: 'qtiauth-thread' });
+    for (const message of ticket.messages ?? []) {
+      const item = element('li', {
+        className: message.staff ? 'qtiauth-message qtiauth-message-staff' : 'qtiauth-message',
+      });
+      item.append(
+        element('p', {
+          className: 'qtiauth-muted',
+          text: `${message.staff ? t('tickets.staff', 'Staff') : t('tickets.user', 'User')} — ${message.created_at}`,
+        }),
+        element('p', { text: message.body }),
+      );
+      thread.appendChild(item);
+    }
+    detail.appendChild(thread);
+    detail.appendChild(element('h3', { text: t('support.staff.notes.heading', 'Internal notes') }));
+    const notes = element('ol', { className: 'qtiauth-thread' });
+    for (const note of ticket.notes ?? []) {
+      const item = element('li', { className: 'qtiauth-message qtiauth-message-note' });
+      item.append(
+        element('p', { className: 'qtiauth-muted', text: note.created_at }),
+        element('p', { text: note.body }),
+      );
+      notes.appendChild(item);
+    }
+    detail.appendChild(notes);
+    detail.appendChild(
+      form(
+        [{ name: 'body', label: 'field.note' }],
+        t,
+        'support.staff.notes.submit',
+        async (values, { feedback }) => {
+          await s.addNote(ticket.id, values.body);
+          feedback.appendChild(successRow(t, 'support.staff.notes.success'));
+          ctx.navigate(`/support/staff/tickets/${encodeURIComponent(ticket.id)}`);
+        },
+      ),
+    );
+    detail.appendChild(element('h3', { text: t('support.staff.reply.heading', 'Reply as staff') }));
+    detail.appendChild(
+      form(
+        [{ name: 'body', label: 'field.message' }],
+        t,
+        'support.staff.reply.submit',
+        async (values, { feedback }) => {
+          await s.reply(ticket.id, { body: values.body });
+          feedback.appendChild(successRow(t, 'support.staff.reply.success'));
+          ctx.navigate(`/support/staff/tickets/${encodeURIComponent(ticket.id)}`);
+        },
+      ),
+    );
+  });
+}
+
+function pageStaffMacros(main, t, ctx) {
+  heading(main, t, 'routes.support.staff.macros.title', 'Canned responses');
+  const s = staffSupport(ctx.api);
+  const wrap = element('div');
+  main.appendChild(wrap);
+  const load = () => {
+    clear(wrap);
+    void s.macros().then((data) => {
+      const items = data?.items ?? [];
+      if (items.length === 0) {
+        wrap.appendChild(empty(t, 'support.staff.macros.empty', 'No canned responses yet.'));
+      } else {
+        wrap.appendChild(
+          list(items, (macro) => {
+            const item = element('li');
+            item.append(
+              element('span', { text: macro.name }),
+              element('button', {
+                type: 'button',
+                text: t('support.staff.macros.delete', 'Delete'),
+                onclick: () => {
+                  void s.deleteMacro(macro.id).then(load);
+                },
+              }),
+            );
+            return item;
+          }),
+        );
+      }
+    });
+  };
+  load();
+  main.appendChild(element('h3', { text: t('support.staff.macros.new', 'Add a canned response') }));
+  main.appendChild(
+    form(
+      [
+        { name: 'name', label: 'field.name' },
+        { name: 'body', label: 'field.message' },
+      ],
+      t,
+      'support.staff.macros.submit',
+      async (values, { feedback }) => {
+        await s.createMacro({ name: values.name, body: values.body });
+        feedback.appendChild(successRow(t, 'support.staff.macros.success'));
+        load();
+      },
+    ),
+  );
+}
+
+function pageStaffMetrics(main, t, ctx) {
+  heading(main, t, 'routes.support.staff.metrics.title', 'Support metrics');
+  const s = staffSupport(ctx.api);
+  const wrap = element('dl', { className: 'qtiauth-details' });
+  main.appendChild(wrap);
+  void s.metrics().then((data) => {
+    if (data === null) {
+      wrap.append(
+        element('dt', { text: t('support.staff.metrics.empty', 'No metrics available.') }),
+        element('dd', { text: '' }),
+      );
+      return;
+    }
+    const rows = [
+      ['support.staff.metrics.firstResponse', String(data.first_response_seconds?.average ?? 0)],
+      ['support.staff.metrics.resolution', String(data.resolution_seconds?.average ?? 0)],
+      ['support.staff.metrics.guest', String(data.guest_tickets ?? 0)],
+    ];
+    for (const [key, value] of rows) {
+      wrap.append(element('dt', { text: t(key, key) }), element('dd', { text: value }));
+    }
+  });
+}
+
+function pageStaffKb(main, t, ctx) {
+  heading(main, t, 'routes.support.staff.kb.title', 'Knowledge base editor');
+  const k = staffKb(ctx.api);
+  const wrap = element('div');
+  main.appendChild(wrap);
+  void k.articles().then((data) => {
+    const items = data?.items ?? [];
+    if (items.length === 0) {
+      wrap.appendChild(empty(t, 'support.staff.kb.empty', 'No articles yet.'));
+    } else {
+      wrap.appendChild(
+        list(items, (article) => {
+          const item = element('li');
+          item.appendChild(
+            element('a', {
+              href: ctx.href(`/support/staff/kb/${encodeURIComponent(article.id)}`),
+              text: `${article.title} (${article.status})`,
+              onclick: (event) => {
+                event.preventDefault();
+                ctx.navigate(`/support/staff/kb/${encodeURIComponent(article.id)}`);
+              },
+            }),
+          );
+          return item;
+        }),
+      );
+    }
+  });
+  main.appendChild(element('h3', { text: t('support.staff.kb.new', 'Create an article') }));
+  main.appendChild(
+    form(
+      [
+        { name: 'category_id', label: 'field.categoryId' },
+        { name: 'slug', label: 'field.slug' },
+        { name: 'title', label: 'field.title' },
+        { name: 'body', label: 'field.body' },
+      ],
+      t,
+      'support.staff.kb.submit',
+      async (values, { feedback }) => {
+        const article = await k.createArticle({
+          category_id: values.category_id,
+          slug: values.slug,
+          title: values.title,
+          body: values.body,
+        });
+        feedback.appendChild(successRow(t, 'support.staff.kb.success'));
+        ctx.navigate(`/support/staff/kb/${encodeURIComponent(article.id)}`);
+      },
+    ),
+  );
+}
+
+function pageStaffKbArticle(main, t, ctx, params) {
+  heading(main, t, 'routes.support.staff.kb.article.title', 'Article');
+  const k = staffKb(ctx.api);
+  const revisionsBox = element('div');
+  const editor = element('div');
+  main.append(
+    editor,
+    element('h3', { text: t('support.staff.kb.revisions', 'Revisions') }),
+    revisionsBox,
+  );
+  void k.article(params.id).then((article) => {
+    if (article === null) {
+      editor.appendChild(empty(t, 'support.staff.kb.missing', 'That article is not available.'));
+      return;
+    }
+    main.querySelector('h2').textContent = article.title;
+    editor.appendChild(
+      form(
+        [
+          { name: 'title', label: 'field.title', value: article.title },
+          { name: 'slug', label: 'field.slug', value: article.slug },
+          { name: 'body', label: 'field.body', value: article.body },
+        ],
+        t,
+        'support.staff.kb.article.submit',
+        async (values, { feedback }) => {
+          await k.updateArticle(article.id, {
+            title: values.title,
+            slug: values.slug,
+            body: values.body,
+          });
+          feedback.appendChild(successRow(t, 'support.staff.kb.article.success'));
+        },
+      ),
+    );
+  });
+  void k.revisions(params.id).then((data) => {
+    const items = data?.items ?? [];
+    if (items.length === 0) {
+      revisionsBox.appendChild(empty(t, 'support.staff.kb.revisions.empty', 'No revisions yet.'));
+      return;
+    }
+    revisionsBox.appendChild(
+      list(items, (revision) => {
+        const item = element('li');
+        item.append(
+          element('span', {
+            text: `r${revision.revision} — ${revision.title} — ${revision.created_at}`,
+          }),
+          element('button', {
+            type: 'button',
+            text: t('support.staff.kb.revisions.restore', 'Restore'),
+            onclick: () => {
+              void k.restore(params.id, revision.revision).then(() => {
+                ctx.navigate(`/support/staff/kb/${encodeURIComponent(params.id)}`);
+              });
+            },
+          }),
+        );
+        return item;
+      }),
+    );
+  });
+}
+
 function adminIndex(main, t, ctx) {
   heading(main, t, 'routes.admin.title', 'Administration', 'admin.lede');
   const sections = [
@@ -1332,6 +2138,93 @@ export const PAGES = Object.freeze({
   },
   devices: { path: '/games/devices', render: pageDevices, requires: { games: true } },
   report: { path: '/report', render: pageReport, requires: { safety: true } },
+  support: { path: '/support', render: pageSupportHome, requires: { support: true } },
+  'support-kb': { path: '/support/kb', render: pageKbHome, requires: { support: true } },
+  'support-kb-search': {
+    path: '/support/kb/search',
+    render: pageKbSearch,
+    requires: { support: true },
+  },
+  'support-kb-category': {
+    path: '/support/kb/categories/:slug',
+    render: pageKbCategory,
+    requires: { support: true },
+  },
+  'support-kb-article': {
+    path: '/support/kb/articles/:slug',
+    render: pageKbArticle,
+    requires: { support: true },
+  },
+  'support-tickets': {
+    path: '/support/tickets',
+    render: pageMyTickets,
+    requires: { support: true, identity: true },
+  },
+  'support-tickets-new': {
+    path: '/support/tickets/new',
+    render: pageNewTicket,
+    requires: { support: true, identity: true },
+  },
+  'support-ticket': {
+    path: '/support/tickets/:id',
+    render: pageTicket,
+    requires: { support: true, identity: true },
+  },
+  'support-appeal': {
+    path: '/support/appeals/new',
+    render: pageAppeal,
+    requires: { support: true, identity: true },
+  },
+  'support-guest': {
+    path: '/support/guest/start',
+    render: pageGuestStart,
+    requires: { support: true },
+  },
+  'support-guest-verify': {
+    path: '/support/guest/verify',
+    render: pageGuestVerify,
+    requires: { support: true },
+  },
+  'support-guest-view': {
+    path: '/support/guest/view',
+    render: pageGuestView,
+    requires: { support: true },
+  },
+  'support-staff': {
+    path: '/support/staff',
+    render: pageStaffSupport,
+    requires: { support: true, admin: true },
+  },
+  'support-staff-tickets': {
+    path: '/support/staff/tickets',
+    render: pageStaffQueue,
+    requires: { support: true, admin: true },
+  },
+  'support-staff-ticket': {
+    path: '/support/staff/tickets/:id',
+    render: pageStaffTicket,
+    requires: { support: true, admin: true },
+  },
+  'support-staff-macros': {
+    path: '/support/staff/macros',
+    render: pageStaffMacros,
+    requires: { support: true, admin: true },
+  },
+  'support-staff-metrics': {
+    path: '/support/staff/metrics',
+    render: pageStaffMetrics,
+    requires: { support: true, admin: true },
+  },
+  'support-staff-kb': {
+    path: '/support/staff/kb',
+    render: pageStaffKb,
+    requires: { support: true, admin: true },
+  },
+  'support-staff-kb-article': {
+    path: '/support/staff/kb/:id',
+    render: pageStaffKbArticle,
+    requires: { support: true, admin: true },
+  },
   admin: { path: '/admin', render: adminIndex, requires: { admin: true } },
   'admin-users': { path: '/admin/users', render: pageAdminUsers, requires: { admin: true } },
   'admin-roles': { path: '/admin/roles', render: pageAdminRoles, requires: { admin: true } },
@@ -1359,6 +2252,7 @@ function moduleEnabled(features, requires) {
   if (requires.oidc && !features.modules.oidc) return false;
   if (requires.games && !features.modules.games) return false;
   if (requires.safety && !features.modules.safety) return false;
+  if (requires.support && !features.modules.support) return false;
   if (requires.admin && !features.modules.admin) return false;
   if (requires.password && !features.auth.methods.password) return false;
   if (requires.auth) {

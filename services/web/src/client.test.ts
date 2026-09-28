@@ -14,6 +14,11 @@ interface ClientModule {
     delete: (path: string) => Promise<unknown>;
   };
   auth: (client: unknown) => Record<string, unknown>;
+  support: (client: unknown) => Record<string, unknown>;
+  kb: (client: unknown) => Record<string, unknown>;
+  guestSupport: (client: unknown) => Record<string, unknown>;
+  staffSupport: (client: unknown) => Record<string, unknown>;
+  staffKb: (client: unknown) => Record<string, unknown>;
   ProblemFetchError: new (problem: unknown) => Error;
 }
 
@@ -113,5 +118,142 @@ describe('auth helpers', () => {
       '/auth/password/forgot',
       '/auth/password/reset',
     ]);
+  });
+});
+
+describe('support helpers', () => {
+  it('routes signed-in ticket calls through /support', () => {
+    const gets: string[] = [];
+    const posts: string[] = [];
+    const client = {
+      get: (path: string) => {
+        gets.push(path);
+        return Promise.resolve({});
+      },
+      post: (path: string) => {
+        posts.push(path);
+        return Promise.resolve({});
+      },
+      put: () => Promise.resolve({}),
+      patch: () => Promise.resolve({}),
+      delete: () => Promise.resolve({}),
+    };
+    const s = mod.support(client) as {
+      listTickets: () => Promise<unknown>;
+      getTicket: (id: string) => Promise<unknown>;
+      createTicket: (spec: unknown) => Promise<unknown>;
+      createAppeal: (spec: unknown) => Promise<unknown>;
+    };
+    void s.listTickets();
+    void s.getTicket('abc');
+    void s.createTicket({});
+    void s.createAppeal({});
+    expect(gets).toEqual(['/support/tickets', '/support/tickets/abc']);
+    expect(posts).toEqual(['/support/tickets', '/support/appeals']);
+  });
+
+  it('routes guest ticket calls through /support/guest', () => {
+    const posts: string[] = [];
+    const client = {
+      get: () => Promise.resolve({}),
+      post: (path: string) => {
+        posts.push(path);
+        return Promise.resolve({});
+      },
+      put: () => Promise.resolve({}),
+      patch: () => Promise.resolve({}),
+      delete: () => Promise.resolve({}),
+    };
+    const g = mod.guestSupport(client) as {
+      requestCode: (email: string, captcha: string | undefined) => Promise<unknown>;
+      createTicket: (spec: unknown) => Promise<unknown>;
+      viewTicket: (token: string) => Promise<unknown>;
+    };
+    void g.requestCode('a@b.test', undefined);
+    void g.createTicket({});
+    void g.viewTicket('t');
+    expect(posts).toEqual([
+      '/support/guest/codes',
+      '/support/guest/tickets',
+      '/support/guest/tickets/view',
+    ]);
+  });
+
+  it('routes knowledge-base calls through /support/kb', () => {
+    const gets: string[] = [];
+    const client = {
+      get: (path: string) => {
+        gets.push(path);
+        return Promise.resolve({});
+      },
+      post: () => Promise.resolve({}),
+      put: () => Promise.resolve({}),
+      patch: () => Promise.resolve({}),
+      delete: () => Promise.resolve({}),
+    };
+    const k = mod.kb(client) as {
+      categories: () => Promise<unknown>;
+      article: (slug: string) => Promise<unknown>;
+      search: (q: string) => Promise<unknown>;
+    };
+    void k.categories();
+    void k.article('a slug');
+    void k.search('help me');
+    expect(gets).toEqual([
+      '/support/kb/categories',
+      '/support/kb/articles/a%20slug',
+      '/support/kb/search?q=help%20me',
+    ]);
+  });
+
+  it('routes staff calls through /admin/support', () => {
+    const gets: string[] = [];
+    const posts: string[] = [];
+    const patches: string[] = [];
+    const client = {
+      get: (path: string) => {
+        gets.push(path);
+        return Promise.resolve({});
+      },
+      post: (path: string) => {
+        posts.push(path);
+        return Promise.resolve({});
+      },
+      put: () => Promise.resolve({}),
+      patch: (path: string) => {
+        patches.push(path);
+        return Promise.resolve({});
+      },
+      delete: () => Promise.resolve({}),
+    };
+    const s = mod.staffSupport(client) as {
+      tickets: () => Promise<unknown>;
+      addNote: (id: string, body: string) => Promise<unknown>;
+      update: (id: string, patch: unknown) => Promise<unknown>;
+      macros: () => Promise<unknown>;
+    };
+    const kbStaff = mod.staffKb(client) as {
+      articles: () => Promise<unknown>;
+      revisions: (id: string) => Promise<unknown>;
+      restore: (id: string, revision: number) => Promise<unknown>;
+    };
+    void s.tickets();
+    void s.addNote('t', 'hi');
+    void s.update('t', {});
+    void s.macros();
+    void kbStaff.articles();
+    void kbStaff.revisions('a');
+    void kbStaff.restore('a', 2);
+    expect(gets).toEqual([
+      '/admin/support/tickets',
+      '/admin/support/macros',
+      '/admin/support/kb/articles',
+      '/admin/support/kb/articles/a/revisions',
+    ]);
+    expect(posts).toEqual([
+      '/admin/support/tickets/t/notes',
+      '/admin/support/kb/articles/a/revisions/2/restore',
+    ]);
+    expect(patches).toEqual(['/admin/support/tickets/t']);
   });
 });

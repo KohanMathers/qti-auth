@@ -169,3 +169,116 @@ export function admin(client) {
     health: () => client.get('/admin/health'),
   };
 }
+
+export function support(client) {
+  return {
+    categories: () => client.get('/support/categories'),
+    listTickets: () => client.get('/support/tickets'),
+    getTicket: (id) => client.get(`/support/tickets/${encodeURIComponent(id)}`),
+    createTicket: (spec) => client.post('/support/tickets', spec),
+    reply: (id, body) =>
+      client.post(`/support/tickets/${encodeURIComponent(id)}/replies`, { body }),
+    close: (id) => client.post(`/support/tickets/${encodeURIComponent(id)}/close`),
+    reopen: (id) => client.post(`/support/tickets/${encodeURIComponent(id)}/reopen`),
+    rate: (id, rating) =>
+      client.post(`/support/tickets/${encodeURIComponent(id)}/rate`, { rating }),
+    createAppeal: (spec) => client.post('/support/appeals', spec),
+    addAttachment: (id, spec) =>
+      client.post(`/support/tickets/${encodeURIComponent(id)}/attachments`, spec),
+    downloadAttachment: (ticketId, attachmentId) =>
+      client.post(
+        `/support/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}/download`,
+      ),
+  };
+}
+
+export function guestSupport(client) {
+  return {
+    categories: () => client.get('/support/guest/categories'),
+    captcha: () => client.get('/support/guest/captcha'),
+    requestCode: (email, captcha) => client.post('/support/guest/codes', { email, captcha }),
+    createTicket: (spec) => client.post('/support/guest/tickets', spec),
+    viewTicket: (token) => client.post('/support/guest/tickets/view', { token }),
+    reply: (token, body) => client.post('/support/guest/tickets/replies', { token, body }),
+    close: (token) => client.post('/support/guest/tickets/close', { token }),
+    reopen: (token) => client.post('/support/guest/tickets/reopen', { token }),
+    rate: (token, rating) => client.post('/support/guest/tickets/rate', { token, rating }),
+    addAttachment: (token, spec) => client.post('/support/guest/attachments', { token, ...spec }),
+    downloadAttachment: (token, attachment_id) =>
+      client.post('/support/guest/attachments/download', { token, attachment_id }),
+  };
+}
+
+export function kb(client) {
+  return {
+    categories: () => client.get('/support/kb/categories'),
+    category: (slug) => client.get(`/support/kb/categories/${encodeURIComponent(slug)}`),
+    articles: (categorySlug) =>
+      client.get(
+        categorySlug === undefined
+          ? '/support/kb/articles'
+          : `/support/kb/articles?category=${encodeURIComponent(categorySlug)}`,
+      ),
+    article: (slug) => client.get(`/support/kb/articles/${encodeURIComponent(slug)}`),
+    search: (q) => client.get(`/support/kb/search?q=${encodeURIComponent(q)}`),
+    related: (subject) => client.get(`/support/kb/related?subject=${encodeURIComponent(subject)}`),
+    feedback: (slug, helpful) =>
+      client.post(`/support/kb/articles/${encodeURIComponent(slug)}/feedback`, { helpful }),
+  };
+}
+
+export function staffSupport(client) {
+  return {
+    tickets: (query = '') => client.get(`/admin/support/tickets${query}`),
+    ticket: (id) => client.get(`/admin/support/tickets/${encodeURIComponent(id)}`),
+    reply: (id, spec) =>
+      client.post(`/admin/support/tickets/${encodeURIComponent(id)}/replies`, spec),
+    addNote: (id, body) =>
+      client.post(`/admin/support/tickets/${encodeURIComponent(id)}/notes`, { body }),
+    update: (id, patch) => client.patch(`/admin/support/tickets/${encodeURIComponent(id)}`, patch),
+    close: (id) => client.post(`/admin/support/tickets/${encodeURIComponent(id)}/close`),
+    reopen: (id) => client.post(`/admin/support/tickets/${encodeURIComponent(id)}/reopen`),
+    macros: () => client.get('/admin/support/macros'),
+    createMacro: (spec) => client.post('/admin/support/macros', spec),
+    updateMacro: (id, patch) =>
+      client.patch(`/admin/support/macros/${encodeURIComponent(id)}`, patch),
+    deleteMacro: (id) => client.delete(`/admin/support/macros/${encodeURIComponent(id)}`),
+    metrics: (sinceDays) =>
+      client.get(
+        sinceDays === undefined
+          ? '/admin/support/metrics'
+          : `/admin/support/metrics?since_days=${encodeURIComponent(sinceDays)}`,
+      ),
+  };
+}
+
+export function staffKb(client) {
+  return {
+    categories: () => client.get('/admin/support/kb/categories'),
+    createCategory: (spec) => client.post('/admin/support/kb/categories', spec),
+    updateCategory: (id, patch) =>
+      client.patch(`/admin/support/kb/categories/${encodeURIComponent(id)}`, patch),
+    deleteCategory: (id) => client.delete(`/admin/support/kb/categories/${encodeURIComponent(id)}`),
+    articles: (query = '') => client.get(`/admin/support/kb/articles${query}`),
+    article: (id) => client.get(`/admin/support/kb/articles/${encodeURIComponent(id)}`),
+    createArticle: (spec) => client.post('/admin/support/kb/articles', spec),
+    updateArticle: (id, patch) =>
+      client.patch(`/admin/support/kb/articles/${encodeURIComponent(id)}`, patch),
+    deleteArticle: (id) => client.delete(`/admin/support/kb/articles/${encodeURIComponent(id)}`),
+    revisions: (id) => client.get(`/admin/support/kb/articles/${encodeURIComponent(id)}/revisions`),
+    revision: (id, revision) =>
+      client.get(
+        `/admin/support/kb/articles/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revision)}`,
+      ),
+    diff: (id, revision, against) =>
+      client.get(
+        against === undefined
+          ? `/admin/support/kb/articles/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revision)}/diff`
+          : `/admin/support/kb/articles/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revision)}/diff?against=${encodeURIComponent(against)}`,
+      ),
+    restore: (id, revision) =>
+      client.post(
+        `/admin/support/kb/articles/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revision)}/restore`,
+      ),
+  };
+}

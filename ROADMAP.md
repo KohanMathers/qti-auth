@@ -947,11 +947,11 @@ and are replaced by the web app in Phase 9. They're not a frontend and get no de
 - [x] Admin: users, roles, audit, webhooks, text filter tuning, moderation queue, CSEA cases,
       OAuth client verification, games management, health page.
 
-### P9.3 Support surface — L
+### P9.3 Support surface — L ✅
 
-- [ ] Help centre home, KB browse, search and article pages, feedback.
-- [ ] Submit ticket (signed in and guest), my tickets, ticket thread, attachments, appeals.
-- [ ] Staff: queue, detail, notes, macros, KB editor with revisions, metrics.
+- [x] Help centre home, KB browse, search and article pages, feedback.
+- [x] Submit ticket (signed in and guest), my tickets, ticket thread, attachments, appeals.
+- [x] Staff: queue, detail, notes, macros, KB editor with revisions, metrics.
 
 ### P9.4 Replace interim pages — S
 

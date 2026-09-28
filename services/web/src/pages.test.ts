@@ -156,6 +156,25 @@ describe('availablePages', () => {
       'leaderboards',
       'devices',
       'report',
+      'support',
+      'support-kb',
+      'support-kb-search',
+      'support-kb-category',
+      'support-kb-article',
+      'support-tickets',
+      'support-tickets-new',
+      'support-ticket',
+      'support-appeal',
+      'support-guest',
+      'support-guest-verify',
+      'support-guest-view',
+      'support-staff',
+      'support-staff-tickets',
+      'support-staff-ticket',
+      'support-staff-macros',
+      'support-staff-metrics',
+      'support-staff-kb',
+      'support-staff-kb-article',
       'admin',
       'admin-users',
       'admin-roles',
@@ -170,6 +189,39 @@ describe('availablePages', () => {
     ]) {
       expect(ids.has(expected)).toBe(true);
     }
+  });
+
+  it('drops support pages when the support module is off', () => {
+    const list = pages.availablePages(
+      baseFeatures({
+        modules: {
+          identity: true,
+          oidc: true,
+          games: true,
+          support: false,
+          safety: true,
+          admin: true,
+        },
+      }),
+    );
+    expect(list.some((page) => page.id.startsWith('support'))).toBe(false);
+  });
+
+  it('drops staff support pages when the admin module is off', () => {
+    const list = pages.availablePages(
+      baseFeatures({
+        modules: {
+          identity: true,
+          oidc: true,
+          games: true,
+          support: true,
+          safety: true,
+          admin: false,
+        },
+      }),
+    );
+    expect(list.some((page) => page.id.startsWith('support-staff'))).toBe(false);
+    expect(list.some((page) => page.id === 'support-kb')).toBe(true);
   });
 });
 
