@@ -1,0 +1,78 @@
+{
+  "uid": "qtiauth-support",
+  "title": "QTIAuth — Support",
+  "tags": ["qtiauth", "support"],
+  "schemaVersion": 39,
+  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "1m",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Tickets opened and open",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (category) (rate(qtiauth_support_tickets_total[15m]))" },
+        {
+          "refId": "B",
+          "expr": "sum by (status) (qtiauth_support_tickets_open)",
+          "legendFormat": "open {{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "First-response and resolution time p95",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qtiauth_support_first_response_seconds_bucket[1h])))",
+          "legendFormat": "first response"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qtiauth_support_resolution_seconds_bucket[1h])))",
+          "legendFormat": "resolution"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "CSAT distribution and auto-closes",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (rating) (rate(qtiauth_support_csat_total[6h]))" },
+        {
+          "refId": "B",
+          "expr": "sum(rate(qtiauth_support_auto_closes_total[6h]))",
+          "legendFormat": "auto-closes"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Guest tickets and knowledge base",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(qtiauth_support_guest_tickets_total[15m]))"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(qtiauth_support_kb_views_total[15m]))",
+          "legendFormat": "kb views"
+        },
+        {
+          "refId": "C",
+          "expr": "sum by (rating) (rate(qtiauth_support_kb_feedback_total[15m]))",
+          "legendFormat": "kb feedback {{rating}}"
+        }
+      ]
+    }
+  ]
+}

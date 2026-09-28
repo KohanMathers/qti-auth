@@ -1,0 +1,102 @@
+groups:
+  - name: qtiauth
+    interval: 30s
+    rules:
+      - alert: HttpErrorRateHigh
+        expr: |
+          sum by (service) (rate(qtiauth_gateway_requests_total{status=~"5.."}[5m]))
+            / sum by (service) (rate(qtiauth_gateway_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Gateway 5xx rate above 5% on {{ $labels.service }}'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: AuthPasswordFailureSpike
+        expr: |
+          sum(rate(qtiauth_auth_password_failures_total[5m])) > 10
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Password sign-in failures above 10/s'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: AuthSignInFailureSpike
+        expr: |
+          sum by (method) (rate(qtiauth_auth_sign_ins_total{result="failed"}[5m]))
+            / sum by (method) (rate(qtiauth_auth_sign_ins_total[5m])) > 0.2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Sign-in failure rate above 20% for {{ $labels.method }}'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: OutboxBacklogAgeHigh
+        expr: max(qtiauth_bus_outbox_oldest_age_seconds) > 300
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Outbox oldest row above 5 minutes on {{ $labels.service }}'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: BusConsumerLagHigh
+        expr: max by (consumer) (qtiauth_bus_consumer_pending) > 1000
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Bus consumer {{ $labels.consumer }} lagging by more than 1000 messages'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: WebhookEndpointsAutoDisabled
+        expr: increase(qtiauth_webhook_endpoints_disabled_total[1h]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: 'Webhook endpoints auto-disabled in the last hour ({{ $labels.format }})'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: SafetySlaBreach
+        expr: increase(qtiauth_safety_sla_breaches_total[15m]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: 'Safety SLA breach recorded'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: SupportFirstResponseSlow
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(qtiauth_support_first_response_seconds_bucket[1h]))) > 86400
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Support first-response p95 above 24 hours'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: BackupRunFailed
+        expr: |
+          increase(qtiauth_backup_runs_total{outcome="failed"}[24h]) > 0
+          or
+          (time() - max(qtiauth_backup_last_success_timestamp_seconds)) > 60 * 60 * 26
+        labels: { severity: critical }
+        annotations:
+          summary: 'A backup run failed, or the last success is older than 26 hours'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: SigningKeyRotationOverdue
+        expr: |
+          time() - max(qtiauth_gateway_identity_key_created_timestamp_seconds) > 60 * 60 * 24 * 90
+          or
+          time() - max(qtiauth_oidc_key_created_timestamp_seconds) > 60 * 60 * 24 * 90
+          or
+          time() - max(qtiauth_games_license_key_created_at_seconds) > 60 * 60 * 24 * 90
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: 'A signing key is older than 90 days'
+          runbook: 'docs/observability.md#alerts'
+
+      - alert: EdgeCertificateExpirySoon
+        expr: (qtiauth_edge_certificate_expiry_timestamp_seconds - time()) < 60 * 60 * 24 * 14
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: 'Edge certificate for {{ $labels.host }} expires in under 14 days'
+          runbook: 'docs/observability.md#alerts'

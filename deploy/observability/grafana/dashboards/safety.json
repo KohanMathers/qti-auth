@@ -1,0 +1,78 @@
+{
+  "uid": "qtiauth-safety",
+  "title": "QTIAuth — Safety",
+  "tags": ["qtiauth", "safety"],
+  "schemaVersion": 39,
+  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "1m",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Reports by type and source",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (type, source) (rate(qtiauth_safety_reports_total[15m]))" },
+        {
+          "refId": "B",
+          "expr": "sum by (outcome) (rate(qtiauth_safety_reports_closed_total[15m]))",
+          "legendFormat": "closed {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Queue depth by priority",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [{ "refId": "A", "expr": "sum by (priority) (qtiauth_safety_queue_depth)" }]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Time to first action, p50 / p95",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (priority, le) (rate(qtiauth_safety_time_to_action_seconds_bucket[1h])))",
+          "legendFormat": "p50 {{priority}}"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (priority, le) (rate(qtiauth_safety_time_to_action_seconds_bucket[1h])))",
+          "legendFormat": "p95 {{priority}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "SLA breaches and actions by type",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (priority) (rate(qtiauth_safety_sla_breaches_total[15m]))"
+        },
+        { "refId": "B", "expr": "sum by (action) (rate(qtiauth_safety_actions_total[15m]))" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Appeals opened / resolved",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (state) (rate(qtiauth_safety_appeals_total[15m]))" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Open CSEA cases",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [{ "refId": "A", "expr": "sum(qtiauth_safety_csea_cases_open)" }]
+    }
+  ]
+}

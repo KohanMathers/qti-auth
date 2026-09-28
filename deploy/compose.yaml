@@ -189,20 +189,75 @@ services:
     profiles: [backup]
 
   prometheus:
-    <<: *placeholder
+    image: prom/prometheus:v3.5.0
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ../deploy/observability/prometheus:/etc/prometheus:ro
+      - prometheus:/prometheus
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:9090/-/ready']
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
     profiles: [observability]
+    restart: unless-stopped
 
   grafana:
-    <<: *placeholder
+    image: grafana/grafana:12.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - ../deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/api/health']
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+    depends_on:
+      prometheus: { condition: service_healthy }
     profiles: [observability]
+    restart: unless-stopped
 
   tempo:
-    <<: *placeholder
+    image: grafana/tempo:2.9.0
+    command: ['-config.file=/etc/tempo/tempo.yaml']
+    volumes:
+      - ../deploy/observability/tempo:/etc/tempo:ro
+      - tempo:/var/tempo
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3200/ready']
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
     profiles: [observability]
+    restart: unless-stopped
 
   loki:
-    <<: *placeholder
+    image: grafana/loki:3.5.0
+    command: ['-config.file=/etc/loki/loki.yaml']
+    volumes:
+      - ../deploy/observability/loki:/etc/loki:ro
+      - loki:/loki
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3100/ready']
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
     profiles: [observability]
+    restart: unless-stopped
 
 networks:
   internal:
@@ -215,3 +270,7 @@ volumes:
   geoip:
   minio:
   backups:
+  prometheus:
+  grafana:
+  tempo:
+  loki:

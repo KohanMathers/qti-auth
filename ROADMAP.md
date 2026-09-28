@@ -865,14 +865,14 @@ Spec: §8.7, §4.12
 **Done when (disaster-recovery drill):** take a backup, delete a user, wipe the Postgres volume,
 restore. The deleted user is absent, all sessions are revoked, and the stack serves traffic.
 
-### P8.2 Observability profile — L
+### P8.2 Observability profile — L ✅
 Spec: §8.6
 
-- [ ] Prometheus, Grafana, Tempo and Loki compose profile, pre-wired.
-- [ ] Dashboards: stack overview, gateway, auth and sessions, bus, notifier, OIDC, Safety, Support,
+- [x] Prometheus, Grafana, Tempo and Loki compose profile, pre-wired.
+- [x] Dashboards: stack overview, gateway, auth and sessions, bus, notifier, OIDC, Safety, Support,
       Games, infra.
-- [ ] Alert rules from §8.6.
-- [ ] **Metrics coverage audit:** every metric in the §8.6 catalogue exists and appears on a dashboard.
+- [x] Alert rules from §8.6.
+- [x] **Metrics coverage audit:** every metric in the §8.6 catalogue exists and appears on a dashboard.
 
 **Done when:** the coverage audit is complete, and each alert rule has been triggered once in a test
 environment.

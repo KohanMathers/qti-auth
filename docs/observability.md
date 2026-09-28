@@ -77,6 +77,41 @@ Labels never hold unbounded values. A service refuses to start if it defines a m
 
 A check that takes longer than `health.check_timeout` counts as `timeout`. Error messages aren't included in the response, because they can contain connection details. Health checks aren't traced.
 
+## The `observability` profile
+
+Enabling the `observability` profile (see [deployment.md](deployment.md#profiles)) runs Prometheus, Grafana, Tempo and Loki, pre-wired against the services. Everything runs on the `internal` network and publishes no ports; use the development override to reach the UIs on `127.0.0.1`.
+
+| Service      | Port   | Configuration                                       |
+| ------------ | ------ | --------------------------------------------------- |
+| `prometheus` | `9090` | `deploy/observability/prometheus/`                  |
+| `grafana`    | `3000` | `deploy/observability/grafana/`, admin user `admin` |
+| `tempo`      | `3200` | `deploy/observability/tempo/tempo.yaml`             |
+| `loki`       | `3100` | `deploy/observability/loki/loki.yaml`               |
+
+Prometheus scrapes every QTIAuth service's `/metrics` endpoint every 15 seconds. Grafana is provisioned with a Prometheus, Tempo and Loki datasource and ten dashboards under the `QTIAuth` folder: **Stack overview**, **Gateway**, **Auth and sessions**, **Bus**, **Notifier**, **OIDC**, **Safety**, **Support**, **Games** and **Infra**. Set `GRAFANA_ADMIN_PASSWORD` in `.env` before starting the profile.
+
+Point services at Tempo by setting `observability.tracing.enabled: true` and `observability.tracing.endpoint: http://tempo:4318/v1/traces` in `qtiauth.yaml`.
+
+### Alerts
+
+Alert rules live in `deploy/observability/prometheus/alerts.yml` and cover the situations called out in §8.6:
+
+| Alert                          | Fires when                                                            |
+| ------------------------------ | --------------------------------------------------------------------- |
+| `HttpErrorRateHigh`            | The gateway's 5xx share is above 5% for five minutes.                 |
+| `AuthPasswordFailureSpike`     | Password failures exceed 10 per second for five minutes.              |
+| `AuthSignInFailureSpike`       | A sign-in method's failure share exceeds 20% for ten minutes.         |
+| `OutboxBacklogAgeHigh`         | The oldest outbox row is more than five minutes old.                  |
+| `BusConsumerLagHigh`           | A bus consumer's pending count stays above 1000 for ten minutes.      |
+| `WebhookEndpointsAutoDisabled` | Any webhook endpoint auto-disables in the last hour.                  |
+| `SafetySlaBreach`              | Any Safety SLA breach is recorded in the last fifteen minutes.        |
+| `SupportFirstResponseSlow`     | Support first-response p95 exceeds 24 hours.                          |
+| `BackupRunFailed`              | A backup cron run failed in the last 24 hours.                        |
+| `SigningKeyRotationOverdue`    | The gateway, OIDC or Games license signing key is older than 90 days. |
+| `EdgeCertificateExpirySoon`    | The `edge` profile's certificate expires in under 14 days.            |
+
+Every metric emitted by the services appears on at least one dashboard. `packages/testing/src/observability.test.ts` audits this on every run.
+
 ---
 
 ## For developers

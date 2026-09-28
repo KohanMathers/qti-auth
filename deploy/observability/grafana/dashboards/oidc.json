@@ -1,0 +1,90 @@
+{
+  "uid": "qtiauth-oidc",
+  "title": "QTIAuth — OIDC",
+  "tags": ["qtiauth", "oidc"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Authorizations by client type and result",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (client_type, result) (rate(qtiauth_oidc_authorizations_total[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Token grants by grant type",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (grant_type, result) (rate(qtiauth_oidc_token_grants_total[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Refresh-token reuse detections",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [{ "refId": "A", "expr": "sum(rate(qtiauth_oidc_refresh_reuse_total[15m]))" }]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Introspections and device approvals",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (result) (rate(qtiauth_oidc_introspections_total[5m]))" },
+        {
+          "refId": "B",
+          "expr": "sum by (outcome) (rate(qtiauth_oidc_device_approvals_total[5m]))",
+          "legendFormat": "device {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Back-channel logout deliveries and duration",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (rate(qtiauth_oidc_logout_deliveries_total[5m]))"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qtiauth_oidc_logout_delivery_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95 duration"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Key age and rotations",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - max(qtiauth_oidc_key_created_timestamp_seconds)",
+          "legendFormat": "age (s)"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(increase(qtiauth_oidc_key_rotations_total[24h]))",
+          "legendFormat": "rotations (24h)"
+        }
+      ]
+    }
+  ]
+}

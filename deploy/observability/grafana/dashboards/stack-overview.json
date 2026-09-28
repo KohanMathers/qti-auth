@@ -1,0 +1,70 @@
+{
+  "uid": "qtiauth-stack",
+  "title": "QTIAuth — Stack overview",
+  "tags": ["qtiauth"],
+  "schemaVersion": 39,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Public request rate (5xx vs total)",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(qtiauth_gateway_requests_total[1m]))",
+          "legendFormat": "total"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(qtiauth_gateway_requests_total{status=~\"5..\"}[1m]))",
+          "legendFormat": "5xx"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Gateway request p95 latency, by surface",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (surface, le) (rate(qtiauth_gateway_request_duration_seconds_bucket[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Upstream errors, by service",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (upstream) (rate(qtiauth_gateway_upstream_errors_total[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Bus publish and consume rate",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(qtiauth_bus_published_total[1m]))",
+          "legendFormat": "published"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(qtiauth_bus_consumed_total[1m]))",
+          "legendFormat": "consumed"
+        }
+      ]
+    }
+  ]
+}

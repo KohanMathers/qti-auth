@@ -1,0 +1,123 @@
+{
+  "uid": "qtiauth-infra",
+  "title": "QTIAuth — Infra",
+  "tags": ["qtiauth", "infra"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Scheduler ticks and publish failures",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (cron_job, outcome) (rate(qtiauth_scheduler_ticks_total[5m]))"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (cron_job) (rate(qtiauth_scheduler_publish_failures_total[5m]))",
+          "legendFormat": "failures {{cron_job}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Next scheduled tick, per job",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "qtiauth_scheduler_next_tick_timestamp_seconds - time()" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Cron runs and duration p95",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (cron_job, outcome) (rate(qtiauth_cron_runs_total[5m]))" },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (cron_job, le) (rate(qtiauth_cron_run_duration_seconds_bucket[15m])))",
+          "legendFormat": "p95 {{cron_job}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Node.js process (CPU, memory, event loop)",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (rate(process_cpu_seconds_total[1m]))",
+          "legendFormat": "cpu {{service}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (service) (nodejs_heap_size_used_bytes)",
+          "legendFormat": "heap {{service}}"
+        },
+        {
+          "refId": "C",
+          "expr": "sum by (service) (nodejs_eventloop_lag_seconds)",
+          "legendFormat": "lag {{service}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Backup runs, size and duration p95",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(qtiauth_backup_runs_total[15m]))"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qtiauth_backup_duration_seconds_bucket[1h])))",
+          "legendFormat": "p95 duration"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qtiauth_backup_size_bytes_bucket[1h])))",
+          "legendFormat": "p95 size"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Backup retention and last success",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(qtiauth_backup_retained)",
+          "legendFormat": "retained"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(qtiauth_backup_storage_objects)",
+          "legendFormat": "objects"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(increase(qtiauth_backup_deleted_total[24h]))",
+          "legendFormat": "deleted (24h)"
+        },
+        {
+          "refId": "D",
+          "expr": "time() - max(qtiauth_backup_last_success_timestamp_seconds)",
+          "legendFormat": "age of last success (s)"
+        }
+      ]
+    }
+  ]
+}

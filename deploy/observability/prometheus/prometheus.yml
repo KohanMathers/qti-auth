@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    stack: qtiauth
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['127.0.0.1:9090']
+
+  - job_name: qtiauth
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['gateway:8000']
+        labels: { service: gateway }
+      - targets: ['identity:8000']
+        labels: { service: identity }
+      - targets: ['notifier:8000']
+        labels: { service: notifier }
+      - targets: ['scheduler:8000']
+        labels: { service: scheduler }
+      - targets: ['oidc:8000']
+        labels: { service: oidc }
+      - targets: ['safety:8000']
+        labels: { service: safety }
+      - targets: ['support:8000']
+        labels: { service: support }
+      - targets: ['games:8000']
+        labels: { service: games }

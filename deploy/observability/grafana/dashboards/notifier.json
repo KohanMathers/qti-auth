@@ -1,0 +1,88 @@
+{
+  "uid": "qtiauth-notifier",
+  "title": "QTIAuth — Notifier",
+  "tags": ["qtiauth", "notifier"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Email deliveries by provider, template and status",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (provider, template, status) (rate(qtiauth_email_deliveries_total[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Email send duration p95",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (provider, outcome, le) (rate(qtiauth_email_send_duration_seconds_bucket[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Email queue delay p95, by priority",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (priority, le) (rate(qtiauth_email_delivery_delay_seconds_bucket[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Webhook deliveries by format and status",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (format, status) (rate(qtiauth_webhook_deliveries_total[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Webhook duration p95 and delivery delay p95",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (format, outcome, le) (rate(qtiauth_webhook_delivery_duration_seconds_bucket[5m])))",
+          "legendFormat": "duration"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (format, le) (rate(qtiauth_webhook_delivery_delay_seconds_bucket[5m])))",
+          "legendFormat": "delay"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Auto-disabled webhook endpoints",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (format) (rate(qtiauth_webhook_endpoints_disabled_total[1h]))"
+        }
+      ]
+    }
+  ]
+}

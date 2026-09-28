@@ -15,6 +15,18 @@ services:
   minio:
     ports: ['127.0.0.1:9000:9000', '127.0.0.1:9001:9001']
 
+  prometheus:
+    ports: ['127.0.0.1:9090:9090']
+
+  grafana:
+    ports: ['127.0.0.1:3000:3000']
+
+  tempo:
+    ports: ['127.0.0.1:3200:3200']
+
+  loki:
+    ports: ['127.0.0.1:3100:3100']
+
   gateway: *dev-service
   identity: *dev-service
   notifier: *dev-service

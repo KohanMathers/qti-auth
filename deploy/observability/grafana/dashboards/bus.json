@@ -1,0 +1,75 @@
+{
+  "uid": "qtiauth-bus",
+  "title": "QTIAuth — Bus",
+  "tags": ["qtiauth", "bus"],
+  "schemaVersion": 39,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Publish rate by subject",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (subject) (rate(qtiauth_bus_published_total[1m]))" },
+        {
+          "refId": "B",
+          "expr": "sum by (subject) (rate(qtiauth_bus_publish_failures_total[1m]))",
+          "legendFormat": "failures {{subject}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Consume rate and redeliveries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (consumer) (rate(qtiauth_bus_consumed_total[1m]))" },
+        {
+          "refId": "B",
+          "expr": "sum by (consumer) (rate(qtiauth_bus_redeliveries_total[1m]))",
+          "legendFormat": "redeliveries {{consumer}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Consumer lag",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [{ "refId": "A", "expr": "max by (consumer) (qtiauth_bus_consumer_pending)" }]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Outbox backlog and oldest row age",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (qtiauth_bus_outbox_backlog)",
+          "legendFormat": "backlog {{service}}"
+        },
+        {
+          "refId": "B",
+          "expr": "max by (service) (qtiauth_bus_outbox_oldest_age_seconds)",
+          "legendFormat": "oldest {{service}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "RPC latency p95",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (subject, le) (rate(qtiauth_bus_rpc_duration_seconds_bucket[5m])))"
+        }
+      ]
+    }
+  ]
+}

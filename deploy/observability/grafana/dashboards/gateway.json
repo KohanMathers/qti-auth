@@ -1,0 +1,138 @@
+{
+  "uid": "qtiauth-gateway",
+  "title": "QTIAuth — Gateway",
+  "tags": ["qtiauth", "gateway"],
+  "schemaVersion": 39,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Requests by surface and status",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (surface, status) (rate(qtiauth_gateway_requests_total[1m]))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Latency p50 / p95 / p99",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(qtiauth_gateway_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qtiauth_gateway_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(qtiauth_gateway_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Request and response body sizes p95",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qtiauth_gateway_request_size_bytes_bucket[5m])))",
+          "legendFormat": "request"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qtiauth_gateway_response_size_bytes_bucket[5m])))",
+          "legendFormat": "response"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Upstream errors by service and reason",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (upstream, reason) (rate(qtiauth_gateway_upstream_errors_total[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Rate-limit checks by policy",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (policy, outcome) (rate(qtiauth_gateway_rate_limit_checks_total[1m]))"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Session lookups and identity rejections",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(qtiauth_gateway_session_lookups_total[1m]))",
+          "legendFormat": "lookups"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(qtiauth_http_identity_rejections_total[1m]))",
+          "legendFormat": "rejections"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Identity signing key age",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - max(qtiauth_gateway_identity_key_created_timestamp_seconds)"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(increase(qtiauth_gateway_identity_key_rotations_total[24h]))",
+          "legendFormat": "rotations (24h)"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Internal HTTP requests and latency (service)",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service, status) (rate(qtiauth_http_requests_total[1m]))"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(qtiauth_http_request_duration_seconds_bucket[5m])))"
+        }
+      ]
+    }
+  ]
+}

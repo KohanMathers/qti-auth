@@ -1,0 +1,197 @@
+{
+  "uid": "qtiauth-games",
+  "title": "QTIAuth — Games",
+  "tags": ["qtiauth", "games"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Entitlements granted and revoked, by source",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source) (rate(qtiauth_games_entitlements_granted_total[5m]))"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (source) (rate(qtiauth_games_entitlements_revoked_total[5m]))",
+          "legendFormat": "revoked {{source}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Key redemptions and generation",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (result) (rate(qtiauth_games_key_redemptions_total[5m]))" },
+        {
+          "refId": "B",
+          "expr": "sum(rate(qtiauth_games_keys_generated_total[5m]))",
+          "legendFormat": "generated"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Achievement unlocks, progress and revokes",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(qtiauth_games_achievement_unlocks_total[5m]))",
+          "legendFormat": "unlocks"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(qtiauth_games_achievement_progress_total[5m]))",
+          "legendFormat": "progress"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(qtiauth_games_achievement_revokes_total[5m]))",
+          "legendFormat": "revokes"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Playtime heartbeats and endings, stat updates",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(qtiauth_games_playtime_heartbeats_total[5m]))",
+          "legendFormat": "heartbeats"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (reason) (rate(qtiauth_games_playtime_endings_total[5m]))"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(qtiauth_games_stat_updates_total[5m]))",
+          "legendFormat": "stat updates"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Leaderboard removals and CAPTCHA",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(qtiauth_games_leaderboard_removals_total[15m]))",
+          "legendFormat": "leaderboard removals"
+        },
+        { "refId": "B", "expr": "sum by (outcome) (rate(qtiauth_games_captcha_total[15m]))" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "License leases issued, revoked, verifications",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(qtiauth_games_license_leases_issued_total[5m]))",
+          "legendFormat": "issued"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (reason) (rate(qtiauth_games_license_leases_revoked_total[5m]))"
+        },
+        {
+          "refId": "C",
+          "expr": "sum by (result) (rate(qtiauth_games_license_verifications_total[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "License key rotations and age",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(qtiauth_games_license_key_rotations_total[24h]))",
+          "legendFormat": "rotations (24h)"
+        },
+        {
+          "refId": "B",
+          "expr": "time() - max(qtiauth_games_license_key_created_at_seconds)",
+          "legendFormat": "age (s)"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Cloud saves — uploads, commits, downloads",
+      "gridPos": { "x": 0, "y": 30, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (rate(qtiauth_games_cloud_save_uploads_total[5m]))",
+          "legendFormat": "uploads {{result}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (result) (rate(qtiauth_games_cloud_save_commits_total[5m]))",
+          "legendFormat": "commits {{result}}"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(qtiauth_games_cloud_save_downloads_total[5m]))",
+          "legendFormat": "downloads"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Cloud saves — bytes committed and deletes",
+      "gridPos": { "x": 12, "y": 30, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(qtiauth_games_cloud_save_committed_bytes_total[5m]))",
+          "legendFormat": "bytes/s"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (reason) (rate(qtiauth_games_cloud_save_deletes_total[15m]))"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Steam — authentication and ownership sync",
+      "gridPos": { "x": 0, "y": 38, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (rate(qtiauth_games_steam_authenticate_total[5m]))",
+          "legendFormat": "authenticate {{result}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (result) (rate(qtiauth_games_steam_ownership_sync_total[15m]))",
+          "legendFormat": "ownership sync {{result}}"
+        }
+      ]
+    }
+  ]
+}
