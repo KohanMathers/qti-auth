@@ -64,11 +64,14 @@ jobs:
       - run: |
           for name in POSTGRES_PASSWORD DB_IDENTITY_PASSWORD DB_NOTIFY_PASSWORD DB_OIDC_PASSWORD \
             DB_SAFETY_PASSWORD DB_SUPPORT_PASSWORD DB_GAMES_PASSWORD DB_AUDIT_PASSWORD \
-            GRAFANA_ADMIN_PASSWORD EDGE_HOSTS EDGE_ACME_EMAIL; do
+            GRAFANA_ADMIN_PASSWORD MINIO_ROOT_USER MINIO_ROOT_PASSWORD \
+            EDGE_HOSTS EDGE_ACME_EMAIL; do
             if [ "$name" = "EDGE_HOSTS" ]; then
               sed -i "s|^$name=.*|$name=localhost|" .env
             elif [ "$name" = "EDGE_ACME_EMAIL" ]; then
               sed -i "s|^$name=.*|$name=test@example.com|" .env
+            elif [ "$name" = "MINIO_ROOT_USER" ]; then
+              sed -i "s|^$name=.*|$name=minio-ci|" .env
             else
               sed -i "s|^$name=.*|$name=$(openssl rand -hex 32)|" .env
             fi
