@@ -372,7 +372,13 @@ function pageReset(main, t, ctx) {
 }
 
 function pageGuardianApprove(main, t, ctx) {
-  heading(main, t, 'routes.guardian.approve.title', 'Approve this account', 'guardian.approve.lede');
+  heading(
+    main,
+    t,
+    'routes.guardian.approve.title',
+    'Approve this account',
+    'guardian.approve.lede',
+  );
   const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
   const a = auth(ctx.api);
   main.appendChild(
@@ -392,7 +398,13 @@ function pageGuardianApprove(main, t, ctx) {
 }
 
 function pageGuardianDecline(main, t, ctx) {
-  heading(main, t, 'routes.guardian.decline.title', 'Decline this account', 'guardian.decline.lede');
+  heading(
+    main,
+    t,
+    'routes.guardian.decline.title',
+    'Decline this account',
+    'guardian.decline.lede',
+  );
   const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
   const a = auth(ctx.api);
   main.appendChild(
@@ -409,7 +421,13 @@ function pageGuardianDecline(main, t, ctx) {
 }
 
 function pageFamilySession(main, t, ctx) {
-  heading(main, t, 'routes.family.session.title', 'Open the family dashboard', 'family.session.lede');
+  heading(
+    main,
+    t,
+    'routes.family.session.title',
+    'Open the family dashboard',
+    'family.session.lede',
+  );
   const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
   const f = family(ctx.api);
   main.appendChild(
@@ -427,7 +445,13 @@ function pageFamilySession(main, t, ctx) {
 }
 
 function pageFamilyInvite(main, t, ctx) {
-  heading(main, t, 'routes.family.invite.title', 'Become a parent or guardian', 'family.invite.lede');
+  heading(
+    main,
+    t,
+    'routes.family.invite.title',
+    'Become a parent or guardian',
+    'family.invite.lede',
+  );
   const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
   const f = family(ctx.api);
   main.appendChild(

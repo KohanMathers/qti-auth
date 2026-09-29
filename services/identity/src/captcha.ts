@@ -159,4 +159,3 @@ export async function inspectCaptcha(
     challenge: widget.challenge ?? null,
   };
 }
-

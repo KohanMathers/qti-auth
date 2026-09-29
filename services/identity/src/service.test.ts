@@ -35,6 +35,7 @@ describe('identity service', () => {
       '0024_family',
       '0025_graduation',
       '0026_user_restrictions',
+      '0027_steam_unlinks',
     ]);
   });
 
