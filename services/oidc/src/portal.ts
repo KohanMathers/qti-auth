@@ -209,7 +209,7 @@ export async function createClient(
         secret_hash: secret === null ? null : hashToken(secret),
         first_party: false,
         verified: false,
-        redirect_uris: checked.uris,
+        redirect_uris: JSON.stringify(checked.uris),
         allowed_scopes: null,
         require_par: options.require_par,
         backchannel_logout_uri: checked.logoutUri,
@@ -279,7 +279,7 @@ export async function updateClient(
       .set({
         name: next.name,
         description: next.description,
-        redirect_uris: checked.uris,
+        redirect_uris: JSON.stringify(checked.uris),
         require_par: next.require_par,
         backchannel_logout_uri: checked.logoutUri,
         backchannel_logout_session_required: next.backchannel_logout_session_required,

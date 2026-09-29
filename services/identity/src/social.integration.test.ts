@@ -359,20 +359,18 @@ describe('social sign-in', () => {
       email: 'redirected@example.com',
       email_verified: true,
     });
-    const start = await call('/auth/social/corp/start?return_to=//evil.example/login');
-    expect(start.status).toBe(302);
-    const binding = start.headers.get(FLOW_BINDING_HEADER) ?? '';
-    secrets.push(binding);
-    const authorized = await fetch(start.headers.get('location') ?? '', { redirect: 'manual' });
-    const redirected = new URL(authorized.headers.get('location') ?? '');
-    secrets.push(redirected.searchParams.get('state') ?? '');
-    const callback = await call(`/auth/social/corp/callback${redirected.search}`, {
-      headers: { [FLOW_BINDING_HEADER]: binding },
-      redirect: 'manual',
+    const offSite = await post('/api/v1/auth/social/corp/start', {
+      return_to: '//evil.example/login',
     });
-    secrets.push(callback.headers.get(SESSION_TOKEN_HEADER) ?? '');
-    expect(callback.headers.get('location')).toBeNull();
+    expect(offSite.status).toBe(400);
+
+    const flow = await authorize(
+      await post('/api/v1/auth/social/corp/start', { return_to: '/settings' }),
+    );
+    const callback = await complete('corp', flow);
     expect(callback.status).toBe(200);
+    secrets.push(callback.headers.get(SESSION_TOKEN_HEADER) ?? '');
+    expect(await callback.json()).toMatchObject({ status: 'signed_in', return_to: '/settings' });
   });
 
   it('sends our own verification when the provider email is unverified', async () => {
@@ -382,7 +380,7 @@ describe('social sign-in', () => {
       email_verified: false,
     });
     const link = await emails.nextLink('need-verify@example.com');
-    expect(link.pathname).toBe('/auth/verify-email');
+    expect(link.pathname).toBe('/verify');
     secrets.push(link.searchParams.get('token') ?? '');
     const me = await call('/api/v1/me', { as: signedInAs(created.userId, created.sessionId) });
     expect(await me.json()).toMatchObject({

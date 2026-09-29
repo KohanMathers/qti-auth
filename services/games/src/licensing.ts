@@ -339,7 +339,7 @@ export async function issueLease(
         game_id: options.gameId,
         device_hash: deviceHash,
         device_label: options.deviceLabel,
-        products,
+        products: JSON.stringify(products),
         issued_at: options.now,
         expires_at: expiresAt,
         revoked_at: null,

@@ -84,14 +84,6 @@ function browser(country = 'GB'): Browser {
   };
 }
 
-function form(fields: Record<string, string>): RequestInit {
-  return {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(fields),
-  };
-}
-
 function json(body: unknown): RequestInit {
   return {
     method: 'POST',
@@ -106,25 +98,25 @@ async function openLink(client: Browser, email: string): Promise<string> {
   const link = await emails.nextLink(email);
   const token = link.searchParams.get('token') ?? '';
   secrets.push(token);
-  const page = await client.request(`${link.pathname}${link.search}`);
-  expect(page.status).toBe(200);
-  expect(await page.text()).toContain('action="magic-link"');
   return token;
+}
+
+function verifyLink(client: Browser, token: string): Promise<Response> {
+  return client.request('/api/v1/auth/magic-link/verify', json({ token }));
 }
 
 async function signUpInBrowser(client: Browser, email: string): Promise<void> {
   const token = await openLink(client, email);
-  const confirm = await client.request('/auth/magic-link', form({ token }));
-  const dobPage = await confirm.text();
-  const signupToken = /name="signup_token" value="([^"]+)"/.exec(dobPage)?.[1] ?? '';
-  expect(signupToken).not.toBe('');
+  const confirm = await verifyLink(client, token);
+  expect(confirm.status).toBe(200);
+  const { signup_token: signupToken } = (await confirm.json()) as { signup_token: string };
+  expect(signupToken).toBeTruthy();
   secrets.push(signupToken);
   const created = await client.request(
-    '/auth/signup',
-    form({ signup_token: signupToken, date_of_birth: '1990-02-03' }),
+    '/api/v1/auth/magic-link/signup',
+    json({ signup_token: signupToken, date_of_birth: '1990-02-03' }),
   );
-  expect(created.status).toBe(200);
-  expect(await created.text()).toContain('You’re signed in');
+  expect(created.status).toBe(201);
   expect(client.cookie()).not.toBeNull();
 }
 
@@ -200,6 +192,18 @@ beforeAll(async () => {
       observability,
       surfaces,
       geoip: { source: 'header', header: 'cf-ipcountry' },
+      rate_limits: {
+        magic_link_email: { per: 'email', limit: 1000, window: '1h', on_store_failure: 'closed' },
+        magic_link_ip: { per: 'ip', limit: 1000, window: '1h', on_store_failure: 'closed' },
+        magic_link_ip_day: { per: 'ip', limit: 1000, window: '1d', on_store_failure: 'closed' },
+        auth_verify: { per: 'ip', limit: 1000, window: '15m', on_store_failure: 'closed' },
+        auth_password: {
+          per: ['ip', 'account'],
+          limit: 1000,
+          window: '15m',
+          on_store_failure: 'closed',
+        },
+      },
       gateway: {
         identity_keys: { encryption_key: Buffer.alloc(32, 7).toString('base64') },
         discovery: { interval: '500ms', expiry: '5s', startup_grace: '1ms' },
@@ -275,7 +279,7 @@ describe('identity through the gateway', () => {
     await signUpInBrowser(laptop, 'two-devices@example.com');
     const phone = browser();
     const token = await openLink(phone, 'two-devices@example.com');
-    const confirm = await phone.request('/auth/magic-link', form({ token }));
+    const confirm = await verifyLink(phone, token);
     expect(confirm.status).toBe(200);
     expect(phone.cookie()).not.toBeNull();
 
@@ -301,58 +305,49 @@ describe('identity through the gateway', () => {
     const client = browser();
     const email = 'password-walker@example.com';
     const register = await client.request(
-      '/auth/register',
-      form({ email, password: 'long-enough-secret', date_of_birth: '1990-02-03' }),
+      '/api/v1/auth/password/signup',
+      json({ email, password: 'long-enough-secret', date_of_birth: '1990-02-03' }),
     );
-    expect(register.status).toBe(200);
-    expect(await register.text()).toContain('Check your email');
+    expect(register.status).toBe(201);
     expect(client.cookie()).toBeNull();
 
-    const verifyLink = await emails.nextLink(email);
-    const confirmPage = await client.request(`${verifyLink.pathname}${verifyLink.search}`);
-    expect(await confirmPage.text()).toContain('action="verify-email"');
-    const verifyToken = verifyLink.searchParams.get('token') ?? '';
+    const verifyToken = (await emails.nextLink(email)).searchParams.get('token') ?? '';
     secrets.push(verifyToken);
-    const confirmed = await client.request('/auth/verify-email', form({ token: verifyToken }));
+    const confirmed = await client.request(
+      '/api/v1/auth/email/verify',
+      json({ token: verifyToken }),
+    );
     expect(confirmed.status).toBe(200);
-    expect(await confirmed.text()).toContain('You’re signed in');
     expect(client.cookie()).not.toBeNull();
     await client.request('/api/v1/auth/logout', { method: 'POST' });
 
     const login = await client.request(
-      '/auth/login',
-      form({ email, password: 'long-enough-secret' }),
+      '/api/v1/auth/password/login',
+      json({ email, password: 'long-enough-secret' }),
     );
     expect(login.status).toBe(200);
     expect(client.cookie()).not.toBeNull();
 
-    const forgot = await client.request('/auth/forgot-password', form({ email }));
-    expect(await forgot.text()).toContain('Check your email');
-    const resetLink = await emails.nextLink(email);
-    const resetConfirm = await client.request(`${resetLink.pathname}${resetLink.search}`);
-    expect(await resetConfirm.text()).toContain('Continue');
-    const token = resetLink.searchParams.get('token') ?? '';
+    const forgot = await client.request('/api/v1/auth/password/forgot', json({ email }));
+    expect(forgot.status).toBe(202);
+    const token = (await emails.nextLink(email)).searchParams.get('token') ?? '';
     secrets.push(token);
-    const continued = await client.request('/auth/reset-password', form({ token }));
-    const resetForm = await continued.text();
-    expect(resetForm).toContain('Don’t log me out of other sessions');
-    expect(resetForm).not.toContain('checked');
     const saved = await client.request(
-      '/auth/reset-password',
-      form({ token, password: 'brand-new-secret1' }),
+      '/api/v1/auth/password/reset',
+      json({ token, password: 'brand-new-secret1' }),
     );
     expect(saved.status).toBe(200);
-    expect(await saved.text()).toContain('You’re signed in');
+    expect(await saved.json()).toMatchObject({ status: 'signed_in' });
   });
 
   it('challenges password login through the gateway once the IP is over the threshold', async () => {
     const client = browser();
     const email = 'captcha-walker@example.com';
     const register = await client.request(
-      '/auth/register',
-      form({ email, password: 'long-enough-secret', date_of_birth: '1990-02-03' }),
+      '/api/v1/auth/password/signup',
+      json({ email, password: 'long-enough-secret', date_of_birth: '1990-02-03' }),
     );
-    expect(register.status).toBe(200);
+    expect(register.status).toBe(201);
     secrets.push((await emails.nextLink(email)).searchParams.get('token') ?? '');
 
     const now = new Date();
@@ -369,11 +364,11 @@ describe('identity through the gateway', () => {
         .execute();
     }
     const blocked = await client.request(
-      '/auth/login',
-      form({ email, password: 'long-enough-secret' }),
+      '/api/v1/auth/password/login',
+      json({ email, password: 'long-enough-secret' }),
     );
     expect(blocked.status).toBe(403);
-    expect(await blocked.text()).toContain('Complete the CAPTCHA to continue.');
+    expect(await blocked.json()).toMatchObject({ code: 'CAPTCHA_REQUIRED' });
 
     const challenge = await client.request('/api/v1/captcha?action=password_login');
     const body = (await challenge.json()) as {
@@ -492,7 +487,7 @@ describe('identity through the gateway', () => {
     expect((await client.request('/api/v1/me')).status).toBe(401);
 
     const token = await openLink(client, 'delete-aal2@example.com');
-    const confirm = await client.request('/auth/magic-link', form({ token }));
+    const confirm = await verifyLink(client, token);
     expect(confirm.status).toBe(200);
     expect(client.cookie()).not.toBeNull();
     expect(await (await client.request('/api/v1/me')).json()).toMatchObject({
@@ -509,7 +504,7 @@ describe('identity through the gateway', () => {
     await grantUser(identity.context.db, me.id, ['users.read']);
     await client.request('/api/v1/auth/logout', { method: 'POST' });
     const token = await openLink(client, 'staff-walker@example.com');
-    const confirm = await client.request('/auth/magic-link', form({ token }));
+    const confirm = await verifyLink(client, token);
     expect(confirm.status).toBe(200);
 
     expect(await (await client.request('/api/v1/sessions')).json()).toMatchObject({
@@ -591,7 +586,7 @@ describe('identity through the gateway', () => {
     expect(await challenged.json()).toMatchObject({ code: 'REAUTHENTICATION_REQUIRED' });
 
     const token = await openLink(away, 'travel@example.com');
-    const confirm = await away.request('/auth/magic-link', form({ token }));
+    const confirm = await verifyLink(away, token);
     expect(confirm.status).toBe(200);
     expect(away.cookie()).toBe(home.cookie());
 
@@ -628,7 +623,7 @@ describe('identity through the gateway', () => {
       expect(await blocked.json()).toMatchObject({ code: 'LEGAL_ACCEPTANCE_REQUIRED' });
     });
     expect((await client.request('/api/v1/me/legal')).status).toBe(200);
-    expect((await client.request('/support/api/v1/sessions')).status).toBe(403);
+    expect((await client.request('/support/api/v1/me/identities')).status).toBe(403);
 
     const accept = await client.request(
       '/api/v1/me/legal/accept',
@@ -639,7 +634,7 @@ describe('identity through the gateway', () => {
     await vi.waitFor(async () => {
       expect((await client.request('/api/v1/me/identities')).status).toBe(200);
     });
-    expect((await client.request('/support/api/v1/sessions')).status).toBe(200);
+    expect((await client.request('/support/api/v1/me/identities')).status).toBe(200);
   });
 
   it('refuses to disable a security notification category through the API', async () => {

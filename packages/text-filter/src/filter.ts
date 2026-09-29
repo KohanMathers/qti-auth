@@ -61,8 +61,9 @@ export function filter(raw: string, lists: WordLists): FilterResult {
   const loose = looseWords(lists);
   for (const token of collapseSingletons(tokenize(raw))) {
     const value = normalize(token);
-    if (value === '' || lists.allow.has(value) || lists.dictionary.has(value)) continue;
+    if (value === '' || lists.allow.has(value)) continue;
     if (blockedWords.has(value)) return blocked('token_block', normalized, value);
+    if (lists.dictionary.has(value)) continue;
     const padded = paddedWith(value, loose);
     if (padded !== null) return blocked('token_padded_loose', normalized, padded);
   }

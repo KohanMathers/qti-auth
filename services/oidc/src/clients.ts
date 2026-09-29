@@ -137,8 +137,9 @@ export async function seedClients(
             : null,
         first_party: definition.first_party,
         verified: definition.verified || definition.first_party,
-        redirect_uris: [...definition.redirect_uris],
-        allowed_scopes: definition.allowed_scopes === null ? null : [...definition.allowed_scopes],
+        redirect_uris: JSON.stringify(definition.redirect_uris),
+        allowed_scopes:
+          definition.allowed_scopes === null ? null : JSON.stringify(definition.allowed_scopes),
         require_par: definition.require_par,
         backchannel_logout_uri: definition.backchannel_logout_uri,
         backchannel_logout_session_required: definition.backchannel_logout_session_required,

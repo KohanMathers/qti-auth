@@ -1,4 +1,10 @@
-import { type Bus, connectBus, consumeCron, type RunningConsumer } from '@qtiauth/bus';
+import {
+  type Bus,
+  connectBus,
+  consumeCron,
+  provisionStreams,
+  type RunningConsumer,
+} from '@qtiauth/bus';
 import { sections } from '@qtiauth/config';
 import { captureLogs } from '@qtiauth/observability/testing';
 import { type RunningService, startService } from '@qtiauth/service-kit';
@@ -59,6 +65,7 @@ describe('scheduler', () => {
     for (const replica of [1, 2, 3]) {
       const bus = await connectBus(config().bus, 'identity');
       buses.push(bus);
+      await provisionStreams(bus.jsm, config().bus);
       consumers.push(
         await consumeCron(bus, {
           job: JOB,

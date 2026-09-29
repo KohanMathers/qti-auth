@@ -678,14 +678,14 @@ export async function countOpenByStatusAndCategory(
   const rows = await db
     .selectFrom('tickets')
     .select(['status', 'category_id'])
-    .select((eb) => eb.fn.countAll<number>().as('count'))
+    .select((eb) => eb.fn.countAll<string>().as('count'))
     .where('status', '<>', 'closed')
     .groupBy(['status', 'category_id'])
     .execute();
   return rows.map((row) => ({
     status: row.status,
     category_id: row.category_id,
-    count: row.count,
+    count: Number(row.count),
   }));
 }
 

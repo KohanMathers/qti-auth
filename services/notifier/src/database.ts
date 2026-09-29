@@ -1,6 +1,6 @@
 import type { WebhookFormat } from '@qtiauth/config';
 import type { EmailCategory, EmailPriority } from '@qtiauth/email';
-import type { Generated } from 'kysely';
+import type { ColumnType, Generated } from 'kysely';
 
 import type { WebhookPayload } from './payload.ts';
 
@@ -34,7 +34,7 @@ export interface WebhookEndpointsTable {
   slug: string | null;
   url: string;
   description: string;
-  events: string[];
+  events: ColumnType<string[], string, string>;
   format: WebhookFormat;
   secret: string;
   previous_secret: string | null;

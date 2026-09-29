@@ -224,7 +224,11 @@ export function valkeySessionCache(client: Valkey): SessionCache {
         `${EPOCH_PREFIX}user:${entry.session.user_id}`,
       );
       if (epochs.some((epoch) => epoch !== null && Number(epoch) >= entry.cached_at)) return null;
-      return { session: resolvedSessionSchema.parse(entry.session), cached_at: entry.cached_at };
+      return {
+        session: resolvedSessionSchema.parse(entry.session),
+        cached_at: entry.cached_at,
+        signals: entry.signals ?? null,
+      };
     },
     set: async (hash, entry, ttl) => {
       await client.set(`${CACHE_PREFIX}${hash}`, JSON.stringify(entry), 'PX', ttl);

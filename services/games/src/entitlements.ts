@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
 import type { EntitlementSource, GameStatus, ProductType } from '@qtiauth/config';
-import { updatedRows } from '@qtiauth/db';
+import { inTransaction, updatedRows } from '@qtiauth/db';
 import type { EventActor } from '@qtiauth/events';
 import type { Kysely } from 'kysely';
 
@@ -167,7 +167,7 @@ export async function grantEntitlement(
   { status: 'ok'; entitlement: EntitlementRecord; changed: boolean } | { status: 'expired' }
 > {
   if (options.expiresAt !== null && options.expiresAt <= options.now) return { status: 'expired' };
-  return db.transaction().execute(async (trx) => {
+  return inTransaction(db, async (trx) => {
     const activeRow = await entitlementQuery(trx)
       .where('entitlements.user_id', '=', options.userId)
       .where('entitlements.product_id', '=', options.productId)

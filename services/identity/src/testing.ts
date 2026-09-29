@@ -1,6 +1,6 @@
 import { randomUUIDv7 } from 'node:crypto';
 
-import { type Bus, consumeWork } from '@qtiauth/bus';
+import { type Bus, consumeWork, provisionStreams } from '@qtiauth/bus';
 import { EMAIL_PRIORITIES, type EmailJob, emailQueue } from '@qtiauth/email';
 import type { Kysely } from 'kysely';
 
@@ -17,6 +17,7 @@ export async function captureEmails(bus: Bus): Promise<CapturedEmails> {
   if (bus.service !== 'notifier') {
     throw new Error('Capture email from a bus connected as notifier');
   }
+  await provisionStreams(bus.jsm, bus.config);
   const jobs: EmailJob[] = [];
   const taken = new Set<string>();
   const consumers = await Promise.all(

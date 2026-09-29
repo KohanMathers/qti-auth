@@ -21,6 +21,7 @@ export {
 } from './migrations.ts';
 export { applyAuditLogPrivileges, ProvisionError, provisionRoles } from './provision.ts';
 export { deletedRows, updatedRows } from './result.ts';
+export { inTransaction } from './transaction.ts';
 export {
   migrateUpCommand,
   PendingMigrationsError,

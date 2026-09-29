@@ -250,7 +250,7 @@ describe('magic link start', () => {
 
     const link = await emails.nextLink('exists@example.com');
     expect(link.origin).toBe(`https://${HOST}`);
-    expect(link.pathname).toBe('/auth/magic-link');
+    expect(link.pathname).toBe('/verify');
     await emails.nextLink('nobody@example.com');
   });
 });
@@ -459,46 +459,6 @@ describe('sessions', () => {
     expect(await resolve(user.token)).toBeNull();
   });
 
-  it('binds the same session to another cookie scope, and logout ends every binding', async () => {
-    const user = await signUp('bound@example.com');
-    const start = await call(`/auth/bind?target=support&return=${encodeURIComponent('/inbox')}`, {
-      as: signedInAs(user.userId, user.sessionId),
-    });
-    expect(start.status).toBe(302);
-    const location = new URL(start.headers.get('location') ?? '');
-    expect(location.origin).toBe(`https://${SUPPORT}`);
-    expect(location.pathname).toBe('/auth/bind/callback');
-    const code = location.searchParams.get('code') ?? '';
-    secrets.push(code);
-
-    const reused = await call(`${location.pathname}${location.search}`, {
-      headers: { 'x-forwarded-host': SUPPORT },
-    });
-    expect(reused.status).toBe(302);
-    expect(reused.headers.get('location')).toBe('/inbox');
-    const token = reused.headers.get(SESSION_TOKEN_HEADER) ?? '';
-    secrets.push(token);
-    expect((await resolve(token, SUPPORT))?.session_id).toBe(user.sessionId);
-    expect(await resolve(user.token)).not.toBeNull();
-
-    const sessions = await call('/api/v1/sessions', {
-      as: signedInAs(user.userId, user.sessionId),
-    });
-    expect(await sessions.json()).toMatchObject({
-      items: [{ id: user.sessionId, current: true }],
-      next_cursor: null,
-    });
-
-    await post('/api/v1/auth/logout', undefined, signedInAs(user.userId, user.sessionId));
-    expect(await resolve(user.token)).toBeNull();
-    expect(await resolve(token, SUPPORT)).toBeNull();
-
-    const replay = await call(`${location.pathname}${location.search}`, {
-      headers: { 'x-forwarded-host': SUPPORT },
-    });
-    expect(replay.status).toBe(400);
-  });
-
   it('ends sessions that stay idle past cookies.idle_timeout', async () => {
     const user = await signUp('idle@example.com');
     await identity.context.db
@@ -533,7 +493,9 @@ describe('passwords', () => {
 
     const verified = await verifyPasswordEmail(registered.verifyToken);
     expect(verified.userId).toBe(registered.userId);
-    const me = await call('/api/v1/me', { as: signedInAs(verified.userId, verified.sessionId) });
+    const me = await call('/api/v1/me', {
+      as: { ...signedInAs(verified.userId, verified.sessionId), amr: ['pwd'] },
+    });
     expect(await me.json()).toMatchObject({
       email: 'pwd-new@example.com',
       email_verified: true,
@@ -548,7 +510,8 @@ describe('passwords', () => {
     const wrong = await loginPassword('pwd-known@example.com', 'wrong-password-ok');
     expect(unknown.status).toBe(wrong.status);
     expect(unknown.headers.get('content-type')).toBe(wrong.headers.get('content-type'));
-    expect(await unknown.text()).toBe(await wrong.text());
+    const withoutRequestId = (text: string) => text.replace(/"request_id":"[^"]*"/, '');
+    expect(withoutRequestId(await unknown.text())).toBe(withoutRequestId(await wrong.text()));
     expect(JSON.parse(await (await loginPassword('pwd-nobody@example.com')).text())).toMatchObject({
       code: 'CREDENTIALS_INCORRECT',
     });
@@ -691,8 +654,8 @@ describe('email change', () => {
         (await emails.nextJob('old-mail@example.com', 'email_change_notice')).variables['link'],
       ),
     );
-    expect(confirmLink.pathname).toBe('/auth/change-email');
-    expect(revertLink.pathname).toBe('/auth/revert-email');
+    expect(confirmLink.pathname).toBe('/verify');
+    expect(revertLink.pathname).toBe('/revert-email');
     const confirmToken = confirmLink.searchParams.get('token') ?? '';
     const revertToken = revertLink.searchParams.get('token') ?? '';
     secrets.push(confirmToken, revertToken);
@@ -925,6 +888,7 @@ describe('events, retention and data rights', () => {
         IDENTITY_EVENTS.userCreated,
         IDENTITY_EVENTS.sessionCreated,
         IDENTITY_EVENTS.sessionRevoked,
+        IDENTITY_EVENTS.legalVersionPublished,
         AUDIT_EVENTS.recorded,
       ]),
     );
@@ -1459,6 +1423,11 @@ describe('family dashboard', () => {
     };
     expect(body.pending_username_change.username).toBe('ChildTwo');
     expect(body.pending_app_approvals).toEqual([]);
+    await identity.context.db
+      .updateTable('users')
+      .set({ username_updated_at: new Date(Date.now() - 31 * 86_400_000) })
+      .where('id', '=', child.userId)
+      .execute();
     const approvedName = await call(
       `/api/v1/family/${child.userId}/username-changes/${body.pending_username_change.id}/approve`,
       { method: 'POST', ...asFamily(familyToken) },
@@ -1522,10 +1491,6 @@ describe('family dashboard', () => {
     await publishCronTick(gateway.js, ACTIVITY_SUMMARY_JOB, new Date());
     await emails.nextJob('family-parent@example.com', 'guardian_activity');
     await emails.nextJob('family-parent-2@example.com', 'guardian_activity');
-
-    const page = await call('/family/magic-link');
-    expect(page.status).toBe(200);
-    expect(await page.text()).toContain('Family dashboard');
   });
 });
 

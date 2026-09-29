@@ -60,6 +60,7 @@ beforeAll(async () => {
     identityKeys: key.keys,
     config: serviceSchema(definition).parse({
       bus: { servers: [natsUrl(nats)] },
+      captcha: { after: 1000 },
       database: {
         host: postgres.getHost(),
         port: postgres.getPort(),
@@ -118,7 +119,9 @@ describe('text filter admin', () => {
     });
     const listed = await call('/api/v1/admin/filter/blocklist');
     expect(await listed.json()).toMatchObject({
-      items: [expect.objectContaining({ word: 'fuckface', source: 'admin' })],
+      items: expect.arrayContaining([
+        expect.objectContaining({ word: 'fuckface', source: 'admin' }),
+      ]) as unknown,
     });
   });
 

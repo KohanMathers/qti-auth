@@ -1,7 +1,6 @@
-import { type Bus, connectBus, consumeWork, publishCronTick, rpcRequest } from '@qtiauth/bus';
+import { type Bus, connectBus, publishCronTick, rpcRequest } from '@qtiauth/bus';
 import { checkOutboxContract } from '@qtiauth/bus/testing';
 import { sections } from '@qtiauth/config';
-import { type EmailJob, emailQueue } from '@qtiauth/email';
 import { IDENTITY_EVENTS, loadEventCatalog } from '@qtiauth/events';
 import { captureLogs } from '@qtiauth/observability/testing';
 import {
@@ -40,8 +39,6 @@ let valkey: Awaited<ReturnType<typeof startValkey>>;
 let gateway: Bus;
 let notifier: Bus;
 let emails: CapturedEmails;
-const notices: EmailJob[] = [];
-let noticeConsumer: Awaited<ReturnType<typeof consumeWork<EmailJob>>>;
 let identity: RunningService<typeof definition, Database>;
 const logs = captureLogs();
 const secrets: string[] = [];
@@ -172,14 +169,6 @@ beforeAll(async () => {
   notifier = await connectBus(bus, 'notifier');
   serveTestIdentityKeys(gateway, key);
   emails = await captureEmails(notifier);
-  noticeConsumer = await consumeWork<EmailJob>(notifier, {
-    queue: emailQueue('normal'),
-    handler: (message) => {
-      notices.push(message.data);
-      return Promise.resolve();
-    },
-    onError: () => undefined,
-  });
   identity = await startService(definition, {
     ...identityService({ statsInterval: 200 }),
     port: 0,
@@ -187,6 +176,7 @@ beforeAll(async () => {
     logDestination: logs.destination,
     config: serviceSchema(definition).parse({
       bus: { servers: [natsUrl(nats)] },
+      captcha: { after: 1000 },
       database: {
         host: postgres.getHost(),
         port: postgres.getPort(),
@@ -211,7 +201,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await identity.stop();
-  await noticeConsumer.stop();
   await emails.stop();
   await Promise.all([gateway.close(), notifier.close()]);
   await Promise.all([postgres.stop(), nats.stop(), valkey.stop()]);
@@ -225,7 +214,7 @@ describe('legal documents', () => {
       documents: expect.arrayContaining([
         expect.objectContaining({
           id: 'terms',
-          version: '2020-01-01',
+          version: '2026-01-01',
           material: true,
           summary: 'The terms of service for Example Account.',
         }),
@@ -249,11 +238,7 @@ describe('legal documents', () => {
     });
     const previous = await call('/api/v1/legal/terms/2019-01-01');
     expect(await previous.json()).toMatchObject({ code: 'LEGAL_DOCUMENT_NOT_FOUND' });
-    expect((await call('/api/v1/legal/terms/2020-01-01')).status).toBe(200);
-
-    const page = await call('/legal/terms');
-    expect(page.status).toBe(200);
-    expect(await page.text()).toContain('Example Account');
+    expect((await call('/api/v1/legal/terms/2026-01-01')).status).toBe(200);
   });
 
   it('records signup acceptance so a new account is not gated', async () => {
@@ -263,7 +248,7 @@ describe('legal documents', () => {
     expect(await mine.json()).toMatchObject({
       pending: [],
       accepted: expect.arrayContaining([
-        expect.objectContaining({ id: 'terms', version: '2020-01-01', method: 'signup' }),
+        expect.objectContaining({ id: 'terms', version: '2026-01-01', method: 'signup' }),
         expect.objectContaining({ id: 'privacy', method: 'signup' }),
         expect.objectContaining({ id: 'children-summary', method: 'signup' }),
       ]) as unknown,
@@ -276,8 +261,8 @@ describe('legal documents', () => {
         {
           file: 'terms.md',
           id: 'terms',
-          version: '2020-01-01',
-          effectiveAt: new Date('2020-01-01T00:00:00.000Z'),
+          version: '2026-01-01',
+          effectiveAt: new Date('2026-01-01T00:00:00.000Z'),
           material: true,
           summary: 'changed',
           body: 'changed body',
@@ -333,31 +318,6 @@ describe('legal documents', () => {
     });
   });
 
-  it('accepts pending documents from the HTML form', async () => {
-    const user = await signUp('legal-html@example.com');
-    await insertVersion({
-      id: 'privacy',
-      version: '2026-11-01',
-      material: true,
-      summary: 'We shortened retention.',
-    });
-    await publishNow();
-
-    const form = await call('/legal/accept', { as: asUser(user) });
-    expect(form.status).toBe(200);
-    expect(await form.text()).toContain('action="accept"');
-
-    const submitted = await call('/legal/accept', {
-      method: 'POST',
-      as: asUser(user),
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: '',
-    });
-    expect(submitted.status).toBe(200);
-    expect(await submitted.text()).toContain('You have accepted the updated documents.');
-    expect(await resolve(user.token)).toMatchObject({ legal_acceptance_required: false });
-  });
-
   it('emails existing accounts when a non-material version takes effect', async () => {
     const user = await signUp('legal-notice@example.com');
     await insertVersion({
@@ -369,7 +329,7 @@ describe('legal documents', () => {
     await publishNow();
     await vi.waitFor(() => {
       expect(
-        notices.some(
+        emails.jobs.some(
           (job) =>
             job.template === 'legal_update' &&
             job.to.address === 'legal-notice@example.com' &&

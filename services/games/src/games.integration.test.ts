@@ -42,7 +42,7 @@ async function outboxTypes(): Promise<string[]> {
 beforeAll(async () => {
   [postgres, nats] = await Promise.all([startPostgres(), startNats()]);
   const bus = sections.bus.parse({ servers: [natsUrl(nats)] });
-  gateway = await connectBus(bus, 'identity');
+  gateway = await connectBus(bus, 'gateway');
   serveTestIdentityKeys(gateway, key);
   games = await startService(definition, {
     ...gamesService(),
@@ -667,7 +667,7 @@ describe('games service', () => {
 
     const verify = await fetch(`${games.url}/api/v1/games/licensing/verify`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { ...identityHeaders(key, 'games'), 'content-type': 'application/json' },
       body: JSON.stringify({ token: issued.token }),
     });
     expect(verify.status).toBe(200);
@@ -690,7 +690,7 @@ describe('games service', () => {
 
     const afterRevoke = await fetch(`${games.url}/api/v1/games/licensing/verify`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { ...identityHeaders(key, 'games'), 'content-type': 'application/json' },
       body: JSON.stringify({ token: issued.token }),
     });
     const revokedBody = (await afterRevoke.json()) as { valid: boolean; reason: string | null };
@@ -699,6 +699,7 @@ describe('games service', () => {
 
     const revocations = await fetch(
       `${games.url}/api/v1/games/licensing/revocations?game_slug=licensed-game`,
+      { headers: identityHeaders(key, 'games') },
     );
     expect(revocations.status).toBe(200);
     const list = (await revocations.json()) as { revocations: { jti: string }[]; token: string };
@@ -707,7 +708,9 @@ describe('games service', () => {
   });
 
   it('publishes a jwks under the well-known path', async () => {
-    const response = await fetch(`${games.url}/.well-known/qtiauth-license-keys.json`);
+    const response = await fetch(`${games.url}/.well-known/qtiauth-license-keys.json`, {
+      headers: identityHeaders(key, 'games'),
+    });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { keys: { kid: string; alg: string }[] };
     expect(body.keys.length).toBeGreaterThan(0);

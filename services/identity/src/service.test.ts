@@ -36,6 +36,7 @@ describe('identity service', () => {
       '0025_graduation',
       '0026_user_restrictions',
       '0027_steam_unlinks',
+      '0028_locked_until_pending_deletion',
     ]);
   });
 

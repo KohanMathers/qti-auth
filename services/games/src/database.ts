@@ -1,4 +1,5 @@
 import type { EntitlementSource, GameStatus, ProductType } from '@qtiauth/config';
+import type { ColumnType } from 'kysely';
 
 export interface GamesTable {
   id: string;
@@ -29,7 +30,7 @@ export interface LicenseLeasesTable {
   game_id: string;
   device_hash: string | null;
   device_label: string | null;
-  products: LeasedProduct[];
+  products: ColumnType<LeasedProduct[], string, string>;
   issued_at: Date;
   expires_at: Date;
   revoked_at: Date | null;

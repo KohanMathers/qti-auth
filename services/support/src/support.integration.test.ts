@@ -47,7 +47,7 @@ let emails: CapturedEmails;
 const key = generateIdentityKey();
 const BODY_MARKER = 'ticket-body-plaintext-7c1e';
 const STAFF_ALERT_EMAIL = 'staff-alerts@example.com';
-const STAFF_ALERT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const STAFF_ALERT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
 function config() {
   return {
@@ -207,7 +207,7 @@ describe('support service', () => {
   });
 
   it('creates sequential tickets, lists them, replies, closes, reopens and rates', async () => {
-    const userId = '11111111-2222-3333-4444-555555555555';
+    const userId = '11111111-2222-4333-8444-555555555555';
     const headers = jsonHeaders({ sub: userId });
     const first = await fetch(`${support.url}/api/v1/support/tickets`, {
       method: 'POST',
@@ -243,7 +243,7 @@ describe('support service', () => {
     const page = (await listed.json()) as { items: { id: string }[] };
     expect(page.items.some((item) => item.id === created.id)).toBe(true);
 
-    const staffId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    const staffId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const staff = jsonHeaders({ sub: staffId, permissions: ['support.tickets.staff'] });
     const assigned = await fetch(`${support.url}/api/v1/admin/support/tickets/${created.id}`, {
       method: 'PATCH',
@@ -331,8 +331,8 @@ describe('support service', () => {
   });
 
   it('lets a banned user open exactly one appeal per action and nothing else', async () => {
-    const userId = '22222222-3333-4444-5555-666666666666';
-    const actionId = '01234567-89ab-cdef-0123-456789abcdef';
+    const userId = '22222222-3333-4444-8555-666666666666';
+    const actionId = '01234567-89ab-4def-8123-456789abcdef';
     const banned = jsonHeaders({ sub: userId, account_state: 'banned' });
     const regular = await fetch(`${support.url}/api/v1/support/tickets`, {
       method: 'POST',
@@ -368,7 +368,7 @@ describe('support service', () => {
       method: 'POST',
       headers: banned,
       body: JSON.stringify({
-        action_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        action_id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
         body: 'A different action.',
       }),
     });
@@ -386,7 +386,7 @@ describe('support service', () => {
 
   it('stores canned responses and uses them in a staff reply', async () => {
     const staff = jsonHeaders({
-      sub: 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
+      sub: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
       permissions: ['support.tickets.staff'],
     });
     const created = await fetch(`${support.url}/api/v1/admin/support/macros`, {
@@ -397,7 +397,7 @@ describe('support service', () => {
     expect(created.status).toBe(201);
     const macro = (await created.json()) as { id: string };
 
-    const userId = '33333333-4444-5555-6666-777777777777';
+    const userId = '33333333-4444-4555-8666-777777777777';
     const ticketRes = await fetch(`${support.url}/api/v1/support/tickets`, {
       method: 'POST',
       headers: jsonHeaders({ sub: userId }),
@@ -422,8 +422,8 @@ describe('support service', () => {
   });
 
   it('reminds then auto-closes tickets waiting on the user', async () => {
-    const userId = '44444444-5555-6666-7777-888888888888';
-    const staffId = 'cccccccc-dddd-eeee-ffff-000000000000';
+    const userId = '44444444-5555-4666-8777-888888888888';
+    const staffId = 'cccccccc-dddd-4eee-8fff-000000000000';
     const opened = await fetch(`${support.url}/api/v1/support/tickets`, {
       method: 'POST',
       headers: jsonHeaders({ sub: userId }),
@@ -528,7 +528,7 @@ describe('support service', () => {
 
     const metrics = await fetch(`${support.url}/api/v1/admin/support/metrics`, {
       headers: jsonHeaders({
-        sub: 'dddddddd-eeee-ffff-0000-111111111111',
+        sub: 'dddddddd-eeee-4fff-8000-111111111111',
         permissions: ['support.tickets.staff'],
       }),
     });
@@ -626,7 +626,7 @@ describe('support service', () => {
     expect(reply.status).toBe(200);
 
     const staff = jsonHeaders({
-      sub: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      sub: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       permissions: ['support.tickets.staff'],
     });
     const staffView = await fetch(`${support.url}/api/v1/admin/support/tickets/${detail.id}`, {
@@ -689,7 +689,7 @@ describe('support service', () => {
   });
 
   it('rejects a renamed HTML upload and serves accepted files as downloads', async () => {
-    const userId = '99999999-8888-7777-6666-555555555555';
+    const userId = '99999999-8888-4777-8666-555555555555';
     const headers = jsonHeaders({ sub: userId });
     const opened = await fetch(`${support.url}/api/v1/support/tickets`, {
       method: 'POST',
@@ -738,7 +738,7 @@ describe('support service', () => {
     expect(pdf.status).toBe(201);
 
     const staff = jsonHeaders({
-      sub: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      sub: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       permissions: ['support.tickets.staff'],
     });
     const detail = await fetch(`${support.url}/api/v1/admin/support/tickets/${ticket.id}`, {

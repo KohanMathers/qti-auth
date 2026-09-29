@@ -131,7 +131,9 @@ describe('safety service', () => {
   });
 
   it('serves the taxonomy without needing a session', async () => {
-    const response = await fetch(`${safety.url}/api/v1/safety/taxonomy`);
+    const response = await fetch(`${safety.url}/api/v1/safety/taxonomy`, {
+      headers: identityHeaders(key, 'safety'),
+    });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { types: { id: string }[] };
     const ids = body.types.map((type) => type.id).sort();
@@ -142,7 +144,7 @@ describe('safety service', () => {
   it('accepts a game intake report, records the snapshot and emits report.created', async () => {
     const taxonomy = loadTaxonomy(config().safety);
     const { createReport } = await import('./reports.ts');
-    const targetUserId = '11111111-2222-3333-4444-555555555555';
+    const targetUserId = '11111111-2222-4333-8444-555555555555';
     const result = await createReport(safety.context.db, taxonomy, {
       typeId: 'hate',
       subtypeId: 'targeted_harassment',
@@ -220,8 +222,8 @@ describe('safety service', () => {
       subtypeId: 'phishing',
       target: { type: 'user', id: '33333333-4444-5555-6666-777777777777' },
       source: 'user',
-      reporter: { userId: 'user-9', contact, locale: 'en-GB' },
-      actor: { type: 'user', id: 'user-9' },
+      reporter: { userId: '99999999-9999-4999-8999-999999999999', contact, locale: 'en-GB' },
+      actor: { type: 'user', id: '99999999-9999-4999-8999-999999999999' },
       now: new Date(),
     });
     if (result.status !== 'ok') throw new Error('report failed');
@@ -274,7 +276,7 @@ describe('safety service', () => {
   it('serves the catalog, queue, actions, dismiss, history and appeals', async () => {
     const staffId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
     const otherStaff = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
-    const targetId = '11111111-2222-3333-4444-555555555555';
+    const targetId = '11111111-2222-4333-8444-555555555555';
     const staff = {
       sub: staffId,
       permissions: ['safety.reports.read', 'safety.actions.apply'],
@@ -407,9 +409,9 @@ describe('safety service', () => {
   });
 
   it('opens a CSEA case, keeps evidence off every leak surface, and holds it after erasure', async () => {
-    const reporterId = 'cccccccc-dddd-eeee-ffff-000000000001';
-    const staffId = 'cccccccc-dddd-eeee-ffff-000000000002';
-    const targetId = 'cccccccc-dddd-eeee-ffff-000000000003';
+    const reporterId = 'cccccccc-dddd-4eee-8fff-000000000001';
+    const staffId = 'cccccccc-dddd-4eee-8fff-000000000002';
+    const targetId = 'cccccccc-dddd-4eee-8fff-000000000003';
     const json = { 'content-type': 'application/json' };
     const reporter = {
       ...identityHeaders(key, 'safety', { sub: reporterId }),
@@ -575,8 +577,8 @@ describe('safety service', () => {
   });
 
   it('opens a CSEA case when a moderator reclassifies a report', async () => {
-    const staffId = 'cccccccc-dddd-eeee-ffff-000000000010';
-    const targetId = 'cccccccc-dddd-eeee-ffff-000000000011';
+    const staffId = 'cccccccc-dddd-4eee-8fff-000000000010';
+    const targetId = 'cccccccc-dddd-4eee-8fff-000000000011';
     const taxonomy = loadTaxonomy(config().safety);
     const opened = await createReport(safety.context.db, taxonomy, {
       typeId: 'hate',

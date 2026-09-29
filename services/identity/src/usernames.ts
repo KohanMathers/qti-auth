@@ -1,6 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
+import { inTransaction } from '@qtiauth/db';
 import { type Kysely, sql } from 'kysely';
 
 import { findAccount } from './accounts.ts';
@@ -134,7 +135,7 @@ export async function claimUsername(
 
   if (await options.isBlocked(username)) return { status: 'unavailable' };
 
-  return db.transaction().execute(async (trx): Promise<ClaimUsernameResult> => {
+  return inTransaction(db, async (trx): Promise<ClaimUsernameResult> => {
     await lockUsername(trx, canonical);
     const latest = await findAccount(trx, options.userId);
     if (!latest || latest.state === 'deleted') return { status: 'not_found' };

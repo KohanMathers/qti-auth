@@ -20,7 +20,13 @@ export function startValkey(): Promise<StartedValkeyContainer> {
 }
 
 export function startNats(): Promise<StartedNatsContainer> {
-  return new NatsContainer(IMAGES.nats).withJetStream().withArg('--http_port', '8222').start();
+  const container = new NatsContainer(IMAGES.nats).withJetStream().withArg('--http_port', '8222');
+  const internals = container as unknown as { args: Set<string>; values: Map<string, string> };
+  for (const flag of ['--user', '--pass']) {
+    internals.args.delete(flag);
+    internals.values.delete(flag);
+  }
+  return container.start();
 }
 
 export interface StartedMinio {

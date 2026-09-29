@@ -82,6 +82,7 @@ beforeAll(async () => {
     identityKeys: key.keys,
     config: serviceSchema(definition).parse({
       bus: { servers: [natsUrl(nats)] },
+      captcha: { after: 1000 },
       database: {
         host: postgres.getHost(),
         port: postgres.getPort(),
@@ -261,6 +262,7 @@ describe('roles and permissions', () => {
   });
 
   it('issues a one-time admin signup and refuses a second bootstrap', async () => {
+    await identity.context.db.deleteFrom('user_roles').execute();
     const normalizeEmail = emailNormalizer(identity.context.config.accounts.email_normalization);
     const issued = await issueAdminSignup(identity.context.db, {
       email: 'first-admin@example.com',

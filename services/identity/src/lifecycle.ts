@@ -93,7 +93,7 @@ export async function purgeExpiredDeletions(
       const held = await hasActiveHold(trx, row.id);
       const moved = await trx
         .updateTable('users')
-        .set({ state: 'deleted', updated_at: options.now })
+        .set({ state: 'deleted', deletion_requested_at: null, updated_at: options.now })
         .where('id', '=', row.id)
         .where('state', '=', 'pending_deletion')
         .executeTakeFirst();

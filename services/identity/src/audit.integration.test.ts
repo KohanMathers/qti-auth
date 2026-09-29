@@ -106,6 +106,7 @@ beforeAll(async () => {
     identityKeys: key.keys,
     config: serviceSchema(definition).parse({
       bus: { servers: [natsUrl(nats)] },
+      captcha: { after: 1000 },
       database: {
         host: postgres.getHost(),
         port: postgres.getPort(),

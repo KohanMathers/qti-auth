@@ -1,7 +1,7 @@
 import { randomUUIDv7 } from 'node:crypto';
 
 import { writeEvent } from '@qtiauth/bus';
-import { deletedRows } from '@qtiauth/db';
+import { deletedRows, inTransaction } from '@qtiauth/db';
 import type { AgeBand } from '@qtiauth/service-kit';
 import type { Expression, ExpressionBuilder, Kysely, SqlBool } from 'kysely';
 
@@ -301,15 +301,17 @@ export async function completeSocial(
 
   const existing = await findIdentity(db, provider.type, profile.subject);
   if (existing !== undefined) {
-    await touchIdentity(db, existing.id, options.now);
-    const session = await createSession(db, {
-      userId: existing.user_id,
-      authMethod: provider.type,
-      amr: socialAmr(provider.type),
-      acr: 'aal1',
-      client: options.client,
-      settings: options.settings.sessions,
-      now: options.now,
+    const session = await inTransaction(db, async (trx) => {
+      await touchIdentity(trx, existing.id, options.now);
+      return createSession(trx, {
+        userId: existing.user_id,
+        authMethod: provider.type,
+        amr: socialAmr(provider.type),
+        acr: 'aal1',
+        client: options.client,
+        settings: options.settings.sessions,
+        now: options.now,
+      });
     });
     return {
       status: 'signed_in',
@@ -536,7 +538,7 @@ async function createSocialAccount(
     consentAge: settings.consentAge,
   });
 
-  return db.transaction().execute(async (trx) => {
+  return inTransaction(db, async (trx) => {
     const taken = await findIdentity(trx, options.type, options.subject);
     if (taken !== undefined) {
       await touchIdentity(trx, taken.id, now);

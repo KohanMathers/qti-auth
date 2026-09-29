@@ -1,5 +1,5 @@
 import type { OidcClientType } from '@qtiauth/config';
-import type { Generated } from 'kysely';
+import type { ColumnType, Generated } from 'kysely';
 
 export interface ClientsTable {
   id: string;
@@ -10,8 +10,8 @@ export interface ClientsTable {
   secret_hash: string | null;
   first_party: boolean;
   verified: boolean;
-  redirect_uris: string[];
-  allowed_scopes: string[] | null;
+  redirect_uris: ColumnType<string[], string, string>;
+  allowed_scopes: ColumnType<string[] | null, string | null, string | null>;
   require_par: boolean;
   backchannel_logout_uri: string | null;
   backchannel_logout_session_required: boolean;
