@@ -14,6 +14,14 @@ beforeAll(async () => {
     sections.valkey.parse({ host: container.getHost(), port: container.getPort() }),
     'test',
   );
+  if (client.status !== 'ready') {
+    await new Promise<void>((resolve, reject) => {
+      client.once('ready', resolve);
+      client.once('end', () => {
+        reject(new Error('valkey connection ended before becoming ready'));
+      });
+    });
+  }
 });
 
 afterAll(async () => {

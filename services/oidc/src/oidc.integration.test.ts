@@ -471,18 +471,25 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await gatewayRunning.stop();
-  await oidc.stop();
-  await identity.stop();
-  await emails.stop();
-  await notifier.close();
-  await new Promise<void>((resolve, reject) => {
-    logoutReceiver.close((error) => {
-      if (error) reject(error);
-      else resolve();
+  await (gatewayRunning as RunningService<typeof gatewayDefinition> | undefined)?.stop();
+  await (oidc as typeof oidc | undefined)?.stop();
+  await (identity as typeof identity | undefined)?.stop();
+  await (emails as typeof emails | undefined)?.stop();
+  await (notifier as Bus | undefined)?.close();
+  const receiver = logoutReceiver as Server | undefined;
+  if (receiver) {
+    await new Promise<void>((resolve, reject) => {
+      receiver.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
     });
-  });
-  await Promise.all([postgres.stop(), nats.stop(), valkey.stop()]);
+  }
+  await Promise.all([
+    (postgres as typeof postgres | undefined)?.stop(),
+    (nats as typeof nats | undefined)?.stop(),
+    (valkey as typeof valkey | undefined)?.stop(),
+  ]);
   assertLogsScrubbed(logs.lines, secrets);
 });
 
