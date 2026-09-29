@@ -183,7 +183,6 @@ export async function notifyNewDevice(ctx: Context, session: CreatedSession): Pr
     .execute();
 }
 
-/** Counts a new session and sends the new-device notice, for every sign-in path. */
 export async function trackSession(
   ctx: Context,
   method: string,
@@ -746,12 +745,10 @@ export async function finishTwoFactor(
   return result;
 }
 
-/** Whether any upstream provider is configured, for showing social sign-in at all. */
 export function socialEnabled(ctx: Context): boolean {
   return anySocialEnabled(ctx.config.features.auth.social);
 }
 
-/** Whether this particular provider is configured. */
 export function socialProviderEnabled(ctx: Context, providerId: string): boolean {
   return findSocialProvider(ctx.config.features.auth.social, providerId) !== undefined;
 }
@@ -1034,7 +1031,6 @@ export async function startDataExport(
 ): Promise<Awaited<ReturnType<typeof requestExport>>> {
   const result = await requestExport(ctx.db, { userId: input.userId, now: new Date() });
   if (result.status === 'not_found') return result;
-  // Runs after the response. If this instance stops first, accounts.resume_exports picks it up.
   void completeExport(ctx.db, ctx.bus, result.id, exportOptions(ctx)).then(
     (status) => {
       recordExportStatus(ctx, status);

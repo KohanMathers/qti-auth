@@ -163,7 +163,6 @@ export function identityService(options: IdentityOptions = {}) {
     },
     start: async (ctx: Context) => {
       const { config, log, bus, db } = ctx;
-      // Emails link to the account surface; fail now rather than on the first send.
       accountOrigin(config);
       encryptionKey(config);
       const stack: Stoppable[] = [];
@@ -203,8 +202,6 @@ export function identityService(options: IdentityOptions = {}) {
       });
       const legalDir = resolveDocumentsDir(ctx.config_path, config.legal.documents_dir);
       const synced = await loadAndSyncLegalDocuments(db, legalDir);
-      // Notices for anything published here go out on the next legal.publish tick, so a large
-      // user base does not hold up startup.
       const published = await publishLegalVersions(db, { now: new Date() });
       if (published.length > 0) ctx.outbox.wake();
       log.info('legal documents synced', {

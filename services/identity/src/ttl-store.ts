@@ -1,13 +1,11 @@
 import { KEY_PREFIX, type Valkey } from '@qtiauth/valkey';
 
-/** A short-lived, single-use value: written once, read at most once. */
 export interface TtlStore<T> {
   put: (key: string, value: T, ttlMs?: number) => Promise<void>;
   take: (key: string) => Promise<T | undefined>;
 }
 
 export interface TtlStoreSettings {
-  /** Key namespace under the shared Valkey prefix, such as `identity:bind:`. */
   namespace: string;
   defaultTtl: number;
 }

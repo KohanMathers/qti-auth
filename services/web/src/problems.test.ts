@@ -39,9 +39,6 @@ describe('problem catalogue', () => {
   });
 
   it('stays in sync with the client-side JS catalogue', async () => {
-    // The JS module is served to browsers as-is, so it has to duplicate the
-    // TypeScript catalogue. Dynamic import avoids needing allowJs / a .d.ts,
-    // and keeps the parity check as a real runtime comparison.
     const mod = (await import('./assets/problems.js')) as { CATALOGUE: unknown };
     expect(mod.CATALOGUE).toEqual(CATALOGUE);
   });

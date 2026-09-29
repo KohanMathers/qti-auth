@@ -23,17 +23,10 @@ const WEIGHTS = {
   clientFingerprint: 1,
 } as const;
 
-/**
- * Weight that has to be comparable before a mismatch may challenge or end a
- * session. Anything less is only the weak signals (TLS fingerprint, timezone,
- * screen size), which change for ordinary reasons and cannot carry that verdict
- * on their own.
- */
 export const CHALLENGE_MIN_WEIGHT = WEIGHTS.country;
 
 export interface TrustVerdict {
   score: number;
-  /** Total weight of the signals present on both sides, so comparable at all. */
   comparable: number;
   level: TrustLevel;
 }

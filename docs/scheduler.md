@@ -97,7 +97,7 @@ const sweep = await consumeCron(ctx.bus, {
 
 Return it from `start` so it stops with the service. The consumer is named `<service>-cron-<job>`. Ticks published while no service has a consumer for the job are thrown away. Handlers can be run again for the same tick, so make them idempotent.
 
-A new job needs a default schedule in `DEFAULT_CRON_JOBS` in `packages/config/src/sections.ts`, a row in the table above and in [SPEC §2.8](../SPEC.md#28-scheduler), and the same entry in `config/qtiauth.yaml`.
+A new job needs a default schedule in `DEFAULT_CRON_JOBS` in `packages/config/src/sections.ts`, a row in the table above, and the same entry in `config/qtiauth.yaml`.
 
 ### Tests
 

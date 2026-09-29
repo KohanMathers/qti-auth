@@ -1,13 +1,12 @@
 # Security policy
 
-QTIAuth handles authentication, sessions and personal data, so we take vulnerability reports
-seriously.
+QTIAuth handles authentication, sessions and personal data, so we take vulnerability reports seriously.
 
 ## Reporting a vulnerability
 
 **Please don't open a public issue for security problems.**
 
-Email **hello@quietterminal.co.uk** with:
+Email hello@quietterminal.co.uk with:
 
 - a description of the issue and its impact,
 - steps to reproduce, or a proof of concept,

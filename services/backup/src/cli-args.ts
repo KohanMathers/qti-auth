@@ -14,7 +14,6 @@ export interface SplitArgs {
 
 export interface SplitArgsOptions {
   usage: string;
-  // Extra boolean flags this command accepts (long form without the leading `--`).
   booleanFlags?: readonly string[];
 }
 

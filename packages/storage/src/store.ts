@@ -21,7 +21,6 @@ export interface ObjectStore {
     response?: PresignGetOptions,
   ) => Promise<string>;
   presignPut: (key: string, contentType: string, expiresSeconds: number) => Promise<string>;
-  /** Resolves when the bucket is reachable, without listing it. */
   checkBucket: () => Promise<void>;
   ensureBucket: () => Promise<void>;
   close: () => Promise<void>;

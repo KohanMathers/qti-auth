@@ -49,7 +49,6 @@ function isBinary(buffer: Buffer): boolean {
 }
 
 function listTrackedFiles(root: string, paths: string[]): string[] {
-  // Tracked plus untracked-but-not-ignored, so the check also works before files are committed.
   const output = execFileSync(
     'git',
     ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...paths],

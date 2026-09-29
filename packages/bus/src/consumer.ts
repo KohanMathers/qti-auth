@@ -130,7 +130,7 @@ export async function runPullConsumer(
             attempt: msg.info.deliveryCount,
           });
         } catch {
-          // Keep consuming even if onError throws.
+          // Keep consuming even if onError throws
         }
       }
     }

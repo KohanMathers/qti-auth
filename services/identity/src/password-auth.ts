@@ -332,9 +332,6 @@ export async function loginWithPassword(
     if (!account || account.state === 'deleted') return undefined;
     if (rehashed) await upsertPassword(trx, account.id, secret, now);
     await recordIdentityUse(trx, account.id, PASSWORD_METHOD, now);
-    // Anything that counts as enrolment for security.require_2fa_for_permissions
-    // has to be asked for here too, or a passkey-only account would satisfy the
-    // enrolment gate and still never be challenged.
     if (await hasSecondFactor(trx, account.id)) {
       const methods = await secondFactorMethods(trx, account.id);
       const challenge = await insertChallenge(trx, {

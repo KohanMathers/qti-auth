@@ -89,12 +89,6 @@ const passkeySchema = z.object({
   last_used_at: z.iso.datetime().nullable(),
 });
 
-/**
- * Enrolling is the one thing an account held at the 2FA enrolment gate, pending
- * legal acceptance or pending parental consent still has to be able to do, so
- * the routes that read or add a factor carry these and the routes that remove
- * one deliberately do not.
- */
 const ENROLMENT_POLICY = {
   allow_account_states: SIGNED_IN_STATES,
   allow_pending_legal: true,
@@ -102,10 +96,6 @@ const ENROLMENT_POLICY = {
   allow_pending_2fa_enrolment: true,
 } as const;
 
-/**
- * Stepping up needs a factor that is already enrolled, so these routes allow the
- * pending states but not the enrolment gate.
- */
 const STEP_UP_POLICY = {
   allow_account_states: SIGNED_IN_STATES,
   allow_pending_legal: true,

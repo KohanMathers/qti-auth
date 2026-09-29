@@ -486,9 +486,6 @@ export async function sweepStalePending(
     .where('created_at', '<', options.olderThan)
     .execute();
   if (rows.length === 0) return { deleted: 0 };
-  // Delete objects first; only drop the DB row once storage has confirmed the
-  // delete. If a store.delete throws, keep the row so the next sweep retries —
-  // otherwise the object is orphaned with no remaining reference.
   const deletedIds: string[] = [];
   for (const row of rows) {
     if (store !== null) {
@@ -520,8 +517,6 @@ export async function eraseUserCloudSaves(
     .where('user_id', '=', userId)
     .execute();
   if (slots.length === 0) return;
-  // Same ordering as sweepStalePending: erase objects first so a failure mid-loop
-  // leaves the DB row in place for the next erasure attempt to retry.
   if (store !== null) {
     for (const slot of slots) {
       await store.deletePrefix(cloudSaveSlotPrefix(userId, slot.game_id, slot.slot));

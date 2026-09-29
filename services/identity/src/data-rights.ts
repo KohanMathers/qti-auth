@@ -491,7 +491,6 @@ export async function eraseUser(
     await eraseUserObjects(options.store, userId, { preserveHeld: options.held });
   }
   await enqueueLedgerEntry(db, { userId, deletedAt: options.now });
-  // A destination that is down leaves the entry queued for deletion_ledger.prune to retry.
   await flushLedgerOutbox(db, options.ledger, options.now, {
     ...(options.onLedgerError === undefined
       ? {}

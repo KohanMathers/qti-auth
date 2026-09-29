@@ -2,7 +2,7 @@
 
 This records the legal parameters used by the CSEA workflow in Safety. It is not legal advice. Confirm the current NCA CSEA-IRP guidance before going live.
 
-The Online Safety (CSEA Content Reporting by Regulated User-to-User Service Providers) Regulations 2026 (SI 2026/268) have applied to every regulated user-to-user service since 7 April 2026, regardless of size. Spec §6.2 defines the workflow; the values below are the statutory fields, timeframes and retention periods that config defaults implement.
+The Online Safety (CSEA Content Reporting by Regulated User-to-User Service Providers) Regulations 2026 (SI 2026/268) have applied to every regulated user-to-user service since 7 April 2026, regardless of size. The values below are the statutory fields, timeframes and retention periods that config defaults implement.
 
 ## Operator registration
 

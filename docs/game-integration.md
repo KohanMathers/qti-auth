@@ -98,7 +98,7 @@ Leaderboards live on a stat. With `features.games.leaderboards.require_game_auth
 
 ### What game authority does and doesn't protect against
 
-The server token proves a stat write went **through the game's server**. That stops anyone scripting fake submissions straight at the API. It does **not** prove the score is legitimate: if the game server just forwards whatever the client reports, memory editing and modified clients still work. Leaderboards are only as trustworthy as the server's own validation — server-side simulation, replay checks, sanity bounds. `max_delta_per_update` on a stat helps catch impossible single-write jumps, but the game is responsible for the rest. A game without its own server can't write `authority: game` stats at all, because a server key shipped inside the client can be extracted.
+The server token proves a stat write went through the game's server. That stops anyone scripting fake submissions straight at the API. It does not prove the score is legitimate: if the game server just forwards whatever the client reports, memory editing and modified clients still work. Leaderboards are only as trustworthy as the server's own validation: server-side simulation, replay checks, sanity bounds, etc. `max_delta_per_update` on a stat helps catch impossible single-write jumps, but the game is responsible for the rest. A game without its own server can't write `authority: game` stats at all, because a server key shipped inside the client can be extracted.
 
 ## Offline leases
 

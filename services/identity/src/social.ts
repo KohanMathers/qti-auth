@@ -675,10 +675,6 @@ async function touchIdentity(db: Kysely<Database>, id: string, now: Date): Promi
   await db.updateTable('identities').set({ last_used_at: now }).where('id', '=', id).execute();
 }
 
-/**
- * A connected upstream identity: it has a provider subject, and is not one of
- * the passkeys that share the identities table.
- */
 function isSocial(eb: ExpressionBuilder<Database, 'identities'>): Expression<SqlBool> {
   return eb.and([eb('subject', 'is not', null), eb('type', 'not in', [PASSKEY_METHOD])]);
 }

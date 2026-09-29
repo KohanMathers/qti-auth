@@ -88,7 +88,6 @@ function nthBirthdayDate(today: Date, age: number): string {
   return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
 }
 
-// The ages, in whole years, at which a band starts and the next one begins.
 function bandAges(band: AgeBand, bands: AgeBands): { from: number; until: number } {
   switch (band) {
     case 'under_13':

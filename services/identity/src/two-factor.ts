@@ -224,8 +224,6 @@ export async function completeSecondFactor(
 
 export type StepUpResult =
   | { status: 'not_found' }
-  // Covers a wrong code, a code for a factor that is not enrolled, and no code
-  // at all: the caller must not learn which from the answer.
   | { status: 'wrong_code' }
   | { status: 'upgraded' };
 

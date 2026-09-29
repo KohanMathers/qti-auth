@@ -19,7 +19,6 @@ import { zipFiles } from './zip.ts';
 
 export const EXPORT_SERVICES = ['notifier', 'oidc', 'games', 'safety', 'support'] as const;
 export const EXPORT_RESUME_JOB = 'accounts.resume_exports';
-// An export not finished within this long is assumed abandoned (for example by a restart).
 export const EXPORT_CLAIM_LEASE = 15 * 60 * 1000;
 
 export type ExportFailure = 'account_gone' | 'collect_failed' | 'store_failed' | 'email_failed';
@@ -205,7 +204,6 @@ export async function completeExport(
       });
       return 'ready';
     } catch (error) {
-      // The row never gets an object_key on failure, so sweepExports cannot find the zip later.
       if (stored) {
         await store.delete(key).catch((cleanupError: unknown) => {
           options.onError?.(cleanupError, 'store_failed');

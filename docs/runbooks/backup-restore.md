@@ -80,7 +80,7 @@ At least once a quarter, run the whole restore against a scratch stack:
 3. Wipe the Postgres volume: `docker compose down -v` on the scratch stack.
 4. Restore the backup and confirm the deleted test user does not come back, every session is revoked, and `/api/v1/meta/health` reports green.
 
-Record the drill's result and how long it took in the operator log. If restore fails, treat it as a P1 incident (see [incident-response.md](incident-response.md)) — the drill's whole purpose is to find broken backups before you need them.
+Record the drill's result and how long it took in the operator log. If restore fails, treat it as a P1 incident (see [incident-response.md](incident-response.md)), the drill's whole purpose is to find broken backups before you need them.
 
 ## Pruning the deletion ledger
 

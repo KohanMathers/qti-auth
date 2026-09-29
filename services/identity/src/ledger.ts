@@ -41,7 +41,6 @@ function entryBytes(entry: LedgerEntry): Uint8Array {
   return new TextEncoder().encode(`${JSON.stringify(entry)}\n`);
 }
 
-// Files mirror the object keys, so both destinations share one layout.
 function ledgerDirectory(directory: string): string {
   return join(directory, LEDGER_OBJECT_PREFIX);
 }
@@ -88,7 +87,6 @@ export async function flushLedgerOutbox(
         deleted_at: row.deleted_at.toISOString(),
       });
     } catch (error) {
-      // The row stays unsent, so the next flush retries it.
       if (options.onWriteError === undefined) throw error;
       options.onWriteError(error, row.user_id);
       continue;
@@ -118,8 +116,6 @@ export async function pruneLedgerDestination(
     }
     return deleted;
   }
-  // Both destinations age entries by when they were written, not by deleted_at, so storage
-  // objects never have to be downloaded to be pruned.
   const dir = ledgerDirectory(destination.directory);
   let names: string[];
   try {

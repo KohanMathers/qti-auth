@@ -80,7 +80,6 @@ export async function captureEmails(bus: Bus): Promise<CapturedEmails> {
   };
 }
 
-/** Gives a user exactly these grants through a one-off role. */
 export async function grantUser(
   db: Kysely<Database>,
   userId: string,

@@ -62,8 +62,6 @@ Surfaces, cookies, CORS, trusted proxies and rate limits have their own sections
 
 Each service announces its routes on `qtiauth.sys.announce` when it starts and whenever asked. The gateway asks every `discovery.interval` and forgets an instance it hasn't heard from for `discovery.expiry`, so a stopped service's routes disappear on their own. Where replicas announce different manifests during an upgrade, the most recently started instance's manifest is used.
 
-Routes are mounted per [SPEC §2.10](../SPEC.md#210-surfaces-hosts-and-sessions):
-
 - `core` routes are mounted on every surface. Module routes are mounted only on surfaces that own the module (`surfaces.<name>.modules`).
 - On the `account` and `support` surfaces, a route is mounted at `<base_path><path>`, so `/api/v1/me` is `/support/api/v1/me` on a support surface with base `/support`.
 - On the `api` surface, the `/api` prefix of a route's path is replaced by the surface's base, so with base `/api` the same route is `/api/v1/me`, and with base `/` it's `/v1/me`. Other paths, such as `/oauth/token`, are mounted at the base as they are.

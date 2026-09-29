@@ -1,7 +1,7 @@
 ---
 id: terms
-version: 2020-01-01
-effective_at: 2020-01-01T00:00:00Z
+version: 2026-01-01
+effective_at: 2026-01-01T00:00:00Z
 material: true
 summary: 'The terms of service for {{ brand.product_name }}.'
 ---

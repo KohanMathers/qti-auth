@@ -9,11 +9,9 @@ import { openMmdb, type MmdbLookup } from './mmdb.ts';
 
 export type GeoipConfig = QtiauthConfig['geoip'];
 
-/** How long a stat of the database file is trusted before checking for a newer one. */
 export const RECHECK_INTERVAL_MS = 30_000;
 
 export interface GeoipOptions {
-  /** Called once per failed load, so a broken database does not fail silently. */
   onError?: (error: unknown, path: string) => void;
   now?: () => number;
 }
@@ -69,8 +67,6 @@ export function openGeoIp(config: GeoipConfig, options: GeoipOptions = {}): GeoI
 
   const now = options.now ?? Date.now;
   let loaded: Loaded | null = null;
-  // The file that failed to load, so a corrupt database is parsed once rather
-  // than on every lookup.
   let failed: { path: string; mtime: number } | null = null;
   let checkedAt: number | null = null;
 

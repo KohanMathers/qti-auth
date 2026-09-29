@@ -44,8 +44,6 @@ export interface LegalAcceptance {
 
 const VERSION_COLUMNS = ['id', 'version', 'effective_at', 'material', 'summary', 'body'] as const;
 
-// The one definition of "current": the effective version with the latest effective_at, then the
-// highest version string. Every query below builds on this.
 function currentVersionsQuery(db: Kysely<Database>, now: Date) {
   return db
     .selectFrom('legal_versions')
@@ -85,7 +83,6 @@ export async function findCurrentLegalVersion(
   return currentVersionsQuery(db, now).where('id', '=', id).executeTakeFirst();
 }
 
-// A version at or before now can be viewed if it is current, or if history is public.
 export async function findViewableLegalVersion(
   db: Kysely<Database>,
   options: { id: string; version: string; publicHistory: boolean; now: Date },
@@ -507,7 +504,6 @@ async function queueNoticeBatch(
   }
   const last = recipients.at(-1);
   const done = recipients.length < LEGAL_NOTICE_BATCH;
-  // Saving progress after each batch means a restart resumes here instead of re-sending.
   await db
     .updateTable('legal_versions')
     .set({

@@ -206,7 +206,7 @@ Accounts only move between states along the allowed transitions in `ACCOUNT_TRAN
 
 Changing email is `POST /api/v1/me/email` with `{ email }` and needs a recent `aal2` session. A confirmation link goes to the new address, and a notice goes to the current one with a 7-day revert link. `POST /api/v1/auth/email/change` applies the new address; `POST /api/v1/auth/email/revert` switches it back.
 
-A user can’t remove their last sign-in method. Magic link (when enabled), password, passkeys and connected social identities all count. Trying to remove the last one answers `409 LAST_SIGN_IN_METHOD` with the spec’s warning and `delete_account_path: "/account/delete"`.
+A user can’t remove their last sign-in method. Magic link (when enabled), password, passkeys and connected social identities all count. Trying to remove the last one answers `409 LAST_SIGN_IN_METHOD` with a warning and `delete_account_path: "/account/delete"`.
 
 The date of birth is stored, and the age band is worked out from it whenever it's needed. Users cannot edit their own date of birth after signup. Staff with `users.edit_dob` can change it, with a reason that is stored. Users younger than `parental.consent_age` enter a parent or guardian email at signup. An admin invite for someone that young still answers `403 PARENTAL_CONSENT_UNAVAILABLE` and nothing is kept.
 
@@ -252,9 +252,9 @@ The pages are deliberately plain: they're stand-ins until the web app arrives, a
 
 Signup is `POST /api/v1/auth/password/signup` with `{ email, password, date_of_birth, guardian_email?, locale? }`. The account is created in `pending_email_verification` and a confirmation email is sent. The account becomes `active` when `POST /api/v1/auth/email/verify` is used, or `pending_parental_consent` when the user is younger than `parental.consent_age`. Login is allowed before that; `/api/v1/me` shows the pending state.
 
-Login is `POST /api/v1/auth/password/login` with `{ email, password }`. Unknown addresses and wrong passwords both answer `401 CREDENTIALS_INCORRECT` ("Email or password incorrect") after an Argon2id check and the same progressive delay, so timing does not give the address away. If the account has a second factor enrolled — TOTP or a passkey — the answer is `200 { "status": "second_factor_required", "challenge", "methods", "expires_at" }` instead of a session, and sign-in finishes at `/api/v1/auth/2fa` or with a passkey.
+Login is `POST /api/v1/auth/password/login` with `{ email, password }`. Unknown addresses and wrong passwords both answer `401 CREDENTIALS_INCORRECT` ("Email or password incorrect") after an Argon2id check and the same progressive delay, so timing does not give the address away. If the account has a second factor enrolled (TOTP or a passkey), the answer is `200 { "status": "second_factor_required", "challenge", "methods", "expires_at" }` instead of a session, and sign-in finishes at `/api/v1/auth/2fa` or with a passkey.
 
-Forgot password is `POST /api/v1/auth/password/forgot` with `{ email }`, always `202 { "status": "sent" }`. The reset form has a **"Don't log me out of other sessions"** checkbox, **unticked by default**, so `POST /api/v1/auth/password/reset` revokes every other session unless `keep_other_sessions` is true.
+Forgot password is `POST /api/v1/auth/password/forgot` with `{ email }`, always `202 { "status": "sent" }`. The reset form has a **"Don't log me out of other sessions"** checkbox, unticked by default, so `POST /api/v1/auth/password/reset` revokes every other session unless `keep_other_sessions` is true.
 
 Adding a password to a passwordless account is `POST /api/v1/me/password` with `{ password }` after a magic-link sign-in within `security.step_up_window`. Changing one takes `{ password, current_password }`.
 
@@ -302,7 +302,7 @@ Google, GitHub, Discord, Steam (OpenID 2.0) and generic OIDC issuers can be used
 
 ## Passkeys and two-factor
 
-Passkeys (WebAuthn) work as a primary sign-in or as a second factor. Several can be registered, each with a name and last-used time. A passkey-only sign-in creates a session at `aal2`. Password sign-in is `aal1` unless a second factor is enrolled — TOTP or a passkey — in which case a second factor is required and the resulting session is `aal2`. The same set counts for `security.require_2fa_for_permissions`, so enrolment and the sign-in challenge always agree.
+Passkeys (WebAuthn) work as a primary sign-in or as a second factor. Several can be registered, each with a name and last-used time. A passkey-only sign-in creates a session at `aal2`. Password sign-in is `aal1` unless a second factor is enrolled (TOTP or a passkey), in which case a second factor is required and the resulting session is `aal2`. The same set counts for `security.require_2fa_for_permissions`, so enrolment and the sign-in challenge always agree.
 
 TOTP is RFC 6238 (SHA-1, 6 digits, 30-second step, ±1 window). The secret is encrypted at rest with `security.encryption_key`. Confirming enrolment issues 10 hashed single-use recovery codes, which can be replaced at `POST /api/v1/me/recovery-codes` after a recent step-up.
 
@@ -341,7 +341,7 @@ The interim login, register and magic-link start pages redisplay the form with t
 
 ## Sessions
 
-A session is a server-side record. The browser holds a random token in the session cookie, and identity stores only its SHA-256 hash, in a binding tied to the cookie's scope (`cookies.domain`, or the host). Each host that cannot share that cookie gets its own binding for the **same** session. Signing in, signing out and ending sessions answer through the gateway, which sets or clears the cookie and drops the session from its cache before responding, so an ended session stops working on the very next request.
+A session is a server-side record. The browser holds a random token in the session cookie, and identity stores only its SHA-256 hash, in a binding tied to the cookie's scope (`cookies.domain`, or the host). Each host that cannot share that cookie gets its own binding for the same session. Signing in, signing out and ending sessions answer through the gateway, which sets or clears the cookie and drops the session from its cache before responding, so an ended session stops working on the very next request.
 
 When a browser navigation needs a session on a host that has no binding, the gateway redirects to `/auth/bind` on the account surface. If the user is signed in there, identity issues a single-use code (60 seconds, bound to the target origin and return path) and redirects to `/auth/bind/callback` on the target surface, which sets that host's cookie for the same session. If they are not signed in, `/auth/bind` lands on `/auth/login` and continues after sign-in. A short-lived `qtiauth_session_bound` cookie stops a failed bind from redirecting forever. Logging out or revoking a session invalidates every binding.
 
@@ -371,7 +371,7 @@ A session ends when it's `cookies.session_ttl` old, when it hasn't been used for
 | `notify`    | The session continues, and a security-alert email is sent          |
 | `ignore`    | Nothing                                                            |
 
-Re-authentication after `aal0` uses a magic link, a passkey, or password plus 2FA, and restores the **same** session rather than minting a new cookie. Social sign-in always starts a new session. Routes that need a session refuse `aal0` with `403 REAUTHENTICATION_REQUIRED`, except `POST /api/v1/auth/logout` (`allow_aal0: true`). A top-level navigation in that state is sent to `/auth/login`.
+Re-authentication after `aal0` uses a magic link, a passkey, or password plus 2FA, and restores the same session rather than minting a new cookie. Social sign-in always starts a new session. Routes that need a session refuse `aal0` with `403 REAUTHENTICATION_REQUIRED`, except `POST /api/v1/auth/logout` (`allow_aal0: true`). A top-level navigation in that state is sent to `/auth/login`.
 
 A first sign-in from a browser or OS that this account has not used sends a `new_device` email, unless `session_security.new_device_email` is false. Accounts under 18 always get that email. Security-alert emails are at most one per user per `session_security.alert_min_interval`.
 
@@ -379,7 +379,7 @@ GeoIP defaults to DB-IP Lite (CC-BY 4.0) at `geoip.database_path`. Set `geoip.so
 
 ### Text filter
 
-Identity loads the word lists in `text_filter.lists_dir` and filters public text with the pipeline in [SPEC §4.11](../SPEC.md#411-text-filter-core-library): allowlist, exact block, dictionary (this is what saves Scunthorpe), then tokens and padded B_loose matches. It never find-and-replaces, never substring-matches B_exact, and never maps `1` to `i`. Every decision is stored in `filter_decisions`. Other services ask `qtiauth.rpc.identity.check_text` with `{ text, context }` and get `{ decision: "allow" | "block" }`.
+Identity loads the word lists in `text_filter.lists_dir` and filters public text with this pipeline: allowlist, exact block, dictionary (this is what saves Scunthorpe), then tokens and padded B_loose matches. It never find-and-replaces, never substring-matches B_exact, and never maps `1` to `i`. Every decision is stored in `filter_decisions`. Other services ask `qtiauth.rpc.identity.check_text` with `{ text, context }` and get `{ decision: "allow" | "block" }`.
 
 `qtiauth lists update [--ldnoobw <commit>]` vendors every LDNOOBW language file at a pinned commit (spaces stripped; `tlh` omitted), SCOWL size 70, ONS and US SSA given names, US Census surnames, and GeoNames places. `qtiauth lists audit` prints dictionary words that contain a blocked substring.
 
@@ -398,7 +398,7 @@ Identity loads the word lists in `text_filter.lists_dir` and filters public text
 
 ## Usernames
 
-Accounts can exist without a username. `POST /api/v1/me/username` with `{ username }` claims one, or changes it later. The first claim is free of the cooldown and yearly limit. Changing is limited by `usernames.change_cooldown` and `usernames.changes_per_year`. History is kept. Changing a name holds the old one for `usernames.release_hold`; during the hold **only the previous owner** can reclaim it.
+Accounts can exist without a username. `POST /api/v1/me/username` with `{ username }` claims one, or changes it later. The first claim is free of the cooldown and yearly limit. Changing is limited by `usernames.change_cooldown` and `usernames.changes_per_year`. History is kept. Changing a name holds the old one for `usernames.release_hold`; during the hold only the previous owner can reclaim it.
 
 Every candidate goes through the text filter. Taken names, reserved names, reserved prefixes and filter blocks all answer `409 USERNAME_UNAVAILABLE` ("Username not available"). Length and charset failures are `400 USERNAME_INVALID`. A `username_change` restriction answers `403 ACCOUNT_RESTRICTED`, unless a staff username reset is still outstanding.
 

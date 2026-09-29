@@ -76,7 +76,7 @@ URLs whose DNS resolves to a private, loopback or link-local address are rejecte
 
 `console` is for development only: it prints sign-in links and anything else in an email to the container's output. `config/qtiauth.dev.yaml` uses it, so `docker compose logs notifier` shows the magic links.
 
-The other providers named in the spec (`brevo`, `postmark`, `ses`, `resend` and `mailgun`) aren't available yet. Bounce and complaint handling will come with them, since SMTP has no standard way to report them.
+Other providers (`brevo`, `postmark`, `ses`, `resend` and `mailgun`) aren't available yet. Bounce and complaint handling will come with them, since SMTP has no standard way to report them.
 
 ## Templates
 

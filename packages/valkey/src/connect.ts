@@ -34,7 +34,6 @@ export function connectValkey(
   onError: (error: unknown) => void = () => undefined,
 ): Valkey {
   const client = new Valkey(valkeyOptions(config, service));
-  // Without a listener, a connection error can crash the process.
   client.on('error', onError);
   return client;
 }

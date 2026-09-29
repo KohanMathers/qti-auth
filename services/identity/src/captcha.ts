@@ -51,7 +51,6 @@ export type CaptchaCheck =
   | { status: 'required'; widget: CaptchaWidget }
   | { status: 'invalid'; widget: CaptchaWidget };
 
-/** Whether this IP has used up its allowance of attempts for the action. */
 async function captchaIsRequired(
   ctx: Context,
   request: Request,

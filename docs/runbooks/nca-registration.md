@@ -15,7 +15,7 @@ This runbook is not legal advice. Check the current NCA CSEA-IRP guidance before
 1. Open the NCA CSEA-IRP registration form at the address in current NCA guidance. Do not follow a link pasted into a chat channel; go via the NCA's own site.
 2. Provide the requested company and service details. QTIAuth features that back specific commitments:
    - **Named accountable individual** → `safety.accountable_person.name` and `.role`.
-   - **CSEA reporting workflow** → the Safety service's CSEA case handling (§6.2 of the spec).
+   - **CSEA reporting workflow** → the Safety service's CSEA case handling.
    - **Report retention** → `retention.csea_evidence` (365 d, evidence) and `retention.csea_nca_reference` (1825 d, unique reference).
    - **Access control** → `safety.csea.access` granted by name, never covered by wildcards.
 3. Provide the mailbox that will receive the NCA's correspondence. Add a rule that forwards it to the CSEA staff group as well; the mailbox itself must not be a group.

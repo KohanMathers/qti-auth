@@ -35,7 +35,6 @@ import { newToken } from './tokens.ts';
 
 export const MAX_USER_AGENT_LENGTH = 512;
 export const LAST_ACTIVE_RESOLUTION = 60_000;
-// Bound the eviction query; leftover extras go on the next sign-in.
 const EVICTION_LIMIT = 1_000;
 
 export interface SessionSettings {
@@ -77,7 +76,6 @@ export interface NewSession {
 
 export interface CreatedSession {
   id: string;
-  /** null when an existing session was restored, so no new cookie is issued. */
   token: string | null;
   expiresAt: Date;
   evicted: string[];

@@ -747,9 +747,6 @@ export async function recomputeRarity(
     const unlocksByAchievement = new Map(
       unlocks.map((row) => [row.achievement_id, Number(row.count)]),
     );
-    // Total distinct (game, user) ownership pairs across every game touched by
-    // this sweep — one row per user per game they entitle, regardless of how
-    // many achievements the game defines. Summing per-achievement would N-count.
     const totalOwners = owners.length;
     for (const record of achievements) {
       const gameOwners = ownersByGame.get(record.game_id)?.size ?? 0;

@@ -12,7 +12,6 @@ export async function cancelPendingDeletion(
   options: { userId: string; now: Date; actor?: EventActor },
 ): Promise<boolean> {
   const actor: EventActor = options.actor ?? { type: 'user', id: options.userId };
-  // Go back to the state the deletion was requested from, so a ban or lock survives.
   const updated = await trx
     .updateTable('users')
     .set({

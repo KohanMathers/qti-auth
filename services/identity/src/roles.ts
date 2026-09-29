@@ -45,7 +45,6 @@ export async function seedRoles(
   definitions: Record<string, RoleDefinition>,
   now = new Date(),
 ): Promise<void> {
-  // on conflict keeps this safe when several instances start at once.
   await db.transaction().execute(async (trx) => {
     for (const [slug, definition] of Object.entries(definitions)) {
       const inserted = await trx
@@ -357,7 +356,6 @@ export async function adminExists(db: Kysely<Database>): Promise<boolean> {
 }
 
 export async function assignAdminIfFirst(db: Kysely<Database>, userId: string): Promise<boolean> {
-  // Serialises concurrent first sign-ins so only one of them becomes admin.
   await sql`select pg_advisory_xact_lock(hashtext('qtiauth.admin_bootstrap'))`.execute(db);
   const admin = await db
     .selectFrom('roles')

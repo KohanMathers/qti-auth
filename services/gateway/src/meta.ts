@@ -96,7 +96,6 @@ export const aboutSchema = z.object({
 
 export type About = z.output<typeof aboutSchema>;
 
-/** What meta reports needs from the opened database: the one source of truth for availability. */
 export type GeoipStatus = Pick<GeoIp, 'available' | 'attribution'>;
 
 export function aboutReport(config: MetaConfig, geoip: GeoipStatus): About {
@@ -153,7 +152,6 @@ export interface HealthInput {
   geoip?: GeoipStatus;
 }
 
-/** Problems worth reporting that do not make the stack degraded. */
 const ADVISORY_PROBLEMS = new Set<HealthProblem['code']>([
   'CROSS_SITE_SURFACES',
   'GEOIP_UNAVAILABLE',

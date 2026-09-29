@@ -1,6 +1,6 @@
 # Games
 
-The games service holds the game and product catalog, tracks per-user entitlements and provisions the confidential server client each game uses to authenticate its back-end calls. It's part of the `games` compose profile and uses the `games` schema. Full spec: [SPEC.md §7](../SPEC.md).
+The games service holds the game and product catalog, tracks per-user entitlements and provisions the confidential server client each game uses to authenticate its back-end calls. It's part of the `games` compose profile and uses the `games` schema.
 
 Games have five statuses: `draft`, `hidden`, `early_access`, `released`, `archived`. Only `early_access` and `released` show on the public catalog; the others are staff-only. Every game has a base product created for it automatically, along with a confidential OAuth client (the "game server client") scoped to that one game. Products can be added, updated and removed except for the base, which stays with the game. Entitlements record which user owns which product, from which source (`admin_grant`, `key_redemption`, `steam`, `api`), and when they were granted, expire or were revoked.
 
@@ -89,43 +89,19 @@ On `POST /api/v1/admin/games/:slug/products/:product_slug/key-batches`, the resp
 
 ## Stats, leaderboards and playtime
 
-Stat definitions per game carry a `key`, a `type` (`int`, `float`, `duration`), an `aggregation`
-(`sum`, `max`, `min`, `latest`), an optional `max_delta_per_update` sanity bound and an `authority`.
-Player-authority stats are written trust-based with the player's access token and the
-`game_stats.write` scope. Game-authority stats are written only through `auth: game_authoritative`,
-which needs the game server's `client_credentials` token in `Authorization: Bearer` and the player's
-access token in `X-QTIAuth-Player-Token` — both issued to the same game.
+Stat definitions per game carry a `key`, a `type` (`int`, `float`, `duration`), an `aggregation` (`sum`, `max`, `min`, `latest`), an optional `max_delta_per_update` sanity bound and an `authority`. Player-authority stats are written trust-based with the player's access token and the `game_stats.write` scope. Game-authority stats are written only through `auth: game_authoritative`, which needs the game server's `client_credentials` token in `Authorization: Bearer` and the player's access token in `X-QTIAuth-Player-Token`, both issued to the same game.
 
-Leaderboards are defined on a stat with a `sort` direction and a `reset_period` (`never`, `daily`,
-`weekly`, `monthly` or `season:<slug>`). Periods roll over on the `leaderboards.reset_periodic` job.
-With `features.games.leaderboards.require_game_authority: true` (the default), leaderboards may only
-be created on stats with `authority: game`. Turn it off to allow trust-based leaderboards.
+Leaderboards are defined on a stat with a `sort` direction and a `reset_period` (`never`, `daily`, `weekly`, `monthly` or `season:<slug>`). Periods roll over on the `leaderboards.reset_periodic` job. With `features.games.leaderboards.require_game_authority: true` (the default), leaderboards may only be created on stats with `authority: game`. Turn it off to allow trust-based leaderboards.
 
-Accounts under 18 are hidden on leaderboards by default. Hidden entries still count in ranking but
-appear as "Hidden player" to everyone except their owner. Players can flip their own visibility with
-`POST /api/v1/games/:slug/leaderboards/:stat/:board/visibility`. Admins can remove a player's entry
-(for example after a cheating investigation) with a reason, which is audited and emits
-`qtiauth.games.leaderboard_entry.removed.v1`.
+Accounts under 18 are hidden on leaderboards by default. Hidden entries still count in ranking but appear as "Hidden player" to everyone except their owner. Players can flip their own visibility with `POST /api/v1/games/:slug/leaderboards/:stat/:board/visibility`. Admins can remove a player's entry (for example after a cheating investigation) with a reason, which is audited and emits `qtiauth.games.leaderboard_entry.removed.v1`.
 
-Playtime is trust-based: games start a session, heartbeat at least every 60 seconds and end it. The
-service accrues per-day totals per game and feeds the guardian activity summary.
-`GET /api/v1/games/:slug/playtime/remaining` returns the remaining daily allowance for accounts
-with a `daily_playtime_minutes` parental control (or `null` when no limit applies). Sessions without
-a recent heartbeat are closed automatically by the `leaderboards.reset_periodic` job.
+Playtime is trust-based: games start a session, heartbeat at least every 60 seconds and end it. The service accrues per-day totals per game and feeds the guardian activity summary. `GET /api/v1/games/:slug/playtime/remaining` returns the remaining daily allowance for accounts with a `daily_playtime_minutes` parental control (or `null` when no limit applies). Sessions without a recent heartbeat are closed automatically by the `leaderboards.reset_periodic` job.
 
-Free-form per-user JSON is available at `GET/PUT /api/v1/games/:slug/custom-data`, capped at
-32,768 bytes.
+Free-form per-user JSON is available at `GET/PUT /api/v1/games/:slug/custom-data`, capped at 32,768 bytes.
 
 ### What game authority does and doesn't protect against
 
-The server credential proves a stat write came **through the game's server**. That stops anyone
-scripting fake submissions straight at the API. It does **not** prove the score is legitimate: if
-the game server just forwards whatever the client reports, memory editing and modified clients
-still work. Leaderboards are only as trustworthy as the game server's own validation — server-side
-simulation, replay checks, sanity bounds. `max_delta_per_update` on a stat helps catch impossible
-single-write jumps, but the game is responsible for the rest. A game without its own server can't
-write `authority: game` stats at all, because a server key shipped inside the client can be
-extracted.
+The server credential proves a stat write came through the game's server. That stops anyone scripting fake submissions straight at the API. It does not prove the score is legitimate: if the game server just forwards whatever the client reports, memory editing and modified clients still work. Leaderboards are only as trustworthy as the game server's own validation: server-side simulation, replay checks, sanity bounds. `max_delta_per_update` on a stat helps catch impossible single-write jumps, but the game is responsible for the rest. A game without its own server can't write `authority: game` stats at all, because a server key shipped inside the client can be extracted.
 
 ## Offline licensing
 
@@ -217,7 +193,7 @@ public static bool VerifyLease(string token, IReadOnlyDictionary<string, string>
 }
 ```
 
-Both snippets are intentionally minimal — real integrations should also check `aud` matches the game slug they run for, cache the parsed JWKS, and pull `GET /api/v1/games/licensing/revocations` on a schedule (typically every `licensing.revocation_list_ttl`) to keep the revocation set fresh.
+Both snippets are intentionally minimal. Real integrations should also check `aud` matches the game slug they run for, cache the parsed JWKS, and pull `GET /api/v1/games/licensing/revocations` on a schedule (typically every `licensing.revocation_list_ttl`) to keep the revocation set fresh.
 
 ## Events
 

@@ -33,9 +33,6 @@ export const GAME_STAT_NAME_MAX = 120;
 export const GAME_LEADERBOARD_NAME_MAX = 120;
 export const GAME_CUSTOM_DATA_MAX_BYTES = 32_768;
 export const HIDDEN_ENTRY_DISPLAY = 'Hidden player';
-// Any gap between heartbeats larger than this is treated as an idle session
-// rather than active play. Prevents idle clients from draining daily playtime
-// budgets that back parental controls.
 export const STALE_PLAYTIME_SECONDS = 300;
 
 export interface StatDefinitionRecord {
@@ -554,9 +551,6 @@ async function rolloverIfDue(
 ): Promise<LeaderboardRecord> {
   if (board.period_ends_at === null || now < board.period_ends_at) return board;
   const bounds = nextPeriod(board.reset_period, board.period_ends_at);
-  // Guard on the previous period_ends_at so two concurrent callers can't each
-  // advance the same board — the second UPDATE affects zero rows and we re-read
-  // to pick up whichever period the winner installed.
   const result = await db
     .updateTable('leaderboards')
     .set({

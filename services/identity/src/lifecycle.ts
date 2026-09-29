@@ -39,7 +39,6 @@ export async function requestDeletion(
     ) {
       return { status: 'conflict' as const, revoked: [] };
     }
-    // Keep the prior state and locked_until so cancelling can't lift a ban or lock.
     const updated = await trx
       .updateTable('users')
       .set({

@@ -128,7 +128,7 @@ safety:
 | `POST /api/v1/admin/safety/csea/cases/:case_id/protect`      | session | One-click lock and content-removal request              |
 | `POST /api/v1/admin/safety/csea/cases/:case_id/close`        | session | Not CSEA: destroy evidence and return to the queue      |
 
-Intake routes accept `auth: service` (a service token) or `auth: oauth` (an OAuth access token). Both need the `safety.reports.submit` scope. When a game server calls with a client whose id is `game:<game_id>`, the intake refuses `game_id` values that don't match — a game may only report on its own player content.
+Intake routes accept `auth: service` (a service token) or `auth: oauth` (an OAuth access token). Both need the `safety.reports.submit` scope. When a game server calls with a client whose id is `game:<game_id>`, the intake refuses `game_id` values that don't match. A game may only report on its own player content.
 
 ## Snapshots
 

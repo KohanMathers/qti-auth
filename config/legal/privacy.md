@@ -1,7 +1,7 @@
 ---
 id: privacy
-version: 2020-01-01
-effective_at: 2020-01-01T00:00:00Z
+version: 2026-01-01
+effective_at: 2026-01-01T00:00:00Z
 material: true
 summary: 'How {{ brand.company_name }} uses personal information.'
 ---

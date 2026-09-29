@@ -21,7 +21,7 @@ cookies:
   idle_timeout: 30d
 
 cors:
-  allowed_origins: [] # surface origins are added automatically
+  allowed_origins: []
 
 network:
   trusted_proxies: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
@@ -223,7 +223,7 @@ roles:
 
 accounts:
   max_per_email: 2
-  email_normalization: # replaces the built-in rules; case is always ignored
+  email_normalization:
     gmail.com: { remove_dots: true, subaddress_separator: '+', domain: null }
     googlemail.com: { remove_dots: true, subaddress_separator: '+', domain: gmail.com }
   email_change_ttl: 15m
@@ -304,7 +304,7 @@ safety:
     sla_check_interval: 1m
   taxonomy:
     types: {} # ids you set replace the built-in type of the same name; see docs/safety.md
-  csea_alert_emails: [] # alert-only; bodies never contain case content
+  csea_alert_emails: []
   csea:
     encryption_key: '${env:APP_ENCRYPTION_KEY}'
     nca_portal_url: '' # operator sets this after NCA CSEA-IRP registration; see docs/compliance/csea.md
@@ -336,7 +336,7 @@ games:
 
 oidc:
   issuer: null # null uses the api surface origin
-  resource: null # access token audience; null uses the issuer
+  resource: null # null uses the issuer
   signing:
     algorithm: ES256 # ES256 | RS256
     encryption_key: '${env:KEY_ENCRYPTION_KEY}'
@@ -354,7 +354,7 @@ oidc:
     allow_private_targets: false
   developer_portal:
     max_clients_per_user: 10
-  scopes: {} # built-in scopes stay; add or replace them here
+  scopes: {}
   clients: {} # { client_id: { name, type, first_party, redirect_uris, secret, backchannel_logout_uri } }
 
 rate_limits: # per: ip | user | client | email | account, or a list counted as one combination
@@ -415,7 +415,7 @@ retention:
 
 storage:
   enabled: false
-  endpoint: '' # http://minio:9000 for the bundled MinIO, or any S3/R2/B2 endpoint
+  endpoint: '' # http://minio:9000 for the bundled MinIO
   region: us-east-1
   bucket: qtiauth
   access_key: '${env:S3_ACCESS_KEY}'

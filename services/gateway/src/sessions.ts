@@ -176,7 +176,6 @@ export function isSessionToken(token: string): boolean {
   return TOKEN.test(token);
 }
 
-/** Signals that must be unchanged for a cached session to be reused. */
 const CACHED_SIGNALS = [
   'user_agent',
   'country',
@@ -196,9 +195,6 @@ export function signalsMatch(
   current: ResolveSessionRequest['signals'] | undefined,
 ): boolean {
   if (current === undefined || cached === undefined || cached === null) return true;
-  // Compared by subnet rather than by exact address: a mobile client's IP can
-  // change on every request, which would make the cache useless, while a move
-  // to another subnet or country still goes back to identity for a fresh check.
   if (subnetOf(cached.ip) !== subnetOf(current.ip)) return false;
   return CACHED_SIGNALS.every((name) => cached[name] === current[name]);
 }

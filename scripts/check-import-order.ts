@@ -17,8 +17,6 @@ interface Statement {
 
 const IMPORT_END = /(?:from\s+|import\s+)'([^']+)'(?:\s+with\s+\{[^}]*\})?;\s*$/;
 
-// Imports are grouped by blank lines (node:, packages, then relative) and sorted by specifier
-// within a group. The .ts extension is ignored, so './age.ts' sorts before './age-assurance.ts'.
 function sortKey(specifier: string): string {
   return specifier.replace(/\.ts$/, '');
 }
@@ -45,7 +43,6 @@ function readStatements(lines: string[], start: number): { statements: Statement
   return { statements, end: index };
 }
 
-/** Returns the text with every import group sorted, and where the first group was out of order. */
 export function sortImports(
   file: string,
   text: string,

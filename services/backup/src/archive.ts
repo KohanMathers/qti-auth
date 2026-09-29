@@ -17,7 +17,9 @@ export class ArchiveFormatError extends Error {
   }
 }
 
-// | 8 bytes magic | 4 bytes version (BE) | 4 bytes manifest length (BE) | 16 bytes reserved |
+// 8 bytes (magic)
+// 4 bytes (header)
+// 16 bytes (reserved)
 export function encodeHeader(manifestLength: number): Buffer {
   const header = Buffer.alloc(ARCHIVE_HEADER_LENGTH);
   ARCHIVE_MAGIC.copy(header, 0);
@@ -45,7 +47,10 @@ export function decodeHeader(bytes: Buffer): ParsedHeader {
   return { version, manifestLength: bytes.readUInt32BE(12) };
 }
 
-// | 12 bytes iv | 4 bytes ciphertext length (BE) | ciphertext | 16 bytes tag |
+// 12 bytes (iv)
+// 4 bytes (ciphertext length)
+// ciphertext
+// 16 bytes (tag)
 export function sealChunk(key: Buffer, aad: string, plaintext: Uint8Array): Buffer {
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv('aes-256-gcm', key, iv);

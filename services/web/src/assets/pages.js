@@ -79,10 +79,6 @@ function problemAlert(t, problem) {
   return box;
 }
 
-// Returns a .catch handler for page-data loads. Attaches a load-error
-// message to `container` so the reader never sees an empty aria-busy=false
-// container after a failed fetch. Existing containers with content are cleared
-// first so we don't stack partial state on top of the failure message.
 function loadErrorInto(container, t, key, fallback) {
   return () => {
     clear(container);
@@ -1432,10 +1428,6 @@ function pageKbArticle(main, t, ctx, params) {
     .catch(loadErrorInto(body, t, 'kb.article.load.error', 'Could not load article.'));
 }
 
-// Renders staff-authored KB HTML into `body`. The server is responsible for
-// sanitising the stored article body; we parse it here into a document
-// fragment (rather than assigning to innerHTML directly) so the only untyped
-// HTML sink in the client lives in one named, greppable place.
 function renderKbArticleBody(body, html) {
   const parsed = new DOMParser().parseFromString(html ?? '', 'text/html');
   body.replaceChildren(...Array.from(parsed.body.childNodes));

@@ -1,15 +1,15 @@
 # Online Safety Act guide for operators
 
-> **Not legal advice.** This guide maps QTIAuth's features to the duties in the UK Online Safety Act 2023 (OSA) and its implementing regulations, based on the mapping in [SPEC §9](../SPEC.md#9-online-safety-act-mapping). Every deployment must run its own risk assessments using Ofcom's Regulation Checker and Child Access Assessment tools, and decide with a legal contact which duties apply. Ofcom's guidance changes; check the current version.
+> **Not legal advice.** This guide maps QTIAuth's features to the duties in the UK Online Safety Act 2023 (OSA) and its implementing regulations. Every deployment must run its own risk assessments using Ofcom's Regulation Checker and Child Access Assessment tools, and decide with a legal contact which duties apply. Ofcom's guidance changes; check the current version.
 
 ## Which duties apply
 
-The OSA applies to **user-to-user services** ("U2U") and **search services**. A user-to-user service is a service where users can generate content that other users can encounter. QTIAuth deployments have two components in scope:
+The OSA applies to user-to-user services ("U2U") and search services. A user-to-user service is a service where users can generate content that other users can encounter. QTIAuth deployments have two components in scope:
 
 - **The account site, support and knowledge base are not user-to-user services.** Nothing users write reaches other users through them: sign-in, tickets, help articles. The OSA duties do not apply to them.
 - **Games with chat, user-generated content or player interaction are user-to-user services.** The duties apply to those games, and QTIAuth provides the machinery through the Safety service (reports, moderation, CSEA workflow) and the Games service (age band, restrictions, parental controls carried in tokens).
 
-If none of the games hosted on the deployment allow users to see each other's content — no chat, no leaderboards where other players can be seen, no UGC — the OSA U2U duties do not apply to the deployment either. Check that assumption against every future game.
+If none of the games hosted on the deployment allow users to see each other's content (no chat, no leaderboards where other players can be seen, no UGC), the OSA U2U duties do not apply to the deployment either. Check that assumption against every future game.
 
 **Category 1.** The user identity verification duty for Category 1 services does not apply to any deployment with fewer than 7 million UK users. QTIAuth does not ship a Category 1 identity verification workflow. If a deployment is designated Category 1, that has to be built.
 
@@ -25,7 +25,7 @@ QTIAuth ships the CSEA workflow (report intake, isolated evidence store, guided 
 
 ## The duty-by-duty mapping
 
-The table is the mapping from SPEC §9, with the QTIAuth config and features that back each duty and a note on what stays with the operator. "Process" means QTIAuth doesn't automate it; the operator does the work and QTIAuth doesn't get in the way.
+This table includes the QTIAuth config and features that back each duty and a note on what stays with the operator. "Process" means QTIAuth doesn't automate it; the operator does the work and QTIAuth doesn't get in the way.
 
 | Duty / measure                                          | Applies to                                                | QTIAuth support                                                                                                                                   | Operator does                                                                           |
 | ------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -40,8 +40,8 @@ The table is the mapping from SPEC §9, with the QTIAuth config and features tha
 | **ICU H1** remove proscribed organisation accounts      | All                                                       | Safety action `proscribed_org_removal` with the same two-person rule as bans.                                                                     | Have a list. Decide when a report meets it.                                             |
 | **ICU F1/F2** child safety defaults                     | High grooming risk, with existing age knowledge           | Not triggered by QTIAuth itself (no social features, §1.2). `age_band`, `restrictions` and `parental_controls` in the token let games apply them. | Decide what defaults each game has for under-18 accounts and enforce them client-side.  |
 | **PCU B2–B7** highly effective age assurance            | Only if priority content is permitted or can't be removed | Not triggered by default. A pluggable `AgeAssuranceProvider` interface is ready when it is.                                                       | Decide whether priority content is allowed. If so, wire up a HEAA-certified provider.   |
-| **s.66 CSEA reporting to the NCA** (since 7 April 2026) | **All U2U services, any size**                            | Safety CSEA workflow; see [csea-case-handling.md](runbooks/csea-case-handling.md) and [compliance/csea.md](compliance/csea.md).                   | Register with the NCA. Staff CSEA cases with a trained team.                            |
-| Record-keeping of risk assessments and measures         | All                                                       | —                                                                                                                                                 | Keep the records. QTIAuth doesn't have a compliance register yet (`LATER` in the spec). |
+| **s.66 CSEA reporting to the NCA** (since 7 April 2026) | All U2U services, any size                                | Safety CSEA workflow; see [csea-case-handling.md](runbooks/csea-case-handling.md) and [compliance/csea.md](compliance/csea.md).                   | Register with the NCA. Staff CSEA cases with a trained team.                            |
+| Record-keeping of risk assessments and measures         | All                                                       | —                                                                                                                                                 | Keep the records. QTIAuth doesn't have a compliance register yet. |
 
 Related law outside the OSA:
 
@@ -70,6 +70,6 @@ Before turning on any user-to-user game:
 
 ## When Ofcom asks
 
-Every action a staff member takes shows up in the audit log with `qtiauth audit verify`. Sessions and revocations, moderation actions, CSEA case checklists, legal-document versions and acceptances, and account deletions all flow through it. Ofcom's usual asks — who did what and when, whether reports are being acted on, whether users had accepted the terms in force — come out of that log and the reports queue.
+Every action a staff member takes shows up in the audit log with `qtiauth audit verify`. Sessions and revocations, moderation actions, CSEA case checklists, legal-document versions and acceptances, and account deletions all flow through it. Ofcom's usual asks (who did what and when, whether reports are being acted on, whether users had accepted the terms in force) come out of that log and the reports queue.
 
 Do not export CSEA case content in response to an Ofcom ask. Ofcom does not receive CSEA reports; the NCA does, through the CSEA-IRP.

@@ -133,19 +133,12 @@ function lookupMethod(method: string): string {
   return method === 'HEAD' ? 'GET' : method;
 }
 
-/**
- * Where a top-level navigation goes instead of a problem document when it is
- * refused for want of a usable session: the account surface's login page, or the
- * binding flow when the cookie cannot reach this host.
- */
 function denialRedirect(input: {
   code: string;
   cookies: GatewayConfig['cookies'];
   account: Surface | undefined;
   host: string | null;
-  /** Path within the matched surface, which is what a surface-relative return_to wants. */
   surfacePath: string;
-  /** Path as the browser sees it, which is where the bind callback sends it back. */
   browserPath: string;
   search: string;
   surface: SurfaceName;
@@ -399,9 +392,6 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
       let oauth: ResolvedAccessToken | null = null;
       let authority: GameAuthority | null = null;
       const token = readCookie(request.headers.get('cookie'), cookieName);
-      // Identity needs the caller's session id even on routes that do not take a
-      // session, to restore a challenged session and to bind a linking flow.
-      // Nothing else can use it, so nothing else pays for a lookup.
       const needsSession = route.auth === 'session' || entry.service === RESOLVE_SESSION_SERVICE;
       if (token !== null && needsSession) {
         const resolved = await sessions.resolve(

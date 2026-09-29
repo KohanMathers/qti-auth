@@ -74,7 +74,6 @@ export function auditRowHash(input: {
     .digest('hex');
 }
 
-// previous is the last row of the batch before, so a chain can be checked a batch at a time.
 export function verifyAuditRows(
   rows: readonly AuditRecord[],
   previous?: Pick<AuditRecord, 'row_hash'>,

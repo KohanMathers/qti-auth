@@ -113,8 +113,6 @@ export async function createKeyBatch(
       .executeTakeFirstOrThrow();
     const codes: string[] = [];
     const seen = new Set<string>();
-    // Bound the collision retry loop; a batch that approaches the charset's
-    // entropy will collide often and could otherwise spin forever.
     const maxAttempts = options.count * 32 + 64;
     let attempts = 0;
     while (codes.length < options.count) {

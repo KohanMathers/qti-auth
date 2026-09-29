@@ -142,8 +142,6 @@ function completeResponse(
         },
       };
     case 'signed_in':
-      // 201 when the sign-in created the account, 200 when it signed in to one
-      // that already existed.
       return {
         status: result.created ? (201 as const) : (200 as const),
         headers: sessionHeaders(result.session),

@@ -1,7 +1,7 @@
 ---
 id: children-summary
-version: 2020-01-01
-effective_at: 2020-01-01T00:00:00Z
+version: 2026-01-01
+effective_at: 2026-01-01T00:00:00Z
 material: false
 summary: 'A plain-language summary of the terms for people under 18.'
 ---

@@ -70,7 +70,6 @@ export function createServiceRegistry(options: RegistryOptions): ServiceRegistry
       .sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  // Only the services this instance announces for (now and before) can change.
   const fingerprint = (names: readonly string[]): string =>
     JSON.stringify(names.map((name) => summarize(name, announcementsOf(name)) ?? null));
 

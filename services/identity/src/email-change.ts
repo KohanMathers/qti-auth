@@ -107,12 +107,6 @@ export async function startEmailChange(
   });
 }
 
-/**
- * Moves the account to the address the token carries. Both directions of an
- * email change do the same work: take the link, check the address still has room
- * for this account, and set it. Reverting also cancels any confirmation still
- * outstanding, so the change cannot be re-applied after the user undid it.
- */
 async function applyEmailToken(
   db: Kysely<Database>,
   options: {

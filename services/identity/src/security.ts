@@ -176,11 +176,6 @@ export async function recordSecurityEvent(
     .execute();
 }
 
-/**
- * Marks the event an alert email covers as notified, so `recentlyNotified` can
- * rate limit the next one. Only that event is marked; when the outcome changed
- * nothing there is no row to mark, so the alert is recorded as its own event.
- */
 export async function markAlertNotified(
   db: Kysely<Database>,
   options: {
@@ -271,11 +266,6 @@ export function securityNotifies(outcome: SecurityOutcome): boolean {
   return outcome.action === 'notify' || outcome.action === 'block';
 }
 
-/**
- * Whether the outcome differs from what the session row already says. Session
- * resolution runs on every request that misses the gateway cache, so an outcome
- * that changes nothing must not write.
- */
 export function securityNeedsWrite(
   outcome: SecurityOutcome,
   state: SessionSecurityState,

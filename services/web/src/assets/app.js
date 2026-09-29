@@ -25,8 +25,6 @@ function joinBase(base, path) {
   return `${base}${path}`;
 }
 
-// Tracks the popstate listener installed by bootstrap so a second bootstrap()
-// call (tests, hot-reload) does not stack duplicate handlers.
 let popstateHandler = null;
 
 async function fetchJson(url, init) {
