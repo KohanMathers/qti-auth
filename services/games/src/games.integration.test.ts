@@ -376,7 +376,7 @@ describe('games service', () => {
     });
     expect(wrongToken.status).toBe(403);
     const problem = (await wrongToken.json()) as { code: string };
-    expect(problem.code).toBe('GAMES_ACHIEVEMENT_WRONG_GAME');
+    expect(problem.code).toBe('GAMES_WRONG_GAME_TOKEN');
 
     const rightToken = await fetch(`${games.url}/api/v1/games/home-game/achievements/unlock`, {
       method: 'POST',

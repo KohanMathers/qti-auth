@@ -117,6 +117,10 @@ export async function steamAuthOutcomeFor(
       }
     } catch (error) {
       if (!(error instanceof SteamApiError)) throw error;
+      ctx.log.warn('steam ownership check failed; treating as unentitled', {
+        app_id: options.app.app_id,
+        code: error.code,
+      });
     }
   }
   let metric: SteamAuthMetric;

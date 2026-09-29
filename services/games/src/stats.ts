@@ -33,6 +33,10 @@ export const GAME_STAT_NAME_MAX = 120;
 export const GAME_LEADERBOARD_NAME_MAX = 120;
 export const GAME_CUSTOM_DATA_MAX_BYTES = 32_768;
 export const HIDDEN_ENTRY_DISPLAY = 'Hidden player';
+// Any gap between heartbeats larger than this is treated as an idle session
+// rather than active play. Prevents idle clients from draining daily playtime
+// budgets that back parental controls.
+export const STALE_PLAYTIME_SECONDS = 300;
 
 export interface StatDefinitionRecord {
   id: string;
@@ -94,6 +98,7 @@ export type LeaderboardWriteError = 'not_found' | 'slug_taken' | 'invalid' | 'ne
 export type StatUpdateOutcome =
   | { status: 'ok'; stat: StatDefinitionRecord; value: StatValueRecord; changed: boolean }
   | { status: 'not_found' }
+  | { status: 'invalid' }
   | { status: 'authority_mismatch' }
   | { status: 'delta_too_large' };
 
@@ -411,7 +416,7 @@ export async function recordStatValue(
     now: Date;
   },
 ): Promise<StatUpdateOutcome> {
-  if (!Number.isFinite(options.value)) return { status: 'authority_mismatch' };
+  if (!Number.isFinite(options.value)) return { status: 'invalid' };
   return db.transaction().execute(async (trx) => {
     const statRow = await trx
       .selectFrom('stat_definitions')
@@ -549,7 +554,10 @@ async function rolloverIfDue(
 ): Promise<LeaderboardRecord> {
   if (board.period_ends_at === null || now < board.period_ends_at) return board;
   const bounds = nextPeriod(board.reset_period, board.period_ends_at);
-  await db
+  // Guard on the previous period_ends_at so two concurrent callers can't each
+  // advance the same board — the second UPDATE affects zero rows and we re-read
+  // to pick up whichever period the winner installed.
+  const result = await db
     .updateTable('leaderboards')
     .set({
       period_started_at: bounds.started_at,
@@ -557,12 +565,21 @@ async function rolloverIfDue(
       updated_at: now,
     })
     .where('id', '=', board.id)
-    .execute();
-  return {
-    ...board,
-    period_started_at: bounds.started_at,
-    period_ends_at: bounds.ends_at,
-  };
+    .where('period_ends_at', '=', board.period_ends_at)
+    .executeTakeFirst();
+  if (updatedRows(result) === 1) {
+    return {
+      ...board,
+      period_started_at: bounds.started_at,
+      period_ends_at: bounds.ends_at,
+    };
+  }
+  const fresh = await db
+    .selectFrom('leaderboards')
+    .selectAll()
+    .where('id', '=', board.id)
+    .executeTakeFirstOrThrow();
+  return leaderboardRecord(fresh);
 }
 
 export async function resetDueLeaderboards(
@@ -1087,7 +1104,7 @@ export async function heartbeatPlaytimeSession(
       .executeTakeFirst();
     if (!current) return { status: 'not_found' as const };
     const previous = current.last_heartbeat_at;
-    const delta = Math.max(0, Math.floor((options.now.getTime() - previous.getTime()) / 1000));
+    const delta = playtimeDelta(previous, options.now);
     const result = await trx
       .updateTable('playtime_sessions')
       .set({
@@ -1108,6 +1125,12 @@ export async function heartbeatPlaytimeSession(
     }
     return { status: 'ok' as const, session: playtimeSessionRecord(result) };
   });
+}
+
+function playtimeDelta(previous: Date, now: Date): number {
+  const raw = Math.floor((now.getTime() - previous.getTime()) / 1000);
+  if (raw <= 0) return 0;
+  return Math.min(raw, STALE_PLAYTIME_SECONDS);
 }
 
 export async function endPlaytimeSession(
@@ -1131,7 +1154,7 @@ export async function endPlaytimeSession(
       .executeTakeFirst();
     if (!current) return { status: 'not_found' as const };
     const previous = current.last_heartbeat_at;
-    const delta = Math.max(0, Math.floor((options.now.getTime() - previous.getTime()) / 1000));
+    const delta = playtimeDelta(previous, options.now);
     const duration = current.duration_seconds + delta;
     const result = await trx
       .updateTable('playtime_sessions')

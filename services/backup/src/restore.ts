@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,14 +12,14 @@ import {
 } from '@qtiauth/cli';
 import { serviceSchema } from '@qtiauth/service-kit';
 
+import { splitArgs } from './cli-args.ts';
 import { backupDestination, readBackup } from './destination.ts';
-import { pgSslMode } from './dump.ts';
 import { decodeJson, storageManifestSchema } from './manifest.ts';
+import { runPgRestore, runPsql } from './pg-cli.ts';
 import { openArchive } from './reader.ts';
 import { type Context, definition } from './service.ts';
 import { backupEncryptionKey } from './settings.ts';
 import { attachStorage } from './start.ts';
-import { splitArgs } from './verify.ts';
 
 export const backupRestoreUsage = `Usage: qtiauth backup restore <archive-id> [--config <path>] [--env-file <path>] [--skip-ledger-replay]
 
@@ -34,7 +33,10 @@ ${configOptionsUsage}
 type BackupConfig = Context['config'];
 
 export const backupRestore: Command = async (args, io) => {
-  const parsed = splitArgs(args, backupRestoreUsage);
+  const parsed = splitArgs(args, {
+    usage: backupRestoreUsage,
+    booleanFlags: ['skip-ledger-replay'],
+  });
   if (parsed.flags.help) {
     io.stdout(backupRestoreUsage);
     return EXIT_OK;
@@ -42,7 +44,7 @@ export const backupRestore: Command = async (args, io) => {
   if (parsed.archiveId === undefined) {
     throw new CommandExit(EXIT_FAILURE, `Missing <archive-id>\n\n${backupRestoreUsage}`);
   }
-  const skipLedger = args.includes('--skip-ledger-replay');
+  const skipLedger = parsed.flags['skip-ledger-replay'] === true;
 
   const loaded = await loadCommandConfig(serviceSchema(definition), parsed.flags, io);
   const config = loaded.config as BackupConfig;
@@ -60,13 +62,13 @@ export const backupRestore: Command = async (args, io) => {
     const tempDir = await mkdtemp(join(tmpdir(), 'qtiauth-restore-'));
     try {
       for (const entry of opened.manifest.schemas) {
-        await psql(config, config.database.name, [
+        await runPsql(config, config.database.name, [
           '-c',
           `drop schema if exists "${entry.schema}" cascade`,
         ]);
         const dumpPath = join(tempDir, `${entry.schema}.dump`);
         await writeFile(dumpPath, opened.readBlob(entry.path));
-        await pgRestore(config, dumpPath, entry.schema);
+        await runPgRestore(config, config.database.name, dumpPath, entry.schema);
         io.stdout(`  ${entry.schema} restored\n`);
       }
 
@@ -153,76 +155,10 @@ async function runSqlBatch(config: BackupConfig, statements: readonly string[]):
   try {
     const file = join(tempDir, 'batch.sql');
     await writeFile(file, body);
-    await psql(config, config.database.name, ['--file', file]);
+    await runPsql(config, config.database.name, ['--file', file]);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
-}
-
-async function psql(config: BackupConfig, database: string, extra: string[]): Promise<void> {
-  await runBinary(
-    config.backups.psql,
-    [
-      `--host=${config.database.host}`,
-      `--port=${String(config.database.port)}`,
-      `--username=${config.backups.admin_user}`,
-      '--no-psqlrc',
-      '--set=ON_ERROR_STOP=1',
-      `--dbname=${database}`,
-      ...extra,
-    ],
-    {
-      PGPASSWORD: config.backups.admin_password,
-      PGSSLMODE: pgSslMode(config.database.ssl),
-    },
-  );
-}
-
-async function pgRestore(config: BackupConfig, path: string, schema: string): Promise<void> {
-  await runBinary(
-    config.backups.pg_restore,
-    [
-      `--host=${config.database.host}`,
-      `--port=${String(config.database.port)}`,
-      `--username=${config.backups.admin_user}`,
-      `--dbname=${config.database.name}`,
-      '--no-owner',
-      '--no-privileges',
-      '--exit-on-error',
-      '--single-transaction',
-      `--schema=${schema}`,
-      path,
-    ],
-    {
-      PGPASSWORD: config.backups.admin_password,
-      PGSSLMODE: pgSslMode(config.database.ssl),
-    },
-  );
-}
-
-function runBinary(binary: string, args: string[], env: Record<string, string>): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, {
-      env: { ...process.env, ...env },
-      stdio: ['ignore', 'inherit', 'pipe'],
-    });
-    const stderr: Buffer[] = [];
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      const message = Buffer.concat(stderr).toString('utf8').trim();
-      reject(
-        new CommandExit(
-          EXIT_FAILURE,
-          `${binary} exited with code ${String(code ?? -1)}${message ? `: ${message}` : ''}`,
-        ),
-      );
-    });
-  });
 }
 
 export function readStorageManifest(bytes: Buffer) {

@@ -104,16 +104,11 @@
         },
         {
           "refId": "B",
-          "expr": "sum(qtiauth_backup_storage_objects)",
-          "legendFormat": "objects"
-        },
-        {
-          "refId": "C",
           "expr": "sum(increase(qtiauth_backup_deleted_total[24h]))",
           "legendFormat": "deleted (24h)"
         },
         {
-          "refId": "D",
+          "refId": "C",
           "expr": "time() - max(qtiauth_backup_last_success_timestamp_seconds)",
           "legendFormat": "age of last success (s)"
         }

@@ -1,4 +1,4 @@
-import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { QtiauthConfig } from '@qtiauth/config';
@@ -81,7 +81,6 @@ export async function readBackup(destination: BackupDestination, id: string): Pr
     }
     return Buffer.from(body);
   }
-  const { readFile } = await import('node:fs/promises');
   return readFile(join(destination.directory, backupFileName(id)));
 }
 

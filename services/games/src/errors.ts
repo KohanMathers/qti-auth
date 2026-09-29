@@ -32,7 +32,7 @@ export const GAMES_ERRORS = defineErrors({
     status: 409,
     title: 'This achievement is not a progress achievement',
   },
-  GAMES_ACHIEVEMENT_WRONG_GAME: {
+  GAMES_WRONG_GAME_TOKEN: {
     status: 403,
     title: 'This token cannot act on that game',
   },

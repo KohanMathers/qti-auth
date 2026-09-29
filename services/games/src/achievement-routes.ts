@@ -10,8 +10,8 @@ import {
   progressAchievement,
   unlockAchievement,
 } from './achievements.ts';
-import { getGameBySlug, isPublicGame } from './catalog.ts';
 import { gamesMetrics } from './metrics.ts';
+import { requireGameToken, requirePublicGame } from './route-helpers.ts';
 import { signedIn } from './routes.ts';
 import type { Context } from './service.ts';
 
@@ -62,18 +62,6 @@ function playerView(record: PlayerAchievementView) {
     progress: record.progress,
     unlocked_at: record.unlocked_at?.toISOString() ?? null,
   };
-}
-
-async function requirePublicGame(ctx: Context, slug: string) {
-  const game = await getGameBySlug(ctx.db, slug);
-  if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
-  return game;
-}
-
-function requireGameToken(identity: { game_id: string | null }, gameId: string): void {
-  if (identity.game_id === null || identity.game_id !== gameId) {
-    throw new ProblemError('GAMES_ACHIEVEMENT_WRONG_GAME');
-  }
 }
 
 function trustLevel(auth: string): GameTrustLevel {
@@ -142,7 +130,7 @@ export function achievementRoutes(router: Router<Context>): void {
       'GAMES_NOT_FOUND',
       'GAMES_ACHIEVEMENT_NOT_FOUND',
       'GAMES_ACHIEVEMENT_NOT_PROGRESS',
-      'GAMES_ACHIEVEMENT_WRONG_GAME',
+      'GAMES_WRONG_GAME_TOKEN',
     ],
     handler: async ({ ctx, identity, params, body }) => {
       const userId = signedIn(identity);
@@ -192,7 +180,7 @@ export function achievementRoutes(router: Router<Context>): void {
       'GAMES_ACHIEVEMENT_NOT_FOUND',
       'GAMES_ACHIEVEMENT_NOT_PROGRESS',
       'GAMES_ACHIEVEMENT_INVALID',
-      'GAMES_ACHIEVEMENT_WRONG_GAME',
+      'GAMES_WRONG_GAME_TOKEN',
     ],
     handler: async ({ ctx, identity, params, body }) => {
       const userId = signedIn(identity);

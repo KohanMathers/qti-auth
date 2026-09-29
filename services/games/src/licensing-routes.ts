@@ -9,7 +9,7 @@ import {
 } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { getGameBySlug, isPublicGame } from './catalog.ts';
+import { getGameBySlug } from './catalog.ts';
 import {
   hashDeviceId,
   issueLease,
@@ -24,6 +24,7 @@ import {
 import type { Keyring } from './licensing-keys.ts';
 import { keyringOf } from './licensing-keys.ts';
 import { gamesMetrics } from './metrics.ts';
+import { requirePublicGame } from './route-helpers.ts';
 import { signedIn } from './routes.ts';
 import type { Context } from './service.ts';
 import {
@@ -215,8 +216,7 @@ export function licensingRoutes(router: Router<Context>): void {
     handler: async ({ ctx, identity, params, body }) => {
       requireLicensingEnabled(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const keyring = requireKeyring(ctx);
       const now = new Date();
       const outcome = await issueLease(ctx.db, {
@@ -493,8 +493,7 @@ export function licensingRoutes(router: Router<Context>): void {
     handler: async ({ ctx, identity, params }) => {
       requireLicensingEnabled(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const now = new Date();
       const rows = await listLeases(ctx.db, {
         userId,
@@ -531,8 +530,7 @@ export function licensingRoutes(router: Router<Context>): void {
     handler: async ({ ctx, identity, params }) => {
       requireLicensingEnabled(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const lease = await ctx.db
         .selectFrom('license_leases')
         .select(['user_id', 'game_id'])

@@ -3,8 +3,8 @@ import type { GameTrustLevel } from '@qtiauth/events';
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { getGameBySlug, isPublicGame } from './catalog.ts';
 import { gamesMetrics } from './metrics.ts';
+import { requireGameToken, requirePublicGame } from './route-helpers.ts';
 import { signedIn } from './routes.ts';
 import type { Context } from './service.ts';
 import {
@@ -96,18 +96,6 @@ function statView(stat: StatDefinitionRecord) {
     authority: stat.authority,
     max_delta_per_update: stat.max_delta_per_update,
   };
-}
-
-async function requirePublicGame(ctx: Context, slug: string) {
-  const game = await getGameBySlug(ctx.db, slug);
-  if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
-  return game;
-}
-
-function requireGameToken(identity: { game_id: string | null }, gameId: string): void {
-  if (identity.game_id === null || identity.game_id !== gameId) {
-    throw new ProblemError('GAMES_ACHIEVEMENT_WRONG_GAME');
-  }
 }
 
 function trustLevel(auth: string): GameTrustLevel {
@@ -236,7 +224,7 @@ export function statRoutes(router: Router<Context>): void {
       'GAMES_STAT_INVALID',
       'GAMES_STAT_AUTHORITY_MISMATCH',
       'GAMES_STAT_DELTA_TOO_LARGE',
-      'GAMES_ACHIEVEMENT_WRONG_GAME',
+      'GAMES_WRONG_GAME_TOKEN',
     ],
     handler: async ({ ctx, identity, params, body }) => {
       const userId = signedIn(identity);
@@ -301,7 +289,7 @@ export function statRoutes(router: Router<Context>): void {
     rate_limit: 'global',
     request: { params: z.object({ slug: z.string().min(1) }), body: customDataBody },
     responses: { 200: { description: 'Stored data', schema: customDataResponseSchema } },
-    errors: ['GAMES_NOT_FOUND', 'GAMES_ACHIEVEMENT_WRONG_GAME', 'GAMES_CUSTOM_DATA_TOO_LARGE'],
+    errors: ['GAMES_NOT_FOUND', 'GAMES_WRONG_GAME_TOKEN', 'GAMES_CUSTOM_DATA_TOO_LARGE'],
     handler: async ({ ctx, identity, params, body }) => {
       const userId = signedIn(identity);
       const game = await requirePublicGame(ctx, params.slug);
@@ -429,7 +417,7 @@ export function statRoutes(router: Router<Context>): void {
     responses: { 201: { description: 'The session', schema: playtimeStartResponseSchema } },
     errors: [
       'GAMES_NOT_FOUND',
-      'GAMES_ACHIEVEMENT_WRONG_GAME',
+      'GAMES_WRONG_GAME_TOKEN',
       'GAMES_PLAYTIME_DISABLED',
       'GAMES_PLAYTIME_LIMIT_REACHED',
     ],
@@ -477,7 +465,7 @@ export function statRoutes(router: Router<Context>): void {
     },
     errors: [
       'GAMES_NOT_FOUND',
-      'GAMES_ACHIEVEMENT_WRONG_GAME',
+      'GAMES_WRONG_GAME_TOKEN',
       'GAMES_PLAYTIME_DISABLED',
       'GAMES_PLAYTIME_SESSION_NOT_FOUND',
     ],
@@ -521,7 +509,7 @@ export function statRoutes(router: Router<Context>): void {
     responses: { 200: { description: 'The session', schema: playtimeEndResponseSchema } },
     errors: [
       'GAMES_NOT_FOUND',
-      'GAMES_ACHIEVEMENT_WRONG_GAME',
+      'GAMES_WRONG_GAME_TOKEN',
       'GAMES_PLAYTIME_DISABLED',
       'GAMES_PLAYTIME_SESSION_NOT_FOUND',
     ],
@@ -565,7 +553,7 @@ export function statRoutes(router: Router<Context>): void {
     rate_limit: 'global',
     request: { params: z.object({ slug: z.string().min(1) }) },
     responses: { 200: { description: 'Remaining playtime', schema: playtimeRemainingSchema } },
-    errors: ['GAMES_NOT_FOUND', 'GAMES_ACHIEVEMENT_WRONG_GAME', 'GAMES_PLAYTIME_DISABLED'],
+    errors: ['GAMES_NOT_FOUND', 'GAMES_WRONG_GAME_TOKEN', 'GAMES_PLAYTIME_DISABLED'],
     handler: async ({ ctx, identity, params }) => {
       if (!ctx.config.features.games.playtime.enabled) {
         throw new ProblemError('GAMES_PLAYTIME_DISABLED');

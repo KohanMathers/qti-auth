@@ -6,7 +6,6 @@ export interface BackupMetrics {
   runs: (outcome: BackupOutcome) => void;
   duration: (seconds: number) => void;
   size: (bytes: number) => void;
-  storageObjects: (count: number) => void;
   retention: (kind: 'kept' | 'deleted', count: number) => void;
   lastRun: (at: Date) => void;
 }
@@ -17,7 +16,6 @@ export const noopBackupMetrics: BackupMetrics = {
   runs: ignore,
   duration: ignore,
   size: ignore,
-  storageObjects: ignore,
   retention: ignore,
   lastRun: ignore,
 };
@@ -36,10 +34,6 @@ export function prometheusBackupMetrics(metrics: Metrics): BackupMetrics {
   const size = metrics.gauge({
     name: 'qtiauth_backup_size_bytes',
     help: 'Size of the most recent backup on disk or in storage.',
-  });
-  const objects = metrics.gauge({
-    name: 'qtiauth_backup_storage_objects',
-    help: 'Objects captured in the most recent backup manifest.',
   });
   const kept = metrics.gauge({
     name: 'qtiauth_backup_retained',
@@ -62,9 +56,6 @@ export function prometheusBackupMetrics(metrics: Metrics): BackupMetrics {
     },
     size: (bytes) => {
       size.set(bytes);
-    },
-    storageObjects: (count) => {
-      objects.set(count);
     },
     retention: (kind, count) => {
       if (kind === 'kept') kept.set(count);

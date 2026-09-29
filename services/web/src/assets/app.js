@@ -25,6 +25,10 @@ function joinBase(base, path) {
   return `${base}${path}`;
 }
 
+// Tracks the popstate listener installed by bootstrap so a second bootstrap()
+// call (tests, hot-reload) does not stack duplicate handlers.
+let popstateHandler = null;
+
 async function fetchJson(url, init) {
   const response = await fetch(url, { credentials: 'same-origin', ...init });
   if (!response.ok) {
@@ -189,7 +193,16 @@ export async function bootstrap(config) {
   } catch (error) {
     clear(main);
     const problem = error instanceof ProblemFetchError ? error.problem : { code: 'INTERNAL_ERROR' };
-    renderProblem(main, translator({}), problem);
+    const t = translator({});
+    renderProblem(main, t, problem);
+    const retry = element('button', {
+      type: 'button',
+      text: t('shell.retry', 'Try again'),
+    });
+    retry.addEventListener('click', () => {
+      void bootstrap(config);
+    });
+    main.appendChild(retry);
     app.setAttribute('aria-busy', 'false');
     return;
   }
@@ -222,7 +235,11 @@ export async function bootstrap(config) {
     }
     main.focus();
   };
-  window.addEventListener('popstate', () => renderCurrent(currentPath(bootstrapData, location)));
+  if (popstateHandler !== null) {
+    window.removeEventListener('popstate', popstateHandler);
+  }
+  popstateHandler = () => renderCurrent(currentPath(bootstrapData, location));
+  window.addEventListener('popstate', popstateHandler);
   renderCurrent(currentPath(bootstrapData, location));
   app.setAttribute('aria-busy', 'false');
 }

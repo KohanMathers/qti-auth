@@ -67,7 +67,7 @@ export interface GamesMetrics {
   cloudSaveDownloaded: () => void;
   cloudSaveDeleted: () => void;
   steamAuthenticate: (outcome: SteamAuthOutcome) => void;
-  steamOwnershipSync: (outcome: SteamSyncOutcome) => void;
+  steamOwnershipSync: (outcome: SteamSyncOutcome, count?: number) => void;
 }
 
 const created = new WeakMap<Metrics, GamesMetrics>();
@@ -258,8 +258,8 @@ function prometheusGamesMetrics(metrics: Metrics): GamesMetrics {
     steamAuthenticate: (outcome) => {
       steamAuthentications.inc({ outcome });
     },
-    steamOwnershipSync: (outcome) => {
-      steamOwnershipSyncs.inc({ outcome });
+    steamOwnershipSync: (outcome, count = 1) => {
+      steamOwnershipSyncs.inc({ outcome }, count);
     },
   };
 }

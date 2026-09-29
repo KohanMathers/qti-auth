@@ -242,4 +242,12 @@ describe('matchPage', () => {
     const list = pages.availablePages(baseFeatures());
     expect(pages.matchPage(list, '/does-not-exist')).toBeNull();
   });
+
+  it('prefers literal routes over parameter routes at the same depth', () => {
+    const list = pages.availablePages(baseFeatures());
+    const session = pages.matchPage(list, '/family/session');
+    expect(session?.page.path).toBe('/family/session');
+    const invite = pages.matchPage(list, '/family/invite');
+    expect(invite?.page.path).toBe('/family/invite');
+  });
 });

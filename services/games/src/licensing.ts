@@ -5,9 +5,9 @@ import type { ProductType } from '@qtiauth/config';
 import { updatedRows } from '@qtiauth/db';
 import type { EventActor } from '@qtiauth/events';
 import type { PublicJwk, SigningAlgorithm } from '@qtiauth/keys';
-import type { Kysely, Selectable } from 'kysely';
+import type { Kysely } from 'kysely';
 
-import type { Database, LeasedProduct, LicenseLeasesTable } from './database.ts';
+import type { Database, LeasedProduct } from './database.ts';
 import {
   type AuditRecordedData,
   auditRecordedEvent,
@@ -173,9 +173,11 @@ export function verifyLease(
   }
   const now = Math.floor((options.now ?? new Date()).getTime() / 1000);
   if (payload.exp <= now) return undefined;
-  if (payload.iat > now + 60) return undefined;
+  if (payload.iat > now + CLOCK_SKEW_SECONDS) return undefined;
   return { header, payload };
 }
+
+const CLOCK_SKEW_SECONDS = 60;
 
 export function hashDeviceId(deviceId: string): string {
   return createHash('sha256').update(deviceId).digest('base64url');
@@ -380,10 +382,6 @@ export async function issueLease(
   });
 }
 
-function leaseFromRow(row: Selectable<LicenseLeasesTable>): LeaseRecord {
-  return row;
-}
-
 export async function getLease(
   db: Kysely<Database>,
   leaseId: string,
@@ -393,7 +391,7 @@ export async function getLease(
     .selectAll()
     .where('id', '=', leaseId)
     .executeTakeFirst();
-  return row ? leaseFromRow(row) : undefined;
+  return row ?? undefined;
 }
 
 export interface LeaseListOptions {
@@ -430,7 +428,7 @@ export async function listLeases(
     .orderBy('id', 'desc')
     .limit(options.limit)
     .execute();
-  return rows.map(leaseFromRow);
+  return rows;
 }
 
 export type RevokeOutcome =
@@ -466,11 +464,11 @@ export async function revokeLease(
         reason: options.reason,
       })
       .execute();
-    const revoked = leaseFromRow({
+    const revoked: LeaseRecord = {
       ...row,
       revoked_at: options.now,
       revoke_reason: options.reason,
-    });
+    };
     const data: LicenseLeaseRevokedData = {
       lease_id: revoked.id,
       user_id: revoked.user_id,

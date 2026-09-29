@@ -25,6 +25,5 @@ export function backupEncryptionKey(config: Context['config']): Buffer {
 }
 
 export function backupArchiveId(now: Date): string {
-  const iso = now.toISOString();
-  return iso.replace(/[:.]/g, '-').replace('Z', 'Z');
+  return now.toISOString().replace(/[:.]/g, '-');
 }

@@ -113,7 +113,17 @@ export async function createKeyBatch(
       .executeTakeFirstOrThrow();
     const codes: string[] = [];
     const seen = new Set<string>();
+    // Bound the collision retry loop; a batch that approaches the charset's
+    // entropy will collide often and could otherwise spin forever.
+    const maxAttempts = options.count * 32 + 64;
+    let attempts = 0;
     while (codes.length < options.count) {
+      if (attempts >= maxAttempts) {
+        throw new Error(
+          `Could not generate ${String(options.count)} unique codes for format ${formatDescriptor(options.format)}`,
+        );
+      }
+      attempts += 1;
       const code = generateCode(options.format);
       const normalized = normalizeCode(code);
       if (seen.has(normalized)) continue;

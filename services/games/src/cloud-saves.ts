@@ -486,19 +486,27 @@ export async function sweepStalePending(
     .where('created_at', '<', options.olderThan)
     .execute();
   if (rows.length === 0) return { deleted: 0 };
+  // Delete objects first; only drop the DB row once storage has confirmed the
+  // delete. If a store.delete throws, keep the row so the next sweep retries —
+  // otherwise the object is orphaned with no remaining reference.
+  const deletedIds: string[] = [];
+  for (const row of rows) {
+    if (store !== null) {
+      try {
+        await store.delete(row.object_key);
+      } catch {
+        continue;
+      }
+    }
+    deletedIds.push(row.id);
+  }
+  if (deletedIds.length === 0) return { deleted: 0 };
   await db
     .deleteFrom('cloud_save_versions')
-    .where(
-      'id',
-      'in',
-      rows.map((row) => row.id),
-    )
+    .where('id', 'in', deletedIds)
     .where('committed_at', 'is', null)
     .execute();
-  if (store !== null) {
-    for (const row of rows) await store.delete(row.object_key);
-  }
-  return { deleted: rows.length };
+  return { deleted: deletedIds.length };
 }
 
 export async function eraseUserCloudSaves(
@@ -512,12 +520,14 @@ export async function eraseUserCloudSaves(
     .where('user_id', '=', userId)
     .execute();
   if (slots.length === 0) return;
-  await db.deleteFrom('cloud_save_slots').where('user_id', '=', userId).execute();
+  // Same ordering as sweepStalePending: erase objects first so a failure mid-loop
+  // leaves the DB row in place for the next erasure attempt to retry.
   if (store !== null) {
     for (const slot of slots) {
       await store.deletePrefix(cloudSaveSlotPrefix(userId, slot.game_id, slot.slot));
     }
   }
+  await db.deleteFrom('cloud_save_slots').where('user_id', '=', userId).execute();
 }
 
 export async function exportUserCloudSaves(

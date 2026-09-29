@@ -33,13 +33,13 @@ import {
   exportUserPlaytime,
   exportUserStats,
   resetDueLeaderboards,
+  STALE_PLAYTIME_SECONDS,
 } from './stats.ts';
 import { createSteamWebClient, type SteamWebClient } from './steam.ts';
 import { attachSteamClient } from './steam-state.ts';
 import { fetchSteamLinksPage, syncUserOwnership } from './steam-sync.ts';
 import { openObjectStore } from './storage-state.ts';
 
-const STALE_PLAYTIME_SECONDS = 300;
 const STEAM_LINKS_PAGE = 100;
 
 export const RETENTION_JOB = 'retention.sweep';
@@ -102,8 +102,8 @@ export function gamesService(options: GamesOptions = {}) {
             timeoutMs: config.games.steam.request_timeout,
           }))
         : null;
-      if (steamClient !== null) attachSteamClient(ctx, steamClient);
       try {
+        if (steamClient !== null) attachSteamClient(ctx, steamClient);
         if (store !== null) {
           if (ctx.config.storage.enabled && ctx.config.storage.create_bucket)
             await store.ensureBucket();
@@ -289,9 +289,9 @@ export function gamesService(options: GamesOptions = {}) {
                   if (page.next === null) more = false;
                   else after = page.next;
                 }
-                for (let i = 0; i < totalGranted; i += 1) metrics.steamOwnershipSync('granted');
-                for (let i = 0; i < totalRevoked; i += 1) metrics.steamOwnershipSync('revoked');
-                for (let i = 0; i < totalErrors; i += 1) metrics.steamOwnershipSync('error');
+                if (totalGranted > 0) metrics.steamOwnershipSync('granted', totalGranted);
+                if (totalRevoked > 0) metrics.steamOwnershipSync('revoked', totalRevoked);
+                if (totalErrors > 0) metrics.steamOwnershipSync('error', totalErrors);
                 if (totalGranted > 0 || totalRevoked > 0 || totalErrors > 0) {
                   log.info('steam ownership sync finished', {
                     granted: totalGranted,

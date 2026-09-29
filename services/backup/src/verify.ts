@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,8 +12,9 @@ import {
 } from '@qtiauth/cli';
 import { serviceSchema } from '@qtiauth/service-kit';
 
+import { splitArgs } from './cli-args.ts';
 import { backupDestination, readBackup } from './destination.ts';
-import { pgSslMode } from './dump.ts';
+import { runPgRestore, runPsql } from './pg-cli.ts';
 import { openArchive } from './reader.ts';
 import { type Context, definition } from './service.ts';
 import { backupEncryptionKey } from './settings.ts';
@@ -31,7 +31,7 @@ ${configOptionsUsage}
 type BackupConfig = Context['config'];
 
 export const backupVerify: Command = async (args, io) => {
-  const { archiveId, flags } = splitArgs(args, backupVerifyUsage);
+  const { archiveId, flags } = splitArgs(args, { usage: backupVerifyUsage });
   if (flags.help) {
     io.stdout(backupVerifyUsage);
     return EXIT_OK;
@@ -41,7 +41,7 @@ export const backupVerify: Command = async (args, io) => {
   }
 
   const loaded = await loadCommandConfig(serviceSchema(definition), flags, io);
-  const config = loaded.config as BackupConfig;
+  const config: BackupConfig = loaded.config;
   if (config.backups.admin_password === '') {
     throw new CommandExit(EXIT_FAILURE, 'backups.admin_password is empty');
   }
@@ -80,119 +80,3 @@ export const backupVerify: Command = async (args, io) => {
     if (store) await store.close();
   }
 };
-
-interface Flags {
-  help?: boolean;
-  config?: string;
-  'env-file'?: string;
-}
-
-interface SplitArgs {
-  archiveId: string | undefined;
-  flags: Flags;
-}
-
-export function splitArgs(args: readonly string[], usage: string): SplitArgs {
-  const flags: Flags = {};
-  const positionals: string[] = [];
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i] ?? '';
-    if (arg === '--help' || arg === '-h') {
-      flags.help = true;
-    } else if (arg === '--config' || arg === '-c') {
-      const next = args[++i];
-      if (next === undefined) {
-        throw new CommandExit(EXIT_FAILURE, `Missing value for ${arg}\n\n${usage}`);
-      }
-      flags.config = next;
-    } else if (arg.startsWith('--config=')) {
-      flags.config = arg.slice('--config='.length);
-    } else if (arg === '--env-file') {
-      const next = args[++i];
-      if (next === undefined) {
-        throw new CommandExit(EXIT_FAILURE, `Missing value for ${arg}\n\n${usage}`);
-      }
-      flags['env-file'] = next;
-    } else if (arg.startsWith('--env-file=')) {
-      flags['env-file'] = arg.slice('--env-file='.length);
-    } else if (arg === '--skip-ledger-replay') {
-      continue;
-    } else if (arg.startsWith('-')) {
-      throw new CommandExit(EXIT_FAILURE, `Unknown option: ${arg}\n\n${usage}`);
-    } else {
-      positionals.push(arg);
-    }
-  }
-  return { archiveId: positionals[0], flags };
-}
-
-async function runPsql(config: BackupConfig, database: string, extra: string[]): Promise<void> {
-  await runBinary(
-    config.backups.psql,
-    [
-      `--host=${config.database.host}`,
-      `--port=${String(config.database.port)}`,
-      `--username=${config.backups.admin_user}`,
-      '--no-psqlrc',
-      '--set=ON_ERROR_STOP=1',
-      `--dbname=${database}`,
-      ...extra,
-    ],
-    {
-      PGPASSWORD: config.backups.admin_password,
-      PGSSLMODE: pgSslMode(config.database.ssl),
-    },
-  );
-}
-
-async function runPgRestore(
-  config: BackupConfig,
-  database: string,
-  path: string,
-  schema: string,
-): Promise<void> {
-  await runBinary(
-    config.backups.pg_restore,
-    [
-      `--host=${config.database.host}`,
-      `--port=${String(config.database.port)}`,
-      `--username=${config.backups.admin_user}`,
-      `--dbname=${database}`,
-      '--no-owner',
-      '--no-privileges',
-      '--exit-on-error',
-      '--single-transaction',
-      `--schema=${schema}`,
-      path,
-    ],
-    {
-      PGPASSWORD: config.backups.admin_password,
-      PGSSLMODE: pgSslMode(config.database.ssl),
-    },
-  );
-}
-
-function runBinary(binary: string, args: string[], env: Record<string, string>): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, {
-      env: { ...process.env, ...env },
-      stdio: ['ignore', 'inherit', 'pipe'],
-    });
-    const stderr: Buffer[] = [];
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      const message = Buffer.concat(stderr).toString('utf8').trim();
-      reject(
-        new CommandExit(
-          EXIT_FAILURE,
-          `${binary} exited with code ${String(code ?? -1)}${message ? `: ${message}` : ''}`,
-        ),
-      );
-    });
-  });
-}

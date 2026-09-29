@@ -6,7 +6,6 @@ import {
 import { ProblemError, type Router } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import { getGameBySlug, isPublicGame } from './catalog.ts';
 import {
   abandonUpload,
   commitUpload,
@@ -21,6 +20,7 @@ import {
   startUpload,
 } from './cloud-saves.ts';
 import { gamesMetrics } from './metrics.ts';
+import { requirePublicGame } from './route-helpers.ts';
 import { signedIn } from './routes.ts';
 import type { Context } from './service.ts';
 import { cloudSaveQuotaBytes } from './settings.ts';
@@ -145,8 +145,7 @@ export function cloudSaveRoutes(router: Router<Context>): void {
     handler: async ({ ctx, identity, params }) => {
       requireCloudSavesEnabled(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const slots = await listSlots(ctx.db, { userId, gameId: game.id });
       return {
         status: 200 as const,
@@ -169,8 +168,7 @@ export function cloudSaveRoutes(router: Router<Context>): void {
     handler: async ({ ctx, identity, params }) => {
       requireCloudSavesEnabled(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const view = await getSlot(ctx.db, { userId, gameId: game.id, slot: params.slot });
       if (!view) throw new ProblemError('GAMES_CLOUD_SAVE_NOT_FOUND');
       return { status: 200 as const, body: slotDetailView(view) };
@@ -196,8 +194,7 @@ export function cloudSaveRoutes(router: Router<Context>): void {
     handler: async ({ ctx, identity, params }) => {
       requireCloudSavesEnabled(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const view = await getSlot(ctx.db, { userId, gameId: game.id, slot: params.slot });
       if (!view) throw new ProblemError('GAMES_CLOUD_SAVE_NOT_FOUND');
       const versions = await listVersions(ctx.db, view.slot.id);
@@ -241,8 +238,7 @@ export function cloudSaveRoutes(router: Router<Context>): void {
       requireCloudSavesEnabled(ctx);
       const store = requireStore(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const config = ctx.config.games.cloud_saves;
       if (body.size_bytes > config.max_object_bytes) {
         throw new ProblemError('GAMES_CLOUD_SAVE_TOO_LARGE');
@@ -316,8 +312,7 @@ export function cloudSaveRoutes(router: Router<Context>): void {
       requireCloudSavesEnabled(ctx);
       const store = requireStore(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const result = await commitUpload(ctx.db, {
         userId,
         gameId: game.id,
@@ -370,8 +365,7 @@ export function cloudSaveRoutes(router: Router<Context>): void {
       requireCloudSavesEnabled(ctx);
       const store = requireStore(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const view = await getSlot(ctx.db, { userId, gameId: game.id, slot: params.slot });
       if (!view) throw new ProblemError('GAMES_CLOUD_SAVE_NOT_FOUND');
       const objectKey = await abandonUpload(ctx.db, {
@@ -409,8 +403,7 @@ export function cloudSaveRoutes(router: Router<Context>): void {
       requireCloudSavesEnabled(ctx);
       const store = requireStore(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const view = await getSlot(ctx.db, { userId, gameId: game.id, slot: params.slot });
       if (!view) throw new ProblemError('GAMES_CLOUD_SAVE_NOT_FOUND');
       let version: CloudSaveVersionRecord | null;
@@ -469,8 +462,7 @@ export function cloudSaveRoutes(router: Router<Context>): void {
       requireCloudSavesEnabled(ctx);
       const store = requireStore(ctx);
       const userId = signedIn(identity);
-      const game = await getGameBySlug(ctx.db, params.slug);
-      if (!game || !isPublicGame(game.status)) throw new ProblemError('GAMES_NOT_FOUND');
+      const game = await requirePublicGame(ctx, params.slug);
       const result = await deleteSlot(ctx.db, {
         userId,
         gameId: game.id,

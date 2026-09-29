@@ -7,7 +7,12 @@ import {
   openChunk,
   readChunkFrame,
 } from './archive.ts';
-import { decodeJson, type Manifest, manifestSchema } from './manifest.ts';
+import {
+  decodeJson,
+  type Manifest,
+  manifestSchema,
+  STORAGE_MANIFEST_BLOB_PATH,
+} from './manifest.ts';
 
 export interface OpenedArchive {
   manifest: Manifest;
@@ -30,7 +35,7 @@ export function openArchive(archive: Buffer, key: Buffer): OpenedArchive {
   for (const entry of manifest.schemas) {
     paths.set(entry.path, entry.chunks);
   }
-  paths.set('storage-manifest.json', -1);
+  paths.set(STORAGE_MANIFEST_BLOB_PATH, -1);
 
   let offset = manifestFrameEnd;
   for (const [path, expected] of paths) {
