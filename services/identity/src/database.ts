@@ -325,7 +325,7 @@ export interface RolesTable {
 
 export interface RolePermissionsTable {
   role_id: string;
-  grant: string;
+  permission: string;
 }
 
 export interface UserRolesTable {

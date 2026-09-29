@@ -102,7 +102,7 @@ export async function grantUser(
   if (grants.length > 0) {
     await db
       .insertInto('role_permissions')
-      .values(grants.map((grant) => ({ role_id: roleId, grant })))
+      .values(grants.map((permission) => ({ role_id: roleId, permission })))
       .execute();
   }
   await db.insertInto('user_roles').values({ user_id: userId, role_id: roleId }).execute();

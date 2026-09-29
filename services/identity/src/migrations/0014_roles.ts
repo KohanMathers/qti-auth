@@ -16,8 +16,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   await sql`
     create table role_permissions (
       role_id uuid not null references roles (id) on delete cascade,
-      grant text not null,
-      primary key (role_id, grant)
+      permission text not null,
+      primary key (role_id, permission)
     )
   `.execute(db);
   await sql`

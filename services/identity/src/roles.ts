@@ -64,7 +64,7 @@ export async function seedRoles(
       if (inserted === undefined || definition.permissions.length === 0) continue;
       await trx
         .insertInto('role_permissions')
-        .values(definition.permissions.map((grant) => ({ role_id: inserted.id, grant })))
+        .values(definition.permissions.map((permission) => ({ role_id: inserted.id, permission })))
         .execute();
     }
   });
@@ -74,12 +74,12 @@ export async function loadPermissions(db: Kysely<Database>, userId: string): Pro
   const rows = await db
     .selectFrom('user_roles')
     .innerJoin('role_permissions', 'role_permissions.role_id', 'user_roles.role_id')
-    .select('role_permissions.grant as grant')
+    .select('role_permissions.permission')
     .where('user_roles.user_id', '=', userId)
     .distinct()
-    .orderBy('grant')
+    .orderBy('permission')
     .execute();
-  return rows.map((row) => row.grant);
+  return rows.map((row) => row.permission);
 }
 
 export async function loadUserRoles(db: Kysely<Database>, userId: string): Promise<RoleRecord[]> {
@@ -97,18 +97,18 @@ async function attachPermissions(db: Kysely<Database>, rows: RoleRow[]): Promise
   if (rows.length === 0) return [];
   const grants = await db
     .selectFrom('role_permissions')
-    .select(['role_id', 'grant'])
+    .select(['role_id', 'permission'])
     .where(
       'role_id',
       'in',
       rows.map((row) => row.id),
     )
-    .orderBy('grant')
+    .orderBy('permission')
     .execute();
   const byRole = new Map<string, string[]>();
   for (const row of grants) {
     const list = byRole.get(row.role_id) ?? [];
-    list.push(row.grant);
+    list.push(row.permission);
     byRole.set(row.role_id, list);
   }
   return rows.map((row) => ({
@@ -210,7 +210,7 @@ export async function createRole(
     if (grants.grants.length > 0) {
       await trx
         .insertInto('role_permissions')
-        .values(grants.grants.map((grant) => ({ role_id: id, grant })))
+        .values(grants.grants.map((permission) => ({ role_id: id, permission })))
         .execute();
     }
     await writeRoleAudit(trx, {
@@ -262,7 +262,7 @@ export async function updateRole(
       if (grants.grants.length > 0) {
         await trx
           .insertInto('role_permissions')
-          .values(grants.grants.map((grant) => ({ role_id: options.roleId, grant })))
+          .values(grants.grants.map((permission) => ({ role_id: options.roleId, permission })))
           .execute();
       }
     }
