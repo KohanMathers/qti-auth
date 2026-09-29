@@ -1,0 +1,23 @@
+<h2 data-t="routes.tickets.title">Your tickets</h2>
+<p class="qtiauth-lede" data-t="tickets.lede">Tickets you have opened.</p>
+
+<div data-slot="tickets">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="tickets">
+      <li>
+        <a data-link data-bind-href="path"
+          >#<span data-field="number"></span> — <span data-field="subject"></span> (<span
+            data-field="status"
+          ></span
+          >)</a
+        >
+      </li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="tickets.empty">
+    You have not opened any tickets.
+  </p>
+  <p class="qtiauth-empty" data-state="error" data-t="tickets.load.error">
+    Could not load tickets.
+  </p>
+</div>

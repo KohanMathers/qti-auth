@@ -1,0 +1,21 @@
+<h2 data-t="routes.revert.title">Revert email change</h2>
+
+<form data-form="revert" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-token" data-t="field.token">Code</label>
+    <input
+      id="qtiauth-f-token"
+      name="token"
+      type="text"
+      autocomplete="off"
+      data-bind-value="token"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="revert.submit">Revert email</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="revert.success">Done.</p>
+  </template>
+</form>

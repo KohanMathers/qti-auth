@@ -1,0 +1,15 @@
+<h2 data-t="routes.kb.category.title" data-field="name">Category</h2>
+
+<div data-slot="articles">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="articles">
+      <li><a data-link data-bind-href="path" data-field="title"></a></li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="kb.category.empty">
+    No articles in this category.
+  </p>
+  <p class="qtiauth-empty" data-state="error" data-t="kb.category.load.error">
+    Could not load category.
+  </p>
+</div>

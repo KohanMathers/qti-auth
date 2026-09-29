@@ -1,0 +1,70 @@
+<h2 data-t="routes.sign-in.title">Sign in</h2>
+<p class="qtiauth-lede" data-t="signIn.lede">Choose a way to sign in.</p>
+
+<section data-show="password">
+  <h3 data-t="signIn.password.heading">Sign in with password</h3>
+  <form data-form="password" novalidate>
+    <p class="qtiauth-field">
+      <label for="qtiauth-f-email" data-t="field.email">Email</label>
+      <input id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
+    </p>
+    <p class="qtiauth-field">
+      <label for="qtiauth-f-password" data-t="field.password">Password</label>
+      <input
+        id="qtiauth-f-password"
+        name="password"
+        type="password"
+        autocomplete="current-password"
+        required
+      />
+    </p>
+    <p class="qtiauth-actions">
+      <button type="submit" data-t="signIn.submit">Sign in</button>
+    </p>
+    <template data-message="success">
+      <p class="qtiauth-success" role="status" data-t="signIn.success">Signed in.</p>
+    </template>
+  </form>
+  <p><a href="/forgot" data-link data-t="signIn.forgot">Forgot your password?</a></p>
+</section>
+
+<section data-show="magic_link">
+  <h3 data-t="signIn.magic.heading">Sign in with a link</h3>
+  <form data-form="magic" novalidate>
+    <p class="qtiauth-field">
+      <label for="qtiauth-f-magic-email" data-t="field.email">Email</label>
+      <input id="qtiauth-f-magic-email" name="email" type="email" autocomplete="email" required />
+    </p>
+    <p class="qtiauth-actions">
+      <button type="submit" data-t="signIn.magic.submit">Send me a link</button>
+    </p>
+    <template data-message="success">
+      <p class="qtiauth-success" role="status" data-t="signIn.magic.success">
+        Check your email for a sign-in link.
+      </p>
+    </template>
+  </form>
+</section>
+
+<section data-show="passkeys">
+  <h3 data-t="signIn.passkey.heading">Sign in with a passkey</h3>
+  <p data-t="signIn.passkey.body">Your device will prompt you to choose a passkey.</p>
+  <button type="button" data-action="passkey" data-t="signIn.passkey.submit">Use a passkey</button>
+  <div class="qtiauth-feedback" aria-live="polite" data-part="passkey-feedback"></div>
+  <template data-message="passkey-pending">
+    <p data-t="signIn.passkey.pending">Passkey sign-in is coming soon.</p>
+  </template>
+</section>
+
+<div class="qtiauth-social" data-show="social">
+  <h3 data-t="signIn.social">Continue with</h3>
+  <ul class="qtiauth-social-list">
+    <template data-item="social">
+      <li>
+        <a class="qtiauth-button qtiauth-button-social" data-bind-href="href" data-field="name"></a>
+      </li>
+    </template>
+  </ul>
+</div>
+
+<p><a href="/sign-up" data-link data-t="signIn.newHere">Create an account</a></p>

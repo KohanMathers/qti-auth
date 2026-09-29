@@ -1,0 +1,21 @@
+<h2 data-t="routes.guest.view.title">Follow a guest ticket</h2>
+<p class="qtiauth-lede" data-t="guest.view.lede">
+  Paste the link token from the email we sent you.
+</p>
+
+<form data-form="view" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-token" data-t="field.token">Code</label>
+    <input id="qtiauth-f-token" name="token" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="guest.view.submit">View ticket</button>
+  </p>
+</form>
+
+<div data-slot="ticket">
+  <div data-state="ready">
+    <h3 data-t="guest.view.ticket">Ticket</h3>
+    <div data-part="ticket"></div>
+  </div>
+</div>

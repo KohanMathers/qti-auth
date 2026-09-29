@@ -1,0 +1,67 @@
+<h2 data-t="routes.support.staff.ticket.title">Ticket</h2>
+
+<div data-slot="ticket">
+  <div data-state="ready">
+    <h3>#<span data-field="number"></span> — <span data-field="subject"></span></h3>
+    <p class="qtiauth-muted">
+      <span data-field="status"></span> — <span data-field="priority"></span> —
+      <span data-field="created_at"></span>
+    </p>
+
+    <ol class="qtiauth-thread">
+      <template data-item="messages">
+        <li data-bind-class="class">
+          <p class="qtiauth-muted">
+            <span data-show="staff" data-t="tickets.staff">Staff</span
+            ><span data-show="!staff" data-t="tickets.user">User</span> —
+            <span data-field="created_at"></span>
+          </p>
+          <p data-field="body"></p>
+        </li>
+      </template>
+    </ol>
+
+    <h3 data-t="support.staff.notes.heading">Internal notes</h3>
+    <ol class="qtiauth-thread">
+      <template data-item="notes">
+        <li class="qtiauth-message qtiauth-message-note">
+          <p class="qtiauth-muted" data-field="created_at"></p>
+          <p data-field="body"></p>
+        </li>
+      </template>
+    </ol>
+    <form data-form="note" novalidate>
+      <p class="qtiauth-field">
+        <label for="qtiauth-f-note" data-t="field.note">Note</label>
+        <input id="qtiauth-f-note" name="body" type="text" autocomplete="off" required />
+      </p>
+      <p class="qtiauth-actions">
+        <button type="submit" data-t="support.staff.notes.submit">Add note</button>
+      </p>
+      <template data-message="success">
+        <p class="qtiauth-success" role="status" data-t="support.staff.notes.success">
+          Note added.
+        </p>
+      </template>
+    </form>
+
+    <h3 data-t="support.staff.reply.heading">Reply as staff</h3>
+    <form data-form="reply" novalidate>
+      <p class="qtiauth-field">
+        <label for="qtiauth-f-reply" data-t="field.message">Message</label>
+        <input id="qtiauth-f-reply" name="body" type="text" autocomplete="off" required />
+      </p>
+      <p class="qtiauth-actions">
+        <button type="submit" data-t="support.staff.reply.submit">Send staff reply</button>
+      </p>
+      <template data-message="success">
+        <p class="qtiauth-success" role="status" data-t="support.staff.reply.success">
+          Reply sent.
+        </p>
+      </template>
+    </form>
+  </div>
+  <p class="qtiauth-empty" data-state="error" data-t="support.staff.ticket.load.error">
+    Could not load ticket.
+  </p>
+</div>

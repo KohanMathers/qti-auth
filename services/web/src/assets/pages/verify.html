@@ -1,0 +1,32 @@
+<h2 data-t="routes.verify.title">Verify your email</h2>
+<p class="qtiauth-lede" data-t="verify.lede">Enter the code we emailed you.</p>
+
+<form data-form="verify" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-token" data-t="field.token">Code</label>
+    <input
+      id="qtiauth-f-token"
+      name="token"
+      type="text"
+      autocomplete="one-time-code"
+      data-bind-value="token"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="verify.submit">Verify email</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="verify.success">Email verified.</p>
+  </template>
+</form>
+
+<button
+  type="button"
+  class="qtiauth-button qtiauth-button-ghost"
+  data-action="resend"
+  data-t="verify.resend"
+>
+  Send a new email
+</button>
+<div data-part="resend-feedback"></div>

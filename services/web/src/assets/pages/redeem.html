@@ -1,0 +1,15 @@
+<h2 data-t="routes.redeem.title">Redeem a key</h2>
+<p class="qtiauth-lede" data-t="redeem.lede">Enter the key from your product.</p>
+
+<form data-form="redeem" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-code" data-t="field.key">Product key</label>
+    <input id="qtiauth-f-code" name="code" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="redeem.submit">Redeem</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="redeem.success">Game added to your library.</p>
+  </template>
+</form>

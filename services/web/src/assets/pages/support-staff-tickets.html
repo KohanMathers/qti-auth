@@ -1,0 +1,22 @@
+<h2 data-t="routes.support.staff.queue.title">Support queue</h2>
+
+<div data-slot="tickets">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="tickets">
+      <li>
+        <a data-link data-bind-href="path"
+          >#<span data-field="number"></span> — <span data-field="subject"></span> (<span
+            data-field="status"
+          ></span
+          >, <span data-field="priority"></span>)</a
+        >
+      </li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="support.staff.queue.empty">
+    No tickets in the queue.
+  </p>
+  <p class="qtiauth-empty" data-state="error" data-t="support.staff.queue.load.error">
+    Could not load queue.
+  </p>
+</div>

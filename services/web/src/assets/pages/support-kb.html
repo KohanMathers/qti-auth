@@ -1,0 +1,14 @@
+<h2 data-t="routes.kb.title">Help centre</h2>
+<p class="qtiauth-lede" data-t="kb.lede">Choose a category to browse published articles.</p>
+
+<div data-slot="categories">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="categories">
+      <li><a data-link data-bind-href="path" data-field="name"></a></li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="kb.empty">
+    No articles have been published yet.
+  </p>
+  <p class="qtiauth-empty" data-state="error" data-t="kb.load.error">Could not load help centre.</p>
+</div>

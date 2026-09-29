@@ -1,0 +1,24 @@
+<h2 data-t="routes.consent.title">Authorize app</h2>
+<p class="qtiauth-lede" data-t="consent.lede">This app wants to access your account.</p>
+
+<dl class="qtiauth-details">
+  <dt data-t="consent.field.app">App</dt>
+  <dd data-field="client_id"></dd>
+  <dt data-t="consent.field.scope">Requested access</dt>
+  <dd data-field="scope"></dd>
+</dl>
+
+<form method="post" data-bind-action="authorize_url">
+  <input type="hidden" name="client_id" data-bind-value="client_id" />
+  <input type="hidden" name="scope" data-bind-value="scope" />
+  <button type="submit" name="decision" value="allow" data-t="consent.allow">Allow</button>
+  <button
+    type="submit"
+    class="qtiauth-button qtiauth-button-ghost"
+    name="decision"
+    value="deny"
+    data-t="consent.deny"
+  >
+    Deny
+  </button>
+</form>

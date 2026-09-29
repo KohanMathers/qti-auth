@@ -1,0 +1,23 @@
+<h2 data-t="routes.legal.title">Legal acceptance</h2>
+<p class="qtiauth-lede" data-t="legal.lede">Documents we need you to accept.</p>
+
+<div data-slot="documents">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="documents">
+      <li class="qtiauth-legal-item">
+        <a target="_blank" rel="noopener" data-bind-href="url" data-field="title"></a>
+        <button type="button" data-action="accept" data-t="legal.accept">Accept</button>
+      </li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="legal.empty">
+    No documents require acceptance.
+  </p>
+  <p class="qtiauth-empty" data-state="error" data-t="legal.load.error">
+    Could not load documents.
+  </p>
+</div>
+
+<template data-message="accepted">
+  <p class="qtiauth-success" role="status" data-t="legal.accepted">Accepted.</p>
+</template>

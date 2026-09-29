@@ -1,9 +1,10 @@
-import type { AssetSet } from './assets.ts';
+import type { Asset, AssetSet } from './assets.ts';
 import type { LocaleSet } from './locale.ts';
 import { contextAttachment } from './state.ts';
 
 export interface WebState {
   assets: AssetSet;
+  templates: Asset;
   locales: LocaleSet;
   basePath: string;
   metaOrigin: string | undefined;

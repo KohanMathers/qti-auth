@@ -1,0 +1,12 @@
+<h2 data-t="routes.family.title">Family dashboard</h2>
+<p class="qtiauth-lede" data-t="family.lede">Manage children linked to your account.</p>
+
+<div data-slot="children">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="children">
+      <li><a data-link data-bind-href="path" data-field="name"></a></li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="family.empty">No linked children.</p>
+  <p class="qtiauth-empty" data-state="error" data-t="family.load.error">Could not load family.</p>
+</div>

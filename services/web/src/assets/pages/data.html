@@ -1,0 +1,23 @@
+<h2 data-t="routes.data.title">Data export and deletion</h2>
+<p class="qtiauth-lede" data-t="data.lede">Ask for a copy of your data or delete your account.</p>
+
+<h3 data-t="data.export.heading">Export your data</h3>
+<div class="qtiauth-status" aria-live="polite" data-part="export-status"></div>
+<button type="button" data-action="export" data-t="data.export.submit">Request export</button>
+<template data-message="export-queued">
+  <p data-t="data.export.queued">Export queued.</p>
+</template>
+
+<h3 data-t="data.deletion.heading">Delete your account</h3>
+<div class="qtiauth-status" aria-live="polite" data-part="deletion-status"></div>
+<button
+  type="button"
+  class="qtiauth-button qtiauth-button-danger"
+  data-action="delete"
+  data-t="data.deletion.submit"
+>
+  Request deletion
+</button>
+<template data-message="deletion-queued">
+  <p data-t="data.deletion.queued">Deletion scheduled.</p>
+</template>

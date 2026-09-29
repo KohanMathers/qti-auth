@@ -7,1425 +7,514 @@ import {
   kb,
   me,
   oauth,
-  ProblemFetchError,
   reports,
   sessions,
   staffKb,
   staffSupport,
   support,
 } from './client.js';
-import { messageFor } from './problems.js';
 
-export function element(tag, props = {}, children = []) {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(props)) {
-    if (value === undefined || value === null) continue;
-    if (key === 'text') node.textContent = value;
-    else if (key === 'attrs') for (const [k, v] of Object.entries(value)) node.setAttribute(k, v);
-    else node[key] = value;
-  }
-  for (const child of children) if (child !== null) node.appendChild(child);
-  return node;
+function queryParam(ctx, name) {
+  return new URLSearchParams(ctx.location.search).get(name) ?? '';
 }
 
-export function clear(node) {
-  while (node.firstChild !== null) node.removeChild(node.firstChild);
+function itemsOf(data) {
+  return data?.items ?? [];
 }
 
-function field(t, spec) {
-  const id = `qtiauth-f-${spec.name}`;
-  const label = element('label', { htmlFor: id, text: t(spec.label, spec.name) });
-  const input = element('input', {
-    id,
-    name: spec.name,
-    type: spec.type ?? 'text',
-    required: spec.required !== false,
-    autocomplete: spec.autocomplete ?? 'off',
-  });
-  if (spec.value !== undefined) input.value = spec.value;
-  if (spec.minLength !== undefined) input.minLength = spec.minLength;
-  if (spec.pattern !== undefined) input.pattern = spec.pattern;
-  const wrap = element('p', { className: 'qtiauth-field' });
-  wrap.append(label, input);
-  return { wrap, input };
-}
-
-function submitRow(t, label) {
-  const row = element('p', { className: 'qtiauth-actions' });
-  row.appendChild(element('button', { type: 'submit', text: t(label, 'Submit') }));
-  return row;
-}
-
-function successRow(t, label) {
-  return element('p', {
-    className: 'qtiauth-success',
-    attrs: { role: 'status' },
-    text: t(label, 'Done.'),
-  });
-}
-
-function problemAlert(t, problem) {
-  const catalogueEntry = messageFor(problem.code ?? 'INTERNAL_ERROR');
-  const box = element('div', {
-    className: 'qtiauth-alert',
-    attrs: { role: 'alert' },
-  });
-  box.append(
-    element('h2', { text: t(`problems.${problem.code}.title`, catalogueEntry.title) }),
-    element('p', {
-      text: problem.detail ?? t(`problems.${problem.code}.detail`, catalogueEntry.detail),
-    }),
-  );
-  return box;
-}
-
-function loadErrorInto(container, t, key, fallback) {
-  return () => {
-    clear(container);
-    container.appendChild(empty(t, key, fallback));
-  };
-}
-
-async function runForm(form, feedback, t, action) {
-  form.setAttribute('aria-busy', 'true');
-  clear(feedback);
-  try {
-    const result = await action();
-    form.setAttribute('aria-busy', 'false');
-    return result;
-  } catch (error) {
-    form.setAttribute('aria-busy', 'false');
-    const problem = error instanceof ProblemFetchError ? error.problem : { code: 'INTERNAL_ERROR' };
-    feedback.appendChild(problemAlert(t, problem));
-    return undefined;
-  }
-}
-
-function heading(main, t, titleKey, fallback, description) {
-  const h2 = element('h2', { text: t(titleKey, fallback) });
-  main.appendChild(h2);
-  if (description !== undefined) {
-    main.appendChild(element('p', { className: 'qtiauth-lede', text: t(description, '') }));
-  }
-  return h2;
-}
-
-function form(fields, t, submitLabel, onSubmit) {
-  const feedback = element('div', {
-    className: 'qtiauth-feedback',
-    attrs: { 'aria-live': 'polite' },
-  });
-  const el = element('form', { noValidate: true });
-  const inputs = new Map();
-  for (const spec of fields) {
-    const { wrap, input } = field(t, spec);
-    el.appendChild(wrap);
-    inputs.set(spec.name, input);
-  }
-  el.appendChild(submitRow(t, submitLabel));
-  el.appendChild(feedback);
-  el.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const values = {};
-    for (const [name, input] of inputs) values[name] = input.value;
-    void runForm(el, feedback, t, () => onSubmit(values, { form: el, feedback }));
-  });
-  return el;
-}
-
-function list(items, render) {
-  const ul = element('ul', { className: 'qtiauth-list' });
-  for (const item of items) ul.appendChild(render(item));
-  return ul;
-}
-
-function empty(t, key, fallback) {
-  return element('p', { className: 'qtiauth-empty', text: t(key, fallback) });
-}
-
-function socialButtons(t, features, ctx) {
-  if (features.auth.social.length === 0) return null;
-  const wrap = element('div', { className: 'qtiauth-social' });
-  wrap.appendChild(element('h3', { text: t('signIn.social', 'Continue with') }));
-  const buttons = element('ul', { className: 'qtiauth-social-list' });
-  for (const provider of features.auth.social) {
-    const anchor = element('a', {
-      href: `${ctx.apiBase}/api/v1/auth/social/${encodeURIComponent(provider.id)}/start`,
-      className: 'qtiauth-button qtiauth-button-social',
-      text: provider.name,
+function pageSignIn(view, t, ctx) {
+  const a = auth(ctx.api);
+  const { methods, social } = ctx.features.auth;
+  view
+    .show('password', methods.password)
+    .show('magic_link', methods.magic_link)
+    .show('passkeys', methods.passkeys)
+    .show('social', social.length > 0);
+  if (methods.password) {
+    view.form('password', async (values, form) => {
+      await a.signInPassword(values.email, values.password);
+      form.say('success');
+      ctx.navigate('/account');
     });
-    const item = element('li');
-    item.appendChild(anchor);
-    buttons.appendChild(item);
   }
-  wrap.appendChild(buttons);
-  return wrap;
-}
-
-function pageSignIn(main, t, ctx) {
-  heading(main, t, 'routes.sign-in.title', 'Sign in', 'signIn.lede');
-  const a = auth(ctx.api);
-  if (ctx.features.auth.methods.password) {
-    main.appendChild(
-      element('h3', { text: t('signIn.password.heading', 'Sign in with password') }),
-    );
-    main.appendChild(
-      form(
-        [
-          { name: 'email', type: 'email', label: 'field.email', autocomplete: 'email' },
-          {
-            name: 'password',
-            type: 'password',
-            label: 'field.password',
-            autocomplete: 'current-password',
-          },
-        ],
-        t,
-        'signIn.submit',
-        async (values, { feedback }) => {
-          await a.signInPassword(values.email, values.password);
-          feedback.appendChild(successRow(t, 'signIn.success'));
-          ctx.navigate('/account');
-        },
-      ),
-    );
-    main.appendChild(
-      element('p', {}, [
-        element('a', {
-          href: ctx.href('/forgot'),
-          text: t('signIn.forgot', 'Forgot your password?'),
-          onclick: (event) => {
-            event.preventDefault();
-            ctx.navigate('/forgot');
-          },
-        }),
-      ]),
-    );
+  if (methods.magic_link) {
+    view.form('magic', async (values, form) => {
+      await a.magicLinkStart(values.email);
+      form.say('success');
+    });
   }
-  if (ctx.features.auth.methods.magic_link) {
-    main.appendChild(element('h3', { text: t('signIn.magic.heading', 'Sign in with a link') }));
-    main.appendChild(
-      form(
-        [{ name: 'email', type: 'email', label: 'field.email', autocomplete: 'email' }],
-        t,
-        'signIn.magic.submit',
-        async (values, { feedback }) => {
-          await a.magicLinkStart(values.email);
-          feedback.appendChild(successRow(t, 'signIn.magic.success'));
-        },
-      ),
-    );
+  if (methods.passkeys) {
+    view.on('passkey', () => {
+      view.part('passkey-feedback').appendChild(view.message('passkey-pending'));
+    });
   }
-  if (ctx.features.auth.methods.passkeys) {
-    main.appendChild(
-      element('h3', { text: t('signIn.passkey.heading', 'Sign in with a passkey') }),
-    );
-    main.appendChild(
-      element('p', {
-        text: t('signIn.passkey.body', 'Your device will prompt you to choose a passkey.'),
-      }),
-    );
-    main.appendChild(
-      element('button', {
-        type: 'button',
-        text: t('signIn.passkey.submit', 'Use a passkey'),
-        onclick: () => {
-          const feedback =
-            main.querySelector('.qtiauth-feedback') ??
-            main.appendChild(element('div', { className: 'qtiauth-feedback' }));
-          feedback.appendChild(
-            element('p', { text: t('signIn.passkey.pending', 'Passkey sign-in is coming soon.') }),
-          );
-        },
-      }),
-    );
-  }
-  const social = socialButtons(t, ctx.features, ctx);
-  if (social !== null) main.appendChild(social);
-  main.appendChild(
-    element('p', {}, [
-      element('a', {
-        href: ctx.href('/sign-up'),
-        text: t('signIn.newHere', 'Create an account'),
-        onclick: (event) => {
-          event.preventDefault();
-          ctx.navigate('/sign-up');
-        },
-      }),
-    ]),
+  view.list(
+    'social',
+    social.map((provider) => ({
+      name: provider.name,
+      href: `${ctx.apiBase}/api/v1/auth/social/${encodeURIComponent(provider.id)}/start`,
+    })),
   );
 }
 
-function pageSignUp(main, t, ctx) {
-  heading(main, t, 'routes.sign-up.title', 'Create an account', 'signUp.lede');
+function pageSignUp(view, t, ctx) {
   const a = auth(ctx.api);
-  if (ctx.features.auth.methods.password) {
-    main.appendChild(
-      form(
-        [
-          { name: 'name', label: 'field.name', autocomplete: 'name' },
-          { name: 'email', type: 'email', label: 'field.email', autocomplete: 'email' },
-          {
-            name: 'password',
-            type: 'password',
-            label: 'field.password',
-            autocomplete: 'new-password',
-            minLength: 12,
-          },
-        ],
-        t,
-        'signUp.submit',
-        async (values, { feedback }) => {
-          await a.signUpPassword(values.email, values.password, values.name);
-          feedback.appendChild(successRow(t, 'signUp.success'));
-          ctx.navigate('/verify');
-        },
-      ),
-    );
+  const { methods } = ctx.features.auth;
+  const magicOnly = methods.magic_link && !methods.password;
+  view.show('password', methods.password).show('magic_only', magicOnly);
+  if (methods.password) {
+    view.form('password', async (values, form) => {
+      await a.signUpPassword(values.email, values.password, values.name);
+      form.say('success');
+      ctx.navigate('/verify');
+    });
   }
-  if (ctx.features.auth.methods.magic_link && !ctx.features.auth.methods.password) {
-    main.appendChild(
-      form(
-        [
-          { name: 'name', label: 'field.name', autocomplete: 'name' },
-          { name: 'email', type: 'email', label: 'field.email', autocomplete: 'email' },
-        ],
-        t,
-        'signUp.magic.submit',
-        async (values, { feedback }) => {
-          await a.magicLinkStart(values.email);
-          feedback.appendChild(successRow(t, 'signUp.magic.success'));
-        },
-      ),
-    );
+  if (magicOnly) {
+    view.form('magic', async (values, form) => {
+      await a.magicLinkStart(values.email);
+      form.say('success');
+    });
   }
 }
 
-function pageVerify(main, t, ctx) {
-  heading(main, t, 'routes.verify.title', 'Verify your email', 'verify.lede');
+function pageVerify(view, t, ctx) {
   const a = auth(ctx.api);
-  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
-  main.appendChild(
-    form(
-      [
-        {
-          name: 'token',
-          label: 'field.token',
-          autocomplete: 'one-time-code',
-          value: token,
-        },
-      ],
-      t,
-      'verify.submit',
-      async (values, { feedback }) => {
-        await a.verifyEmail(values.token);
-        feedback.appendChild(successRow(t, 'verify.success'));
-        ctx.navigate('/account');
-      },
-    ),
-  );
-  main.appendChild(
-    element('button', {
-      type: 'button',
-      className: 'qtiauth-button qtiauth-button-ghost',
-      text: t('verify.resend', 'Send a new email'),
-      onclick: () => {
-        void a.startVerifyEmail().catch(() => {
-          main.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' }));
-        });
-      },
-    }),
-  );
+  view.fill({ token: queryParam(ctx, 'token') });
+  view.form('verify', async (values, form) => {
+    await a.verifyEmail(values.token);
+    form.say('success');
+    ctx.navigate('/account');
+  });
+  view.on('resend', () => {
+    void a.startVerifyEmail().catch(() => {
+      view.part('resend-feedback').appendChild(view.problem());
+    });
+  });
 }
 
-function pageForgot(main, t, ctx) {
-  heading(main, t, 'routes.forgot.title', 'Reset your password', 'forgot.lede');
+function pageForgot(view, t, ctx) {
   const a = auth(ctx.api);
-  main.appendChild(
-    form(
-      [{ name: 'email', type: 'email', label: 'field.email', autocomplete: 'email' }],
-      t,
-      'forgot.submit',
-      async (values, { feedback }) => {
-        await a.forgot(values.email);
-        feedback.appendChild(successRow(t, 'forgot.success'));
-      },
-    ),
-  );
+  view.form('forgot', async (values, form) => {
+    await a.forgot(values.email);
+    form.say('success');
+  });
 }
 
-function pageReset(main, t, ctx) {
-  heading(main, t, 'routes.reset.title', 'Choose a new password', 'reset.lede');
+function pageReset(view, t, ctx) {
   const a = auth(ctx.api);
-  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
-  main.appendChild(
-    form(
-      [
-        { name: 'token', label: 'field.token', autocomplete: 'one-time-code', value: token },
-        {
-          name: 'password',
-          type: 'password',
-          label: 'field.password',
-          autocomplete: 'new-password',
-          minLength: 12,
-        },
-      ],
-      t,
-      'reset.submit',
-      async (values, { feedback }) => {
-        await a.reset(values.token, values.password);
-        feedback.appendChild(successRow(t, 'reset.success'));
-        ctx.navigate('/sign-in');
-      },
-    ),
-  );
+  view.fill({ token: queryParam(ctx, 'token') });
+  view.form('reset', async (values, form) => {
+    await a.reset(values.token, values.password);
+    form.say('success');
+    ctx.navigate('/sign-in');
+  });
 }
 
-function pageGuardianApprove(main, t, ctx) {
-  heading(
-    main,
-    t,
-    'routes.guardian.approve.title',
-    'Approve this account',
-    'guardian.approve.lede',
-  );
-  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+function pageGuardianApprove(view, t, ctx) {
   const a = auth(ctx.api);
-  main.appendChild(
-    form(
-      [
-        { name: 'token', label: 'field.token', value: token },
-        { name: 'date_of_birth', type: 'date', label: 'field.dateOfBirth' },
-      ],
-      t,
-      'guardian.approve.submit',
-      async (values, { feedback }) => {
-        await a.guardianApprove(values.token, values.date_of_birth);
-        feedback.appendChild(successRow(t, 'guardian.approve.success'));
-      },
-    ),
-  );
+  view.fill({ token: queryParam(ctx, 'token') });
+  view.form('approve', async (values, form) => {
+    await a.guardianApprove(values.token, values.date_of_birth);
+    form.say('success');
+  });
 }
 
-function pageGuardianDecline(main, t, ctx) {
-  heading(
-    main,
-    t,
-    'routes.guardian.decline.title',
-    'Decline this account',
-    'guardian.decline.lede',
-  );
-  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+function pageGuardianDecline(view, t, ctx) {
   const a = auth(ctx.api);
-  main.appendChild(
-    form(
-      [{ name: 'token', label: 'field.token', value: token }],
-      t,
-      'guardian.decline.submit',
-      async (values, { feedback }) => {
-        await a.guardianDecline(values.token);
-        feedback.appendChild(successRow(t, 'guardian.decline.success'));
-      },
-    ),
-  );
+  view.fill({ token: queryParam(ctx, 'token') });
+  view.form('decline', async (values, form) => {
+    await a.guardianDecline(values.token);
+    form.say('success');
+  });
 }
 
-function pageFamilySession(main, t, ctx) {
-  heading(
-    main,
-    t,
-    'routes.family.session.title',
-    'Open the family dashboard',
-    'family.session.lede',
-  );
-  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+function pageFamilySession(view, t, ctx) {
   const f = family(ctx.api);
-  main.appendChild(
-    form(
-      [{ name: 'token', label: 'field.token', value: token }],
-      t,
-      'family.session.submit',
-      async (values, { feedback }) => {
-        await f.openSession(values.token);
-        feedback.appendChild(successRow(t, 'family.session.success'));
-        ctx.navigate('/family');
-      },
-    ),
-  );
+  view.fill({ token: queryParam(ctx, 'token') });
+  view.form('session', async (values, form) => {
+    await f.openSession(values.token);
+    form.say('success');
+    ctx.navigate('/family');
+  });
 }
 
-function pageFamilyInvite(main, t, ctx) {
-  heading(
-    main,
-    t,
-    'routes.family.invite.title',
-    'Become a parent or guardian',
-    'family.invite.lede',
-  );
-  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+function pageFamilyInvite(view, t, ctx) {
   const f = family(ctx.api);
-  main.appendChild(
-    form(
-      [
-        { name: 'token', label: 'field.token', value: token },
-        { name: 'date_of_birth', type: 'date', label: 'field.dateOfBirth' },
-      ],
-      t,
-      'family.invite.submit',
-      async (values, { feedback }) => {
-        await f.acceptInvite(values.token, values.date_of_birth);
-        feedback.appendChild(successRow(t, 'family.invite.success'));
-      },
-    ),
-  );
+  view.fill({ token: queryParam(ctx, 'token') });
+  view.form('invite', async (values, form) => {
+    await f.acceptInvite(values.token, values.date_of_birth);
+    form.say('success');
+  });
 }
 
-function pageRevertEmail(main, t, ctx) {
-  heading(main, t, 'routes.revert.title', 'Revert email change', 'revert.lede');
-  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+function pageRevertEmail(view, t, ctx) {
   const a = auth(ctx.api);
-  main.appendChild(
-    form(
-      [{ name: 'token', label: 'field.token', value: token }],
-      t,
-      'revert.submit',
-      async (values, { feedback }) => {
-        await a.revertEmail(values.token);
-        feedback.appendChild(successRow(t, 'revert.success'));
-      },
-    ),
-  );
+  view.fill({ token: queryParam(ctx, 'token') });
+  view.form('revert', async (values, form) => {
+    await a.revertEmail(values.token);
+    form.say('success');
+  });
 }
 
-function pageAccount(main, t, ctx) {
-  heading(main, t, 'routes.account.title', 'Your account', 'routes.account.body');
-  const sections = [
-    { path: '/account/profile', label: 'account.section.profile' },
-    { path: '/account/email', label: 'account.section.email' },
-    { path: '/account/security', label: 'account.section.security' },
-    { path: '/account/sessions', label: 'account.section.sessions' },
-    { path: '/account/methods', label: 'account.section.methods' },
-    { path: '/account/notifications', label: 'account.section.notifications' },
-    { path: '/account/legal', label: 'account.section.legal' },
-    { path: '/account/data', label: 'account.section.data' },
-  ];
-  main.appendChild(
-    list(sections, (section) => {
-      const item = element('li');
-      item.appendChild(
-        element('a', {
-          href: ctx.href(section.path),
-          text: t(section.label, section.path),
-          onclick: (event) => {
-            event.preventDefault();
-            ctx.navigate(section.path);
-          },
-        }),
-      );
-      return item;
-    }),
-  );
+function pageAccount(view, t, ctx) {
   const a = auth(ctx.api);
-  main.appendChild(
-    element('button', {
-      type: 'button',
-      className: 'qtiauth-button qtiauth-button-ghost',
-      text: t('account.signOut', 'Sign out'),
-      onclick: () => {
-        void a
-          .signOut()
-          .then(() => ctx.navigate('/sign-in'))
-          .catch(() => ctx.navigate('/sign-in'));
-      },
-    }),
-  );
+  view.on('sign-out', () => {
+    void a
+      .signOut()
+      .then(() => ctx.navigate('/sign-in'))
+      .catch(() => ctx.navigate('/sign-in'));
+  });
 }
 
-function pageProfile(main, t, ctx) {
-  heading(main, t, 'routes.profile.title', 'Profile', 'profile.lede');
+function pageProfile(view, t, ctx) {
   const account = me(ctx.api);
-  const details = element('dl', { className: 'qtiauth-details' });
-  main.appendChild(details);
   void account
     .get()
     .then((data) => {
-      const entries = [
-        ['profile.field.name', data?.name ?? ''],
-        ['profile.field.username', data?.username ?? ''],
-        ['profile.field.email', data?.email ?? ''],
-      ];
-      for (const [key, value] of entries) {
-        details.append(element('dt', { text: t(key, key) }), element('dd', { text: value }));
-      }
+      view
+        .fill({ name: data?.name ?? '', username: data?.username ?? '', email: data?.email ?? '' })
+        .state('profile', 'ready');
     })
-    .catch(() => {
-      details.appendChild(
-        element('dd', { text: t('profile.load.error', 'Could not load profile.') }),
-      );
-    });
-  main.appendChild(element('h3', { text: t('profile.username.heading', 'Change username') }));
-  main.appendChild(
-    form(
-      [{ name: 'username', label: 'field.username', autocomplete: 'username' }],
-      t,
-      'profile.username.submit',
-      async (values, { feedback }) => {
-        await account.setUsername(values.username);
-        feedback.appendChild(successRow(t, 'profile.username.success'));
-      },
-    ),
-  );
+    .catch(() => view.state('profile', 'error'));
+  view.form('username', async (values, form) => {
+    await account.setUsername(values.username);
+    form.say('success');
+  });
 }
 
-function pageEmail(main, t, ctx) {
-  heading(main, t, 'routes.email.title', 'Change email', 'email.lede');
+function pageEmail(view, t, ctx) {
   const a = auth(ctx.api);
-  main.appendChild(
-    form(
-      [
-        { name: 'email', type: 'email', label: 'field.email.new', autocomplete: 'email' },
-        {
-          name: 'password',
-          type: 'password',
-          label: 'field.password',
-          autocomplete: 'current-password',
-        },
-      ],
-      t,
-      'email.submit',
-      async (values, { feedback }) => {
-        await a.changeEmail(values.email, values.password);
-        feedback.appendChild(successRow(t, 'email.success'));
-      },
-    ),
-  );
+  view.form('email', async (values, form) => {
+    await a.changeEmail(values.email, values.password);
+    form.say('success');
+  });
 }
 
-function pageSecurity(main, t, ctx) {
-  heading(main, t, 'routes.security.title', 'Security', 'security.lede');
+function pageSecurity(view, t, ctx) {
   const a = auth(ctx.api);
-  main.appendChild(element('h3', { text: t('security.password.heading', 'Change password') }));
-  main.appendChild(
-    form(
-      [
-        {
-          name: 'current',
-          type: 'password',
-          label: 'field.password.current',
-          autocomplete: 'current-password',
-        },
-        {
-          name: 'next',
-          type: 'password',
-          label: 'field.password.new',
-          autocomplete: 'new-password',
-          minLength: 12,
-        },
-      ],
-      t,
-      'security.password.submit',
-      async (values, { feedback }) => {
-        await a.changePassword(values.current, values.next);
-        feedback.appendChild(successRow(t, 'security.password.success'));
-      },
-    ),
-  );
-  main.appendChild(
-    element('h3', { text: t('security.twoFactor.heading', 'Two-factor authentication') }),
-  );
-  main.appendChild(
-    element('p', {
-      text: t(
-        'security.twoFactor.body',
-        'Add an authenticator app or passkey to protect sign-ins.',
-      ),
-    }),
-  );
-  main.appendChild(element('h3', { text: t('security.recovery.heading', 'Recovery codes') }));
-  main.appendChild(
-    element('p', {
-      text: t(
-        'security.recovery.body',
-        'Generate one-time codes to sign in if you lose your device.',
-      ),
-    }),
-  );
+  view.form('password', async (values, form) => {
+    await a.changePassword(values.current, values.next);
+    form.say('success');
+  });
 }
 
-function pageSessions(main, t, ctx) {
-  heading(main, t, 'routes.sessions.title', 'Signed-in sessions', 'sessions.lede');
+function pageSessions(view, t, ctx) {
   const s = sessions(ctx.api);
-  const wrap = element('div', { className: 'qtiauth-sessions' });
-  main.appendChild(wrap);
   const load = () => {
-    clear(wrap);
     void s
       .list()
       .then((data) => {
-        const items = data?.items ?? [];
-        if (items.length === 0) {
-          wrap.appendChild(empty(t, 'sessions.empty', 'No other sessions.'));
-          return;
-        }
-        wrap.appendChild(
-          list(items, (session) => {
-            const item = element('li', { className: 'qtiauth-session' });
-            item.append(
-              element('span', {
-                className: 'qtiauth-session-label',
-                text: `${session.user_agent ?? 'unknown'} — ${session.ip ?? ''}`,
-              }),
-              element('button', {
-                type: 'button',
-                text: t('sessions.revoke', 'Revoke'),
-                onclick: () => {
-                  void s
-                    .revoke(session.id)
-                    .then(load)
-                    .catch(() => item.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-                },
-              }),
-            );
-            return item;
-          }),
-        );
+        view.list('sessions', itemsOf(data), (session, row) => {
+          row.fill({ user_agent: session.user_agent, ip: session.ip ?? '' });
+          row.on('revoke', () => {
+            void s
+              .revoke(session.id)
+              .then(load)
+              .catch(() => row.append(view.problem()));
+          });
+        });
       })
-      .catch(() => {
-        wrap.appendChild(empty(t, 'sessions.load.error', 'Could not load sessions.'));
-      });
+      .catch(() => view.state('sessions', 'error'));
   };
   load();
-  main.appendChild(
-    element('button', {
-      type: 'button',
-      className: 'qtiauth-button qtiauth-button-ghost',
-      text: t('sessions.revokeOthers', 'Sign out other sessions'),
-      onclick: () => {
-        void s.revokeOthers().then(load).catch(load);
-      },
-    }),
-  );
+  view.on('revoke-others', () => {
+    void s.revokeOthers().then(load).catch(load);
+  });
 }
 
-function pageMethods(main, t, ctx) {
-  heading(main, t, 'routes.methods.title', 'Connected sign-in methods', 'methods.lede');
-  const methods = ctx.features.auth.methods;
-  const rows = [
-    { key: 'password', enabled: methods.password },
-    { key: 'magic_link', enabled: methods.magic_link },
-    { key: 'passkeys', enabled: methods.passkeys },
-    { key: 'totp', enabled: methods.totp },
-  ];
-  main.appendChild(
-    list(rows, (row) => {
-      const item = element('li');
-      const label = t(`methods.${row.key}`, row.key);
-      const state = row.enabled ? t('methods.on', 'on') : t('methods.off', 'off');
-      item.textContent = `${label} — ${state}`;
-      return item;
-    }),
-  );
+function pageMethods(view, t, ctx) {
+  const { methods } = ctx.features.auth;
+  for (const key of ['password', 'magic_link', 'passkeys', 'totp']) {
+    view.show(key, Boolean(methods[key]));
+  }
 }
 
-function pageNotifications(main, t, ctx) {
-  heading(main, t, 'routes.notifications.title', 'Notification preferences', 'notifications.lede');
+function pageNotifications(view, t, ctx) {
   const account = me(ctx.api);
-  const wrap = element('form', { className: 'qtiauth-prefs' });
-  main.appendChild(wrap);
   void account
     .notifications()
     .then((data) => {
-      clear(wrap);
-      const preferences = data?.preferences ?? {};
-      const channels = Object.entries(preferences);
-      if (channels.length === 0) {
-        wrap.appendChild(empty(t, 'notifications.empty', 'No preferences yet.'));
-        return;
-      }
-      for (const [channel, value] of channels) {
-        const id = `qtiauth-p-${channel}`;
-        const box = element('p', { className: 'qtiauth-field' });
-        box.append(
-          element('input', { id, name: channel, type: 'checkbox', checked: Boolean(value) }),
-          element('label', { htmlFor: id, text: t(`notifications.channel.${channel}`, channel) }),
-        );
-        wrap.appendChild(box);
-      }
-      const feedback = element('div', { className: 'qtiauth-feedback' });
-      wrap.appendChild(submitRow(t, 'notifications.submit'));
-      wrap.appendChild(feedback);
-      wrap.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const values = {};
-        for (const input of wrap.querySelectorAll('input[type=checkbox]')) {
-          values[input.name] = input.checked;
-        }
-        void runForm(wrap, feedback, t, async () => {
-          await account.setNotifications(values);
-          feedback.appendChild(successRow(t, 'notifications.success'));
-        });
-      });
+      const channels = Object.entries(data?.preferences ?? {});
+      view.list(
+        'channels',
+        channels.map(([channel, enabled]) => ({
+          id: `qtiauth-p-${channel}`,
+          channel,
+          enabled: Boolean(enabled),
+          label: t(`notifications.channel.${channel}`, channel),
+        })),
+      );
     })
-    .catch(loadErrorInto(wrap, t, 'notifications.load.error', 'Could not load preferences.'));
+    .catch(() => view.state('channels', 'error'));
+  view.form('preferences', async (values, form) => {
+    await account.setNotifications(values);
+    form.say('success');
+  });
 }
 
-function pageLegal(main, t, ctx) {
-  heading(main, t, 'routes.legal.title', 'Legal acceptance', 'legal.lede');
+function pageLegal(view, t, ctx) {
   const account = me(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void account
     .legal()
     .then((data) => {
-      const documents = data?.documents ?? [];
-      if (documents.length === 0) {
-        wrap.appendChild(empty(t, 'legal.empty', 'No documents require acceptance.'));
-        return;
-      }
-      wrap.appendChild(
-        list(documents, (document) => {
-          const item = element('li', { className: 'qtiauth-legal-item' });
-          item.append(
-            element('a', {
-              href: document.url,
-              text: document.title,
-              attrs: { target: '_blank', rel: 'noopener' },
-            }),
-            element('button', {
-              type: 'button',
-              text: t('legal.accept', 'Accept'),
-              onclick: () => {
-                void account
-                  .acceptLegal(document.id, document.version)
-                  .then(() => item.appendChild(successRow(t, 'legal.accepted')))
-                  .catch(() => item.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-              },
-            }),
-          );
-          return item;
-        }),
-      );
+      view.list('documents', data?.documents ?? [], (document, row) => {
+        row.fill({ url: document.url, title: document.title });
+        row.on('accept', () => {
+          void account
+            .acceptLegal(document.id, document.version)
+            .then(() => row.append(view.message('accepted')))
+            .catch(() => row.append(view.problem()));
+        });
+      });
     })
-    .catch(loadErrorInto(wrap, t, 'legal.load.error', 'Could not load documents.'));
+    .catch(() => view.state('documents', 'error'));
 }
 
-function pageData(main, t, ctx) {
-  heading(main, t, 'routes.data.title', 'Data export and deletion', 'data.lede');
+function pageData(view, t, ctx) {
   const account = me(ctx.api);
-  main.appendChild(element('h3', { text: t('data.export.heading', 'Export your data') }));
-  const exportStatus = element('div', {
-    className: 'qtiauth-status',
-    attrs: { 'aria-live': 'polite' },
-  });
-  main.appendChild(exportStatus);
-  main.appendChild(
-    element('button', {
-      type: 'button',
-      text: t('data.export.submit', 'Request export'),
-      onclick: () => {
-        clear(exportStatus);
-        void account
-          .export()
-          .then((result) => {
-            exportStatus.appendChild(
-              element('p', {
-                text: t('data.export.queued', `Export queued: ${result?.id ?? ''}`),
-              }),
-            );
-          })
-          .catch(() => {
-            exportStatus.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' }));
-          });
-      },
-    }),
+  const request = (part, message, action) => () => {
+    view.part(part).replaceChildren();
+    void action()
+      .then((result) => view.say(part, message, result ?? {}))
+      .catch(() => view.part(part).appendChild(view.problem()));
+  };
+  view.on(
+    'export',
+    request('export-status', 'export-queued', () => account.export()),
   );
-  main.appendChild(element('h3', { text: t('data.deletion.heading', 'Delete your account') }));
-  const deletionStatus = element('div', {
-    className: 'qtiauth-status',
-    attrs: { 'aria-live': 'polite' },
-  });
-  main.appendChild(deletionStatus);
-  main.appendChild(
-    element('button', {
-      type: 'button',
-      className: 'qtiauth-button qtiauth-button-danger',
-      text: t('data.deletion.submit', 'Request deletion'),
-      onclick: () => {
-        clear(deletionStatus);
-        void account
-          .requestDeletion()
-          .then((result) => {
-            deletionStatus.appendChild(
-              element('p', {
-                text: t('data.deletion.queued', `Scheduled for ${result?.scheduled_at ?? 'soon'}`),
-              }),
-            );
-          })
-          .catch(() => {
-            deletionStatus.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' }));
-          });
-      },
-    }),
+  view.on(
+    'delete',
+    request('deletion-status', 'deletion-queued', () => account.requestDeletion()),
   );
 }
 
-function pageFamily(main, t, ctx) {
-  heading(main, t, 'routes.family.title', 'Family dashboard', 'family.lede');
+function pageFamily(view, t, ctx) {
   const f = family(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void f
     .list()
     .then((data) => {
-      const children = data?.children ?? [];
-      if (children.length === 0) {
-        wrap.appendChild(empty(t, 'family.empty', 'No linked children.'));
-        return;
-      }
-      wrap.appendChild(
-        list(children, (child) => {
-          const item = element('li');
-          item.appendChild(
-            element('a', {
-              href: ctx.href(`/family/${encodeURIComponent(child.id)}`),
-              text: child.display_name ?? child.username ?? child.id,
-              onclick: (event) => {
-                event.preventDefault();
-                ctx.navigate(`/family/${encodeURIComponent(child.id)}`);
-              },
-            }),
-          );
-          return item;
-        }),
+      view.list(
+        'children',
+        (data?.children ?? []).map((child) => ({
+          path: `/family/${encodeURIComponent(child.id)}`,
+          name: child.display_name ?? child.username ?? child.id,
+        })),
       );
     })
-    .catch(loadErrorInto(wrap, t, 'family.load.error', 'Could not load family.'));
+    .catch(() => view.state('children', 'error'));
 }
 
-function pageChild(main, t, ctx, params) {
-  heading(main, t, 'routes.family.child.title', 'Child dashboard', 'family.child.lede');
+function pageChild(view, t, ctx, params) {
   const f = family(ctx.api);
-  const details = element('dl', { className: 'qtiauth-details' });
-  main.appendChild(details);
   void f
     .child(params.id)
     .then((data) => {
-      const rows = [
-        ['family.field.username', data?.username ?? ''],
-        ['family.field.age_band', data?.age_band ?? ''],
-        ['family.field.status', data?.status ?? ''],
-      ];
-      for (const [key, value] of rows) {
-        details.append(element('dt', { text: t(key, key) }), element('dd', { text: value }));
-      }
+      view
+        .fill({
+          username: data?.username ?? '',
+          age_band: data?.age_band ?? '',
+          status: data?.status ?? '',
+        })
+        .state('child', 'ready');
     })
-    .catch(loadErrorInto(details, t, 'family.child.load.error', 'Could not load child.'));
+    .catch(() => view.state('child', 'error'));
 }
 
-function pageChildWaiting(main, t) {
-  heading(main, t, 'routes.waiting.title', 'Waiting for a guardian');
-  main.appendChild(
-    element('p', {
-      text: t(
-        'waiting.body',
-        'Ask a parent or guardian to approve your account. This page will refresh when they do.',
-      ),
-    }),
-  );
+function pageConsent(view, t, ctx) {
+  view.fill({
+    client_id: queryParam(ctx, 'client_id'),
+    scope: queryParam(ctx, 'scope'),
+    authorize_url: `${ctx.apiBase}/api/v1/oauth/authorize`,
+  });
 }
 
-function pageConsent(main, t, ctx) {
-  heading(main, t, 'routes.consent.title', 'Authorize app', 'consent.lede');
-  const query = new URLSearchParams(ctx.location.search);
-  const clientId = query.get('client_id') ?? '';
-  const scope = query.get('scope') ?? '';
-  main.appendChild(
-    element('dl', { className: 'qtiauth-details' }, [
-      element('dt', { text: t('consent.field.app', 'App') }),
-      element('dd', { text: clientId }),
-      element('dt', { text: t('consent.field.scope', 'Requested access') }),
-      element('dd', { text: scope }),
-    ]),
-  );
-  main.appendChild(
-    element('form', { method: 'post', action: `${ctx.apiBase}/api/v1/oauth/authorize` }, [
-      element('input', { type: 'hidden', name: 'client_id', value: clientId }),
-      element('input', { type: 'hidden', name: 'scope', value: scope }),
-      element('button', {
-        type: 'submit',
-        name: 'decision',
-        value: 'allow',
-        text: t('consent.allow', 'Allow'),
-      }),
-      element('button', {
-        type: 'submit',
-        className: 'qtiauth-button qtiauth-button-ghost',
-        name: 'decision',
-        value: 'deny',
-        text: t('consent.deny', 'Deny'),
-      }),
-    ]),
-  );
-}
-
-function pageDevice(main, t, ctx) {
-  heading(main, t, 'routes.device.title', 'Enter device code', 'device.lede');
+function pageDevice(view, t, ctx) {
   const o = oauth(ctx.api);
-  main.appendChild(
-    form(
-      [{ name: 'user_code', label: 'field.userCode', autocomplete: 'one-time-code' }],
-      t,
-      'device.submit',
-      async (values, { feedback }) => {
-        await o.devicePair(values.user_code);
-        feedback.appendChild(successRow(t, 'device.success'));
-      },
-    ),
-  );
+  view.form('pair', async (values, form) => {
+    await o.devicePair(values.user_code);
+    form.say('success');
+  });
 }
 
-function pageApps(main, t, ctx) {
-  heading(main, t, 'routes.apps.title', 'Authorised apps', 'routes.apps.body');
+function pageApps(view, t, ctx) {
   const o = oauth(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void o
     .authorizedApps()
     .then((data) => {
-      const apps = data?.items ?? [];
-      if (apps.length === 0) {
-        wrap.appendChild(empty(t, 'apps.empty', 'No apps are connected.'));
-        return;
-      }
-      wrap.appendChild(
-        list(apps, (app) => {
-          const item = element('li');
-          item.append(
-            element('span', { text: app.client_name ?? app.client_id }),
-            element('button', {
-              type: 'button',
-              text: t('apps.revoke', 'Revoke'),
-              onclick: () => {
-                void o
-                  .revokeApp(app.client_id)
-                  .then(() => item.remove())
-                  .catch(() => item.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-              },
-            }),
-          );
-          return item;
-        }),
-      );
+      view.list('apps', itemsOf(data), (app, row) => {
+        row.fill({ name: app.client_name ?? app.client_id });
+        row.on('revoke', () => {
+          void o
+            .revokeApp(app.client_id)
+            .then(() => row.remove())
+            .catch(() => row.append(view.problem()));
+        });
+      });
     })
-    .catch(loadErrorInto(wrap, t, 'apps.load.error', 'Could not load apps.'));
+    .catch(() => view.state('apps', 'error'));
 }
 
-function pageDeveloper(main, t, ctx) {
-  heading(main, t, 'routes.developer.title', 'Developer portal', 'developer.lede');
+function pageDeveloper(view, t, ctx) {
   const o = oauth(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void o
     .developerClients()
     .then((data) => {
-      const clients = data?.items ?? [];
-      if (clients.length === 0) {
-        wrap.appendChild(empty(t, 'developer.empty', 'No OAuth clients yet.'));
-      } else {
-        wrap.appendChild(
-          list(clients, (item) => {
-            const row = element('li');
-            row.append(
-              element('span', { text: item.name ?? item.client_id }),
-              element('span', { className: 'qtiauth-muted', text: item.client_id }),
-            );
-            return row;
-          }),
-        );
-      }
-      main.appendChild(
-        element('h3', { text: t('developer.create.heading', 'Register a new client') }),
-      );
-      main.appendChild(
-        form(
-          [
-            { name: 'name', label: 'field.clientName' },
-            { name: 'redirect_uris', label: 'field.redirectUris' },
-          ],
-          t,
-          'developer.create.submit',
-          async (values, { feedback }) => {
-            await o.createClient({
-              name: values.name,
-              redirect_uris: values.redirect_uris.split(/\s+/u).filter(Boolean),
-            });
-            feedback.appendChild(successRow(t, 'developer.create.success'));
-          },
-        ),
+      view.list(
+        'clients',
+        itemsOf(data).map((client) => ({
+          name: client.name ?? client.client_id,
+          client_id: client.client_id,
+        })),
       );
     })
-    .catch(loadErrorInto(wrap, t, 'developer.load.error', 'Could not load clients.'));
+    .catch(() => view.state('clients', 'error'));
+  view.form('create', async (values, form) => {
+    await o.createClient({
+      name: values.name,
+      redirect_uris: values.redirect_uris.split(/\s+/u).filter(Boolean),
+    });
+    form.say('success');
+  });
 }
 
-function pageGames(main, t, ctx) {
-  heading(main, t, 'routes.games.title', 'Games', 'routes.games.body');
+function pageGames(view, t, ctx) {
   const g = games(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void g
     .library()
     .then((data) => {
-      const owned = data?.items ?? [];
-      if (owned.length === 0) {
-        wrap.appendChild(empty(t, 'games.empty', 'No games in your library yet.'));
-        return;
-      }
-      wrap.appendChild(
-        list(owned, (entry) => {
-          const item = element('li');
-          item.textContent = entry.title ?? entry.game_id;
-          return item;
-        }),
+      view.list(
+        'library',
+        itemsOf(data).map((entry) => ({ title: entry.title ?? entry.game_id })),
       );
     })
-    .catch(loadErrorInto(wrap, t, 'games.load.error', 'Could not load library.'));
-  const sub = [
-    ['/games/redeem', 'games.section.redeem'],
-    ['/games/achievements', 'games.section.achievements'],
-    ['/games/stats', 'games.section.stats'],
-    ['/games/leaderboards', 'games.section.leaderboards'],
-    ['/games/devices', 'games.section.devices'],
-  ];
-  main.appendChild(
-    list(sub, ([path, label]) => {
-      const item = element('li');
-      item.appendChild(
-        element('a', {
-          href: ctx.href(path),
-          text: t(label, path),
-          onclick: (event) => {
-            event.preventDefault();
-            ctx.navigate(path);
-          },
-        }),
-      );
-      return item;
-    }),
-  );
+    .catch(() => view.state('library', 'error'));
 }
 
-function pageRedeem(main, t, ctx) {
-  heading(main, t, 'routes.redeem.title', 'Redeem a key', 'redeem.lede');
+function pageRedeem(view, t, ctx) {
   const g = games(ctx.api);
-  main.appendChild(
-    form(
-      [{ name: 'code', label: 'field.key', autocomplete: 'off' }],
-      t,
-      'redeem.submit',
-      async (values, { feedback }) => {
-        const result = await g.redeem(values.code);
-        feedback.appendChild(
-          element('p', {
-            className: 'qtiauth-success',
-            attrs: { role: 'status' },
-            text: t('redeem.success', `Added ${result?.title ?? 'game'} to your library.`),
-          }),
-        );
-      },
-    ),
-  );
+  view.form('redeem', async (values, form) => {
+    const result = await g.redeem(values.code);
+    form.say('success', { title: result?.title ?? 'game' });
+  });
 }
 
-function pageDevices(main, t, ctx) {
-  heading(main, t, 'routes.devices.title', 'Game devices', 'devices.lede');
+function pageDevices(view, t, ctx) {
   const g = games(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void g
     .devices()
     .then((data) => {
-      const devices = data?.items ?? [];
-      if (devices.length === 0) {
-        wrap.appendChild(empty(t, 'devices.empty', 'No linked devices.'));
-        return;
-      }
-      wrap.appendChild(
-        list(devices, (device) => {
-          const item = element('li');
-          item.append(
-            element('span', { text: `${device.name ?? device.id} — ${device.platform ?? ''}` }),
-            element('button', {
-              type: 'button',
-              text: t('devices.revoke', 'Revoke'),
-              onclick: () => {
-                void g
-                  .revokeDevice(device.id)
-                  .then(() => item.remove())
-                  .catch(() => item.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-              },
-            }),
-          );
-          return item;
-        }),
-      );
+      view.list('devices', itemsOf(data), (device, row) => {
+        row.fill({ name: device.name ?? device.id, platform: device.platform ?? '' });
+        row.on('revoke', () => {
+          void g
+            .revokeDevice(device.id)
+            .then(() => row.remove())
+            .catch(() => row.append(view.problem()));
+        });
+      });
     })
-    .catch(loadErrorInto(wrap, t, 'devices.load.error', 'Could not load devices.'));
+    .catch(() => view.state('devices', 'error'));
 }
 
-function gamePickerPage(main, t, ctx, action, titleKey, fallback) {
-  heading(main, t, titleKey, fallback);
+function gamePicker(view, ctx, action) {
   const g = games(ctx.api);
-  const output = element('div', { className: 'qtiauth-status' });
-  main.appendChild(
-    form([{ name: 'game_id', label: 'field.game' }], t, 'games.load', async (values) => {
-      clear(output);
-      const data = await action(g, values.game_id);
-      const items = data?.items ?? [];
-      if (items.length === 0) {
-        output.appendChild(empty(t, 'games.section.empty', 'Nothing to show.'));
-        return;
-      }
-      output.appendChild(
-        list(items, (row) => {
-          const item = element('li');
-          item.textContent = row.title ?? row.name ?? JSON.stringify(row);
-          return item;
-        }),
-      );
-    }),
-  );
-  main.appendChild(output);
+  view.form('game', async (values) => {
+    const data = await action(g, values.game_id);
+    view.list(
+      'rows',
+      itemsOf(data).map((row) => ({ label: row.title ?? row.name ?? JSON.stringify(row) })),
+    );
+  });
 }
 
-function pageAchievements(main, t, ctx) {
-  gamePickerPage(
-    main,
-    t,
-    ctx,
-    (g, id) => g.achievements(id),
-    'routes.achievements.title',
-    'Achievements',
-  );
+function pageAchievements(view, t, ctx) {
+  gamePicker(view, ctx, (g, id) => g.achievements(id));
 }
 
-function pageStats(main, t, ctx) {
-  gamePickerPage(main, t, ctx, (g, id) => g.stats(id), 'routes.stats.title', 'Stats');
+function pageStats(view, t, ctx) {
+  gamePicker(view, ctx, (g, id) => g.stats(id));
 }
 
-function pageLeaderboards(main, t, ctx) {
-  gamePickerPage(
-    main,
-    t,
-    ctx,
-    (g, id) => g.leaderboards(id),
-    'routes.leaderboards.title',
-    'Leaderboards',
-  );
+function pageLeaderboards(view, t, ctx) {
+  gamePicker(view, ctx, (g, id) => g.leaderboards(id));
 }
 
-function pageReport(main, t, ctx) {
-  heading(main, t, 'routes.report.title', 'Report user or content', 'report.lede');
+function pageReport(view, t, ctx) {
   const r = reports(ctx.api);
-  main.appendChild(
-    form(
-      [
-        { name: 'target', label: 'field.target' },
-        { name: 'reason', label: 'field.reason' },
-        { name: 'detail', label: 'field.detail', required: false },
-      ],
-      t,
-      'report.submit',
-      async (values, { feedback }) => {
-        await r.submit({ target: values.target, reason: values.reason, detail: values.detail });
-        feedback.appendChild(successRow(t, 'report.success'));
-      },
-    ),
-  );
+  view.form('report', async (values, form) => {
+    await r.submit({ target: values.target, reason: values.reason, detail: values.detail });
+    form.say('success');
+  });
 }
 
-function pageSupportHome(main, t, ctx) {
-  heading(main, t, 'routes.support.title', 'Support', 'support.lede');
-  const sections = [
-    ['/support/kb', 'support.section.kb'],
-    ['/support/kb/search', 'support.section.search'],
-    ['/support/tickets', 'support.section.tickets'],
-    ['/support/tickets/new', 'support.section.newTicket'],
-    ['/support/appeals/new', 'support.section.appeal'],
-    ['/support/guest/start', 'support.section.guest'],
-  ];
-  main.appendChild(
-    list(sections, ([path, label]) => {
-      const item = element('li');
-      item.appendChild(
-        element('a', {
-          href: ctx.href(path),
-          text: t(label, path),
-          onclick: (event) => {
-            event.preventDefault();
-            ctx.navigate(path);
-          },
-        }),
-      );
-      return item;
-    }),
-  );
+function articleLinks(articles) {
+  return articles.map((article) => ({
+    path: `/support/kb/articles/${encodeURIComponent(article.slug)}`,
+    title: article.title,
+  }));
 }
 
-function pageKbHome(main, t, ctx) {
-  heading(main, t, 'routes.kb.title', 'Help centre', 'kb.lede');
+function pageKbHome(view, t, ctx) {
   const k = kb(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void k
     .categories()
     .then((data) => {
-      const items = data?.items ?? [];
-      if (items.length === 0) {
-        wrap.appendChild(empty(t, 'kb.empty', 'No articles have been published yet.'));
-        return;
-      }
-      wrap.appendChild(
-        list(items, (category) => {
-          const item = element('li');
-          item.appendChild(
-            element('a', {
-              href: ctx.href(`/support/kb/categories/${encodeURIComponent(category.slug)}`),
-              text: category.name,
-              onclick: (event) => {
-                event.preventDefault();
-                ctx.navigate(`/support/kb/categories/${encodeURIComponent(category.slug)}`);
-              },
-            }),
-          );
-          return item;
-        }),
+      view.list(
+        'categories',
+        itemsOf(data).map((category) => ({
+          path: `/support/kb/categories/${encodeURIComponent(category.slug)}`,
+          name: category.name,
+        })),
       );
     })
-    .catch(loadErrorInto(wrap, t, 'kb.load.error', 'Could not load help centre.'));
+    .catch(() => view.state('categories', 'error'));
 }
 
-function pageKbCategory(main, t, ctx, params) {
-  const h2 = heading(main, t, 'routes.kb.category.title', 'Category');
+function pageKbCategory(view, t, ctx, params) {
   const k = kb(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void k
     .category(params.slug)
     .then((data) => {
-      h2.textContent = data?.name ?? params.slug;
-      const articles = data?.articles?.items ?? [];
-      if (articles.length === 0) {
-        wrap.appendChild(empty(t, 'kb.category.empty', 'No articles in this category.'));
-        return;
-      }
-      wrap.appendChild(
-        list(articles, (article) => {
-          const item = element('li');
-          item.appendChild(
-            element('a', {
-              href: ctx.href(`/support/kb/articles/${encodeURIComponent(article.slug)}`),
-              text: article.title,
-              onclick: (event) => {
-                event.preventDefault();
-                ctx.navigate(`/support/kb/articles/${encodeURIComponent(article.slug)}`);
-              },
-            }),
-          );
-          return item;
-        }),
-      );
+      view.fill({ name: data?.name ?? params.slug });
+      view.list('articles', articleLinks(data?.articles?.items ?? []));
     })
-    .catch(loadErrorInto(wrap, t, 'kb.category.load.error', 'Could not load category.'));
+    .catch(() => view.state('articles', 'error'));
 }
 
-function pageKbSearch(main, t, ctx) {
-  heading(main, t, 'routes.kb.search.title', 'Search the help centre', 'kb.search.lede');
+function pageKbSearch(view, t, ctx) {
   const k = kb(ctx.api);
-  const results = element('div');
-  main.appendChild(
-    form(
-      [{ name: 'q', label: 'field.query', autocomplete: 'off' }],
-      t,
-      'kb.search.submit',
-      async (values) => {
-        clear(results);
-        const data = await k.search(values.q);
-        const items = data?.items ?? [];
-        if (items.length === 0) {
-          results.appendChild(empty(t, 'kb.search.empty', 'No matching articles.'));
-          return;
-        }
-        results.appendChild(
-          list(items, (article) => {
-            const item = element('li');
-            item.appendChild(
-              element('a', {
-                href: ctx.href(`/support/kb/articles/${encodeURIComponent(article.slug)}`),
-                text: article.title,
-                onclick: (event) => {
-                  event.preventDefault();
-                  ctx.navigate(`/support/kb/articles/${encodeURIComponent(article.slug)}`);
-                },
-              }),
-            );
-            return item;
-          }),
-        );
-      },
-    ),
-  );
-  main.appendChild(results);
+  view.form('search', async (values) => {
+    const data = await k.search(values.q);
+    view.list('results', articleLinks(itemsOf(data)));
+  });
 }
 
-function pageKbArticle(main, t, ctx, params) {
-  const h2 = heading(main, t, 'routes.kb.article.title', 'Article');
+function pageKbArticle(view, t, ctx, params) {
   const k = kb(ctx.api);
-  const body = element('div', { className: 'qtiauth-article' });
-  const meta = element('p', { className: 'qtiauth-muted' });
-  const feedback = element('div', { className: 'qtiauth-status' });
-  main.append(meta, body, feedback);
   void k
     .article(params.slug)
     .then((data) => {
       if (data === null) {
-        body.appendChild(empty(t, 'kb.article.missing', 'That article is not available.'));
+        view.state('article', 'missing');
         return;
       }
-      h2.textContent = data.title;
-      meta.textContent = `${data.category?.name ?? ''} — ${data.updated_at}`;
-      renderKbArticleBody(body, data.html);
-      const yes = element('button', {
-        type: 'button',
-        text: t('kb.feedback.yes', 'Yes, this helped'),
-        onclick: () => {
-          void k
-            .feedback(params.slug, true)
-            .then(() => {
-              clear(feedback);
-              feedback.appendChild(successRow(t, 'kb.feedback.thanks'));
-            })
-            .catch(() => feedback.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-        },
+      view.fill({
+        title: data.title,
+        category: data.category?.name ?? '',
+        updated_at: data.updated_at,
       });
-      const no = element('button', {
-        type: 'button',
-        className: 'qtiauth-button qtiauth-button-ghost',
-        text: t('kb.feedback.no', 'No, this did not help'),
-        onclick: () => {
-          void k
-            .feedback(params.slug, false)
-            .then(() => {
-              clear(feedback);
-              feedback.appendChild(successRow(t, 'kb.feedback.thanks'));
-            })
-            .catch(() => feedback.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-        },
-      });
-      const buttons = element('p', { className: 'qtiauth-actions' });
-      buttons.append(yes, no);
-      main.appendChild(buttons);
+      renderKbArticleBody(view.part('body'), data.html);
+      view.state('article', 'ready');
     })
-    .catch(loadErrorInto(body, t, 'kb.article.load.error', 'Could not load article.'));
+    .catch(() => view.state('article', 'error'));
+  const feedback = (helpful) => () => {
+    void k
+      .feedback(params.slug, helpful)
+      .then(() => view.say('feedback', 'thanks'))
+      .catch(() => view.part('feedback').appendChild(view.problem()));
+  };
+  view.on('helpful', feedback(true));
+  view.on('not-helpful', feedback(false));
 }
 
 function renderKbArticleBody(body, html) {
@@ -1433,958 +522,447 @@ function renderKbArticleBody(body, html) {
   body.replaceChildren(...Array.from(parsed.body.childNodes));
 }
 
-function pageMyTickets(main, t, ctx) {
-  heading(main, t, 'routes.tickets.title', 'Your tickets', 'tickets.lede');
+function pageMyTickets(view, t, ctx) {
   const s = support(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void s
     .listTickets()
     .then((data) => {
-      const items = data?.items ?? [];
-      if (items.length === 0) {
-        wrap.appendChild(empty(t, 'tickets.empty', 'You have not opened any tickets.'));
-        return;
-      }
-      wrap.appendChild(
-        list(items, (ticket) => {
-          const item = element('li');
-          item.appendChild(
-            element('a', {
-              href: ctx.href(`/support/tickets/${encodeURIComponent(ticket.id)}`),
-              text: `#${ticket.number} — ${ticket.subject} (${ticket.status})`,
-              onclick: (event) => {
-                event.preventDefault();
-                ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
-              },
-            }),
-          );
-          return item;
-        }),
+      view.list(
+        'tickets',
+        itemsOf(data).map((ticket) => ({
+          path: `/support/tickets/${encodeURIComponent(ticket.id)}`,
+          number: ticket.number,
+          subject: ticket.subject,
+          status: ticket.status,
+        })),
       );
     })
-    .catch(loadErrorInto(wrap, t, 'tickets.load.error', 'Could not load tickets.'));
+    .catch(() => view.state('tickets', 'error'));
 }
 
-function pageNewTicket(main, t, ctx) {
-  heading(main, t, 'routes.tickets.new.title', 'Open a support ticket', 'tickets.new.lede');
-  const s = support(ctx.api);
-  const categories = element('select', { name: 'category_id', required: true });
-  categories.appendChild(
-    element('option', { value: '', text: t('tickets.new.pickCategory', 'Choose a category') }),
-  );
-  void s
-    .categories()
+function loadCategories(view, request) {
+  void request
     .then((data) => {
-      const items = data?.items ?? [];
-      for (const category of items) {
-        categories.appendChild(element('option', { value: category.id, text: category.name }));
-      }
-    })
-    .catch(() => {
-      categories.appendChild(
-        element('option', {
-          value: '',
-          text: t('tickets.new.categoryLoadError', 'Could not load categories.'),
-          disabled: true,
-        }),
+      view.list(
+        'categories',
+        itemsOf(data).map((category) => ({ id: category.id, name: category.name })),
       );
-    });
-  const feedback = element('div', {
-    className: 'qtiauth-feedback',
-    attrs: { 'aria-live': 'polite' },
-  });
-  const el = element('form', { noValidate: true });
-  const categoryWrap = element('p', { className: 'qtiauth-field' });
-  categoryWrap.append(
-    element('label', { htmlFor: 'qtiauth-f-category', text: t('field.category', 'Category') }),
-    categories,
-  );
-  categories.id = 'qtiauth-f-category';
-  el.appendChild(categoryWrap);
-  const subject = element('input', { type: 'text', name: 'subject', required: true });
-  subject.id = 'qtiauth-f-subject';
-  const subjectWrap = element('p', { className: 'qtiauth-field' });
-  subjectWrap.append(
-    element('label', { htmlFor: 'qtiauth-f-subject', text: t('field.subject', 'Subject') }),
-    subject,
-  );
-  el.appendChild(subjectWrap);
-  const body = element('textarea', { name: 'body', required: true, rows: 6 });
-  body.id = 'qtiauth-f-body';
-  const bodyWrap = element('p', { className: 'qtiauth-field' });
-  bodyWrap.append(
-    element('label', { htmlFor: 'qtiauth-f-body', text: t('field.message', 'Message') }),
-    body,
-  );
-  el.appendChild(bodyWrap);
-  el.appendChild(submitRow(t, 'tickets.new.submit'));
-  el.appendChild(feedback);
-  el.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void runForm(el, feedback, t, async () => {
-      const ticket = await s.createTicket({
-        category_id: categories.value,
-        subject: subject.value,
-        body: body.value,
-      });
-      ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
-    });
-  });
-  main.appendChild(el);
+    })
+    .catch(() => view.part('categories').appendChild(view.message('categories-error')));
 }
 
-function renderTicketDetail(main, t, ctx, ticket, api, h2) {
-  h2.textContent = `#${ticket.number} — ${ticket.subject}`;
-  const meta = element('p', { className: 'qtiauth-muted' });
-  meta.textContent = `${ticket.status} — ${ticket.priority} — ${ticket.created_at}`;
-  main.appendChild(meta);
-  const thread = element('ol', { className: 'qtiauth-thread' });
-  for (const message of ticket.messages ?? []) {
-    const item = element('li', {
-      className: message.staff ? 'qtiauth-message qtiauth-message-staff' : 'qtiauth-message',
-    });
-    item.append(
-      element('p', {
-        className: 'qtiauth-muted',
-        text: `${message.staff ? t('tickets.staff', 'Staff') : t('tickets.you', 'You')} — ${message.created_at}`,
-      }),
-      element('p', { text: message.body }),
-    );
-    thread.appendChild(item);
-  }
-  main.appendChild(thread);
-  const attachments = ticket.attachments ?? [];
-  if (attachments.length > 0) {
-    main.appendChild(element('h3', { text: t('tickets.attachments', 'Attachments') }));
-    main.appendChild(
-      list(attachments, (attachment) => {
-        const item = element('li');
-        item.append(
-          element('span', { text: `${attachment.filename} (${attachment.content_type})` }),
-          element('button', {
-            type: 'button',
-            text: t('tickets.download', 'Download'),
-            onclick: () => {
-              void api
-                .downloadAttachment(ticket.id, attachment.id)
-                .then((result) => {
-                  if (result?.url) window.open(result.url, '_blank', 'noopener');
-                })
-                .catch(() => item.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-            },
-          }),
-        );
-        return item;
-      }),
-    );
-  }
-  if (ticket.status !== 'closed') {
-    main.appendChild(element('h3', { text: t('tickets.reply.heading', 'Reply') }));
-    main.appendChild(
-      form(
-        [{ name: 'body', label: 'field.message' }],
-        t,
-        'tickets.reply.submit',
-        async (values, { feedback }) => {
-          await api.reply(ticket.id, values.body);
-          feedback.appendChild(successRow(t, 'tickets.reply.success'));
-          ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
-        },
-      ),
-    );
-    main.appendChild(
-      element('button', {
-        type: 'button',
-        className: 'qtiauth-button qtiauth-button-ghost',
-        text: t('tickets.close', 'Close ticket'),
-        onclick: () => {
-          void api
-            .close(ticket.id)
-            .then(() => ctx.navigate('/support/tickets'))
-            .catch(() => main.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-        },
-      }),
-    );
-  } else {
-    main.appendChild(
-      element('button', {
-        type: 'button',
-        text: t('tickets.reopen', 'Reopen ticket'),
-        onclick: () => {
-          void api
-            .reopen(ticket.id)
-            .then(() => {
-              ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
-            })
-            .catch(() => main.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-        },
-      }),
-    );
-    if (ticket.rating == null) {
-      main.appendChild(element('h3', { text: t('tickets.rate.heading', 'Rate this ticket') }));
-      const rating = element('div', { className: 'qtiauth-actions' });
-      for (const score of [1, 2, 3, 4, 5]) {
-        rating.appendChild(
-          element('button', {
-            type: 'button',
-            text: String(score),
-            onclick: () => {
-              void api
-                .rate(ticket.id, score)
-                .then(() => {
-                  ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
-                })
-                .catch(() => main.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-            },
-          }),
-        );
-      }
-      main.appendChild(rating);
-    }
-  }
-}
-
-function pageTicket(main, t, ctx, params) {
-  const h2 = heading(main, t, 'routes.tickets.detail.title', 'Ticket');
+function pageNewTicket(view, t, ctx) {
   const s = support(ctx.api);
-  const body = element('div');
-  main.appendChild(body);
+  loadCategories(view, s.categories());
+  view.form('ticket', async (values) => {
+    const ticket = await s.createTicket({
+      category_id: values.category_id,
+      subject: values.subject,
+      body: values.body,
+    });
+    ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
+  });
+}
+
+function messageRow(message, row) {
+  row.show('staff', Boolean(message.staff)).fill({
+    class: message.staff ? 'qtiauth-message qtiauth-message-staff' : 'qtiauth-message',
+    created_at: message.created_at,
+    body: message.body,
+  });
+}
+
+function renderTicketDetail(detail, ticket, api, { reload, closed }) {
+  const open = ticket.status !== 'closed';
+  const unrated = ticket.rating == null;
+  const attachments = ticket.attachments ?? [];
+  const failed = () => detail.part('errors').appendChild(detail.problem());
+  detail
+    .fill({ status: ticket.status, priority: ticket.priority, created_at: ticket.created_at })
+    .show('attachments', attachments.length > 0)
+    .show('open', open)
+    .show('unrated', unrated);
+  detail.list('messages', ticket.messages ?? [], messageRow);
+  if (attachments.length > 0) {
+    detail.list('attachments', attachments, (attachment, row) => {
+      row.fill({ filename: attachment.filename, content_type: attachment.content_type });
+      row.on('download', () => {
+        void api
+          .downloadAttachment(ticket.id, attachment.id)
+          .then((result) => {
+            if (result?.url) window.open(result.url, '_blank', 'noopener');
+          })
+          .catch(() => row.append(row.problem()));
+      });
+    });
+  }
+  if (open) {
+    detail.form('reply', async (values, form) => {
+      await api.reply(ticket.id, values.body);
+      form.say('success');
+      reload();
+    });
+    detail.on('close', () => {
+      void api.close(ticket.id).then(closed).catch(failed);
+    });
+    return;
+  }
+  detail.on('reopen', () => {
+    void api.reopen(ticket.id).then(reload).catch(failed);
+  });
+  if (unrated) {
+    detail.on('rate', (event, button) => {
+      void api.rate(ticket.id, Number(button.value)).then(reload).catch(failed);
+    });
+  }
+}
+
+function pageTicket(view, t, ctx, params) {
+  const s = support(ctx.api);
   void s
     .getTicket(params.id)
-    .then((ticket) => renderTicketDetail(main, t, ctx, ticket, s, h2))
-    .catch(loadErrorInto(body, t, 'tickets.detail.load.error', 'Could not load ticket.'));
-}
-
-function pageAppeal(main, t, ctx) {
-  heading(main, t, 'routes.appeals.title', 'Appeal a decision', 'appeals.lede');
-  const s = support(ctx.api);
-  main.appendChild(
-    form(
-      [
-        { name: 'action_id', label: 'field.actionId', required: false },
-        { name: 'body', label: 'field.message' },
-      ],
-      t,
-      'appeals.submit',
-      async (values, { feedback }) => {
-        const ticket = await s.createAppeal({
-          action_id: values.action_id === '' ? undefined : values.action_id,
-          body: values.body,
-        });
-        feedback.appendChild(successRow(t, 'appeals.success'));
-        ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
-      },
-    ),
-  );
-}
-
-function pageGuestStart(main, t, ctx) {
-  heading(main, t, 'routes.guest.title', 'Contact support without signing in', 'guest.lede');
-  const g = guestSupport(ctx.api);
-  main.appendChild(
-    form(
-      [{ name: 'email', type: 'email', label: 'field.email', autocomplete: 'email' }],
-      t,
-      'guest.code.submit',
-      async (values, { feedback }) => {
-        await g.requestCode(values.email, undefined);
-        feedback.appendChild(successRow(t, 'guest.code.sent'));
-        ctx.navigate(`/support/guest/verify?email=${encodeURIComponent(values.email)}`);
-      },
-    ),
-  );
-}
-
-function pageGuestVerify(main, t, ctx) {
-  heading(main, t, 'routes.guest.verify.title', 'Open a guest ticket', 'guest.verify.lede');
-  const g = guestSupport(ctx.api);
-  const query = new URLSearchParams(ctx.location.search);
-  const emailFromQuery = query.get('email') ?? '';
-  const categories = element('select', { name: 'category_id', required: true });
-  categories.id = 'qtiauth-f-category';
-  categories.appendChild(
-    element('option', { value: '', text: t('tickets.new.pickCategory', 'Choose a category') }),
-  );
-  void g
-    .categories()
-    .then((data) => {
-      for (const category of data?.items ?? []) {
-        categories.appendChild(element('option', { value: category.id, text: category.name }));
-      }
-    })
-    .catch(() => {
-      categories.appendChild(
-        element('option', {
-          value: '',
-          text: t('tickets.new.categoryLoadError', 'Could not load categories.'),
-          disabled: true,
-        }),
-      );
-    });
-  const feedback = element('div', {
-    className: 'qtiauth-feedback',
-    attrs: { 'aria-live': 'polite' },
-  });
-  const el = element('form', { noValidate: true });
-  const inputs = new Map();
-  for (const spec of [
-    { name: 'email', type: 'email', label: 'field.email', value: emailFromQuery },
-    { name: 'code', label: 'field.code' },
-    { name: 'subject', label: 'field.subject' },
-    { name: 'body', label: 'field.message' },
-  ]) {
-    const { wrap, input } = field(t, spec);
-    el.appendChild(wrap);
-    inputs.set(spec.name, input);
-  }
-  const categoryWrap = element('p', { className: 'qtiauth-field' });
-  categoryWrap.append(
-    element('label', { htmlFor: 'qtiauth-f-category', text: t('field.category', 'Category') }),
-    categories,
-  );
-  el.insertBefore(categoryWrap, el.children[2] ?? null);
-  el.appendChild(submitRow(t, 'guest.verify.submit'));
-  el.appendChild(feedback);
-  el.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void runForm(el, feedback, t, async () => {
-      const result = await g.createTicket({
-        email: inputs.get('email').value,
-        code: inputs.get('code').value,
-        category_id: categories.value,
-        subject: inputs.get('subject').value,
-        body: inputs.get('body').value,
+    .then((ticket) => {
+      const path = `/support/tickets/${encodeURIComponent(ticket.id)}`;
+      view.say('heading', 'heading', { number: ticket.number, subject: ticket.subject });
+      renderTicketDetail(view.include('ticket', 'ticket'), ticket, s, {
+        reload: () => ctx.navigate(path),
+        closed: () => ctx.navigate('/support/tickets'),
       });
-      feedback.appendChild(
-        element('p', {
-          className: 'qtiauth-success',
-          attrs: { role: 'status' },
-          text: t('guest.verify.success', `Ticket #${result?.number ?? ''} opened.`),
-        }),
-      );
+      view.state('ticket', 'ready');
+    })
+    .catch(() => view.state('ticket', 'error'));
+}
+
+function pageAppeal(view, t, ctx) {
+  const s = support(ctx.api);
+  view.form('appeal', async (values, form) => {
+    const ticket = await s.createAppeal({
+      action_id: values.action_id === '' ? undefined : values.action_id,
+      body: values.body,
     });
+    form.say('success');
+    ctx.navigate(`/support/tickets/${encodeURIComponent(ticket.id)}`);
   });
-  main.appendChild(el);
 }
 
-function pageGuestView(main, t, ctx) {
-  heading(main, t, 'routes.guest.view.title', 'Follow a guest ticket', 'guest.view.lede');
+function pageGuestStart(view, t, ctx) {
   const g = guestSupport(ctx.api);
-  const detail = element('div');
-  const detailHeading = element('h2');
-  main.appendChild(
-    form([{ name: 'token', label: 'field.token' }], t, 'guest.view.submit', async (values) => {
-      clear(detail);
-      const ticket = await g.viewTicket(values.token);
-      renderTicketDetail(
-        detail,
-        t,
-        ctx,
-        ticket,
-        {
-          reply: (id, body) => g.reply(values.token, body),
-          close: () => g.close(values.token),
-          reopen: () => g.reopen(values.token),
-          rate: (id, rating) => g.rate(values.token, rating),
-          downloadAttachment: (_id, attachmentId) =>
-            g.downloadAttachment(values.token, attachmentId),
-        },
-        detailHeading,
-      );
-    }),
-  );
-  detail.appendChild(detailHeading);
-  detail.appendChild(element('h3', { text: t('guest.view.ticket', 'Ticket') }));
-  main.appendChild(detail);
+  view.form('code', async (values, form) => {
+    await g.requestCode(values.email, undefined);
+    form.say('success');
+    ctx.navigate(`/support/guest/verify?email=${encodeURIComponent(values.email)}`);
+  });
 }
 
-function pageStaffSupport(main, t, ctx) {
-  heading(main, t, 'routes.support.staff.title', 'Support staff', 'support.staff.lede');
-  const sections = [
-    ['/support/staff/tickets', 'support.staff.section.queue'],
-    ['/support/staff/macros', 'support.staff.section.macros'],
-    ['/support/staff/metrics', 'support.staff.section.metrics'],
-    ['/support/staff/kb', 'support.staff.section.kb'],
-  ];
-  main.appendChild(
-    list(sections, ([path, label]) => {
-      const item = element('li');
-      item.appendChild(
-        element('a', {
-          href: ctx.href(path),
-          text: t(label, path),
-          onclick: (event) => {
-            event.preventDefault();
-            ctx.navigate(path);
-          },
-        }),
-      );
-      return item;
-    }),
-  );
+function pageGuestVerify(view, t, ctx) {
+  const g = guestSupport(ctx.api);
+  view.fill({ email: queryParam(ctx, 'email') });
+  loadCategories(view, g.categories());
+  view.form('ticket', async (values, form) => {
+    const result = await g.createTicket({
+      email: values.email,
+      code: values.code,
+      category_id: values.category_id,
+      subject: values.subject,
+      body: values.body,
+    });
+    form.say('success', { number: result?.number ?? '' });
+  });
 }
 
-function pageStaffQueue(main, t, ctx) {
-  heading(main, t, 'routes.support.staff.queue.title', 'Support queue');
+function pageGuestView(view, t, ctx) {
+  const g = guestSupport(ctx.api);
+  const showTicket = async (token) => {
+    const ticket = await g.viewTicket(token);
+    const reload = () => {
+      void showTicket(token).catch(() => view.part('ticket').appendChild(view.problem()));
+    };
+    const api = {
+      reply: (_id, body) => g.reply(token, body),
+      close: () => g.close(token),
+      reopen: () => g.reopen(token),
+      rate: (_id, rating) => g.rate(token, rating),
+      downloadAttachment: (_id, attachmentId) => g.downloadAttachment(token, attachmentId),
+    };
+    renderTicketDetail(view.include('ticket', 'ticket'), ticket, api, {
+      reload,
+      closed: reload,
+    });
+    view.state('ticket', 'ready');
+  };
+  view.form('view', (values) => showTicket(values.token));
+}
+
+function pageStaffQueue(view, t, ctx) {
   const s = staffSupport(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void s
     .tickets()
     .then((data) => {
-      const items = data?.items ?? [];
-      if (items.length === 0) {
-        wrap.appendChild(empty(t, 'support.staff.queue.empty', 'No tickets in the queue.'));
-        return;
-      }
-      wrap.appendChild(
-        list(items, (ticket) => {
-          const item = element('li');
-          item.appendChild(
-            element('a', {
-              href: ctx.href(`/support/staff/tickets/${encodeURIComponent(ticket.id)}`),
-              text: `#${ticket.number} — ${ticket.subject} (${ticket.status}, ${ticket.priority})`,
-              onclick: (event) => {
-                event.preventDefault();
-                ctx.navigate(`/support/staff/tickets/${encodeURIComponent(ticket.id)}`);
-              },
-            }),
-          );
-          return item;
-        }),
+      view.list(
+        'tickets',
+        itemsOf(data).map((ticket) => ({
+          path: `/support/staff/tickets/${encodeURIComponent(ticket.id)}`,
+          number: ticket.number,
+          subject: ticket.subject,
+          status: ticket.status,
+          priority: ticket.priority,
+        })),
       );
     })
-    .catch(loadErrorInto(wrap, t, 'support.staff.queue.load.error', 'Could not load queue.'));
+    .catch(() => view.state('tickets', 'error'));
 }
 
-function pageStaffTicket(main, t, ctx, params) {
-  heading(main, t, 'routes.support.staff.ticket.title', 'Ticket');
+function pageStaffTicket(view, t, ctx, params) {
   const s = staffSupport(ctx.api);
-  const detail = element('div');
-  main.appendChild(detail);
   void s
     .ticket(params.id)
     .then((ticket) => {
-      clear(detail);
-      detail.appendChild(element('h3', { text: `#${ticket.number} — ${ticket.subject}` }));
-      detail.appendChild(
-        element('p', {
-          className: 'qtiauth-muted',
-          text: `${ticket.status} — ${ticket.priority} — ${ticket.created_at}`,
-        }),
-      );
-      const thread = element('ol', { className: 'qtiauth-thread' });
-      for (const message of ticket.messages ?? []) {
-        const item = element('li', {
-          className: message.staff ? 'qtiauth-message qtiauth-message-staff' : 'qtiauth-message',
-        });
-        item.append(
-          element('p', {
-            className: 'qtiauth-muted',
-            text: `${message.staff ? t('tickets.staff', 'Staff') : t('tickets.user', 'User')} — ${message.created_at}`,
-          }),
-          element('p', { text: message.body }),
-        );
-        thread.appendChild(item);
-      }
-      detail.appendChild(thread);
-      detail.appendChild(
-        element('h3', { text: t('support.staff.notes.heading', 'Internal notes') }),
-      );
-      const notes = element('ol', { className: 'qtiauth-thread' });
-      for (const note of ticket.notes ?? []) {
-        const item = element('li', { className: 'qtiauth-message qtiauth-message-note' });
-        item.append(
-          element('p', { className: 'qtiauth-muted', text: note.created_at }),
-          element('p', { text: note.body }),
-        );
-        notes.appendChild(item);
-      }
-      detail.appendChild(notes);
-      detail.appendChild(
-        form(
-          [{ name: 'body', label: 'field.note' }],
-          t,
-          'support.staff.notes.submit',
-          async (values, { feedback }) => {
-            await s.addNote(ticket.id, values.body);
-            feedback.appendChild(successRow(t, 'support.staff.notes.success'));
-            ctx.navigate(`/support/staff/tickets/${encodeURIComponent(ticket.id)}`);
-          },
-        ),
-      );
-      detail.appendChild(
-        element('h3', { text: t('support.staff.reply.heading', 'Reply as staff') }),
-      );
-      detail.appendChild(
-        form(
-          [{ name: 'body', label: 'field.message' }],
-          t,
-          'support.staff.reply.submit',
-          async (values, { feedback }) => {
-            await s.reply(ticket.id, { body: values.body });
-            feedback.appendChild(successRow(t, 'support.staff.reply.success'));
-            ctx.navigate(`/support/staff/tickets/${encodeURIComponent(ticket.id)}`);
-          },
-        ),
-      );
+      const reload = () => ctx.navigate(`/support/staff/tickets/${encodeURIComponent(ticket.id)}`);
+      view.fill({
+        number: ticket.number,
+        subject: ticket.subject,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+      });
+      view.list('messages', ticket.messages ?? [], messageRow);
+      view.list('notes', ticket.notes ?? []);
+      view.form('note', async (values, form) => {
+        await s.addNote(ticket.id, values.body);
+        form.say('success');
+        reload();
+      });
+      view.form('reply', async (values, form) => {
+        await s.reply(ticket.id, { body: values.body });
+        form.say('success');
+        reload();
+      });
+      view.state('ticket', 'ready');
     })
-    .catch(loadErrorInto(detail, t, 'support.staff.ticket.load.error', 'Could not load ticket.'));
+    .catch(() => view.state('ticket', 'error'));
 }
 
-function pageStaffMacros(main, t, ctx) {
-  heading(main, t, 'routes.support.staff.macros.title', 'Canned responses');
+function pageStaffMacros(view, t, ctx) {
   const s = staffSupport(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   const load = () => {
-    clear(wrap);
     void s
       .macros()
       .then((data) => {
-        const items = data?.items ?? [];
-        if (items.length === 0) {
-          wrap.appendChild(empty(t, 'support.staff.macros.empty', 'No canned responses yet.'));
-        } else {
-          wrap.appendChild(
-            list(items, (macro) => {
-              const item = element('li');
-              item.append(
-                element('span', { text: macro.name }),
-                element('button', {
-                  type: 'button',
-                  text: t('support.staff.macros.delete', 'Delete'),
-                  onclick: () => {
-                    void s
-                      .deleteMacro(macro.id)
-                      .then(load)
-                      .catch(() => item.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-                  },
-                }),
-              );
-              return item;
-            }),
-          );
-        }
+        view.list('macros', itemsOf(data), (macro, row) => {
+          row.fill({ name: macro.name });
+          row.on('delete', () => {
+            void s
+              .deleteMacro(macro.id)
+              .then(load)
+              .catch(() => row.append(view.problem()));
+          });
+        });
       })
-      .catch(loadErrorInto(wrap, t, 'support.staff.macros.load.error', 'Could not load macros.'));
+      .catch(() => view.state('macros', 'error'));
   };
   load();
-  main.appendChild(element('h3', { text: t('support.staff.macros.new', 'Add a canned response') }));
-  main.appendChild(
-    form(
-      [
-        { name: 'name', label: 'field.name' },
-        { name: 'body', label: 'field.message' },
-      ],
-      t,
-      'support.staff.macros.submit',
-      async (values, { feedback }) => {
-        await s.createMacro({ name: values.name, body: values.body });
-        feedback.appendChild(successRow(t, 'support.staff.macros.success'));
-        load();
-      },
-    ),
-  );
+  view.form('macro', async (values, form) => {
+    await s.createMacro({ name: values.name, body: values.body });
+    form.say('success');
+    load();
+  });
 }
 
-function pageStaffMetrics(main, t, ctx) {
-  heading(main, t, 'routes.support.staff.metrics.title', 'Support metrics');
+function pageStaffMetrics(view, t, ctx) {
   const s = staffSupport(ctx.api);
-  const wrap = element('dl', { className: 'qtiauth-details' });
-  main.appendChild(wrap);
   void s
     .metrics()
     .then((data) => {
       if (data === null) {
-        wrap.append(
-          element('dt', { text: t('support.staff.metrics.empty', 'No metrics available.') }),
-          element('dd', { text: '' }),
-        );
+        view.state('metrics', 'empty');
         return;
       }
-      const rows = [
-        ['support.staff.metrics.firstResponse', String(data.first_response_seconds?.average ?? 0)],
-        ['support.staff.metrics.resolution', String(data.resolution_seconds?.average ?? 0)],
-        ['support.staff.metrics.guest', String(data.guest_tickets ?? 0)],
-      ];
-      for (const [key, value] of rows) {
-        wrap.append(element('dt', { text: t(key, key) }), element('dd', { text: value }));
-      }
+      view
+        .fill({
+          first_response: data.first_response_seconds?.average ?? 0,
+          resolution: data.resolution_seconds?.average ?? 0,
+          guest: data.guest_tickets ?? 0,
+        })
+        .state('metrics', 'ready');
     })
-    .catch(loadErrorInto(wrap, t, 'support.staff.metrics.load.error', 'Could not load metrics.'));
+    .catch(() => view.state('metrics', 'error'));
 }
 
-function pageStaffKb(main, t, ctx) {
-  heading(main, t, 'routes.support.staff.kb.title', 'Knowledge base editor');
+function pageStaffKb(view, t, ctx) {
   const k = staffKb(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   void k
     .articles()
     .then((data) => {
-      const items = data?.items ?? [];
-      if (items.length === 0) {
-        wrap.appendChild(empty(t, 'support.staff.kb.empty', 'No articles yet.'));
-      } else {
-        wrap.appendChild(
-          list(items, (article) => {
-            const item = element('li');
-            item.appendChild(
-              element('a', {
-                href: ctx.href(`/support/staff/kb/${encodeURIComponent(article.id)}`),
-                text: `${article.title} (${article.status})`,
-                onclick: (event) => {
-                  event.preventDefault();
-                  ctx.navigate(`/support/staff/kb/${encodeURIComponent(article.id)}`);
-                },
-              }),
-            );
-            return item;
-          }),
-        );
-      }
+      view.list(
+        'articles',
+        itemsOf(data).map((article) => ({
+          path: `/support/staff/kb/${encodeURIComponent(article.id)}`,
+          title: article.title,
+          status: article.status,
+        })),
+      );
     })
-    .catch(loadErrorInto(wrap, t, 'support.staff.kb.load.error', 'Could not load articles.'));
-  main.appendChild(element('h3', { text: t('support.staff.kb.new', 'Create an article') }));
-  main.appendChild(
-    form(
-      [
-        { name: 'category_id', label: 'field.categoryId' },
-        { name: 'slug', label: 'field.slug' },
-        { name: 'title', label: 'field.title' },
-        { name: 'body', label: 'field.body' },
-      ],
-      t,
-      'support.staff.kb.submit',
-      async (values, { feedback }) => {
-        const article = await k.createArticle({
-          category_id: values.category_id,
-          slug: values.slug,
-          title: values.title,
-          body: values.body,
-        });
-        feedback.appendChild(successRow(t, 'support.staff.kb.success'));
-        ctx.navigate(`/support/staff/kb/${encodeURIComponent(article.id)}`);
-      },
-    ),
-  );
+    .catch(() => view.state('articles', 'error'));
+  view.form('article', async (values, form) => {
+    const article = await k.createArticle({
+      category_id: values.category_id,
+      slug: values.slug,
+      title: values.title,
+      body: values.body,
+    });
+    form.say('success');
+    ctx.navigate(`/support/staff/kb/${encodeURIComponent(article.id)}`);
+  });
 }
 
-function pageStaffKbArticle(main, t, ctx, params) {
-  const h2 = heading(main, t, 'routes.support.staff.kb.article.title', 'Article');
+function pageStaffKbArticle(view, t, ctx, params) {
   const k = staffKb(ctx.api);
-  const revisionsBox = element('div');
-  const editor = element('div');
-  main.append(
-    editor,
-    element('h3', { text: t('support.staff.kb.revisions', 'Revisions') }),
-    revisionsBox,
-  );
   void k
     .article(params.id)
     .then((article) => {
       if (article === null) {
-        editor.appendChild(empty(t, 'support.staff.kb.missing', 'That article is not available.'));
+        view.state('article', 'missing');
         return;
       }
-      h2.textContent = article.title;
-      editor.appendChild(
-        form(
-          [
-            { name: 'title', label: 'field.title', value: article.title },
-            { name: 'slug', label: 'field.slug', value: article.slug },
-            { name: 'body', label: 'field.body', value: article.body },
-          ],
-          t,
-          'support.staff.kb.article.submit',
-          async (values, { feedback }) => {
-            await k.updateArticle(article.id, {
-              title: values.title,
-              slug: values.slug,
-              body: values.body,
-            });
-            feedback.appendChild(successRow(t, 'support.staff.kb.article.success'));
-          },
-        ),
-      );
+      view.fill({ title: article.title, slug: article.slug, body: article.body });
+      view.form('article', async (values, form) => {
+        await k.updateArticle(article.id, {
+          title: values.title,
+          slug: values.slug,
+          body: values.body,
+        });
+        form.say('success');
+      });
+      view.state('article', 'ready');
     })
-    .catch(
-      loadErrorInto(editor, t, 'support.staff.kb.article.load.error', 'Could not load article.'),
-    );
+    .catch(() => view.state('article', 'error'));
   void k
     .revisions(params.id)
     .then((data) => {
-      const items = data?.items ?? [];
-      if (items.length === 0) {
-        revisionsBox.appendChild(empty(t, 'support.staff.kb.revisions.empty', 'No revisions yet.'));
-        return;
-      }
-      revisionsBox.appendChild(
-        list(items, (revision) => {
-          const item = element('li');
-          item.append(
-            element('span', {
-              text: `r${revision.revision} — ${revision.title} — ${revision.created_at}`,
-            }),
-            element('button', {
-              type: 'button',
-              text: t('support.staff.kb.revisions.restore', 'Restore'),
-              onclick: () => {
-                void k
-                  .restore(params.id, revision.revision)
-                  .then(() => {
-                    ctx.navigate(`/support/staff/kb/${encodeURIComponent(params.id)}`);
-                  })
-                  .catch(() => item.appendChild(problemAlert(t, { code: 'INTERNAL_ERROR' })));
-              },
-            }),
-          );
-          return item;
-        }),
-      );
+      view.list('revisions', itemsOf(data), (revision, row) => {
+        row.fill({
+          revision: revision.revision,
+          title: revision.title,
+          created_at: revision.created_at,
+        });
+        row.on('restore', () => {
+          void k
+            .restore(params.id, revision.revision)
+            .then(() => ctx.navigate(`/support/staff/kb/${encodeURIComponent(params.id)}`))
+            .catch(() => row.append(view.problem()));
+        });
+      });
     })
-    .catch(
-      loadErrorInto(
-        revisionsBox,
-        t,
-        'support.staff.kb.revisions.load.error',
-        'Could not load revisions.',
-      ),
-    );
+    .catch(() => view.state('revisions', 'error'));
 }
 
-function adminIndex(main, t, ctx) {
-  heading(main, t, 'routes.admin.title', 'Administration', 'admin.lede');
-  const sections = [
-    ['/admin/users', 'admin.section.users'],
-    ['/admin/roles', 'admin.section.roles'],
-    ['/admin/audit', 'admin.section.audit'],
-    ['/admin/webhooks', 'admin.section.webhooks'],
-    ['/admin/filter', 'admin.section.filter'],
-    ['/admin/moderation', 'admin.section.moderation'],
-    ['/admin/csea', 'admin.section.csea'],
-    ['/admin/oauth', 'admin.section.oauth'],
-    ['/admin/games', 'admin.section.games'],
-    ['/admin/health', 'admin.section.health'],
-  ];
-  main.appendChild(
-    list(sections, ([path, label]) => {
-      const item = element('li');
-      item.appendChild(
-        element('a', {
-          href: ctx.href(path),
-          text: t(label, path),
-          onclick: (event) => {
-            event.preventDefault();
-            ctx.navigate(path);
-          },
-        }),
-      );
-      return item;
-    }),
-  );
-}
-
-function adminList(main, t, ctx, loader, titleKey, fallback, render) {
-  heading(main, t, titleKey, fallback);
-  const wrap = element('div');
-  main.appendChild(wrap);
+function adminList(view, ctx, loader, toRow) {
   void loader(admin(ctx.api))
     .then((data) => {
       const items = data?.items ?? data ?? [];
-      const rows = Array.isArray(items) ? items : [];
-      if (rows.length === 0) {
-        wrap.appendChild(empty(t, 'admin.empty', 'Nothing to show.'));
-        return;
-      }
-      wrap.appendChild(list(rows, render));
+      view.list('rows', Array.isArray(items) ? items.map(toRow) : []);
     })
-    .catch(() => {
-      wrap.appendChild(empty(t, 'admin.load.error', 'Could not load data.'));
-    });
+    .catch(() => view.state('rows', 'error'));
 }
 
-function pageAdminUsers(main, t, ctx) {
+function pageAdminUsers(view, t, ctx) {
   adminList(
-    main,
-    t,
+    view,
     ctx,
     (a) => a.users(),
-    'routes.admin.users.title',
-    'Users',
-    (user) => {
-      const item = element('li');
-      item.textContent = `${user.username ?? user.id} — ${user.email ?? ''}`;
-      return item;
-    },
+    (user) => ({ username: user.username ?? user.id, email: user.email ?? '' }),
   );
 }
 
-function pageAdminRoles(main, t, ctx) {
+function pageAdminRoles(view, t, ctx) {
   adminList(
-    main,
-    t,
+    view,
     ctx,
     (a) => a.roles(),
-    'routes.admin.roles.title',
-    'Roles',
-    (role) => {
-      const item = element('li');
-      item.textContent = `${role.name ?? role.id}`;
-      return item;
-    },
+    (role) => ({ name: role.name ?? role.id }),
   );
 }
 
-function pageAdminAudit(main, t, ctx) {
+function pageAdminAudit(view, t, ctx) {
   adminList(
-    main,
-    t,
+    view,
     ctx,
     (a) => a.audit(),
-    'routes.admin.audit.title',
-    'Audit',
-    (entry) => {
-      const item = element('li');
-      item.textContent = `${entry.at ?? ''} — ${entry.action ?? ''} — ${entry.actor ?? ''}`;
-      return item;
-    },
+    (entry) => ({ at: entry.at ?? '', action: entry.action ?? '', actor: entry.actor ?? '' }),
   );
 }
 
-function pageAdminWebhooks(main, t, ctx) {
+function pageAdminWebhooks(view, t, ctx) {
   adminList(
-    main,
-    t,
+    view,
     ctx,
     (a) => a.webhooks(),
-    'routes.admin.webhooks.title',
-    'Webhooks',
-    (hook) => {
-      const item = element('li');
-      item.textContent = `${hook.url ?? hook.id} — ${(hook.events ?? []).join(', ')}`;
-      return item;
-    },
+    (hook) => ({ url: hook.url ?? hook.id, events: (hook.events ?? []).join(', ') }),
   );
 }
 
-function pageAdminFilter(main, t, ctx) {
-  heading(main, t, 'routes.admin.filter.title', 'Text filter tuning');
+function pageAdminFilter(view, t, ctx) {
   const a = admin(ctx.api);
-  const wrap = element('div');
-  main.appendChild(wrap);
   const sections = [
-    ['admin.filter.blocks', () => a.filterBlocks()],
-    ['admin.filter.allowlist', () => a.filterAllowlist()],
-    ['admin.filter.blocklist', () => a.filterBlocklist()],
+    ['blocks', () => a.filterBlocks()],
+    ['allowlist', () => a.filterAllowlist()],
+    ['blocklist', () => a.filterBlocklist()],
   ];
-  for (const [label, loader] of sections) {
-    wrap.appendChild(element('h3', { text: t(label, label) }));
-    const box = element('div');
-    wrap.appendChild(box);
+  for (const [slot, loader] of sections) {
     void loader()
       .then((data) => {
-        const rows = data?.items ?? [];
-        if (rows.length === 0) {
-          box.appendChild(empty(t, 'admin.empty', 'Nothing to show.'));
-        } else {
-          box.appendChild(
-            list(rows, (row) => {
-              const item = element('li');
-              item.textContent = row.word ?? row.pattern ?? JSON.stringify(row);
-              return item;
-            }),
-          );
-        }
+        view.list(
+          slot,
+          itemsOf(data).map((row) => ({ label: row.word ?? row.pattern ?? JSON.stringify(row) })),
+        );
       })
-      .catch(loadErrorInto(box, t, 'admin.load.error', 'Could not load data.'));
+      .catch(() => view.state(slot, 'error'));
   }
 }
 
-function pageAdminModeration(main, t, ctx) {
+function pageAdminModeration(view, t, ctx) {
   adminList(
-    main,
-    t,
+    view,
     ctx,
     (a) => a.moderationQueue(),
-    'routes.admin.moderation.title',
-    'Moderation queue',
-    (row) => {
-      const item = element('li');
-      item.textContent = `${row.kind ?? ''} — ${row.target ?? ''}`;
-      return item;
-    },
+    (row) => ({ kind: row.kind ?? '', target: row.target ?? '' }),
   );
 }
 
-function pageAdminCsea(main, t, ctx) {
+function pageAdminCsea(view, t, ctx) {
   adminList(
-    main,
-    t,
+    view,
     ctx,
     (a) => a.cseaCases(),
-    'routes.admin.csea.title',
-    'CSEA cases',
-    (row) => {
-      const item = element('li');
-      item.textContent = `${row.opened_at ?? ''} — ${row.status ?? ''}`;
-      return item;
-    },
+    (row) => ({ opened_at: row.opened_at ?? '', status: row.status ?? '' }),
   );
 }
 
-function pageAdminOauth(main, t, ctx) {
+function pageAdminOauth(view, t, ctx) {
   adminList(
-    main,
-    t,
+    view,
     ctx,
     (a) => a.oauthClients(),
-    'routes.admin.oauth.title',
-    'OAuth client verification',
-    (row) => {
-      const item = element('li');
-      item.textContent = `${row.name ?? row.client_id} — ${row.status ?? ''}`;
-      return item;
-    },
+    (row) => ({ name: row.name ?? row.client_id, status: row.status ?? '' }),
   );
 }
 
-function pageAdminGames(main, t, ctx) {
+function pageAdminGames(view, t, ctx) {
   adminList(
-    main,
-    t,
+    view,
     ctx,
     (a) => a.gamesCatalog(),
-    'routes.admin.games.title',
-    'Games catalog',
-    (row) => {
-      const item = element('li');
-      item.textContent = `${row.title ?? row.id}`;
-      return item;
-    },
+    (row) => ({ title: row.title ?? row.id }),
   );
 }
 
-function pageAdminHealth(main, t, ctx) {
-  heading(main, t, 'routes.admin.health.title', 'Service health');
-  const wrap = element('dl', { className: 'qtiauth-details' });
-  main.appendChild(wrap);
+function pageAdminHealth(view, t, ctx) {
   void admin(ctx.api)
     .health()
     .then((data) => {
-      const services = data?.services ?? [];
-      for (const service of services) {
-        wrap.append(element('dt', { text: service.name }), element('dd', { text: service.status }));
-      }
+      view.list('services', data?.services ?? []);
     })
-    .catch(() => {
-      wrap.append(
-        element('dt', { text: t('admin.health.title', 'Status') }),
-        element('dd', { text: t('admin.load.error', 'Could not load data.') }),
-      );
-    });
+    .catch(() => view.state('services', 'error'));
 }
 
 export const PAGES = Object.freeze({
@@ -2410,7 +988,7 @@ export const PAGES = Object.freeze({
   child: { path: '/family/:id', render: pageChild, requires: { identity: true } },
   'family-session': { path: '/family/session', render: pageFamilySession },
   'family-invite': { path: '/family/invite', render: pageFamilyInvite },
-  waiting: { path: '/waiting', render: pageChildWaiting },
+  waiting: { path: '/waiting' },
   'guardian-approve': { path: '/guardian/approve', render: pageGuardianApprove },
   'guardian-decline': { path: '/guardian/decline', render: pageGuardianDecline },
   'revert-email': { path: '/revert-email', render: pageRevertEmail },
@@ -2433,7 +1011,7 @@ export const PAGES = Object.freeze({
   },
   devices: { path: '/games/devices', render: pageDevices, requires: { games: true } },
   report: { path: '/report', render: pageReport, requires: { safety: true } },
-  support: { path: '/support', render: pageSupportHome, requires: { support: true } },
+  support: { path: '/support', requires: { support: true } },
   'support-kb': { path: '/support/kb', render: pageKbHome, requires: { support: true } },
   'support-kb-search': {
     path: '/support/kb/search',
@@ -2485,11 +1063,7 @@ export const PAGES = Object.freeze({
     render: pageGuestView,
     requires: { support: true },
   },
-  'support-staff': {
-    path: '/support/staff',
-    render: pageStaffSupport,
-    requires: { support: true, admin: true },
-  },
+  'support-staff': { path: '/support/staff', requires: { support: true, admin: true } },
   'support-staff-tickets': {
     path: '/support/staff/tickets',
     render: pageStaffQueue,
@@ -2520,7 +1094,7 @@ export const PAGES = Object.freeze({
     render: pageStaffKbArticle,
     requires: { support: true, admin: true },
   },
-  admin: { path: '/admin', render: adminIndex, requires: { admin: true } },
+  admin: { path: '/admin', requires: { admin: true } },
   'admin-users': { path: '/admin/users', render: pageAdminUsers, requires: { admin: true } },
   'admin-roles': { path: '/admin/roles', render: pageAdminRoles, requires: { admin: true } },
   'admin-audit': { path: '/admin/audit', render: pageAdminAudit, requires: { admin: true } },

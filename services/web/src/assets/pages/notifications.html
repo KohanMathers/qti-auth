@@ -1,0 +1,28 @@
+<h2 data-t="routes.notifications.title">Notification preferences</h2>
+<p class="qtiauth-lede" data-t="notifications.lede">Choose how we reach you.</p>
+
+<div data-slot="channels">
+  <form class="qtiauth-prefs" data-form="preferences" data-state="list" novalidate>
+    <template data-item="channels">
+      <p class="qtiauth-field">
+        <input
+          type="checkbox"
+          data-bind-id="id"
+          data-bind-name="channel"
+          data-bind-checked="enabled"
+        />
+        <label data-bind-for="id" data-field="label"></label>
+      </p>
+    </template>
+    <p class="qtiauth-actions">
+      <button type="submit" data-t="notifications.submit">Save preferences</button>
+    </p>
+    <template data-message="success">
+      <p class="qtiauth-success" role="status" data-t="notifications.success">Preferences saved.</p>
+    </template>
+  </form>
+  <p class="qtiauth-empty" data-state="empty" data-t="notifications.empty">No preferences yet.</p>
+  <p class="qtiauth-empty" data-state="error" data-t="notifications.load.error">
+    Could not load preferences.
+  </p>
+</div>

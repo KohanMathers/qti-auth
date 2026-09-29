@@ -1,0 +1,11 @@
+<h2 data-t="routes.tickets.detail.title" data-part="heading">Ticket</h2>
+<template data-message="heading"
+  >#<span data-field="number"></span> — <span data-field="subject"></span
+></template>
+
+<div data-slot="ticket">
+  <div data-state="ready" data-part="ticket"></div>
+  <p class="qtiauth-empty" data-state="error" data-t="tickets.detail.load.error">
+    Could not load ticket.
+  </p>
+</div>

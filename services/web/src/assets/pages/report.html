@@ -1,0 +1,25 @@
+<h2 data-t="routes.report.title">Report user or content</h2>
+<p class="qtiauth-lede" data-t="report.lede">Tell us what happened. Reports are private.</p>
+
+<form data-form="report" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-target" data-t="field.target">User or content</label>
+    <input id="qtiauth-f-target" name="target" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-reason" data-t="field.reason">Reason</label>
+    <input id="qtiauth-f-reason" name="reason" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-detail" data-t="field.detail">Details (optional)</label>
+    <input id="qtiauth-f-detail" name="detail" type="text" autocomplete="off" />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="report.submit">Send report</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="report.success">
+      Thanks. We will review your report.
+    </p>
+  </template>
+</form>

@@ -5,6 +5,7 @@ export const DEFAULT_ASSETS_DIR = join(import.meta.dirname, 'assets');
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
@@ -44,6 +45,10 @@ function etagFor(body: Uint8Array): string {
   return `"${(hash >>> 0).toString(16).padStart(8, '0')}"`;
 }
 
+export function assetFrom(name: string, body: Uint8Array): Asset {
+  return { body, content_type: contentTypeFor(name), etag: etagFor(body) };
+}
+
 export async function loadAssets(dir: string = DEFAULT_ASSETS_DIR): Promise<AssetSet> {
   const entries = await readdir(dir, { withFileTypes: true });
   const set = new Map<string, Asset>();
@@ -52,12 +57,7 @@ export async function loadAssets(dir: string = DEFAULT_ASSETS_DIR): Promise<Asse
     if (!ASSET_NAME.test(entry.name)) {
       throw new AssetSetError(`Asset ${entry.name} must be lowercase, numbers, . _ or -`);
     }
-    const body = await readFile(join(dir, entry.name));
-    set.set(entry.name, {
-      body,
-      content_type: contentTypeFor(entry.name),
-      etag: etagFor(body),
-    });
+    set.set(entry.name, assetFrom(entry.name, await readFile(join(dir, entry.name))));
   }
   return set;
 }

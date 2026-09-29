@@ -1,0 +1,41 @@
+<h2 data-t="routes.security.title">Security</h2>
+<p class="qtiauth-lede" data-t="security.lede">Keep your account protected.</p>
+
+<h3 data-t="security.password.heading">Change password</h3>
+<form data-form="password" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-current" data-t="field.password.current">Current password</label>
+    <input
+      id="qtiauth-f-current"
+      name="current"
+      type="password"
+      autocomplete="current-password"
+      required
+    />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-next" data-t="field.password.new">New password</label>
+    <input
+      id="qtiauth-f-next"
+      name="next"
+      type="password"
+      autocomplete="new-password"
+      minlength="12"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="security.password.submit">Change password</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="security.password.success">
+      Password changed.
+    </p>
+  </template>
+</form>
+
+<h3 data-t="security.twoFactor.heading">Two-factor authentication</h3>
+<p data-t="security.twoFactor.body">Add an authenticator app or passkey to protect sign-ins.</p>
+
+<h3 data-t="security.recovery.heading">Recovery codes</h3>
+<p data-t="security.recovery.body">Generate one-time codes to sign in if you lose your device.</p>

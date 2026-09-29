@@ -4,6 +4,7 @@ import { type AssetSet, DEFAULT_ASSETS_DIR, loadAssets } from './assets.ts';
 import { DEFAULT_LOCALE, DEFAULT_LOCALES_DIR, type LocaleSet, loadLocales } from './locale.ts';
 import { assertKitCoverage } from './problems.ts';
 import { type Context, type definition, router } from './service.ts';
+import { DEFAULT_TEMPLATES_DIR, loadTemplates } from './templates.ts';
 import { attachWebState } from './web-state.ts';
 
 export const REQUIRED_ASSETS = [
@@ -12,6 +13,7 @@ export const REQUIRED_ASSETS = [
   'pages.js',
   'problems.js',
   'styles.css',
+  'view.js',
 ] as const;
 
 export class WebStartError extends Error {
@@ -23,6 +25,7 @@ export class WebStartError extends Error {
 
 export interface WebOptions {
   assetsDir?: string;
+  templatesDir?: string;
   localesDir?: string;
   metaOrigin?: string;
 }
@@ -61,10 +64,12 @@ export function webService(options: WebOptions = {}) {
         assertKitCoverage();
         const assets = await loadAssets(options.assetsDir ?? DEFAULT_ASSETS_DIR);
         assertAssets(assets);
+        const templates = await loadTemplates(options.templatesDir ?? DEFAULT_TEMPLATES_DIR);
         const locales = await loadLocales(options.localesDir ?? DEFAULT_LOCALES_DIR);
         assertLocales(locales);
         attachWebState(ctx, {
           assets,
+          templates,
           locales,
           basePath: basePathFor(ctx),
           metaOrigin: metaOriginFor(ctx, options.metaOrigin),

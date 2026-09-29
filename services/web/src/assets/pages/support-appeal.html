@@ -1,0 +1,19 @@
+<h2 data-t="routes.appeals.title">Appeal a decision</h2>
+<p class="qtiauth-lede" data-t="appeals.lede">Ask for a lock, ban or restriction to be reviewed.</p>
+
+<form data-form="appeal" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-action-id" data-t="field.actionId">Action ID (optional)</label>
+    <input id="qtiauth-f-action-id" name="action_id" type="text" autocomplete="off" />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-body" data-t="field.message">Message</label>
+    <input id="qtiauth-f-body" name="body" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="appeals.submit">Send appeal</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="appeals.success">Appeal submitted.</p>
+  </template>
+</form>

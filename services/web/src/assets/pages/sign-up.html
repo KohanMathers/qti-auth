@@ -1,0 +1,51 @@
+<h2 data-t="routes.sign-up.title">Create an account</h2>
+<p class="qtiauth-lede" data-t="signUp.lede">It takes a minute.</p>
+
+<form data-form="password" data-show="password" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-name" data-t="field.name">Name</label>
+    <input id="qtiauth-f-name" name="name" type="text" autocomplete="name" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-email" data-t="field.email">Email</label>
+    <input id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-password" data-t="field.password">Password</label>
+    <input
+      id="qtiauth-f-password"
+      name="password"
+      type="password"
+      autocomplete="new-password"
+      minlength="12"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="signUp.submit">Create account</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="signUp.success">
+      Account created. Check your email to verify it.
+    </p>
+  </template>
+</form>
+
+<form data-form="magic" data-show="magic_only" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-magic-name" data-t="field.name">Name</label>
+    <input id="qtiauth-f-magic-name" name="name" type="text" autocomplete="name" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-magic-email" data-t="field.email">Email</label>
+    <input id="qtiauth-f-magic-email" name="email" type="email" autocomplete="email" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="signUp.magic.submit">Send me a sign-up link</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="signUp.magic.success">
+      Check your email to finish signing up.
+    </p>
+  </template>
+</form>

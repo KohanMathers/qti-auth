@@ -1,0 +1,28 @@
+<h2 data-t="routes.sessions.title">Signed-in sessions</h2>
+<p class="qtiauth-lede" data-t="sessions.lede">Devices signed in to your account.</p>
+
+<div class="qtiauth-sessions" data-slot="sessions">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="sessions">
+      <li class="qtiauth-session">
+        <span class="qtiauth-session-label"
+          ><span data-field="user_agent">unknown</span> — <span data-field="ip"></span
+        ></span>
+        <button type="button" data-action="revoke" data-t="sessions.revoke">Revoke</button>
+      </li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="sessions.empty">No other sessions.</p>
+  <p class="qtiauth-empty" data-state="error" data-t="sessions.load.error">
+    Could not load sessions.
+  </p>
+</div>
+
+<button
+  type="button"
+  class="qtiauth-button qtiauth-button-ghost"
+  data-action="revoke-others"
+  data-t="sessions.revokeOthers"
+>
+  Sign out other sessions
+</button>

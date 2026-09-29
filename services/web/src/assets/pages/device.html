@@ -1,0 +1,21 @@
+<h2 data-t="routes.device.title">Enter device code</h2>
+<p class="qtiauth-lede" data-t="device.lede">Enter the code shown on your other device.</p>
+
+<form data-form="pair" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-user-code" data-t="field.userCode">Device code</label>
+    <input
+      id="qtiauth-f-user-code"
+      name="user_code"
+      type="text"
+      autocomplete="one-time-code"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="device.submit">Pair device</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="device.success">Device paired.</p>
+  </template>
+</form>

@@ -1,0 +1,35 @@
+<h2 data-t="routes.reset.title">Choose a new password</h2>
+<p class="qtiauth-lede" data-t="reset.lede">Choose a password of at least 12 characters.</p>
+
+<form data-form="reset" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-token" data-t="field.token">Code</label>
+    <input
+      id="qtiauth-f-token"
+      name="token"
+      type="text"
+      autocomplete="one-time-code"
+      data-bind-value="token"
+      required
+    />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-password" data-t="field.password">Password</label>
+    <input
+      id="qtiauth-f-password"
+      name="password"
+      type="password"
+      autocomplete="new-password"
+      minlength="12"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="reset.submit">Set new password</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="reset.success">
+      Password changed. Sign in with your new password.
+    </p>
+  </template>
+</form>

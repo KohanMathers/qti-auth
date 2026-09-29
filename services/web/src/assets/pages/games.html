@@ -1,0 +1,24 @@
+<h2 data-t="routes.games.title">Games</h2>
+<p class="qtiauth-lede" data-t="routes.games.body">Your library, achievements and devices.</p>
+
+<div data-slot="library">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="library">
+      <li data-field="title"></li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="games.empty">No games in your library yet.</p>
+  <p class="qtiauth-empty" data-state="error" data-t="games.load.error">Could not load library.</p>
+</div>
+
+<ul class="qtiauth-list">
+  <li><a href="/games/redeem" data-link data-t="games.section.redeem">Redeem a key</a></li>
+  <li>
+    <a href="/games/achievements" data-link data-t="games.section.achievements">Achievements</a>
+  </li>
+  <li><a href="/games/stats" data-link data-t="games.section.stats">Stats</a></li>
+  <li>
+    <a href="/games/leaderboards" data-link data-t="games.section.leaderboards">Leaderboards</a>
+  </li>
+  <li><a href="/games/devices" data-link data-t="games.section.devices">Devices</a></li>
+</ul>

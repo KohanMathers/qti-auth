@@ -1,0 +1,17 @@
+<h2 data-t="routes.devices.title">Game devices</h2>
+<p class="qtiauth-lede" data-t="devices.lede">Devices linked to your account for games.</p>
+
+<div data-slot="devices">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="devices">
+      <li>
+        <span><span data-field="name"></span> — <span data-field="platform"></span></span>
+        <button type="button" data-action="revoke" data-t="devices.revoke">Revoke</button>
+      </li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="devices.empty">No linked devices.</p>
+  <p class="qtiauth-empty" data-state="error" data-t="devices.load.error">
+    Could not load devices.
+  </p>
+</div>

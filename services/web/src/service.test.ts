@@ -14,7 +14,9 @@ describe('web service', () => {
       'GET /pages.js',
       'GET /problems.js',
       'GET /styles.css',
+      'GET /templates.html',
       'GET /theme.css',
+      'GET /view.js',
     ]);
     expect(routes.every((route) => route.module === 'core')).toBe(true);
     expect(routes.every((route) => route.auth === 'none')).toBe(true);

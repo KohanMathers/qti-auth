@@ -1,0 +1,31 @@
+<h2 data-t="routes.family.invite.title">Become a parent or guardian</h2>
+
+<form data-form="invite" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-token" data-t="field.token">Code</label>
+    <input
+      id="qtiauth-f-token"
+      name="token"
+      type="text"
+      autocomplete="off"
+      data-bind-value="token"
+      required
+    />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-date-of-birth" data-t="field.dateOfBirth">Date of birth</label>
+    <input
+      id="qtiauth-f-date-of-birth"
+      name="date_of_birth"
+      type="date"
+      autocomplete="off"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="family.invite.submit">Accept invite</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="family.invite.success">Done.</p>
+  </template>
+</form>

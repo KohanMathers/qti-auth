@@ -1,0 +1,51 @@
+<h2 data-t="routes.guest.verify.title">Open a guest ticket</h2>
+<p class="qtiauth-lede" data-t="guest.verify.lede">
+  Fill in your ticket and paste the code we emailed.
+</p>
+
+<form data-form="ticket" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-email" data-t="field.email">Email</label>
+    <input
+      id="qtiauth-f-email"
+      name="email"
+      type="email"
+      autocomplete="off"
+      data-bind-value="email"
+      required
+    />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-code" data-t="field.code">Code</label>
+    <input id="qtiauth-f-code" name="code" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-category" data-t="field.category">Category</label>
+    <select id="qtiauth-f-category" name="category_id" data-part="categories" required>
+      <option value="" data-t="tickets.new.pickCategory">Choose a category</option>
+      <template data-item="categories">
+        <option data-bind-value="id" data-field="name"></option>
+      </template>
+    </select>
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-subject" data-t="field.subject">Subject</label>
+    <input id="qtiauth-f-subject" name="subject" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-body" data-t="field.message">Message</label>
+    <input id="qtiauth-f-body" name="body" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="guest.verify.submit">Open ticket</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="guest.verify.success">Ticket opened.</p>
+  </template>
+</form>
+
+<template data-message="categories-error">
+  <option value="" disabled data-t="tickets.new.categoryLoadError">
+    Could not load categories.
+  </option>
+</template>

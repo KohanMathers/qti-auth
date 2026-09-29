@@ -1,0 +1,14 @@
+<h2 data-t="routes.admin.health.title">Service health</h2>
+
+<div data-slot="services">
+  <dl class="qtiauth-details" data-state="list">
+    <template data-item="services">
+      <dt data-field="name"></dt>
+      <dd data-field="status"></dd>
+    </template>
+  </dl>
+  <dl class="qtiauth-details" data-state="error">
+    <dt data-t="admin.health.title">Status</dt>
+    <dd data-t="admin.load.error">Could not load data.</dd>
+  </dl>
+</div>

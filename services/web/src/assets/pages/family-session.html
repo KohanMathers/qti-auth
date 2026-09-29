@@ -1,0 +1,21 @@
+<h2 data-t="routes.family.session.title">Open the family dashboard</h2>
+
+<form data-form="session" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-token" data-t="field.token">Code</label>
+    <input
+      id="qtiauth-f-token"
+      name="token"
+      type="text"
+      autocomplete="off"
+      data-bind-value="token"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="family.session.submit">Open dashboard</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="family.session.success">Done.</p>
+  </template>
+</form>

@@ -1,0 +1,17 @@
+<h2 data-t="routes.guest.title">Contact support without signing in</h2>
+<p class="qtiauth-lede" data-t="guest.lede">Enter your email to receive a one-time code.</p>
+
+<form data-form="code" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-email" data-t="field.email">Email</label>
+    <input id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="guest.code.submit">Send code</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="guest.code.sent">
+      Check your email for the code.
+    </p>
+  </template>
+</form>

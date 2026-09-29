@@ -1,0 +1,20 @@
+<h2 data-t="routes.achievements.title">Achievements</h2>
+
+<form data-form="game" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-game-id" data-t="field.game">Game ID</label>
+    <input id="qtiauth-f-game-id" name="game_id" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="games.load">Load</button>
+  </p>
+</form>
+
+<div class="qtiauth-status" data-slot="rows">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="rows">
+      <li data-field="label"></li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="games.section.empty">Nothing to show.</p>
+</div>

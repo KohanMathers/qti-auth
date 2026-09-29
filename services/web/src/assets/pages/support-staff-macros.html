@@ -1,0 +1,40 @@
+<h2 data-t="routes.support.staff.macros.title">Canned responses</h2>
+
+<div data-slot="macros">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="macros">
+      <li>
+        <span data-field="name"></span>
+        <button type="button" data-action="delete" data-t="support.staff.macros.delete">
+          Delete
+        </button>
+      </li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="support.staff.macros.empty">
+    No canned responses yet.
+  </p>
+  <p class="qtiauth-empty" data-state="error" data-t="support.staff.macros.load.error">
+    Could not load macros.
+  </p>
+</div>
+
+<h3 data-t="support.staff.macros.new">Add a canned response</h3>
+<form data-form="macro" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-name" data-t="field.name">Name</label>
+    <input id="qtiauth-f-name" name="name" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-body" data-t="field.message">Message</label>
+    <input id="qtiauth-f-body" name="body" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="support.staff.macros.submit">Save canned response</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="support.staff.macros.success">
+      Canned response saved.
+    </p>
+  </template>
+</form>

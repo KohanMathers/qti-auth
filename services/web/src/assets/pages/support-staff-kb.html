@@ -1,0 +1,43 @@
+<h2 data-t="routes.support.staff.kb.title">Knowledge base editor</h2>
+
+<div data-slot="articles">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="articles">
+      <li>
+        <a data-link data-bind-href="path"
+          ><span data-field="title"></span> (<span data-field="status"></span>)</a
+        >
+      </li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="support.staff.kb.empty">No articles yet.</p>
+  <p class="qtiauth-empty" data-state="error" data-t="support.staff.kb.load.error">
+    Could not load articles.
+  </p>
+</div>
+
+<h3 data-t="support.staff.kb.new">Create an article</h3>
+<form data-form="article" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-category-id" data-t="field.categoryId">Category ID</label>
+    <input id="qtiauth-f-category-id" name="category_id" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-slug" data-t="field.slug">Slug</label>
+    <input id="qtiauth-f-slug" name="slug" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-title" data-t="field.title">Title</label>
+    <input id="qtiauth-f-title" name="title" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-body" data-t="field.body">Body</label>
+    <input id="qtiauth-f-body" name="body" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="support.staff.kb.submit">Create article</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="support.staff.kb.success">Article created.</p>
+  </template>
+</form>

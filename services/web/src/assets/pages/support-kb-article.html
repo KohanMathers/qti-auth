@@ -1,0 +1,32 @@
+<h2 data-t="routes.kb.article.title" data-field="title">Article</h2>
+
+<div data-slot="article">
+  <div data-state="ready">
+    <p class="qtiauth-muted">
+      <span data-field="category"></span> — <span data-field="updated_at"></span>
+    </p>
+    <div class="qtiauth-article" data-part="body"></div>
+    <div class="qtiauth-status" data-part="feedback"></div>
+    <p class="qtiauth-actions">
+      <button type="button" data-action="helpful" data-t="kb.feedback.yes">Yes, this helped</button>
+      <button
+        type="button"
+        class="qtiauth-button qtiauth-button-ghost"
+        data-action="not-helpful"
+        data-t="kb.feedback.no"
+      >
+        No, this did not help
+      </button>
+    </p>
+  </div>
+  <p class="qtiauth-empty" data-state="missing" data-t="kb.article.missing">
+    That article is not available.
+  </p>
+  <p class="qtiauth-empty" data-state="error" data-t="kb.article.load.error">
+    Could not load article.
+  </p>
+</div>
+
+<template data-message="thanks">
+  <p class="qtiauth-success" role="status" data-t="kb.feedback.thanks">Thanks for the feedback.</p>
+</template>

@@ -1,0 +1,30 @@
+<h2 data-t="routes.profile.title">Profile</h2>
+<p class="qtiauth-lede" data-t="profile.lede">How your account looks to others.</p>
+
+<div data-slot="profile">
+  <dl class="qtiauth-details" data-state="ready">
+    <dt data-t="profile.field.name">Display name</dt>
+    <dd data-field="name"></dd>
+    <dt data-t="profile.field.username">Username</dt>
+    <dd data-field="username"></dd>
+    <dt data-t="profile.field.email">Email</dt>
+    <dd data-field="email"></dd>
+  </dl>
+  <p class="qtiauth-empty" data-state="error" data-t="profile.load.error">
+    Could not load profile.
+  </p>
+</div>
+
+<h3 data-t="profile.username.heading">Change username</h3>
+<form data-form="username" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-username" data-t="field.username">Username</label>
+    <input id="qtiauth-f-username" name="username" type="text" autocomplete="username" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="profile.username.submit">Save username</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="profile.username.success">Username saved.</p>
+  </template>
+</form>

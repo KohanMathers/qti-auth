@@ -1,0 +1,43 @@
+<h2 data-t="routes.developer.title">Developer portal</h2>
+<p class="qtiauth-lede" data-t="developer.lede">OAuth clients you have registered.</p>
+
+<div data-slot="clients">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="clients">
+      <li>
+        <span data-field="name"></span>
+        <span class="qtiauth-muted" data-field="client_id"></span>
+      </li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="developer.empty">No OAuth clients yet.</p>
+  <p class="qtiauth-empty" data-state="error" data-t="developer.load.error">
+    Could not load clients.
+  </p>
+</div>
+
+<h3 data-t="developer.create.heading">Register a new client</h3>
+<form data-form="create" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-name" data-t="field.clientName">Client name</label>
+    <input id="qtiauth-f-name" name="name" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-redirect-uris" data-t="field.redirectUris"
+      >Redirect URIs (whitespace separated)</label
+    >
+    <input
+      id="qtiauth-f-redirect-uris"
+      name="redirect_uris"
+      type="text"
+      autocomplete="off"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="developer.create.submit">Create client</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="developer.create.success">Client created.</p>
+  </template>
+</form>

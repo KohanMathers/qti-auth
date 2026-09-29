@@ -223,9 +223,7 @@ export async function completeSecondFactor(
 }
 
 export type StepUpResult =
-  | { status: 'not_found' }
-  | { status: 'wrong_code' }
-  | { status: 'upgraded' };
+  { status: 'not_found' } | { status: 'wrong_code' } | { status: 'upgraded' };
 
 export async function stepUpSession(
   db: Kysely<Database>,

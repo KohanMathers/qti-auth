@@ -1,0 +1,17 @@
+<h2 data-t="routes.forgot.title">Reset your password</h2>
+<p class="qtiauth-lede" data-t="forgot.lede">We'll email you a reset link.</p>
+
+<form data-form="forgot" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-email" data-t="field.email">Email</label>
+    <input id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="forgot.submit">Send reset link</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="forgot.success">
+      Check your email for the reset link.
+    </p>
+  </template>
+</form>

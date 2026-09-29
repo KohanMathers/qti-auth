@@ -1,0 +1,21 @@
+<h2 data-t="routes.guardian.decline.title">Decline this account</h2>
+
+<form data-form="decline" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-token" data-t="field.token">Code</label>
+    <input
+      id="qtiauth-f-token"
+      name="token"
+      type="text"
+      autocomplete="off"
+      data-bind-value="token"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="guardian.decline.submit">Decline</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="guardian.decline.success">Done.</p>
+  </template>
+</form>

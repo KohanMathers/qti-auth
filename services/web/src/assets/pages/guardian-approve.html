@@ -1,0 +1,31 @@
+<h2 data-t="routes.guardian.approve.title">Approve this account</h2>
+
+<form data-form="approve" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-token" data-t="field.token">Code</label>
+    <input
+      id="qtiauth-f-token"
+      name="token"
+      type="text"
+      autocomplete="off"
+      data-bind-value="token"
+      required
+    />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-date-of-birth" data-t="field.dateOfBirth">Date of birth</label>
+    <input
+      id="qtiauth-f-date-of-birth"
+      name="date_of_birth"
+      type="date"
+      autocomplete="off"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="guardian.approve.submit">Approve</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="guardian.approve.success">Done.</p>
+  </template>
+</form>

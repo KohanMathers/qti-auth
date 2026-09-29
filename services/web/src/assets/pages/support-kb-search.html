@@ -1,0 +1,23 @@
+<h2 data-t="routes.kb.search.title">Search the help centre</h2>
+<p class="qtiauth-lede" data-t="kb.search.lede">
+  Look up an article by keywords in its title or body.
+</p>
+
+<form data-form="search" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-q" data-t="field.query">Search</label>
+    <input id="qtiauth-f-q" name="q" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="kb.search.submit">Search</button>
+  </p>
+</form>
+
+<div data-slot="results">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="results">
+      <li><a data-link data-bind-href="path" data-field="title"></a></li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="kb.search.empty">No matching articles.</p>
+</div>

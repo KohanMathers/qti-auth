@@ -132,6 +132,33 @@ router.route({
 
 router.route({
   method: 'GET',
+  path: '/view.js',
+  operation_id: 'viewScript',
+  summary: 'Template engine that fills page templates',
+  tags: ['web'],
+  auth: 'none',
+  rate_limit: 'global',
+  responses: jsOk,
+  errors: ['ASSET_NOT_FOUND'],
+  handler: ({ ctx, request }) =>
+    Promise.resolve(serveAsset(requireWebState(ctx), request, 'view.js')),
+});
+
+router.route({
+  method: 'GET',
+  path: '/templates.html',
+  operation_id: 'pageTemplates',
+  summary: 'Every page template, bundled from assets/pages',
+  tags: ['web'],
+  auth: 'none',
+  rate_limit: 'global',
+  responses: { 200: { description: 'The page template bundle' } },
+  handler: ({ ctx, request }) =>
+    Promise.resolve(assetResponse(requireWebState(ctx).templates, request)),
+});
+
+router.route({
+  method: 'GET',
   path: '/locales/:locale',
   operation_id: 'localeCatalogue',
   summary: 'Translated strings for a locale',

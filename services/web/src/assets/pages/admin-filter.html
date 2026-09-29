@@ -1,0 +1,36 @@
+<h2 data-t="routes.admin.filter.title">Text filter tuning</h2>
+
+<div>
+  <h3 data-t="admin.filter.blocks">Recent blocks</h3>
+  <div data-slot="blocks">
+    <ul class="qtiauth-list" data-state="list">
+      <template data-item="blocks">
+        <li data-field="label"></li>
+      </template>
+    </ul>
+    <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
+    <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+  </div>
+
+  <h3 data-t="admin.filter.allowlist">Allowlist</h3>
+  <div data-slot="allowlist">
+    <ul class="qtiauth-list" data-state="list">
+      <template data-item="allowlist">
+        <li data-field="label"></li>
+      </template>
+    </ul>
+    <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
+    <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+  </div>
+
+  <h3 data-t="admin.filter.blocklist">Blocklist</h3>
+  <div data-slot="blocklist">
+    <ul class="qtiauth-list" data-state="list">
+      <template data-item="blocklist">
+        <li data-field="label"></li>
+      </template>
+    </ul>
+    <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
+    <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+  </div>
+</div>

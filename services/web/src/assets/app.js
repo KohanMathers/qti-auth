@@ -1,6 +1,7 @@
 import { apiClient, ProblemFetchError } from './client.js';
-import { availablePages, clear, element, matchPage, PAGES } from './pages.js';
+import { availablePages, matchPage, PAGES } from './pages.js';
 import { messageFor } from './problems.js';
+import { mountPage, parseTemplates } from './view.js';
 
 const BOOTSTRAP_SELECTOR = '#qtiauth-bootstrap';
 const APP_SELECTOR = '#qtiauth-app';
@@ -27,7 +28,23 @@ function joinBase(base, path) {
 
 let popstateHandler = null;
 
-async function fetchJson(url, init) {
+function element(tag, props = {}, children = []) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (value === undefined || value === null) continue;
+    if (key === 'text') node.textContent = value;
+    else if (key === 'attrs') for (const [k, v] of Object.entries(value)) node.setAttribute(k, v);
+    else node[key] = value;
+  }
+  for (const child of children) if (child !== null) node.appendChild(child);
+  return node;
+}
+
+function clear(node) {
+  while (node.firstChild !== null) node.removeChild(node.firstChild);
+}
+
+async function fetchOk(url, init) {
   const response = await fetch(url, { credentials: 'same-origin', ...init });
   if (!response.ok) {
     const contentType = response.headers.get('content-type') ?? '';
@@ -41,7 +58,15 @@ async function fetchJson(url, init) {
       title: 'Something went wrong',
     });
   }
-  return response.json();
+  return response;
+}
+
+async function fetchJson(url, init) {
+  return (await fetchOk(url, init)).json();
+}
+
+async function fetchText(url) {
+  return (await fetchOk(url)).text();
 }
 
 function metaEndpoint(bootstrap, path) {
@@ -55,6 +80,11 @@ async function loadLocale(bootstrap) {
   } catch {
     return {};
   }
+}
+
+async function loadTemplates(bootstrap, fetchTemplates) {
+  const html = await fetchTemplates(joinBase(bootstrap.basePath, '/templates.html'));
+  return parseTemplates(html);
 }
 
 export function translator(catalogue) {
@@ -179,6 +209,7 @@ function absoluteHref(bootstrap, path) {
 export async function bootstrap(config) {
   const bootstrapData = config?.bootstrap ?? readBootstrap();
   const fetcher = config?.fetch ?? fetchJson;
+  const fetchTemplates = config?.fetchText ?? fetchText;
   const location = config?.location ?? window.location;
   const history = config?.history ?? window.history;
   const app = document.querySelector(APP_SELECTOR);
@@ -186,8 +217,12 @@ export async function bootstrap(config) {
   if (app === null || main === null) return;
   app.setAttribute('aria-busy', 'true');
   let features;
+  let templates;
   try {
-    features = await fetcher(metaEndpoint(bootstrapData, '/api/v1/meta/features'));
+    [features, templates] = await Promise.all([
+      fetcher(metaEndpoint(bootstrapData, '/api/v1/meta/features')),
+      loadTemplates(bootstrapData, fetchTemplates),
+    ]);
   } catch (error) {
     clear(main);
     const problem = error instanceof ProblemFetchError ? error.problem : { code: 'INTERNAL_ERROR' };
@@ -228,8 +263,14 @@ export async function bootstrap(config) {
     renderNav(main, routes, t, (route) => ctx.navigate(route.path));
     const match = matchPage(pages, path);
     if (match !== null) {
-      match.page.render(main, t, ctx, match.params);
-      announce(t(`routes.${match.page.id}.title`, match.page.id));
+      try {
+        const view = mountPage(main, templates, match.page.id, t, ctx);
+        const title = view.nodes.find((node) => node.localName === 'h2')?.textContent;
+        match.page.render?.(view, t, ctx, match.params);
+        announce(title ?? match.page.id);
+      } catch (error) {
+        renderProblem(main, t, { code: 'INTERNAL_ERROR', detail: String(error?.message ?? error) });
+      }
     }
     main.focus();
   };
