@@ -32,8 +32,6 @@ describe('oidc service', () => {
       'GET /api/v1/oauth/clients',
       'GET /api/v1/oauth/clients/:client_id',
       'GET /oauth/authorize',
-      'GET /oauth/consent',
-      'GET /oauth/device',
       'GET /oauth/userinfo',
       'PATCH /api/v1/oauth/clients/:client_id',
       'POST /api/v1/admin/oauth/clients/:client_id/suspend',
@@ -41,8 +39,6 @@ describe('oidc service', () => {
       'POST /api/v1/admin/oauth/clients/:client_id/verify',
       'POST /api/v1/oauth/clients',
       'POST /api/v1/oauth/clients/:client_id/secret',
-      'POST /oauth/consent',
-      'POST /oauth/device',
       'POST /oauth/device_authorization',
       'POST /oauth/introspect',
       'POST /oauth/par',
@@ -69,7 +65,6 @@ describe('oidc service', () => {
       module: 'oidc',
       rate_limit: 'oauth_authorize',
     });
-    expect(route('GET', '/oauth/consent')).toMatchObject({ auth: 'session' });
     expect(route('POST', '/oauth/token')).toMatchObject({
       auth: 'none',
       rate_limit: 'oauth_token',
@@ -79,7 +74,6 @@ describe('oidc service', () => {
       scopes: ['openid'],
     });
     expect(route('POST', '/oauth/device_authorization')).toMatchObject({ auth: 'none' });
-    expect(route('GET', '/oauth/device')).toMatchObject({ auth: 'session' });
     expect(route('POST', '/oauth/par')).toMatchObject({ auth: 'none' });
     expect(route('GET', '/api/v1/oauth/client')).toMatchObject({ auth: 'service' });
     expect(route('GET', '/.well-known/openid-configuration')).toMatchObject({ auth: 'none' });

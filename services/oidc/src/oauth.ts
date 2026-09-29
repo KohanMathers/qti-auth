@@ -277,7 +277,7 @@ export async function authorize(
     });
     return new Response(null, {
       status: 302,
-      headers: { location: `/oauth/consent?request_id=${requestId}` },
+      headers: { location: `/consent?request_id=${requestId}` },
     });
   }
   const requestId = randomUUIDv7();
@@ -304,7 +304,7 @@ export async function authorize(
     .execute();
   return new Response(null, {
     status: 302,
-    headers: { location: `/oauth/consent?request_id=${requestId}` },
+    headers: { location: `/consent?request_id=${requestId}` },
   });
 }
 

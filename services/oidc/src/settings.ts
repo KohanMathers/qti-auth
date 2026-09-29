@@ -4,13 +4,11 @@ import { parseEncryptionKey } from '@qtiauth/keys';
 import type { Context, OidcConfig } from './service.ts';
 
 export const AUTHORIZE_PATH = '/oauth/authorize';
-export const CONSENT_PATH = '/oauth/consent';
 export const TOKEN_PATH = '/oauth/token';
 export const USERINFO_PATH = '/oauth/userinfo';
 export const REVOKE_PATH = '/oauth/revoke';
 export const INTROSPECT_PATH = '/oauth/introspect';
 export const DEVICE_AUTHORIZATION_PATH = '/oauth/device_authorization';
-export const DEVICE_PATH = '/oauth/device';
 export const PAR_PATH = '/oauth/par';
 export const DISCOVERY_PATH = '/.well-known/openid-configuration';
 export const JWKS_PATH = '/.well-known/jwks.json';

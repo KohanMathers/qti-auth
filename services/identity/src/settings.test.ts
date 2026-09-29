@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   accountOrigin,
   accountPath,
-  BIND_CALLBACK_PAGE,
   emailLinkUrl,
   IdentityConfigError,
   magicLinkUrl,
@@ -24,17 +23,17 @@ function surfaces(account: Record<string, unknown>) {
 describe('magic link URLs', () => {
   it('point at the account surface’s first origin and base path', () => {
     expect(magicLinkUrl(surfaces({ hosts: ['me.example.com'] }), 'abc')).toBe(
-      'https://me.example.com/auth/magic-link?token=abc',
+      'https://me.example.com/verify?token=abc',
     );
     expect(
       magicLinkUrl(
         surfaces({ ports: [8080], base_path: '/account', origins: ['http://10.0.0.5:8080'] }),
         'abc',
       ),
-    ).toBe('http://10.0.0.5:8080/account/auth/magic-link?token=abc');
+    ).toBe('http://10.0.0.5:8080/account/verify?token=abc');
     expect(accountPath(surfaces({ hosts: ['me.example.com'] }), '/settings')).toBe('/settings');
     expect(emailLinkUrl(surfaces({ hosts: ['me.example.com'] }), RESET_PASSWORD_PAGE, 'abc')).toBe(
-      'https://me.example.com/auth/reset-password?token=abc',
+      'https://me.example.com/reset?token=abc',
     );
   });
 
@@ -93,6 +92,5 @@ describe('bind targets', () => {
       returnPath: '/tickets',
     });
     expect(parseBindTarget(config, 'support', 'https://evil.example')).toBeUndefined();
-    expect(BIND_CALLBACK_PAGE).toBe('/auth/bind/callback');
   });
 });

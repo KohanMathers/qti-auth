@@ -1,16 +1,8 @@
-import {
-  type CaptchaProvider,
-  type CaptchaWidget,
-  createCaptcha,
-  FRIENDLY_CAPTCHA_SCRIPT_URL,
-  HCAPTCHA_SCRIPT_URL,
-  TURNSTILE_SCRIPT_URL,
-} from '@qtiauth/captcha';
+import { type CaptchaProvider, type CaptchaWidget, createCaptcha } from '@qtiauth/captcha';
 import { ProblemError } from '@qtiauth/service-kit';
 
 import type { AuthFailureScope } from './database.ts';
 import { countedIpAttempts, recordIpAttempt } from './failures.ts';
-import { escapeHtml } from './html.ts';
 import { identityMetrics } from './metrics.ts';
 import type { Context } from './service.ts';
 import { clientIp } from './settings.ts';
@@ -168,56 +160,3 @@ export async function inspectCaptcha(
   };
 }
 
-export interface CaptchaRender {
-  html: string;
-  sources: readonly string[];
-}
-
-const EMPTY: CaptchaRender = { html: '', sources: [] };
-
-export function captchaMarkup(widget: CaptchaWidget, nonce: string): CaptchaRender {
-  switch (widget.provider) {
-    case 'none':
-      return EMPTY;
-    case 'altcha': {
-      if (widget.challenge === undefined) return EMPTY;
-      const payload = JSON.stringify(widget.challenge).replaceAll('<', '\\u003c');
-      return {
-        html: `<input type="hidden" name="captcha" id="captcha" value="">
-<script nonce="${nonce}">
-(async () => {
-  const challenge = ${payload};
-  const encoder = new TextEncoder();
-  const hex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  for (let n = 0; n <= challenge.maxnumber; n++) {
-    const digest = await crypto.subtle.digest('SHA-256', encoder.encode(challenge.salt + String(n)));
-    if (hex(digest) === challenge.challenge) {
-      document.getElementById('captcha').value = JSON.stringify({ ...challenge, number: n });
-      return;
-    }
-  }
-})();
-</script>`,
-        sources: [],
-      };
-    }
-    case 'turnstile':
-      return {
-        html: `<div class="cf-turnstile" data-sitekey="${escapeHtml(widget.site_key ?? '')}"></div>
-<script src="${TURNSTILE_SCRIPT_URL}" async defer></script>`,
-        sources: [TURNSTILE_SCRIPT_URL],
-      };
-    case 'hcaptcha':
-      return {
-        html: `<div class="h-captcha" data-sitekey="${escapeHtml(widget.site_key ?? '')}"></div>
-<script src="${HCAPTCHA_SCRIPT_URL}" async defer></script>`,
-        sources: [HCAPTCHA_SCRIPT_URL],
-      };
-    case 'friendly_captcha':
-      return {
-        html: `<div class="frc-captcha" data-sitekey="${escapeHtml(widget.site_key ?? '')}"></div>
-<script type="module" src="${FRIENDLY_CAPTCHA_SCRIPT_URL}" async defer></script>`,
-        sources: [FRIENDLY_CAPTCHA_SCRIPT_URL],
-      };
-  }
-}

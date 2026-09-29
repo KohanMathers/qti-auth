@@ -59,6 +59,9 @@ export function auth(client) {
     verifyEmail: (token) => client.post('/auth/email/verify', { token }),
     changeEmail: (email, password) => client.post('/auth/email/change', { email, password }),
     revertEmail: (token) => client.post('/auth/email/revert', { token }),
+    guardianApprove: (token, date_of_birth) =>
+      client.post('/auth/parental-consent/approve', { token, date_of_birth }),
+    guardianDecline: (token) => client.post('/auth/parental-consent/decline', { token }),
   };
 }
 
@@ -93,6 +96,11 @@ export function family(client) {
   return {
     list: () => client.get('/family'),
     child: (id) => client.get(`/family/${encodeURIComponent(id)}`),
+    openSession: (token) => client.post('/auth/family/session', { token }),
+    acceptInvite: (token, date_of_birth) =>
+      client.post('/auth/family/invite/accept', { token, date_of_birth }),
+    requestSessionEmail: (email) => client.post('/auth/family/magic-link', { email }),
+    logout: () => client.post('/auth/family/logout'),
     setControls: (id, controls) =>
       client.put(`/family/${encodeURIComponent(id)}/controls`, controls),
     childSessions: (id) => client.get(`/family/${encodeURIComponent(id)}/sessions`),

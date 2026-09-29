@@ -296,9 +296,17 @@ function pageSignUp(main, t, ctx) {
 function pageVerify(main, t, ctx) {
   heading(main, t, 'routes.verify.title', 'Verify your email', 'verify.lede');
   const a = auth(ctx.api);
+  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
   main.appendChild(
     form(
-      [{ name: 'token', label: 'field.token', autocomplete: 'one-time-code' }],
+      [
+        {
+          name: 'token',
+          label: 'field.token',
+          autocomplete: 'one-time-code',
+          value: token,
+        },
+      ],
       t,
       'verify.submit',
       async (values, { feedback }) => {
@@ -339,10 +347,11 @@ function pageForgot(main, t, ctx) {
 function pageReset(main, t, ctx) {
   heading(main, t, 'routes.reset.title', 'Choose a new password', 'reset.lede');
   const a = auth(ctx.api);
+  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
   main.appendChild(
     form(
       [
-        { name: 'token', label: 'field.token', autocomplete: 'one-time-code' },
+        { name: 'token', label: 'field.token', autocomplete: 'one-time-code', value: token },
         {
           name: 'password',
           type: 'password',
@@ -357,6 +366,98 @@ function pageReset(main, t, ctx) {
         await a.reset(values.token, values.password);
         feedback.appendChild(successRow(t, 'reset.success'));
         ctx.navigate('/sign-in');
+      },
+    ),
+  );
+}
+
+function pageGuardianApprove(main, t, ctx) {
+  heading(main, t, 'routes.guardian.approve.title', 'Approve this account', 'guardian.approve.lede');
+  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+  const a = auth(ctx.api);
+  main.appendChild(
+    form(
+      [
+        { name: 'token', label: 'field.token', value: token },
+        { name: 'date_of_birth', type: 'date', label: 'field.dateOfBirth' },
+      ],
+      t,
+      'guardian.approve.submit',
+      async (values, { feedback }) => {
+        await a.guardianApprove(values.token, values.date_of_birth);
+        feedback.appendChild(successRow(t, 'guardian.approve.success'));
+      },
+    ),
+  );
+}
+
+function pageGuardianDecline(main, t, ctx) {
+  heading(main, t, 'routes.guardian.decline.title', 'Decline this account', 'guardian.decline.lede');
+  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+  const a = auth(ctx.api);
+  main.appendChild(
+    form(
+      [{ name: 'token', label: 'field.token', value: token }],
+      t,
+      'guardian.decline.submit',
+      async (values, { feedback }) => {
+        await a.guardianDecline(values.token);
+        feedback.appendChild(successRow(t, 'guardian.decline.success'));
+      },
+    ),
+  );
+}
+
+function pageFamilySession(main, t, ctx) {
+  heading(main, t, 'routes.family.session.title', 'Open the family dashboard', 'family.session.lede');
+  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+  const f = family(ctx.api);
+  main.appendChild(
+    form(
+      [{ name: 'token', label: 'field.token', value: token }],
+      t,
+      'family.session.submit',
+      async (values, { feedback }) => {
+        await f.openSession(values.token);
+        feedback.appendChild(successRow(t, 'family.session.success'));
+        ctx.navigate('/family');
+      },
+    ),
+  );
+}
+
+function pageFamilyInvite(main, t, ctx) {
+  heading(main, t, 'routes.family.invite.title', 'Become a parent or guardian', 'family.invite.lede');
+  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+  const f = family(ctx.api);
+  main.appendChild(
+    form(
+      [
+        { name: 'token', label: 'field.token', value: token },
+        { name: 'date_of_birth', type: 'date', label: 'field.dateOfBirth' },
+      ],
+      t,
+      'family.invite.submit',
+      async (values, { feedback }) => {
+        await f.acceptInvite(values.token, values.date_of_birth);
+        feedback.appendChild(successRow(t, 'family.invite.success'));
+      },
+    ),
+  );
+}
+
+function pageRevertEmail(main, t, ctx) {
+  heading(main, t, 'routes.revert.title', 'Revert email change', 'revert.lede');
+  const token = new URLSearchParams(ctx.location.search).get('token') ?? '';
+  const a = auth(ctx.api);
+  main.appendChild(
+    form(
+      [{ name: 'token', label: 'field.token', value: token }],
+      t,
+      'revert.submit',
+      async (values, { feedback }) => {
+        await a.revertEmail(values.token);
+        feedback.appendChild(successRow(t, 'revert.success'));
       },
     ),
   );
@@ -2118,7 +2219,12 @@ export const PAGES = Object.freeze({
   data: { path: '/account/data', render: pageData, requires: { identity: true } },
   family: { path: '/family', render: pageFamily, requires: { identity: true } },
   child: { path: '/family/:id', render: pageChild, requires: { identity: true } },
+  'family-session': { path: '/family/session', render: pageFamilySession },
+  'family-invite': { path: '/family/invite', render: pageFamilyInvite },
   waiting: { path: '/waiting', render: pageChildWaiting },
+  'guardian-approve': { path: '/guardian/approve', render: pageGuardianApprove },
+  'guardian-decline': { path: '/guardian/decline', render: pageGuardianDecline },
+  'revert-email': { path: '/revert-email', render: pageRevertEmail },
   consent: { path: '/consent', render: pageConsent, requires: { oidc: true } },
   device: { path: '/device', render: pageDevice, requires: { oidc: true } },
   apps: { path: '/apps', render: pageApps, requires: { oidc: true } },

@@ -953,9 +953,9 @@ and are replaced by the web app in Phase 9. They're not a frontend and get no de
 - [x] Submit ticket (signed in and guest), my tickets, ticket thread, attachments, appeals.
 - [x] Staff: queue, detail, notes, macros, KB editor with revisions, metrics.
 
-### P9.4 Replace interim pages — S
+### P9.4 Replace interim pages — S ✅
 
-- [ ] Every interim server-rendered page is replaced and removed from the services.
+- [x] Every interim server-rendered page is replaced and removed from the services.
 
 **Done when (whole phase):** every backend feature is reachable in the UI, the interim pages are gone,
 and the accessibility suite passes.

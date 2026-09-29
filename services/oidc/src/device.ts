@@ -64,7 +64,7 @@ export function displayUserCode(normalized: string): string {
 
 function verificationUri(ctx: Context): string {
   const origin = surfaceOrigin(ctx.config, 'account') ?? issuerUrl(ctx.config);
-  return `${origin.replace(/\/+$/, '')}/oauth/device`;
+  return `${origin.replace(/\/+$/, '')}/device`;
 }
 
 export async function startDeviceAuthorization(
