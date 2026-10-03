@@ -32,7 +32,7 @@ import {
   updateEndpoint,
 } from './endpoints.ts';
 import { NO_STORE } from './headers.ts';
-import { accountOrigin } from './origin.ts';
+import { adminOrigins } from './origin.ts';
 import type { Context } from './service.ts';
 import { webhookSecretHint } from './sign.ts';
 
@@ -359,7 +359,7 @@ export function webhookRoutes(router: Router<Context>): void {
       const endpoint = await getEndpoint(ctx.db, params.endpoint_id);
       if (!endpoint) throw new ProblemError('WEBHOOK_ENDPOINT_NOT_FOUND');
       const deliveryId = await enqueueTest(ctx.db, endpoint, {
-        origin: accountOrigin(ctx.config.surfaces),
+        origins: adminOrigins(ctx.config.surfaces),
         now: new Date(),
       });
       log.info('webhook test queued', { endpoint_id: endpoint.id, delivery_id: deliveryId });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { adminPath, discordBody, minimizeData, slackBody, webhookPayload } from './payload.ts';
+import { adminLink, discordBody, minimizeData, slackBody, webhookPayload } from './payload.ts';
 
 describe('webhook payloads', () => {
   it('keeps ids, types, trust and timestamps and drops content', () => {
@@ -37,15 +37,21 @@ describe('webhook payloads', () => {
         data: { reason: 'spam', trust: 'player' },
       },
       'identity.user.banned',
-      'https://me.example.com',
+      { account: 'https://me.example.com', support: 'https://me.example.com/support' },
     );
     expect(payload.admin_url).toBe('https://me.example.com/admin/users/user-1');
-    expect(adminPath('safety.report.created', { type: 'report', id: 'rep-1' })).toBe(
-      '/admin/safety/reports/rep-1',
-    );
-    expect(adminPath('support.ticket.created', { type: 'ticket', id: 'tix-1' })).toBe(
-      '/admin/support/tickets/tix-1',
-    );
+    expect(adminLink('safety.report.created', { type: 'report', id: 'rep-1' })).toEqual({
+      surface: 'account',
+      path: '/admin/moderation/rep-1',
+    });
+    expect(adminLink('support.ticket.created', { type: 'ticket', id: 'tix-1' })).toEqual({
+      surface: 'support',
+      path: '/staff/tickets/tix-1',
+    });
+    expect(adminLink('oidc.client.created', { type: 'oauth_client', id: 'app-1' })).toEqual({
+      surface: 'account',
+      path: '/admin/oauth/app-1',
+    });
 
     const discord = JSON.parse(discordBody(payload)) as {
       embeds: { title: string; fields: { name: string; value: string }[] }[];

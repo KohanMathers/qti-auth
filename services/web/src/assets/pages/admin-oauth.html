@@ -3,7 +3,37 @@
 <div data-slot="rows">
   <ul class="qtiauth-list" data-state="list">
     <template data-item="rows">
-      <li><span data-field="name"></span> — <span data-field="status"></span></li>
+      <li>
+        <a href="/admin/oauth" data-link data-bind-href="path" data-field="name"></a>
+        <span class="qtiauth-muted" data-field="client_id"></span>
+        <span data-field="status"></span>
+        <button
+          type="button"
+          data-action="verify"
+          data-bind-hidden="verified"
+          data-t="admin.oauth.verify"
+        >
+          Verify
+        </button>
+        <button
+          type="button"
+          class="qtiauth-button qtiauth-button-danger"
+          data-action="suspend"
+          data-bind-hidden="suspended"
+          data-t="admin.oauth.suspend"
+        >
+          Suspend
+        </button>
+        <button
+          type="button"
+          class="qtiauth-button qtiauth-button-ghost"
+          data-action="unsuspend"
+          data-bind-hidden="active"
+          data-t="admin.oauth.unsuspend"
+        >
+          Unsuspend
+        </button>
+      </li>
     </template>
   </ul>
   <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>

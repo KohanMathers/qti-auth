@@ -34,10 +34,28 @@
       required
     />
   </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-type" data-t="field.clientType">Client type</label>
+    <select id="qtiauth-f-type" name="type">
+      <option value="confidential" data-t="developer.type.confidential">
+        Confidential (runs on a server that can keep a secret)
+      </option>
+      <option value="public" data-t="developer.type.public">
+        Public (runs on a device, such as a game or app)
+      </option>
+    </select>
+  </p>
   <p class="qtiauth-actions">
     <button type="submit" data-t="developer.create.submit">Create client</button>
   </p>
   <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="developer.create.success">Client created.</p>
+    <p class="qtiauth-success" role="status" data-t="developer.create.success">
+      Client {client_id} created.
+    </p>
+  </template>
+  <template data-message="success-secret">
+    <p class="qtiauth-success" role="status" data-t="developer.create.successSecret">
+      Client {client_id} created. Its secret is {secret}. Copy it now: it won’t be shown again.
+    </p>
   </template>
 </form>

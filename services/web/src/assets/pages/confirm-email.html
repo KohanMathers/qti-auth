@@ -1,0 +1,26 @@
+<h2 data-t="routes.confirm-email.title">Confirm your new email</h2>
+<p class="qtiauth-lede" data-t="confirmEmail.lede">
+  Confirm the change to finish using this address on your account.
+</p>
+
+<form data-form="confirm" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-token" data-t="field.token">Code</label>
+    <input
+      id="qtiauth-f-token"
+      name="token"
+      type="text"
+      autocomplete="one-time-code"
+      data-bind-value="token"
+      required
+    />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="confirmEmail.submit">Confirm email</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="confirmEmail.success">
+      Your email address is now {email}.
+    </p>
+  </template>
+</form>

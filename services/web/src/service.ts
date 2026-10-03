@@ -8,6 +8,7 @@ import * as z from 'zod';
 
 import packageJson from '../package.json' with { type: 'json' };
 import { assetResponse } from './assets.ts';
+import { PAGES } from './assets/pages.js';
 import { WEB_ERRORS } from './errors.ts';
 import { localeResponse } from './locale.ts';
 import { shellResponse } from './shell.ts';
@@ -31,6 +32,13 @@ const cssOk = { 200: { description: 'A stylesheet' } };
 const jsOk = { 200: { description: 'A JavaScript asset' } };
 const jsonOk = { 200: { description: 'A JSON catalogue' } };
 
+function appShell(ctx: Context): Promise<Response> {
+  const state = requireWebState(ctx);
+  return Promise.resolve(
+    shellResponse(ctx.config, { basePath: state.basePath, metaOrigin: state.metaOrigin }),
+  );
+}
+
 router.route({
   method: 'GET',
   path: '/',
@@ -40,13 +48,35 @@ router.route({
   auth: 'none',
   rate_limit: 'global',
   responses: htmlOk,
-  handler: ({ ctx }) => {
-    const state = requireWebState(ctx);
-    return Promise.resolve(
-      shellResponse(ctx.config, { basePath: state.basePath, metaOrigin: state.metaOrigin }),
-    );
-  },
+  handler: ({ ctx }) => appShell(ctx),
 });
+
+function operationId(pageId: string): string {
+  return `page${pageId.replaceAll(/(?:^|-)([a-z])/g, (_, letter: string) => letter.toUpperCase())}`;
+}
+
+for (const [id, page] of Object.entries(PAGES)) {
+  if (page.path === '/') continue;
+  const names = [...page.path.matchAll(/:([a-z_]+)/g)].map((match) => match[1] ?? '');
+  router.route({
+    method: 'GET',
+    path: page.path,
+    operation_id: operationId(id),
+    summary: `Render the web app shell for the ${id} page`,
+    tags: ['web'],
+    auth: 'none',
+    rate_limit: 'global',
+    ...(names.length === 0
+      ? {}
+      : {
+          request: {
+            params: z.object(Object.fromEntries(names.map((name) => [name, z.string().max(256)]))),
+          },
+        }),
+    responses: htmlOk,
+    handler: ({ ctx }) => appShell(ctx),
+  });
+}
 
 router.route({
   method: 'GET',

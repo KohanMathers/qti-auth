@@ -45,19 +45,29 @@ export function apiClient(bootstrap, fetcher = window.fetch.bind(window)) {
 export function auth(client) {
   return {
     signInPassword: (email, password) => client.post('/auth/password/login', { email, password }),
-    signUpPassword: (email, password, name) =>
-      client.post('/auth/password/signup', { email, password, name }),
+    secondFactor: (challenge, factor) => client.post('/auth/2fa', { challenge, ...factor }),
+    passkeyStart: (second_factor) =>
+      client.post('/auth/passkey/authenticate/start', { second_factor }),
+    passkeyFinish: (challenge, response) =>
+      client.post('/auth/passkey/authenticate', { challenge, response }),
+    signUpPassword: (spec) => client.post('/auth/password/signup', spec),
     signOut: () => client.post('/auth/logout'),
-    magicLinkStart: (email) => client.post('/auth/magic-link/start', { email }),
-    magicLinkVerify: (token) => client.post('/auth/magic-link/verify', { token }),
-    magicLinkSignup: (token, name) => client.post('/auth/magic-link/signup', { token, name }),
+    magicLinkStart: (email, return_to) =>
+      client.post('/auth/magic-link/start', { email, return_to }),
+    magicLinkVerify: (token, user_id) => client.post('/auth/magic-link/verify', { token, user_id }),
+    magicLinkSignup: (spec) => client.post('/auth/magic-link/signup', spec),
+    socialStart: (provider, return_to) =>
+      client.post(`/auth/social/${encodeURIComponent(provider)}/start`, { return_to }),
+    socialComplete: (spec) => client.post('/auth/social/complete', spec),
+    socialSignup: (spec) => client.post('/auth/social/signup', spec),
     forgot: (email) => client.post('/auth/password/forgot', { email }),
-    reset: (token, password) => client.post('/auth/password/reset', { token, password }),
-    changePassword: (current, next) =>
-      client.post('/me/password', { current_password: current, new_password: next }),
-    startVerifyEmail: () => client.post('/auth/email/verify/start'),
+    reset: (token, password, extra = {}) =>
+      client.post('/auth/password/reset', { token, password, ...extra }),
+    setPassword: (password, current_password) =>
+      client.post('/me/password', { password, current_password }),
+    startVerifyEmail: (email) => client.post('/auth/email/verify/start', { email }),
     verifyEmail: (token) => client.post('/auth/email/verify', { token }),
-    changeEmail: (email, password) => client.post('/auth/email/change', { email, password }),
+    confirmEmailChange: (token) => client.post('/auth/email/change', { token }),
     revertEmail: (token) => client.post('/auth/email/revert', { token }),
     guardianApprove: (token, date_of_birth) =>
       client.post('/auth/parental-consent/approve', { token, date_of_birth }),
@@ -68,18 +78,38 @@ export function auth(client) {
 export function me(client) {
   return {
     get: () => client.get('/me'),
-    setUsername: (username) => client.put('/me/username', { username }),
-    setEmail: (email) => client.put('/me/email', { email }),
+    setUsername: (username) => client.post('/me/username', { username }),
+    setEmail: (email) => client.post('/me/email', { email }),
     notifications: () => client.get('/me/notifications'),
-    setNotifications: (preferences) => client.put('/me/notifications', { preferences }),
+    setNotifications: (categories) => client.patch('/me/notifications', { categories }),
     legal: () => client.get('/me/legal'),
-    acceptLegal: (document_id, version) =>
-      client.post('/me/legal/accept', { document_id, version }),
+    legalDocument: (id) => client.get(`/legal/${encodeURIComponent(id)}`),
+    acceptLegal: (documents) => client.post('/me/legal/accept', { documents }),
     export: () => client.post('/me/export'),
     exportStatus: (id) => client.get(`/me/export/${encodeURIComponent(id)}`),
-    deletion: () => client.get('/me/deletion'),
     requestDeletion: () => client.post('/me/deletion'),
-    cancelDeletion: () => client.delete('/me/deletion'),
+    requestFamilyRemoval: () => client.post('/me/family/removal'),
+    cancelFamilyRemoval: () => client.delete('/me/family/removal'),
+  };
+}
+
+export function factors(client) {
+  const passkey = (id) => `/me/passkeys/${encodeURIComponent(id)}`;
+  return {
+    list: () => client.get('/me/factors'),
+    totpStart: () => client.post('/me/totp/start'),
+    totpConfirm: (challenge, code) => client.post('/me/totp', { challenge, code }),
+    totpDisable: (code) => client.post('/me/totp/disable', { code }),
+    recoveryCodes: () => client.post('/me/recovery-codes'),
+    passkeyRegisterStart: () => client.post('/me/passkeys/register/start'),
+    passkeyRegister: (challenge, name, response) =>
+      client.post('/me/passkeys/register', { challenge, name, response }),
+    renamePasskey: (id, name) => client.post(passkey(id), { name }),
+    removePasskey: (id) => client.delete(passkey(id)),
+    stepUp: (factor) => client.post('/me/step-up', factor),
+    stepUpPasskeyStart: () => client.post('/me/step-up/passkey/start'),
+    stepUpPasskey: (challenge, response) =>
+      client.post('/me/step-up/passkey', { challenge, response }),
   };
 }
 
@@ -102,7 +132,7 @@ export function family(client) {
     requestSessionEmail: (email) => client.post('/auth/family/magic-link', { email }),
     logout: () => client.post('/auth/family/logout'),
     setControls: (id, controls) =>
-      client.put(`/family/${encodeURIComponent(id)}/controls`, controls),
+      client.patch(`/family/${encodeURIComponent(id)}/controls`, controls),
     childSessions: (id) => client.get(`/family/${encodeURIComponent(id)}/sessions`),
     revokeChildSession: (id, sessionId) =>
       client.delete(`/family/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sessionId)}`),
@@ -125,56 +155,103 @@ export function family(client) {
         `/family/${encodeURIComponent(id)}/app-approvals/${encodeURIComponent(requestId)}/decline`,
       ),
     activity: (id) => client.get(`/family/${encodeURIComponent(id)}/activity`),
+    approveRemoval: (id) => client.post(`/family/${encodeURIComponent(id)}/removal/approve`),
+    declineRemoval: (id) => client.post(`/family/${encodeURIComponent(id)}/removal/decline`),
   };
 }
 
 export function oauth(client) {
   return {
-    authorizedApps: () => client.get('/me/oauth/apps'),
-    revokeApp: (id) => client.delete(`/me/oauth/apps/${encodeURIComponent(id)}`),
-    devicePair: (user_code) => client.post('/oauth/device/verify', { user_code }),
-    developerClients: () => client.get('/developer/clients'),
-    createClient: (spec) => client.post('/developer/clients', spec),
+    authorizedApps: () => client.get('/oauth/authorized'),
+    revokeApp: (clientId) => client.delete(`/oauth/authorized/${encodeURIComponent(clientId)}`),
+    consentRequest: (request_id) =>
+      client.get(`/oauth/consent?${new URLSearchParams({ request_id }).toString()}`),
+    decideConsent: (request_id, decision) =>
+      client.post('/oauth/consent', { request_id, decision }),
+    deviceRequest: (user_code) =>
+      client.get(`/oauth/device?${new URLSearchParams({ user_code }).toString()}`),
+    decideDevice: (user_code, decision) =>
+      client.post('/oauth/device/verify', { user_code, decision }),
+    developerClients: () => client.get('/oauth/clients'),
+    createClient: (spec) => client.post('/oauth/clients', spec),
   };
 }
 
 export function games(client) {
+  const game = (slug) => `/games/${encodeURIComponent(slug)}`;
   return {
-    library: () => client.get('/games/library'),
+    owned: () => client.get('/games/owned'),
     redeem: (code) => client.post('/games/keys/redeem', { code }),
-    achievements: (game_id) => client.get(`/games/${encodeURIComponent(game_id)}/me/achievements`),
-    stats: (game_id) => client.get(`/games/${encodeURIComponent(game_id)}/me/stats`),
-    leaderboards: (game_id) => client.get(`/games/${encodeURIComponent(game_id)}/leaderboards`),
-    devices: () => client.get('/games/devices'),
-    revokeDevice: (id) => client.delete(`/games/devices/${encodeURIComponent(id)}`),
+    achievements: (slug) => client.get(`${game(slug)}/achievements`),
+    stats: (slug) => client.get(`${game(slug)}/stats/values`),
+    leaderboard: (slug, stat, board) =>
+      client.get(
+        `${game(slug)}/leaderboards/${encodeURIComponent(stat)}/${encodeURIComponent(board)}`,
+      ),
+    devices: (slug) => client.get(`${game(slug)}/licensing/devices`),
+    revokeDevice: (slug, leaseId) =>
+      client.delete(`${game(slug)}/licensing/devices/${encodeURIComponent(leaseId)}`),
   };
 }
 
 export function reports(client) {
   return {
+    taxonomy: () => client.get('/safety/taxonomy'),
     submit: (spec) => client.post('/safety/reports', spec),
   };
 }
 
 export function admin(client) {
+  const user = (id) => `/admin/users/${encodeURIComponent(id)}`;
+  const oauthClient = (id) => `/admin/oauth/clients/${encodeURIComponent(id)}`;
+  const webhook = (id) => `/admin/webhooks/${encodeURIComponent(id)}`;
+  const report = (id) => `/admin/safety/reports/${encodeURIComponent(id)}`;
+  const cseaCase = (id) => `/admin/safety/csea/cases/${encodeURIComponent(id)}`;
+  const entitlement = (id) => `/admin/entitlements/${encodeURIComponent(id)}`;
   return {
     users: (query = '') => client.get(`/admin/users${query}`),
-    user: (id) => client.get(`/admin/users/${encodeURIComponent(id)}`),
-    banUser: (id) => client.post(`/admin/users/${encodeURIComponent(id)}/ban`),
-    unbanUser: (id) => client.post(`/admin/users/${encodeURIComponent(id)}/unban`),
-    lockUser: (id) => client.post(`/admin/users/${encodeURIComponent(id)}/lock`),
-    unlockUser: (id) => client.post(`/admin/users/${encodeURIComponent(id)}/unlock`),
+    user: (id) => client.get(user(id)),
+    banUser: (id, reason) => client.post(`${user(id)}/ban`, { reason }),
+    unbanUser: (id, reason) => client.post(`${user(id)}/unban`, { reason }),
+    lockUser: (id, reason, expires_at) => client.post(`${user(id)}/lock`, { reason, expires_at }),
+    unlockUser: (id, reason) => client.post(`${user(id)}/unlock`, { reason }),
+    forceReauth: (id, reason) => client.post(`${user(id)}/reauth`, { reason }),
+    revokeUserSessions: (id, reason) => client.post(`${user(id)}/sessions/revoke`, { reason }),
+    resetUsername: (id, reason) => client.post(`${user(id)}/username-reset`, { reason }),
     roles: () => client.get('/admin/roles'),
     audit: (query = '') => client.get(`/admin/audit${query}`),
     webhooks: () => client.get('/admin/webhooks'),
+    webhook: (id) => client.get(webhook(id)),
+    webhookDeliveries: (id) => client.get(`${webhook(id)}/deliveries`),
+    setWebhookEnabled: (id, enabled) => client.patch(webhook(id), { enabled }),
+    testWebhook: (id) => client.post(`${webhook(id)}/test`),
     filterBlocks: () => client.get('/admin/filter/blocks'),
     filterAllowlist: () => client.get('/admin/filter/allowlist'),
     filterBlocklist: () => client.get('/admin/filter/blocklist'),
-    moderationQueue: () => client.get('/admin/moderation/queue'),
-    cseaCases: () => client.get('/admin/csea/cases'),
-    oauthClients: () => client.get('/admin/oauth/clients'),
+    moderationQueue: () => client.get('/admin/safety/reports?status=open'),
+    report: (id) => client.get(report(id)),
+    reportAction: (id, spec) => client.post(`${report(id)}/actions`, spec),
+    dismissReport: (id) => client.post(`${report(id)}/dismiss`),
+    safetyCatalog: () => client.get('/admin/safety/catalog'),
+    appeals: () => client.get('/admin/safety/appeals?status=open'),
+    resolveAppeal: (id, outcome) =>
+      client.post(`/admin/safety/appeals/${encodeURIComponent(id)}/resolve`, { outcome }),
+    cseaCases: () => client.get('/admin/safety/csea/cases'),
+    cseaCase: (id) => client.get(cseaCase(id)),
+    protectCseaCase: (id) => client.post(`${cseaCase(id)}/protect`),
+    submitCseaCase: (id, spec) => client.post(`${cseaCase(id)}/submit`, spec),
+    closeCseaCase: (id, reason) => client.post(`${cseaCase(id)}/close`, { reason }),
+    oauthClients: (query = '') => client.get(`/admin/oauth/clients${query}`),
+    oauthClient: (id) => client.get(oauthClient(id)),
+    verifyOauthClient: (id) => client.post(`${oauthClient(id)}/verify`),
+    suspendOauthClient: (id) => client.post(`${oauthClient(id)}/suspend`),
+    unsuspendOauthClient: (id) => client.post(`${oauthClient(id)}/unsuspend`),
     gamesCatalog: () => client.get('/admin/games'),
-    health: () => client.get('/admin/health'),
+    userEntitlements: (userId) =>
+      client.get(`/admin/entitlements?${new URLSearchParams({ user_id: userId }).toString()}`),
+    entitlement: (id) => client.get(entitlement(id)),
+    revokeEntitlement: (id, reason) => client.post(`${entitlement(id)}/revoke`, { reason }),
+    health: () => client.get('/meta/health'),
   };
 }
 

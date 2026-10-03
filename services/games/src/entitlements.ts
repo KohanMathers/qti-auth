@@ -259,6 +259,13 @@ export async function revokeEntitlement(
   });
 }
 
+export async function getEntitlement(
+  db: Kysely<Database>,
+  entitlementId: string,
+): Promise<EntitlementRecord | undefined> {
+  return entitlementQuery(db).where('entitlements.id', '=', entitlementId).executeTakeFirst();
+}
+
 export async function revokeEntitlementById(
   db: Kysely<Database>,
   options: { entitlementId: string; reason: string; actor: EventActor; now: Date },

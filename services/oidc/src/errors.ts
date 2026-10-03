@@ -6,6 +6,10 @@ export const OIDC_ERRORS = defineErrors({
     status: 400,
     title: 'This authorization request is unknown, has expired or has already been used',
   },
+  DEVICE_CODE_INVALID: {
+    status: 400,
+    title: 'This device code is unknown, has expired or has already been used',
+  },
   DEVELOPER_PORTAL_DISABLED: { status: 403, title: 'The developer portal is turned off' },
   CLIENT_CHILD_ACCOUNT: {
     status: 403,

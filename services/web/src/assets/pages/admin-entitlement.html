@@ -1,0 +1,44 @@
+<h2 data-t="routes.admin.entitlement.title">Entitlement</h2>
+
+<div data-slot="entitlement">
+  <p data-state="loading" role="status" data-t="admin.loading">Loading…</p>
+  <div data-state="ready">
+    <dl class="qtiauth-details">
+      <dt data-t="admin.entitlement.product">Product</dt>
+      <dd data-field="product"></dd>
+      <dt data-t="admin.entitlement.source">Source</dt>
+      <dd data-field="source"></dd>
+      <dt data-t="admin.entitlement.granted">Granted</dt>
+      <dd data-field="granted"></dd>
+      <dt data-t="admin.entitlement.expires">Expires</dt>
+      <dd data-field="expires"></dd>
+      <dt data-t="admin.entitlement.revoked">Revoked</dt>
+      <dd data-field="revoked"></dd>
+      <dt data-t="admin.entitlement.user">User</dt>
+      <dd><a href="/admin/users" data-link data-bind-href="user_path" data-field="user_id"></a></dd>
+    </dl>
+  </div>
+  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+</div>
+
+<h3 data-t="admin.entitlement.revoke.heading">Revoke</h3>
+<form data-form="revoke" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-revoke-reason" data-t="admin.reason"
+      >Reason (recorded in the audit log)</label
+    >
+    <input id="qtiauth-f-revoke-reason" name="reason" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button
+      type="submit"
+      class="qtiauth-button qtiauth-button-danger"
+      data-t="admin.entitlement.revoke"
+    >
+      Revoke
+    </button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="admin.entitlement.revoked">Revoked.</p>
+  </template>
+</form>

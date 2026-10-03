@@ -3,10 +3,6 @@
 
 <form data-form="password" data-show="password" novalidate>
   <p class="qtiauth-field">
-    <label for="qtiauth-f-name" data-t="field.name">Name</label>
-    <input id="qtiauth-f-name" name="name" type="text" autocomplete="name" required />
-  </p>
-  <p class="qtiauth-field">
     <label for="qtiauth-f-email" data-t="field.email">Email</label>
     <input id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
   </p>
@@ -21,6 +17,16 @@
       required
     />
   </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-dob" data-t="field.dateOfBirth">Date of birth</label>
+    <input id="qtiauth-f-dob" name="date_of_birth" type="date" autocomplete="bday" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-guardian" data-t="field.guardianEmail.optional">
+      Parent or guardian email, if you need their permission
+    </label>
+    <input id="qtiauth-f-guardian" name="guardian_email" type="email" autocomplete="off" />
+  </p>
   <p class="qtiauth-actions">
     <button type="submit" data-t="signUp.submit">Create account</button>
   </p>
@@ -32,10 +38,6 @@
 </form>
 
 <form data-form="magic" data-show="magic_only" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-magic-name" data-t="field.name">Name</label>
-    <input id="qtiauth-f-magic-name" name="name" type="text" autocomplete="name" required />
-  </p>
   <p class="qtiauth-field">
     <label for="qtiauth-f-magic-email" data-t="field.email">Email</label>
     <input id="qtiauth-f-magic-email" name="email" type="email" autocomplete="email" required />

@@ -1,0 +1,53 @@
+<h2 data-t="routes.admin.oauthClient.title">OAuth client</h2>
+
+<div data-slot="client">
+  <p data-state="loading" role="status" data-t="admin.loading">Loading…</p>
+  <div data-state="ready">
+    <dl class="qtiauth-details">
+      <dt data-t="admin.oauth.name">Name</dt>
+      <dd data-field="name"></dd>
+      <dt data-t="admin.oauth.clientId">Client ID</dt>
+      <dd data-field="client_id"></dd>
+      <dt data-t="admin.oauth.description">Description</dt>
+      <dd data-field="description"></dd>
+      <dt data-t="admin.oauth.type">Type</dt>
+      <dd data-field="type"></dd>
+      <dt data-t="admin.oauth.redirectUris">Redirect URIs</dt>
+      <dd data-field="redirect_uris"></dd>
+      <dt data-t="admin.oauth.status">Status</dt>
+      <dd data-field="status"></dd>
+      <dt data-t="admin.oauth.created">Created</dt>
+      <dd data-field="created"></dd>
+    </dl>
+    <p class="qtiauth-actions">
+      <button
+        type="button"
+        data-action="verify"
+        data-bind-hidden="verified"
+        data-t="admin.oauth.verify"
+      >
+        Verify
+      </button>
+      <button
+        type="button"
+        class="qtiauth-button qtiauth-button-danger"
+        data-action="suspend"
+        data-bind-hidden="suspended"
+        data-t="admin.oauth.suspend"
+      >
+        Suspend
+      </button>
+      <button
+        type="button"
+        class="qtiauth-button qtiauth-button-ghost"
+        data-action="unsuspend"
+        data-bind-hidden="active"
+        data-t="admin.oauth.unsuspend"
+      >
+        Unsuspend
+      </button>
+    </p>
+    <div class="qtiauth-feedback" aria-live="polite" data-part="client-feedback"></div>
+  </div>
+  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+</div>

@@ -1,0 +1,49 @@
+<h2 data-t="routes.admin.webhook.title">Webhook</h2>
+
+<div data-slot="webhook">
+  <p data-state="loading" role="status" data-t="admin.loading">Loading…</p>
+  <div data-state="ready">
+    <dl class="qtiauth-details">
+      <dt data-t="admin.webhook.url">URL</dt>
+      <dd data-field="url"></dd>
+      <dt data-t="admin.webhook.description">Description</dt>
+      <dd data-field="description"></dd>
+      <dt data-t="admin.webhook.events">Events</dt>
+      <dd data-field="events"></dd>
+      <dt data-t="admin.webhook.format">Format</dt>
+      <dd data-field="format"></dd>
+      <dt data-t="admin.webhook.status">Status</dt>
+      <dd data-field="status"></dd>
+      <dt data-t="admin.webhook.failures">Failures in a row</dt>
+      <dd data-field="failures"></dd>
+    </dl>
+    <p class="qtiauth-actions">
+      <button
+        type="button"
+        data-action="enable"
+        data-bind-hidden="enabled"
+        data-t="admin.webhook.enable"
+      >
+        Enable
+      </button>
+      <button
+        type="button"
+        class="qtiauth-button qtiauth-button-ghost"
+        data-action="disable"
+        data-bind-hidden="disabled"
+        data-t="admin.webhook.disable"
+      >
+        Disable
+      </button>
+      <button type="button" data-action="test" data-t="admin.webhook.test">Send a test</button>
+    </p>
+    <div class="qtiauth-feedback" aria-live="polite" data-part="webhook-feedback"></div>
+    <h3 data-t="admin.webhook.deliveries">Recent deliveries</h3>
+    <ul class="qtiauth-list">
+      <template data-item="deliveries">
+        <li data-field="label"></li>
+      </template>
+    </ul>
+  </div>
+  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+</div>

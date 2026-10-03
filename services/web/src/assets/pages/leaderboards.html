@@ -2,8 +2,20 @@
 
 <form data-form="game" novalidate>
   <p class="qtiauth-field">
-    <label for="qtiauth-f-game-id" data-t="field.game">Game ID</label>
-    <input id="qtiauth-f-game-id" name="game_id" type="text" autocomplete="off" required />
+    <label for="qtiauth-f-game" data-t="field.game">Game</label>
+    <select id="qtiauth-f-game" name="game" required>
+      <template data-item="games">
+        <option data-bind-value="slug" data-field="name"></option>
+      </template>
+    </select>
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-stat" data-t="field.stat">Stat</label>
+    <input id="qtiauth-f-stat" name="stat" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-board" data-t="field.board">Leaderboard</label>
+    <input id="qtiauth-f-board" name="board" type="text" autocomplete="off" required />
   </p>
   <p class="qtiauth-actions">
     <button type="submit" data-t="games.load">Load</button>
@@ -17,4 +29,7 @@
     </template>
   </ul>
   <p class="qtiauth-empty" data-state="empty" data-t="games.section.empty">Nothing to show.</p>
+  <p class="qtiauth-empty" data-state="error" data-t="games.load.error">
+    Could not load your games.
+  </p>
 </div>

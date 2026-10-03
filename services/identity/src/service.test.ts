@@ -82,6 +82,8 @@ describe('identity service', () => {
       'GET /api/v1/me/notifications',
       'GET /api/v1/me/passkeys',
       'GET /api/v1/sessions',
+      'GET /auth/bind',
+      'GET /auth/bind/callback',
       'PATCH /api/v1/admin/roles/:role_id',
       'PATCH /api/v1/family/:child_id/controls',
       'PATCH /api/v1/me/notifications',

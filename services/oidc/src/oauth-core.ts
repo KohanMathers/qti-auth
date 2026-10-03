@@ -51,15 +51,26 @@ export function oauthJson(
   );
 }
 
-export function authorizationRedirect(
+export function authorizationLocation(
   redirectUri: string,
   params: Record<string, string | undefined>,
-): Response {
+): string {
   const url = new URL(redirectUri);
   for (const [name, value] of Object.entries(params)) {
     if (value !== undefined) url.searchParams.set(name, value);
   }
-  return new Response(null, { status: 302, headers: { location: url.toString() } });
+  return url.toString();
+}
+
+export function redirect(location: string): Response {
+  return new Response(null, { status: 302, headers: { location } });
+}
+
+export function authorizationRedirect(
+  redirectUri: string,
+  params: Record<string, string | undefined>,
+): Response {
+  return redirect(authorizationLocation(redirectUri, params));
 }
 
 export function seconds(date: Date): number {

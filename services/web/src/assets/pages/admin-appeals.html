@@ -1,0 +1,23 @@
+<h2 data-t="routes.admin.appeals.title">Appeals</h2>
+
+<div data-slot="rows">
+  <ul class="qtiauth-list" data-state="list">
+    <template data-item="rows">
+      <li>
+        <span class="qtiauth-muted" data-field="created"></span>
+        <span data-field="body"></span>
+        <button type="button" data-action="lift" data-t="admin.appeals.lift">Lift</button>
+        <button
+          type="button"
+          class="qtiauth-button qtiauth-button-ghost"
+          data-action="uphold"
+          data-t="admin.appeals.uphold"
+        >
+          Uphold
+        </button>
+      </li>
+    </template>
+  </ul>
+  <p class="qtiauth-empty" data-state="empty" data-t="admin.appeals.empty">No open appeals.</p>
+  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+</div>

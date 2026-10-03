@@ -14,10 +14,10 @@ describe('support origins', () => {
       'https://account.example.com/support/tickets/ticket-1',
     );
     expect(staffTicketUrl(surfaces, 'ticket-1')).toBe(
-      'https://account.example.com/admin/support/tickets/ticket-1',
+      'https://account.example.com/support/staff/tickets/ticket-1',
     );
     expect(guestTicketUrl(surfaces, 'token-1')).toBe(
-      'https://account.example.com/support/guest?token=token-1',
+      'https://account.example.com/support/guest/view?token=token-1',
     );
   });
 });

@@ -38,7 +38,7 @@ Endpoints are discovered from `/.well-known/openid-configuration` on the deploym
 
 For a device without a browser use RFC 8628. Post to `/oauth/device_authorization` with your `client_id` and `scope`; the response has `verification_uri`, `user_code`, `device_code` and `interval`. Show the user the URI and the code. Poll `/oauth/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code` and the device code, no faster than `interval` seconds. Pending polls answer `authorization_pending`; polling too fast answers `slow_down` and the interval grows by five seconds.
 
-The user opens `/oauth/device` in a browser, types the code, confirms with a POST (a scanner prefetch cannot consume it), and your poll returns the tokens on the next tick.
+The user opens `/device` on the account surface in a browser, types the code, confirms with a POST (a scanner prefetch cannot consume it), and your poll returns the tokens on the next tick.
 
 ### Steam-linked accounts
 
@@ -140,7 +140,7 @@ Tickets never appear in logs, traces or metric labels.
 
 ## When something goes wrong
 
-- **`401 AUTHENTICATION_REQUIRED`** on a session route → the player token expired, or the session is at `aal0`. Refresh, or send the player to `/auth/login` on the account surface.
+- **`401 AUTHENTICATION_REQUIRED`** on a session route → the player token expired, or the session is at `aal0`. Refresh, or send the player to `/sign-in` on the account surface.
 - **`403 INSUFFICIENT_SCOPE`** → your token doesn't have the scope. Discovery lists the scopes each endpoint needs; ask for them at authorize.
 - **`403 STEP_UP_REQUIRED`** on an admin action → the session's step-up window has passed. Re-authenticate to `aal2` (passkey or TOTP) and try again.
 - **`409` on a game-authoritative write** → the player token and server token weren't issued for the same game. Rotate the server client's secret only if it may have leaked; otherwise re-check the client_id you're using.

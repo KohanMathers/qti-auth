@@ -26,7 +26,7 @@ import {
 } from './oauth-core.ts';
 import { parseScopeString, requestedScopes } from './scopes.ts';
 import type { Context } from './service.ts';
-import { issuerUrl, surfaceOrigin } from './settings.ts';
+import { DEVICE_PAGE, issuerUrl, surfaceOrigin } from './settings.ts';
 import { hashToken, newToken } from './tokens.ts';
 
 export const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
@@ -64,7 +64,7 @@ export function displayUserCode(normalized: string): string {
 
 function verificationUri(ctx: Context): string {
   const origin = surfaceOrigin(ctx.config, 'account') ?? issuerUrl(ctx.config);
-  return `${origin.replace(/\/+$/, '')}/device`;
+  return `${origin.replace(/\/+$/, '')}${DEVICE_PAGE}`;
 }
 
 export async function startDeviceAuthorization(

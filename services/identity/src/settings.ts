@@ -21,11 +21,14 @@ import type { SessionClient, SessionSettings } from './sessions.ts';
 import type { SocialSettings } from './social.ts';
 
 export const RETURN_TO = /^\/(?![/\\])[^\s\\]*$/;
-export const MAGIC_LINK_PAGE = '/verify';
+export const MAGIC_LINK_PAGE = '/magic-link';
+export const SIGN_IN_PAGE = '/sign-in';
+export const BIND_PAGE = '/auth/bind';
+export const BIND_CALLBACK_PAGE = '/auth/bind/callback';
 export const RESET_PASSWORD_PAGE = '/reset';
 export const VERIFY_EMAIL_PAGE = '/verify';
 export const SOCIAL_CALLBACK_PAGE = '/auth/social/:provider/callback';
-export const CHANGE_EMAIL_PAGE = '/verify';
+export const CHANGE_EMAIL_PAGE = '/confirm-email';
 export const REVERT_EMAIL_PAGE = '/revert-email';
 export const GUARDIAN_APPROVE_PAGE = '/guardian/approve';
 export const GUARDIAN_DECLINE_PAGE = '/guardian/decline';

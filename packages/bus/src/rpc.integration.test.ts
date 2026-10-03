@@ -42,6 +42,7 @@ beforeAll(async () => {
       }),
     );
   }
+  await Promise.all([identity.nc.flush(), replica.nc.flush()]);
 });
 
 afterAll(async () => {
@@ -82,6 +83,7 @@ describe('request/reply', () => {
       handler: () => Promise.reject(new Error('connection string with secrets')),
       onError,
     });
+    await identity.nc.flush();
     try {
       await expect(
         rpcRequest(gateway, 'identity', 'get_user_summary', { user_id: 'missing' }),
@@ -125,6 +127,7 @@ describe('request/reply', () => {
       },
       onError: () => undefined,
     });
+    await identity.nc.flush();
     try {
       const before = Date.now();
       await expect(rpcRequest(gateway, 'identity', 'slow', {}, { timeout: 100 })).resolves.toEqual({
@@ -146,6 +149,7 @@ describe('request/reply', () => {
       },
       onError: () => undefined,
     });
+    await identity.nc.flush();
     const reply = rpcRequest(gateway, 'identity', 'drain', {});
     await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();

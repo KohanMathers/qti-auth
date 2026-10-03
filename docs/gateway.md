@@ -81,7 +81,7 @@ surfaces:
 
 The session cookie is `__Host-<cookies.name>` (`__Host-qtiauth_session` by default), or `<cookies.name>` when `cookies.domain` is set. The cookie is resolved on `auth: session` routes and on every identity route, so identity can restore an `aal0` session from `auth: none` sign-in routes; a cookie sent to any other service's public route costs no lookup. `sub` and permissions are only attached on `auth: session` routes; on other routes the caller is otherwise anonymous, with `sid` set when a session exists. The family dashboard cookie is `__Host-<cookies.name>_family`. Identity sets it through `X-QTIAuth-Family-Token`; the gateway stores it and sends it back only to identity. Client-sent family headers are ignored.
 
-When a top-level navigation (`Sec-Fetch-Mode: navigate`, or `GET`/`HEAD` with `Accept: text/html`) needs a session on a host that does not share the account cookie, the gateway redirects to `/auth/bind` on the account surface and sets a one-minute `__Host-<cookies.name>_bound` cookie so a failed bind is not retried in a loop. `/auth/bind` itself, if the account host has no session, redirects to `/auth/login` with `return_to`. A top-level navigation whose session is at `aal0` is sent to `/auth/login`. API clients still get `401 AUTHENTICATION_REQUIRED`, or `403 REAUTHENTICATION_REQUIRED` when the session is at `aal0`.
+When a top-level navigation (`Sec-Fetch-Mode: navigate`, or `GET`/`HEAD` with `Accept: text/html`) needs a session on a host that does not share the account cookie, the gateway redirects to `/auth/bind` on the account surface and sets a one-minute `__Host-<cookies.name>_bound` cookie so a failed bind is not retried in a loop. `/auth/bind` itself, if the account host has no session, redirects to `/sign-in` with `return_to`. A top-level navigation whose session is at `aal0` is sent to `/sign-in`. API clients still get `401 AUTHENTICATION_REQUIRED`, or `403 REAUTHENTICATION_REQUIRED` when the session is at `aal0`.
 
 The gateway hashes the cookie's token and looks the session up in Valkey. On a miss, when Valkey is down, or when `features.session_security.enabled` is on and the request's signals (IP subnet, User-Agent, country, TLS fingerprint, timezone, screen, client fingerprint) differ from the cached snapshot, it asks identity over `qtiauth.rpc.identity.resolve_session` and caches the answer for `session_cache.ttl` or until the session expires. If identity can't be reached, the request gets `503 SERVICE_UNAVAILABLE`. A cookie that doesn't resolve to a session is cleared in the response.
 
@@ -121,7 +121,7 @@ For `auth: service` routes, in order:
 
 Session cookies are ignored on oauth and service routes. Access tokens are ignored on session routes. `auth: none` routes skip these checks. Routes with `auth: game_authoritative` get `401 AUTHENTICATION_REQUIRED` until those credentials are available.
 
-A top-level browser navigation that needs a session and has none is redirected to `/auth/login?return_to=…` on the account surface, with the path and query the browser asked for. API callers still get `401 AUTHENTICATION_REQUIRED`.
+A top-level browser navigation that needs a session and has none is redirected to `/sign-in?return_to=…` on the account surface, with the path and query the browser asked for. API callers still get `401 AUTHENTICATION_REQUIRED`.
 
 ## Internal identity keys
 

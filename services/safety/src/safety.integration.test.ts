@@ -511,7 +511,7 @@ describe('safety service', () => {
     const alert = await emails.nextJob(ALERT_EMAIL, 'csea_case_opened');
     expect(JSON.stringify(alert.variables)).not.toContain(LEAK_MARKER);
     expect(alert.variables).toEqual({
-      link: `https://account.example.com/admin/safety/csea/${record.id}`,
+      link: `https://account.example.com/admin/csea/${record.id}`,
     });
 
     const metrics = await (await fetch(`${safety.url}/metrics`)).text();

@@ -5,10 +5,20 @@
   <ul class="qtiauth-list" data-state="list">
     <template data-item="sessions">
       <li class="qtiauth-session">
-        <span class="qtiauth-session-label"
-          ><span data-field="user_agent">unknown</span> — <span data-field="ip"></span
-        ></span>
-        <button type="button" data-action="revoke" data-t="sessions.revoke">Revoke</button>
+        <span class="qtiauth-session-label" data-t="sessions.item">
+          {device} {country}, last active {last_active}
+        </span>
+        <span class="qtiauth-muted" data-bind-hidden="not_current" data-t="sessions.current">
+          This device
+        </span>
+        <button
+          type="button"
+          data-action="revoke"
+          data-bind-hidden="current"
+          data-t="sessions.revoke"
+        >
+          Revoke
+        </button>
       </li>
     </template>
   </ul>

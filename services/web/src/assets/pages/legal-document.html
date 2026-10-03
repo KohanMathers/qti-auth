@@ -1,0 +1,13 @@
+<h2 data-t="routes.legal-document.title">Legal document</h2>
+
+<div data-slot="document">
+  <p data-state="loading" role="status" data-t="legalDocument.loading">Loading…</p>
+  <article data-state="ready">
+    <p class="qtiauth-lede" data-field="summary"></p>
+    <p class="qtiauth-muted" data-t="legalDocument.version">Version {version}, from {effective}</p>
+    <div class="qtiauth-document" data-field="body"></div>
+  </article>
+  <p class="qtiauth-empty" data-state="error" data-t="legalDocument.load.error">
+    Could not load this document.
+  </p>
+</div>

@@ -3,16 +3,35 @@
 
 <form data-form="report" novalidate>
   <p class="qtiauth-field">
-    <label for="qtiauth-f-target" data-t="field.target">User or content</label>
-    <input id="qtiauth-f-target" name="target" type="text" autocomplete="off" required />
+    <label for="qtiauth-f-target-type" data-t="field.targetType">What are you reporting?</label>
+    <select id="qtiauth-f-target-type" name="target_type" data-bind-value="target_type">
+      <option value="user" data-t="report.target.user">A user</option>
+      <option value="content" data-t="report.target.content">Something someone posted</option>
+    </select>
+  </p>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-target" data-t="field.target">User or content ID</label>
+    <input
+      id="qtiauth-f-target"
+      name="target"
+      type="text"
+      autocomplete="off"
+      data-bind-value="target"
+      required
+    />
   </p>
   <p class="qtiauth-field">
     <label for="qtiauth-f-reason" data-t="field.reason">Reason</label>
-    <input id="qtiauth-f-reason" name="reason" type="text" autocomplete="off" required />
+    <select id="qtiauth-f-reason" name="reason" required>
+      <template data-item="reasons">
+        <option data-bind-value="value" data-field="label"></option>
+      </template>
+    </select>
   </p>
+  <div class="qtiauth-feedback" aria-live="polite" data-part="reasons-feedback"></div>
   <p class="qtiauth-field">
-    <label for="qtiauth-f-detail" data-t="field.detail">Details (optional)</label>
-    <input id="qtiauth-f-detail" name="detail" type="text" autocomplete="off" />
+    <label for="qtiauth-f-note" data-t="field.detail">Details (optional)</label>
+    <textarea id="qtiauth-f-note" name="note" rows="4" maxlength="2000"></textarea>
   </p>
   <p class="qtiauth-actions">
     <button type="submit" data-t="report.submit">Send report</button>

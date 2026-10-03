@@ -3,7 +3,7 @@ import type { RouteModule } from '@qtiauth/service-kit';
 import { getDomain } from 'tldts';
 
 export const BIND_PATH = '/auth/bind';
-export const LOGIN_PATH = '/auth/login';
+export const LOGIN_PATH = '/sign-in';
 
 export type SurfaceName = (typeof SURFACES)[number];
 export type Module = (typeof MODULES)[number];

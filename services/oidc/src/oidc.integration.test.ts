@@ -126,16 +126,19 @@ function locationOf(response: Response): URL {
   return new URL(location ?? '', ORIGIN);
 }
 
-async function openLink(client: Browser, email: string): Promise<string> {
+async function signUpToken(client: Browser, email: string): Promise<string> {
   const start = await client.request('/api/v1/auth/magic-link/start', json({ email }));
   expect(start.status).toBe(202);
   const link = await emails.nextLink(email);
+  expect(link.pathname).toBe('/magic-link');
   const token = link.searchParams.get('token') ?? '';
   secrets.push(token);
-  const page = await client.request(`${link.pathname}${link.search}`);
-  expect(page.status).toBe(200);
-  expect(await page.text()).toContain('action="magic-link"');
-  return token;
+  const verified = await client.request('/api/v1/auth/magic-link/verify', json({ token }));
+  expect(verified.status).toBe(200);
+  const body = (await verified.json()) as { status: string; signup_token: string };
+  expect(body.status).toBe('signup_required');
+  secrets.push(body.signup_token);
+  return body.signup_token;
 }
 
 async function signUpInBrowser(
@@ -143,18 +146,12 @@ async function signUpInBrowser(
   email: string,
   dateOfBirth = '1990-02-03',
 ): Promise<void> {
-  const token = await openLink(client, email);
-  const confirm = await client.request('/auth/magic-link', form({ token }));
-  const dobPage = await confirm.text();
-  const signupToken = /name="signup_token" value="([^"]+)"/.exec(dobPage)?.[1] ?? '';
-  expect(signupToken).not.toBe('');
-  secrets.push(signupToken);
+  const signupToken = await signUpToken(client, email);
   const created = await client.request(
-    '/auth/signup',
-    form({ signup_token: signupToken, date_of_birth: dateOfBirth }),
+    '/api/v1/auth/magic-link/signup',
+    json({ signup_token: signupToken, date_of_birth: dateOfBirth }),
   );
-  expect(created.status).toBe(200);
-  expect(await created.text()).toContain('You’re signed in');
+  expect(created.status).toBe(201);
   expect(client.cookie()).not.toBeNull();
 }
 
@@ -165,22 +162,16 @@ async function signUpChildWithGuardian(
   email: string,
   guardianEmail: string,
 ): Promise<string> {
-  const token = await openLink(child, email);
-  const confirm = await child.request('/auth/magic-link', form({ token }));
-  const dobPage = await confirm.text();
-  const signupToken = /name="signup_token" value="([^"]+)"/.exec(dobPage)?.[1] ?? '';
-  expect(signupToken).not.toBe('');
-  secrets.push(signupToken);
+  const signupToken = await signUpToken(child, email);
   const created = await child.request(
-    '/auth/signup',
-    form({
+    '/api/v1/auth/magic-link/signup',
+    json({
       signup_token: signupToken,
       date_of_birth: CHILD_DOB,
       guardian_email: guardianEmail,
     }),
   );
-  expect(created.status).toBe(200);
-  expect(await created.text()).toContain('We’ve emailed');
+  expect(created.status).toBe(201);
   expect(child.cookie()).not.toBeNull();
   const me = await child.request('/api/v1/me');
   expect(me.status).toBe(200);
@@ -196,12 +187,63 @@ async function signUpChildWithGuardian(
   expect(approved.status).toBe(204);
   await vi.waitFor(
     async () => {
-      const page = await child.request('/oauth/device');
-      expect(page.status).toBe(200);
+      const authorized = await child.request('/api/v1/oauth/authorized');
+      expect(authorized.status).toBe(200);
     },
     { timeout: 10_000 },
   );
   return account.id;
+}
+
+interface PendingRequest {
+  state: string;
+  client: { client_id: string; name: string; verified: boolean };
+  scopes: { scope: string; description: string }[];
+}
+
+async function consentRequest(client: Browser, consentUrl: URL): Promise<PendingRequest> {
+  expect(consentUrl.pathname).toBe('/consent');
+  const requestId = consentUrl.searchParams.get('request_id') ?? '';
+  const response = await client.request(
+    `/api/v1/oauth/consent?${new URLSearchParams({ request_id: requestId }).toString()}`,
+  );
+  expect(response.status).toBe(200);
+  return (await response.json()) as PendingRequest;
+}
+
+async function decideConsent(
+  client: Browser,
+  consentUrl: URL,
+  decision: 'allow' | 'deny',
+): Promise<URL> {
+  const response = await client.request(
+    '/api/v1/oauth/consent',
+    json({ request_id: consentUrl.searchParams.get('request_id') ?? '', decision }),
+  );
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as { redirect_to: string };
+  return new URL(body.redirect_to);
+}
+
+async function deviceRequest(client: Browser, userCode: string): Promise<PendingRequest> {
+  const response = await client.request(
+    `/api/v1/oauth/device?${new URLSearchParams({ user_code: userCode }).toString()}`,
+  );
+  expect(response.status).toBe(200);
+  return (await response.json()) as PendingRequest;
+}
+
+async function decideDevice(
+  client: Browser,
+  userCode: string,
+  decision: 'allow' | 'deny',
+): Promise<string> {
+  const response = await client.request(
+    '/api/v1/oauth/device/verify',
+    json({ user_code: userCode, decision }),
+  );
+  expect(response.status).toBe(200);
+  return ((await response.json()) as { status: string }).status;
 }
 
 async function openFamily(guardianEmail: string): Promise<Browser> {
@@ -453,6 +495,12 @@ beforeAll(async () => {
       observability,
       surfaces,
       geoip: { source: 'header', header: 'cf-ipcountry' },
+      rate_limits: {
+        magic_link_email: { per: 'email', limit: 1000, window: '1h', on_store_failure: 'closed' },
+        magic_link_ip: { per: 'ip', limit: 1000, window: '1h', on_store_failure: 'closed' },
+        magic_link_ip_day: { per: 'ip', limit: 1000, window: '1d', on_store_failure: 'closed' },
+        auth_verify: { per: 'ip', limit: 1000, window: '15m', on_store_failure: 'closed' },
+      },
       gateway: {
         identity_keys: { encryption_key: Buffer.alloc(32, 7).toString('base64') },
         discovery: { interval: '500ms', expiry: '5s', startup_grace: '1ms' },
@@ -603,22 +651,17 @@ describe('oidc through the gateway', () => {
     const authorize = await client.request(authorizePath(STUDIO, STUDIO_REDIRECT, challenge));
     expect(authorize.status).toBe(302);
     const consent = locationOf(authorize);
-    expect(consent.pathname).toBe('/oauth/consent');
-    const requestId = consent.searchParams.get('request_id') ?? '';
-    expect(requestId).not.toBe('');
+    const pending = await consentRequest(client, consent);
+    expect(pending).toMatchObject({
+      state: 'consent',
+      client: { client_id: STUDIO, name: 'Studio', verified: false },
+    });
+    expect(pending.scopes).toContainEqual({
+      scope: 'email',
+      description: 'See your email address',
+    });
 
-    const page = await client.request(`${consent.pathname}${consent.search}`);
-    expect(page.status).toBe(200);
-    const html = await page.text();
-    expect(html).toContain('Studio wants to');
-    expect(html).toContain('Unverified app');
-
-    const allowed = await client.request(
-      '/oauth/consent',
-      form({ request_id: requestId, decision: 'allow' }),
-    );
-    expect(allowed.status).toBe(302);
-    const redirected = locationOf(allowed);
+    const redirected = await decideConsent(client, consent, 'allow');
     expect(redirected.origin).toBe('https://app.example.com');
     const code = redirected.searchParams.get('code') ?? '';
     secrets.push(code);
@@ -680,10 +723,7 @@ describe('oidc through the gateway', () => {
     const authorize = await child.request(authorizePath(STUDIO, STUDIO_REDIRECT, challenge));
     expect(authorize.status).toBe(302);
     const consentUrl = locationOf(authorize);
-    expect(consentUrl.pathname).toBe('/oauth/consent');
-    const waiting = await child.request(`${consentUrl.pathname}${consentUrl.search}`);
-    expect(waiting.status).toBe(200);
-    expect(await waiting.text()).toContain('Waiting for a parent or guardian');
+    expect((await consentRequest(child, consentUrl)).state).toBe('pending_guardian');
     await emails.nextJob('guardian-parent@example.com', 'guardian_app_approval');
 
     const pending = await pendingStudioApproval(guardian, childId);
@@ -693,9 +733,9 @@ describe('oidc through the gateway', () => {
     );
     expect(approved.status).toBe(204);
 
-    const finished = await child.request(`${consentUrl.pathname}${consentUrl.search}`);
-    expect(finished.status).toBe(302);
-    const code = locationOf(finished).searchParams.get('code') ?? '';
+    expect((await consentRequest(child, consentUrl)).state).toBe('approved');
+    const finished = await decideConsent(child, consentUrl, 'allow');
+    const code = finished.searchParams.get('code') ?? '';
     secrets.push(code);
     expect(code).not.toBe('');
     await exchangeCode(child, {
@@ -724,8 +764,7 @@ describe('oidc through the gateway', () => {
     const authorize = await child.request(authorizePath(STUDIO, STUDIO_REDIRECT, pkce().challenge));
     expect(authorize.status).toBe(302);
     const consentUrl = locationOf(authorize);
-    const waiting = await child.request(`${consentUrl.pathname}${consentUrl.search}`);
-    expect(waiting.status).toBe(200);
+    expect((await consentRequest(child, consentUrl)).state).toBe('pending_guardian');
     await emails.nextJob('deny-parent@example.com', 'guardian_app_approval');
 
     const pending = await pendingStudioApproval(guardian, childId);
@@ -735,9 +774,9 @@ describe('oidc through the gateway', () => {
     );
     expect(declined.status).toBe(204);
 
-    const finished = await child.request(`${consentUrl.pathname}${consentUrl.search}`);
-    expect(finished.status).toBe(302);
-    expect(locationOf(finished).searchParams.get('error')).toBe('access_denied');
+    expect((await consentRequest(child, consentUrl)).state).toBe('declined');
+    const finished = await decideConsent(child, consentUrl, 'deny');
+    expect(finished.searchParams.get('error')).toBe('access_denied');
   });
 
   it('keeps a child’s device flow pending until a guardian approves', async () => {
@@ -764,16 +803,12 @@ describe('oidc through the gateway', () => {
       'device-parent@example.com',
     );
     const guardian = await openFamily('device-parent@example.com');
-    const confirm = await child.request(
-      `/oauth/device?user_code=${encodeURIComponent(codes.user_code)}`,
-    );
-    expect(confirm.status).toBe(200);
-    const allowed = await child.request(
-      '/oauth/device',
-      form({ user_code: codes.user_code, decision: 'allow' }),
-    );
-    expect(allowed.status).toBe(200);
-    expect(await allowed.text()).toContain('Waiting for a parent or guardian');
+    expect(await deviceRequest(child, codes.user_code)).toMatchObject({
+      state: 'pending',
+      client: { name: 'Studio' },
+    });
+    expect(await decideDevice(child, codes.user_code, 'allow')).toBe('pending_guardian');
+    expect((await deviceRequest(child, codes.user_code)).state).toBe('pending_guardian');
     await emails.nextJob('device-parent@example.com', 'guardian_app_approval');
 
     const pendingPoll = await device.request(
@@ -871,13 +906,8 @@ describe('oidc through the gateway', () => {
     const authorize = await client.request(
       authorizePath(STUDIO, STUDIO_REDIRECT, challenge, 'openid'),
     );
-    const consent = locationOf(authorize);
-    const requestId = consent.searchParams.get('request_id') ?? '';
-    const allowed = await client.request(
-      '/oauth/consent',
-      form({ request_id: requestId, decision: 'allow' }),
-    );
-    const code = locationOf(allowed).searchParams.get('code') ?? '';
+    const allowed = await decideConsent(client, locationOf(authorize), 'allow');
+    const code = allowed.searchParams.get('code') ?? '';
     secrets.push(code);
     const tokens = await exchangeCode(client, {
       clientId: STUDIO,
@@ -953,7 +983,7 @@ describe('oidc through the gateway', () => {
           code: 'AUTHENTICATION_REQUIRED',
         });
       } else if (response.status === 302) {
-        expect(locationOf(response).pathname, `${mount.method} ${path}`).toBe('/auth/login');
+        expect(locationOf(response).pathname, `${mount.method} ${path}`).toBe('/sign-in');
       }
     }
   });
@@ -976,7 +1006,7 @@ describe('oidc through the gateway', () => {
       interval: number;
     };
     secrets.push(codes.device_code, codes.user_code);
-    expect(codes.verification_uri).toBe(`${ORIGIN}/oauth/device`);
+    expect(codes.verification_uri).toBe(`${ORIGIN}/device`);
     expect(codes.interval).toBe(0);
 
     const pending = await device.request(
@@ -992,17 +1022,16 @@ describe('oidc through the gateway', () => {
 
     const user = browser();
     await signUpInBrowser(user, 'cli@example.com');
-    const confirm = await user.request(
-      `/oauth/device?user_code=${encodeURIComponent(codes.user_code)}`,
+    expect(await deviceRequest(user, codes.user_code)).toMatchObject({
+      state: 'pending',
+      client: { client_id: GAME, name: 'Game', verified: true },
+    });
+    expect(await decideDevice(user, codes.user_code, 'allow')).toBe('granted');
+    const used = await user.request(
+      `/api/v1/oauth/device?${new URLSearchParams({ user_code: codes.user_code }).toString()}`,
     );
-    expect(confirm.status).toBe(200);
-    expect(await confirm.text()).toContain('Game wants to');
-    const allowed = await user.request(
-      '/oauth/device',
-      form({ user_code: codes.user_code, decision: 'allow' }),
-    );
-    expect(allowed.status).toBe(200);
-    expect(await allowed.text()).toContain('You can return to your device');
+    expect(used.status).toBe(400);
+    expect(await used.json()).toMatchObject({ code: 'DEVICE_CODE_INVALID' });
 
     const tokens = await device.request(
       '/oauth/token',
@@ -1248,14 +1277,9 @@ describe('oidc through the gateway', () => {
     );
     expect(authorize.status).toBe(302);
     const consent = locationOf(authorize);
-    const requestId = consent.searchParams.get('request_id') ?? '';
-    const page = await client.request(`${consent.pathname}${consent.search}`);
-    expect(await page.text()).toContain('Unverified app');
-    const allowed = await client.request(
-      '/oauth/consent',
-      form({ request_id: requestId, decision: 'allow' }),
-    );
-    const code = locationOf(allowed).searchParams.get('code') ?? '';
+    expect((await consentRequest(client, consent)).client.verified).toBe(false);
+    const allowed = await decideConsent(client, consent, 'allow');
+    const code = allowed.searchParams.get('code') ?? '';
     secrets.push(code);
     const tokens = await exchangeCode(client, {
       clientId: app.client_id,

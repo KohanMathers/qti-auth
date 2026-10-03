@@ -5,7 +5,8 @@
   <ul class="qtiauth-list" data-state="list">
     <template data-item="documents">
       <li class="qtiauth-legal-item">
-        <a target="_blank" rel="noopener" data-bind-href="url" data-field="title"></a>
+        <a href="/legal" data-link data-bind-href="path" data-field="summary"></a>
+        <span class="qtiauth-muted" data-t="legal.effective">From {effective}</span>
         <button type="button" data-action="accept" data-t="legal.accept">Accept</button>
       </li>
     </template>

@@ -9,9 +9,14 @@ export function appealUrl(
   surfaces: QtiauthConfig['surfaces'],
   actionId: string,
 ): string | undefined {
-  const origin = accountOrigin(surfaces);
+  const surface = surfaces.support;
+  const origin =
+    surface.origins?.[0] ?? (surface.hosts[0] ? `https://${surface.hosts[0]}` : undefined);
   if (origin === undefined) return undefined;
-  return new URL(`/appeals/${encodeURIComponent(actionId)}`, origin).toString();
+  const base = surface.base_path === '/' ? '' : surface.base_path;
+  const url = new URL(`${base}/appeals/new`, origin);
+  url.searchParams.set('action_id', actionId);
+  return url.toString();
 }
 
 export function cseaCaseUrl(
@@ -20,5 +25,5 @@ export function cseaCaseUrl(
 ): string | undefined {
   const origin = accountOrigin(surfaces);
   if (origin === undefined) return undefined;
-  return new URL(`/admin/safety/csea/${encodeURIComponent(caseId)}`, origin).toString();
+  return new URL(`/admin/csea/${encodeURIComponent(caseId)}`, origin).toString();
 }

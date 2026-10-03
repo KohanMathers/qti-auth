@@ -5,7 +5,13 @@
 <div class="qtiauth-status" aria-live="polite" data-part="export-status"></div>
 <button type="button" data-action="export" data-t="data.export.submit">Request export</button>
 <template data-message="export-queued">
-  <p data-t="data.export.queued">Export queued.</p>
+  <p data-t="data.export.queued">Export queued. This page updates when it’s ready.</p>
+</template>
+<template data-message="export-ready">
+  <p><a data-bind-href="url" data-t="data.export.ready">Download your data</a></p>
+</template>
+<template data-message="export-emailed">
+  <p data-t="data.export.emailed">We’ll email your export to you when it’s ready.</p>
 </template>
 
 <h3 data-t="data.deletion.heading">Delete your account</h3>
@@ -19,5 +25,7 @@
   Request deletion
 </button>
 <template data-message="deletion-queued">
-  <p data-t="data.deletion.queued">Deletion scheduled.</p>
+  <p data-t="data.deletion.queued">
+    Deletion scheduled, and you’ve been signed out. Signing in again before it happens cancels it.
+  </p>
 </template>

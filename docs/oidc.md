@@ -61,34 +61,37 @@ retention:
 
 ## Endpoints
 
-| Path                                                    | Auth    | Purpose                                                                          |
-| ------------------------------------------------------- | ------- | -------------------------------------------------------------------------------- |
-| `GET /.well-known/openid-configuration`                 | none    | Discovery                                                                        |
-| `GET /.well-known/jwks.json`                            | none    | Public signing keys                                                              |
-| `GET /oauth/authorize`                                  | session | Authorization code + PKCE S256, or a PAR `request_uri`                           |
-| `GET`/`POST /oauth/consent`                             | session | Interim consent page, or a waiting page when a parent or guardian must approve   |
-| `POST /oauth/par`                                       | none    | Pushed Authorization Request (RFC 9126)                                          |
-| `POST /oauth/device_authorization`                      | none    | Device Authorization Grant (RFC 8628)                                            |
-| `GET`/`POST /oauth/device`                              | session | User code entry and confirmation page                                            |
-| `POST /oauth/token`                                     | none    | `authorization_code`, `refresh_token`, `client_credentials` and the device grant |
-| `GET /oauth/userinfo`                                   | oauth   | Claims the access token's scopes release                                         |
-| `POST /oauth/revoke`                                    | none    | RFC 7009, always `200`                                                           |
-| `POST /oauth/introspect`                                | none    | RFC 7662, confidential clients only                                              |
-| `GET /api/v1/oauth/authorized`                          | session | Apps the signed-in user has authorized                                           |
-| `DELETE /api/v1/oauth/authorized/:client_id`            | session | Revoke an app's tokens and stored consent                                        |
-| `GET /api/v1/oauth/client`                              | service | The client authenticated by a client-credentials access token                    |
-| `GET`/`POST /api/v1/oauth/clients`                      | session | List or register the signed-in user's OAuth clients                              |
-| `GET`/`PATCH`/`DELETE /api/v1/oauth/clients/:client_id` | session | One owned client                                                                 |
-| `POST /api/v1/oauth/clients/:client_id/secret`          | session | Replace a confidential client's secret. Needs step-up                            |
-| `POST /api/v1/admin/oauth/clients/:client_id/verify`    | session | Mark a client verified (`oidc.clients.verify`)                                   |
-| `POST /api/v1/admin/oauth/clients/:client_id/suspend`   | session | Suspend a client and revoke its tokens (`oidc.clients.suspend`)                  |
-| `POST /api/v1/admin/oauth/clients/:client_id/unsuspend` | session | Lift a suspension (`oidc.clients.suspend`)                                       |
+| Path                                                    | Auth    | Purpose                                                                           |
+| ------------------------------------------------------- | ------- | --------------------------------------------------------------------------------- |
+| `GET /.well-known/openid-configuration`                 | none    | Discovery                                                                         |
+| `GET /.well-known/jwks.json`                            | none    | Public signing keys                                                               |
+| `GET /oauth/authorize`                                  | session | Authorization code + PKCE S256, or a PAR `request_uri`                            |
+| `GET /api/v1/oauth/consent`                             | session | A pending authorization: `consent`, `pending_guardian`, `approved` or `declined`  |
+| `POST /api/v1/oauth/consent`                            | session | `{ request_id, decision }`. Answers `{ redirect_to }` for the browser             |
+| `POST /oauth/par`                                       | none    | Pushed Authorization Request (RFC 9126)                                           |
+| `POST /oauth/device_authorization`                      | none    | Device Authorization Grant (RFC 8628)                                             |
+| `GET /api/v1/oauth/device`                              | session | Look up a device request by `user_code`                                           |
+| `POST /api/v1/oauth/device/verify`                      | session | `{ user_code, decision }`. Answers `granted`, `denied` or `pending_guardian`      |
+| `POST /oauth/token`                                     | none    | `authorization_code`, `refresh_token`, `client_credentials` and the device grant  |
+| `GET /oauth/userinfo`                                   | oauth   | Claims the access token's scopes release                                          |
+| `POST /oauth/revoke`                                    | none    | RFC 7009, always `200`                                                            |
+| `POST /oauth/introspect`                                | none    | RFC 7662, confidential clients only                                               |
+| `GET /api/v1/oauth/authorized`                          | session | Apps the signed-in user has authorized                                            |
+| `DELETE /api/v1/oauth/authorized/:client_id`            | session | Revoke an app's tokens and stored consent                                         |
+| `GET /api/v1/oauth/client`                              | service | The client authenticated by a client-credentials access token                     |
+| `GET`/`POST /api/v1/oauth/clients`                      | session | List or register the signed-in user's OAuth clients                               |
+| `GET`/`PATCH`/`DELETE /api/v1/oauth/clients/:client_id` | session | One owned client                                                                  |
+| `POST /api/v1/oauth/clients/:client_id/secret`          | session | Replace a confidential client's secret. Needs step-up                             |
+| `GET /api/v1/admin/oauth/clients`                       | session | Every client for review, `?verified=false` for unverified (`oidc.clients.verify`) |
+| `POST /api/v1/admin/oauth/clients/:client_id/verify`    | session | Mark a client verified (`oidc.clients.verify`)                                    |
+| `POST /api/v1/admin/oauth/clients/:client_id/suspend`   | session | Suspend a client and revoke its tokens (`oidc.clients.suspend`)                   |
+| `POST /api/v1/admin/oauth/clients/:client_id/unsuspend` | session | Lift a suspension (`oidc.clients.suspend`)                                        |
 
-Token, revoke, introspect, PAR and device authorization take `application/x-www-form-urlencoded`. They answer OAuth JSON errors, not Problem Details. Authorize redirects with `error` when the `redirect_uri` is registered; otherwise it answers `invalid_request`.
+Token, revoke, introspect, PAR and device authorization take `application/x-www-form-urlencoded`. They answer OAuth JSON errors, not Problem Details. Authorize redirects with `error` when the `redirect_uri` is registered; otherwise it answers `invalid_request`. When consent is needed it redirects to the web app's `/consent?request_id=…` page.
 
 PKCE `S256` is required for the authorization-code flow and PAR. Redirect URIs match exactly, including query. Native apps may register `http://127.0.0.1` or `http://[::1]`; any port is accepted at authorize time (RFC 8252).
 
-First-party clients skip the consent screen. Stored consent skips it when the granted scopes already cover the request. Clients that are neither first-party nor admin-verified show an **Unverified app** notice. A child account (`age_band` other than `adult`) authorizing a non-first-party client waits for a parent or guardian when the account has one: consent and device pages refresh until they decide, and the authorization code is issued only after approval. A decline, a cancel, or a child with no guardian redirects with `access_denied`. Device-flow polls stay `authorization_pending` until approval. The pending request emits `qtiauth.oidc.authorization.guardian_requested.v1`. The first stored consent for a client emits `qtiauth.oidc.client.authorized.v1`.
+First-party clients skip the consent screen. Stored consent skips it when the granted scopes already cover the request. Clients that are neither first-party nor admin-verified show an **Unverified app** notice. A child account (`age_band` other than `adult`) authorizing a non-first-party client waits for a parent or guardian when the account has one: the web app's consent page checks again until they decide, and the authorization code is issued only after approval. A decline, a cancel, or a child with no guardian redirects with `access_denied`. Device-flow polls stay `authorization_pending` until approval. The pending request emits `qtiauth.oidc.authorization.guardian_requested.v1`. The first stored consent for a client emits `qtiauth.oidc.client.authorized.v1`.
 
 Refresh tokens rotate on every use. Presenting a rotated refresh token revokes the family and emits `qtiauth.oidc.refresh.reuse_detected.v1`. Reusing an authorization code revokes every token for that user and client.
 
@@ -96,7 +99,7 @@ Access tokens are RFC 9068 `at+jwt`. ID tokens are `JWT` with `at_hash`. Both ar
 
 `client_credentials` is confidential clients only. `openid` and `offline_access` are not allowed. The access token has no user: JWT `sub` is the `client_id`, and the gateway treats it as `auth: service`.
 
-Device flow: the client posts to `/oauth/device_authorization` and polls `/oauth/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code`. The user opens `/oauth/device`, enters the code, and confirms with a POST so a scanner prefetch cannot consume it. Pending polls get `authorization_pending`; polling too fast gets `slow_down`.
+Device flow: the client posts to `/oauth/device_authorization` and polls `/oauth/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code`. The user opens the web app's `/device` page (the `verification_uri`), enters the code, and confirms, so a scanner prefetch cannot consume it. Pending polls get `authorization_pending`; polling too fast gets `slow_down`.
 
 PAR: the client posts the authorize parameters to `/oauth/par` and receives a one-time `request_uri`. Authorize then takes only `client_id` and `request_uri`. Clients with `require_par` cannot skip this.
 
@@ -122,7 +125,7 @@ Access tokens for the ended session are revoked. Refresh tokens for that session
 
 `auth: service` routes take a `client_credentials` access token the same way, and forward `auth: service` with `client_id` and scopes and no user. A user access token is refused on service routes, and a service token is refused on oauth and session routes.
 
-A browser navigation that needs a session and has none is redirected to `/auth/login?return_to=…` on the account surface. API callers get `401 AUTHENTICATION_REQUIRED`. Missing scopes are `403 INSUFFICIENT_SCOPE` with `missing_scopes`.
+A browser navigation that needs a session and has none is redirected to `/sign-in?return_to=…` on the account surface. API callers get `401 AUTHENTICATION_REQUIRED`. Missing scopes are `403 INSUFFICIENT_SCOPE` with `missing_scopes`.
 
 ## Data rights
 

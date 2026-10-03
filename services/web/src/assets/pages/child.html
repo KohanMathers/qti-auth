@@ -2,14 +2,185 @@
 <p class="qtiauth-lede" data-t="family.child.lede">Review activity, controls and requests.</p>
 
 <div data-slot="child">
-  <dl class="qtiauth-details" data-state="ready">
-    <dt data-t="family.field.username">Username</dt>
-    <dd data-field="username"></dd>
-    <dt data-t="family.field.age_band">Age band</dt>
-    <dd data-field="age_band"></dd>
-    <dt data-t="family.field.status">Status</dt>
-    <dd data-field="status"></dd>
-  </dl>
+  <div data-state="ready">
+    <dl class="qtiauth-details">
+      <dt data-t="family.field.username">Username</dt>
+      <dd data-field="username"></dd>
+      <dt data-t="family.field.email">Email</dt>
+      <dd data-field="email"></dd>
+      <dt data-t="family.field.age_band">Age band</dt>
+      <dd data-field="age_band"></dd>
+      <dt data-t="family.field.status">Status</dt>
+      <dd data-field="status"></dd>
+    </dl>
+
+    <h3 data-t="family.requests.heading">Waiting for you</h3>
+    <ul class="qtiauth-list">
+      <template data-item="apps">
+        <li>
+          <span data-t="family.requests.app">{name} wants to: {scopes}</span>
+          <button type="button" data-action="approve-app" data-t="family.approve">Approve</button>
+          <button
+            type="button"
+            class="qtiauth-button qtiauth-button-ghost"
+            data-action="decline-app"
+            data-t="family.decline"
+          >
+            Decline
+          </button>
+        </li>
+      </template>
+      <template data-item="usernames">
+        <li>
+          <span data-t="family.requests.username">New username: {username}</span>
+          <button type="button" data-action="approve-username" data-t="family.approve">
+            Approve
+          </button>
+          <button
+            type="button"
+            class="qtiauth-button qtiauth-button-ghost"
+            data-action="decline-username"
+            data-t="family.decline"
+          >
+            Decline
+          </button>
+        </li>
+      </template>
+      <template data-item="removals">
+        <li>
+          <span data-t="family.requests.removal">
+            Asked on {requested} to leave your family account.
+          </span>
+          <button type="button" data-action="approve-removal" data-t="family.approve">
+            Approve
+          </button>
+          <button
+            type="button"
+            class="qtiauth-button qtiauth-button-ghost"
+            data-action="decline-removal"
+            data-t="family.decline"
+          >
+            Decline
+          </button>
+        </li>
+      </template>
+    </ul>
+    <div class="qtiauth-feedback" aria-live="polite" data-part="requests-feedback"></div>
+
+    <h3 data-t="family.controls.heading">Controls</h3>
+    <form data-form="controls" novalidate>
+      <p class="qtiauth-field">
+        <input
+          id="qtiauth-c-online"
+          name="online_play"
+          type="checkbox"
+          data-bind-checked="online_play"
+        />
+        <label for="qtiauth-c-online" data-t="family.controls.online_play">Online play</label>
+      </p>
+      <p class="qtiauth-field">
+        <input
+          id="qtiauth-c-chat"
+          name="in_game_chat"
+          type="checkbox"
+          data-bind-checked="in_game_chat"
+        />
+        <label for="qtiauth-c-chat" data-t="family.controls.in_game_chat">In-game chat</label>
+      </p>
+      <p class="qtiauth-field">
+        <input
+          id="qtiauth-c-ugc"
+          name="user_generated_content"
+          type="checkbox"
+          data-bind-checked="user_generated_content"
+        />
+        <label for="qtiauth-c-ugc" data-t="family.controls.user_generated_content">
+          Content made by other players
+        </label>
+      </p>
+      <p class="qtiauth-field">
+        <input
+          id="qtiauth-c-purchases"
+          name="purchases"
+          type="checkbox"
+          data-bind-checked="purchases"
+        />
+        <label for="qtiauth-c-purchases" data-t="family.controls.purchases">Purchases</label>
+      </p>
+      <p class="qtiauth-field">
+        <input
+          id="qtiauth-c-profile"
+          name="public_profile"
+          type="checkbox"
+          data-bind-checked="public_profile"
+        />
+        <label for="qtiauth-c-profile" data-t="family.controls.public_profile"
+          >Public profile</label
+        >
+      </p>
+      <p class="qtiauth-field">
+        <input
+          id="qtiauth-c-leaderboards"
+          name="leaderboard_visible"
+          type="checkbox"
+          data-bind-checked="leaderboard_visible"
+        />
+        <label for="qtiauth-c-leaderboards" data-t="family.controls.leaderboard_visible">
+          Show on leaderboards
+        </label>
+      </p>
+      <p class="qtiauth-field">
+        <label for="qtiauth-c-playtime" data-t="family.controls.daily_playtime_minutes">
+          Daily playtime limit in minutes (empty for no limit)
+        </label>
+        <input
+          id="qtiauth-c-playtime"
+          name="daily_playtime_minutes"
+          type="number"
+          min="0"
+          max="1440"
+          data-bind-value="daily_playtime_minutes"
+        />
+      </p>
+      <p class="qtiauth-actions">
+        <button type="submit" data-t="family.controls.submit">Save controls</button>
+      </p>
+      <template data-message="success">
+        <p class="qtiauth-success" role="status" data-t="family.controls.success">
+          Controls saved.
+        </p>
+      </template>
+    </form>
+
+    <h3 data-t="family.sessions.heading">Signed-in devices</h3>
+    <div data-slot="sessions">
+      <ul class="qtiauth-list" data-state="list">
+        <template data-item="sessions">
+          <li>
+            <span data-t="family.sessions.item">{device}, last active {last_active}</span>
+            <button type="button" data-action="revoke-session" data-t="sessions.revoke">
+              Revoke
+            </button>
+          </li>
+        </template>
+      </ul>
+      <p class="qtiauth-empty" data-state="empty" data-t="family.sessions.empty">
+        Not signed in anywhere.
+      </p>
+      <p class="qtiauth-empty" data-state="error" data-t="family.sessions.load.error">
+        Could not load devices.
+      </p>
+    </div>
+    <button
+      type="button"
+      class="qtiauth-button qtiauth-button-ghost"
+      data-action="revoke-all"
+      data-t="family.sessions.revokeAll"
+    >
+      Sign out everywhere
+    </button>
+    <div class="qtiauth-feedback" aria-live="polite" data-part="sessions-feedback"></div>
+  </div>
   <p class="qtiauth-empty" data-state="error" data-t="family.child.load.error">
     Could not load child.
   </p>

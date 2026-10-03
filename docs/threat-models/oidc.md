@@ -34,7 +34,7 @@ OIDC is the OAuth 2.1 / OpenID Connect provider and developer portal. It runs wi
 
 ## Mitigations
 
-- Nonce-based CSP on interim consent / device pages.
+- The web app's CSP (no inline script or style) on the consent and device pages.
 - Every state-changing route names a rate-limit policy.
 - All tokens are 256-bit CSPRNG, hashed at rest.
 - Non-root, read-only container.

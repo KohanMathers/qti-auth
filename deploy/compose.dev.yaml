@@ -30,6 +30,7 @@ services:
   gateway: *dev-service
   identity: *dev-service
   notifier: *dev-service
+  web: *dev-service
   scheduler: *dev-service
   oidc: *dev-service
   safety: *dev-service

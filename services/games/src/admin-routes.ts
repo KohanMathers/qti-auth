@@ -36,6 +36,7 @@ import {
 } from './catalog.ts';
 import {
   type EntitlementRecord,
+  getEntitlement,
   grantEntitlement,
   listEntitlements,
   revokeEntitlementById,
@@ -700,6 +701,25 @@ export function adminRoutes(router: Router<Context>): void {
           product_slug: product.slug,
         }),
       };
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: '/api/v1/admin/entitlements/:entitlement_id',
+    operation_id: 'getAdminEntitlement',
+    summary: 'One entitlement',
+    tags: ['games', 'admin'],
+    auth: 'session',
+    permissions: ['games.entitlements.manage'],
+    rate_limit: 'global',
+    request: { params: z.object({ entitlement_id: z.uuid() }) },
+    responses: { 200: { description: 'The entitlement', schema: entitlementSchema } },
+    errors: ['GAMES_ENTITLEMENT_NOT_FOUND'],
+    handler: async ({ ctx, params }) => {
+      const entitlement = await getEntitlement(ctx.db, params.entitlement_id);
+      if (!entitlement) throw new ProblemError('GAMES_ENTITLEMENT_NOT_FOUND');
+      return { status: 200 as const, body: await entitlementView(ctx, entitlement) };
     },
   });
 

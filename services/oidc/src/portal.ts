@@ -149,6 +149,40 @@ export async function listOwnedClients(
   return rows.map(presentedClient);
 }
 
+export async function listAllClients(
+  db: Kysely<Database>,
+  options: {
+    limit: number;
+    after?: { created_at: string; id: string } | undefined;
+    verified?: boolean | undefined;
+  },
+): Promise<ClientRecord[]> {
+  let query = db
+    .selectFrom('clients')
+    .selectAll()
+    .orderBy('created_at', 'desc')
+    .orderBy('id', 'desc')
+    .limit(options.limit + 1);
+  if (options.verified !== undefined) {
+    query = query.where((eb) =>
+      options.verified === true
+        ? eb.or([eb('verified', '=', true), eb('first_party', '=', true)])
+        : eb.and([eb('verified', '=', false), eb('first_party', '=', false)]),
+    );
+  }
+  const after = options.after;
+  if (after) {
+    query = query.where((eb) =>
+      eb.or([
+        eb('created_at', '<', new Date(after.created_at)),
+        eb.and([eb('created_at', '=', new Date(after.created_at)), eb('id', '<', after.id)]),
+      ]),
+    );
+  }
+  const rows = await query.execute();
+  return rows.map(presentedClient);
+}
+
 export async function getOwnedClient(
   db: Kysely<Database>,
   ownerUserId: string,

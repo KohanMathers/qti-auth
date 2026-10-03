@@ -10,6 +10,7 @@ import {
 
 import packageJson from '../package.json' with { type: 'json' };
 import { authorizedRoutes } from './authorized.ts';
+import { consentRoutes } from './consent-routes.ts';
 import type { Database } from './database.ts';
 import { discoveryRoutes } from './discovery.ts';
 import { OIDC_ERRORS } from './errors.ts';
@@ -43,5 +44,6 @@ export const router = createServiceRouter<Context>(definition);
 
 discoveryRoutes(router);
 oauthRoutes(router);
+consentRoutes(router);
 authorizedRoutes(router);
 portalRoutes(router);

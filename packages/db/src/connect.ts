@@ -38,7 +38,9 @@ export function poolConfig(database: DatabaseConfig, schema: DbSchema): pg.PoolC
 }
 
 function kysely<DB>(config: pg.PoolConfig, namespace: string): Kysely<DB> {
-  const dialect = new PostgresDialect({ pool: new pg.Pool(config) });
+  const pool = new pg.Pool(config);
+  pool.on('error', () => undefined);
+  const dialect = new PostgresDialect({ pool });
   return new Kysely<DB>({ dialect: tracedDialect(dialect, { namespace }) });
 }
 

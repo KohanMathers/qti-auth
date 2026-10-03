@@ -21,12 +21,20 @@
   </template>
 </form>
 
-<button
-  type="button"
-  class="qtiauth-button qtiauth-button-ghost"
-  data-action="resend"
-  data-t="verify.resend"
->
-  Send a new email
-</button>
-<div data-part="resend-feedback"></div>
+<h3 data-t="verify.resend.heading">Need a new email?</h3>
+<form data-form="resend" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-resend-email" data-t="field.email">Email</label>
+    <input id="qtiauth-f-resend-email" name="email" type="email" autocomplete="email" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" class="qtiauth-button qtiauth-button-ghost" data-t="verify.resend">
+      Send a new email
+    </button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="verify.resend.success">
+      If that address is waiting to be verified, we’ve sent a new link.
+    </p>
+  </template>
+</form>

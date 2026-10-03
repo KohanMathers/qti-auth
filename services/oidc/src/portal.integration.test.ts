@@ -168,12 +168,23 @@ describe('developer portal', () => {
     const rotatedBody = (await rotated.json()) as { secret: string };
     expect(rotatedBody.secret).not.toBe(secret);
 
+    const unverified = await call('/api/v1/admin/oauth/clients?verified=false', { as: staff });
+    expect(unverified.status).toBe(200);
+    expect(await unverified.json()).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({ client_id: clientId, verified: false }),
+      ]) as unknown,
+    });
+
     const verified = await call(`/api/v1/admin/oauth/clients/${clientId}/verify`, {
       method: 'POST',
       as: staff,
     });
     expect(verified.status).toBe(200);
     expect(await verified.json()).toMatchObject({ verified: true });
+    const reviewed = await call('/api/v1/admin/oauth/clients?verified=false', { as: staff });
+    const pending = (await reviewed.json()) as { items: { client_id: string }[] };
+    expect(pending.items.map((item) => item.client_id)).not.toContain(clientId);
 
     const row = await oidc.context.db
       .selectFrom('clients')

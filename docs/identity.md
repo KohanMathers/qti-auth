@@ -216,37 +216,31 @@ Banned and locked accounts can still call `GET /api/v1/me`, sign out, and use da
 
 Deleting an account is `POST /api/v1/me/deletion` and needs a recent `aal2` session. The account moves to `pending_deletion` for `accounts.deletion_grace`, every session ends, and signing in during that time returns it to `active`. `accounts.purge_deleted` then emits `identity.user.deleted` and every service erases the user, including objects in storage. A `{ user_id, deleted_at }` ledger entry is written to the backup destination through an outbox and kept for `backups.retention` plus 30 days (`deletion_ledger.prune`). Safety can place a legal hold over RPC (`place_legal_hold`); held objects stay isolated under `legal-hold/` when everything else is deleted.
 
-A copy of the account's data is `POST /api/v1/me/export`, also after step-up. Identity zips its own export with `export_user` answers from notifier, oidc, games, safety and support (a service that isn't running is skipped). With storage, a download link is emailed for `accounts.export_ttl`. Without storage, the zip is emailed as an attachment when it is under `accounts.export_email_max_bytes`; otherwise the export is `unavailable` and `GET /api/v1/meta/health` reports `STORAGE_UNAVAILABLE`. `GET /api/v1/me/export/:export_id` is the status, including a fresh presigned URL while the object is still there. The export runs after the response; if the instance stops first, `accounts.resume_exports` (every 5 minutes) picks up any export that has been pending for 15 minutes. `GET`/`POST /auth/delete` and `/auth/export` are the interim pages.
+A copy of the account's data is `POST /api/v1/me/export`, also after step-up. Identity zips its own export with `export_user` answers from notifier, oidc, games, safety and support (a service that isn't running is skipped). With storage, a download link is emailed for `accounts.export_ttl`. Without storage, the zip is emailed as an attachment when it is under `accounts.export_email_max_bytes`; otherwise the export is `unavailable` and `GET /api/v1/meta/health` reports `STORAGE_UNAVAILABLE`. `GET /api/v1/me/export/:export_id` is the status, including a fresh presigned URL while the object is still there. The export runs after the response; if the instance stops first, `accounts.resume_exports` (every 5 minutes) picks up any export that has been pending for 15 minutes.
 
 | Endpoint                           | Does                                                                        |
 | ---------------------------------- | --------------------------------------------------------------------------- |
 | `POST /api/v1/me/deletion`         | Schedule deletion. Needs step-up. Signs the caller out                      |
 | `POST /api/v1/me/export`           | Start a data export. Needs step-up. Answers `202 { id, status: "pending" }` |
 | `GET /api/v1/me/export/:export_id` | Export status, download URL when ready, or `unavailable`                    |
-| `GET`/`POST /auth/delete`          | Interim deletion page                                                       |
-| `GET`/`POST /auth/export`          | Interim export page                                                         |
 
 `docker compose run --rm identity qtiauth user export <user-id>` prints identity's export JSON. `qtiauth user delete <user-id>` schedules deletion as the system actor.
 
 ## Magic links
 
 1. `POST /api/v1/auth/magic-link/start` with `{ email, locale?, return_to? }` always answers `202 { "status": "sent" }`, and always queues an email. Whether an account exists is only looked at when the link is used, so the answer can't give it away.
-2. The link opens `/auth/magic-link?token=…` on the account surface. That page only shows a **Continue** button, so email scanners that fetch links don't use them up.
+2. The link opens the web app's `/magic-link?token=…` page on the account surface. That page only shows a **Continue** button, so email scanners that fetch links don't use them up.
 3. Continuing uses the link. With one account on the address, the user is signed in. With several, they choose one. With none, they're asked for their date of birth, and the account is created when they submit it.
 
 Each link works once, for `magic_link.ttl`. The `magic_link` rate-limit policy applies to starting (3 an hour per address, 10 an hour and 20 a day per IP), and `auth_verify` to using links and signing up (30 every 15 minutes per IP).
 
-The pages are deliberately plain: they're stand-ins until the web app arrives, and the same steps are available as JSON:
+The web app's page drives these endpoints:
 
-| Endpoint                                | Does                                                                                                                                          |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/auth/magic-link/start`    | Emails a link                                                                                                                                 |
-| `POST /api/v1/auth/magic-link/verify`   | Takes `{ token, user_id? }`. Answers `signed_in`, `choose_account` with the accounts to pick from, or `signup_required` with a `signup_token` |
-| `POST /api/v1/auth/magic-link/signup`   | Takes `{ signup_token, date_of_birth, guardian_email? }` and creates the account                                                              |
-| `GET /auth/magic-link`                  | The confirmation page                                                                                                                         |
-| `POST /auth/magic-link`, `/auth/signup` | The form posts behind the pages                                                                                                               |
-| `GET /auth/signup`                      | Choose password or magic-link signup                                                                                                          |
-| `GET /auth/magic-link/start`            | Ask for a magic link                                                                                                                          |
+| Endpoint                              | Does                                                                                                                                          |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/auth/magic-link/start`  | Emails a link                                                                                                                                 |
+| `POST /api/v1/auth/magic-link/verify` | Takes `{ token, user_id? }`. Answers `signed_in`, `choose_account` with the accounts to pick from, or `signup_required` with a `signup_token` |
+| `POST /api/v1/auth/magic-link/signup` | Takes `{ signup_token, date_of_birth, guardian_email? }` and creates the account                                                              |
 
 ## Passwords
 
@@ -269,16 +263,9 @@ Passwords equal to or containing the email local part (3 or more characters) are
 | `POST /api/v1/auth/email/verify/start` | Email a confirmation link for a pending address             |
 | `POST /api/v1/auth/email/verify`       | Confirm the address and sign in                             |
 | `POST /api/v1/me/password`             | Add or change a password                                    |
-| `GET`/`POST /auth/register`            | Password signup pages                                       |
-| `GET`/`POST /auth/login`               | Password sign-in pages                                      |
-| `GET`/`POST /auth/forgot-password`     | Request a reset                                             |
-| `GET`/`POST /auth/reset-password`      | Scanner-safe confirm, then the reset form                   |
-| `GET`/`POST /auth/verify-email`        | Scanner-safe confirm                                        |
 | `POST /api/v1/me/email`                | Start an email change. Needs `step_up: true`                |
 | `POST /api/v1/auth/email/change`       | Confirm the new address from the emailed link               |
 | `POST /api/v1/auth/email/revert`       | Undo a change from the notice sent to the previous address  |
-| `GET`/`POST /auth/change-email`        | Scanner-safe confirm                                        |
-| `GET`/`POST /auth/revert-email`        | Scanner-safe undo                                           |
 
 ## Social and upstream sign-in
 
@@ -290,15 +277,10 @@ Google, GitHub, Discord, Steam (OpenID 2.0) and generic OIDC issuers can be used
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `POST /api/v1/auth/social/:provider/start`     | Returns the provider URL. `provider` is `google`, `github`, `discord`, `steam` or a generic id |
 | `POST /api/v1/auth/social/complete`            | Finish after the provider redirects back. May answer `signup_required`                         |
-| `POST /api/v1/auth/social/signup`              | `{ challenge, date_of_birth?, email? }` when the provider did not supply both                  |
 | `POST /api/v1/me/identities/:provider/connect` | Start connecting while signed in                                                               |
 | `GET /api/v1/me/identities`                    | Connected providers and which ones can still be added                                          |
 | `DELETE /api/v1/me/identities/:identity_id`    | Remove a connected provider, unless it is the last sign-in method                              |
-| `GET /auth/social/:provider/start`             | Redirect to the provider                                                                       |
 | `GET /auth/social/:provider/callback`          | Finish after the redirect                                                                      |
-| `GET`/`POST /auth/social/signup`               | Date of birth / email after upstream sign-in                                                   |
-| `GET /auth/identities`                         | Connected methods and Connect links                                                            |
-| `GET /auth/identities/:provider/connect`       | Redirect to the provider while signed in                                                       |
 
 ## Passkeys and two-factor
 
@@ -326,10 +308,6 @@ Staff whose permissions match `security.require_2fa_for_permissions` can sign in
 | `POST /api/v1/me/step-up`                      | Raise this session to `aal2` with TOTP or a recovery code                                  |
 | `POST /api/v1/me/step-up/passkey/start`        | WebAuthn options to step up                                                                |
 | `POST /api/v1/me/step-up/passkey`              | Finish passkey step-up                                                                     |
-| `GET`/`POST /auth/two-factor`                  | Interim authenticator/recovery form after password sign-in                                 |
-| `GET`/`POST /auth/totp`                        | Interim authenticator enrolment                                                            |
-| `GET /auth/passkey`                            | Interim passkey sign-in page                                                               |
-| `GET /auth/passkeys`                           | Interim passkey list                                                                       |
 | `GET /auth/bind`                               | Issue a one-time code that binds this session to another surface                           |
 | `GET /auth/bind/callback`                      | Exchange the code and set this host’s session cookie                                       |
 
@@ -337,13 +315,11 @@ Staff whose permissions match `security.require_2fa_for_permissions` can sign in
 
 Signup, password login and magic-link start show a CAPTCHA only after `captcha.after` attempts from the same IP inside `captcha.window`. Until then the request is processed as usual. After the threshold the request is refused with `403 CAPTCHA_REQUIRED` until a valid solution is sent in `captcha`. A bad solution is `400 CAPTCHA_INVALID`. `GET /api/v1/captcha?action=password_login|password_signup|magic_link` says whether this IP currently needs one, and returns an Altcha challenge or the vendor site key.
 
-The interim login, register and magic-link start pages redisplay the form with the widget when a CAPTCHA is required.
-
 ## Sessions
 
 A session is a server-side record. The browser holds a random token in the session cookie, and identity stores only its SHA-256 hash, in a binding tied to the cookie's scope (`cookies.domain`, or the host). Each host that cannot share that cookie gets its own binding for the same session. Signing in, signing out and ending sessions answer through the gateway, which sets or clears the cookie and drops the session from its cache before responding, so an ended session stops working on the very next request.
 
-When a browser navigation needs a session on a host that has no binding, the gateway redirects to `/auth/bind` on the account surface. If the user is signed in there, identity issues a single-use code (60 seconds, bound to the target origin and return path) and redirects to `/auth/bind/callback` on the target surface, which sets that host's cookie for the same session. If they are not signed in, `/auth/bind` lands on `/auth/login` and continues after sign-in. A short-lived `qtiauth_session_bound` cookie stops a failed bind from redirecting forever. Logging out or revoking a session invalidates every binding.
+When a browser navigation needs a session on a host that has no binding, the gateway redirects to `/auth/bind` on the account surface. If the user is signed in there, identity issues a single-use code (60 seconds, bound to the target origin and return path) and redirects to `/auth/bind/callback` on the target surface, which sets that host's cookie for the same session. If they are not signed in, `/auth/bind` lands on the web app's `/sign-in` page and continues after sign-in. A bind that can't be completed also goes to `/sign-in`. A short-lived `qtiauth_session_bound` cookie stops a failed bind from redirecting forever. Logging out or revoking a session invalidates every binding.
 
 | Endpoint                              | Does                                                   |
 | ------------------------------------- | ------------------------------------------------------ |
@@ -371,7 +347,7 @@ A session ends when it's `cookies.session_ttl` old, when it hasn't been used for
 | `notify`    | The session continues, and a security-alert email is sent          |
 | `ignore`    | Nothing                                                            |
 
-Re-authentication after `aal0` uses a magic link, a passkey, or password plus 2FA, and restores the same session rather than minting a new cookie. Social sign-in always starts a new session. Routes that need a session refuse `aal0` with `403 REAUTHENTICATION_REQUIRED`, except `POST /api/v1/auth/logout` (`allow_aal0: true`). A top-level navigation in that state is sent to `/auth/login`.
+Re-authentication after `aal0` uses a magic link, a passkey, or password plus 2FA, and restores the same session rather than minting a new cookie. Social sign-in always starts a new session. Routes that need a session refuse `aal0` with `403 REAUTHENTICATION_REQUIRED`, except `POST /api/v1/auth/logout` (`allow_aal0: true`). A top-level navigation in that state is sent to `/sign-in`.
 
 A first sign-in from a browser or OS that this account has not used sends a `new_device` email, unless `session_security.new_device_email` is false. Accounts under 18 always get that email. Security-alert emails are at most one per user per `session_security.alert_min_interval`.
 
@@ -404,10 +380,9 @@ Every candidate goes through the text filter. Taken names, reserved names, reser
 
 `GET /api/v1/me` includes `username`, `username_updated_at` and `username_reset_required`. Username and `username_updated_at` are null until a name is claimed. It also includes `public_profile` and `leaderboard_visible`. The first claim is immediate. Later changes on an account with an active parent or guardian return `202` with `status: pending_guardian_approval` until a guardian approves. Staff can force a reset: the current name is released, `username_reset_required` is true, and the next claim skips cooldown and the yearly limit. `GET`/`POST /auth/username` is the interim page.
 
-| Endpoint                    | Does                                      |
-| --------------------------- | ----------------------------------------- |
-| `POST /api/v1/me/username`  | Claim or change the signed-in user’s name |
-| `GET`/`POST /auth/username` | Interim claim/change form                 |
+| Endpoint                   | Does                                      |
+| -------------------------- | ----------------------------------------- |
+| `POST /api/v1/me/username` | Claim or change the signed-in user’s name |
 
 ## Age
 
@@ -435,9 +410,6 @@ An admin invite for someone below `consent_age` still answers `403 PARENTAL_CONS
 | `POST /api/v1/me/parental-consent/email`     | Change the guardian address (`{ email }`). Max 3 changes          |
 | `POST /api/v1/auth/parental-consent/approve` | `{ token, date_of_birth }`. Guardian must be an adult             |
 | `POST /api/v1/auth/parental-consent/decline` | `{ token }`. Deletes the account immediately                      |
-| `GET`/`POST /auth/waiting`                   | Interim waiting page                                              |
-| `GET`/`POST /auth/guardian/approve`          | Scanner-safe approve form                                         |
-| `GET`/`POST /auth/guardian/decline`          | Scanner-safe decline form                                         |
 
 ## Family dashboard
 
@@ -453,7 +425,6 @@ When a linked young person reaches `parental.consent_age`, `parental.graduation`
 
 | Endpoint                                                             | Does                                                                               |
 | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `POST /api/v1/auth/family/magic-link`                                | Email a dashboard link if this address is a guardian. Same response either way     |
 | `POST /api/v1/auth/family/session`                                   | Open a family session from the emailed token                                       |
 | `POST /api/v1/auth/family/invite/accept`                             | Accept an invitation (`{ token, date_of_birth }`). Must be an adult                |
 | `POST /api/v1/auth/family/logout`                                    | End the family session                                                             |
@@ -480,8 +451,6 @@ When a linked young person reaches `parental.consent_age`, `parental.graduation`
 | `POST /api/v1/me/family/removal`                                     | Ask to remove the link, or remove it at the adult band                             |
 | `DELETE /api/v1/me/family/removal`                                   | Cancel a waiting request                                                           |
 | `GET`/`POST /family` and `/family/:child_id`                         | Interim dashboard pages                                                            |
-| `GET`/`POST /family/magic-link`, `/family/session`, `/family/invite` | Scanner-safe magic-link, session and invite forms                                  |
-| `GET`/`POST /auth/family/leave`                                      | Interim page for the young person to request or cancel removal                     |
 
 ## Admin users
 

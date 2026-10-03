@@ -36,6 +36,7 @@ import { expireLocks, UNLOCK_JOB } from './account-locks.ts';
 import { countAccountsByState, findAccount } from './accounts.ts';
 import { AGE_RECOMPUTE_JOB, recomputeAgeBands } from './age-bands.ts';
 import { AUDIT_CONSUMER, insertAuditRecord, sweepAuditLog } from './audit.ts';
+import { attachBindStore, valkeyBindStore } from './bind-state.ts';
 import { sweepChallenges } from './challenges.ts';
 import { eraseUser, exportUser, storeHeldSnapshot } from './data-rights.ts';
 import type { Database } from './database.ts';
@@ -212,6 +213,7 @@ export function identityService(options: IdentityOptions = {}) {
       const valkey = connectValkey(config.valkey, 'identity', (error) => {
         log.warn('valkey client error', { error });
       });
+      attachBindStore(ctx, valkeyBindStore(valkey));
       if (anySocialEnabled(config.features.auth.social)) {
         attachOauthStore(ctx, valkeyOauthStore(valkey));
       }

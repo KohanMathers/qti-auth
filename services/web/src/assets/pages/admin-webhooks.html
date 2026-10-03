@@ -3,7 +3,10 @@
 <div data-slot="rows">
   <ul class="qtiauth-list" data-state="list">
     <template data-item="rows">
-      <li><span data-field="url"></span> — <span data-field="events"></span></li>
+      <li>
+        <a href="/admin/webhooks" data-link data-bind-href="path" data-field="url"></a> —
+        <span data-field="events"></span>
+      </li>
     </template>
   </ul>
   <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>

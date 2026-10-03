@@ -31,7 +31,7 @@ import { seedEndpoints, sweepWebhookDeliveries } from './endpoints.ts';
 import { WEBHOOK_EVENT_TYPES } from './event-names.ts';
 import { createWebhookHttp, type WebhookHttp } from './http.ts';
 import { prometheusNotifierMetrics } from './metrics.ts';
-import { accountOrigin } from './origin.ts';
+import { adminOrigins } from './origin.ts';
 import { createProvider, type EmailConfig, type EmailProvider } from './providers.ts';
 import { createEmailSender, EmailSendError } from './sender.ts';
 import { type Context, type definition, router } from './service.ts';
@@ -149,12 +149,12 @@ export function notifierService(options: NotifierOptions = {}) {
           );
         }
 
-        const origin = accountOrigin(config.surfaces);
+        const origins = adminOrigins(config.surfaces);
         const sender = createWebhookSender({
           db,
           http: options.webhookHttp ?? createWebhookHttp({ lookup: options.dnsLookup }),
           config: config.webhooks,
-          origin,
+          origins,
           alertEmail: config.branding.support_email,
           locale: config.email.default_locale,
           queueAlert: (request) => queueEmail(bus, request),
@@ -170,7 +170,7 @@ export function notifierService(options: NotifierOptions = {}) {
             catalog: await loadEventCatalog(),
             metrics: ctx.busMetrics,
             handler: async (event, trx) => {
-              await enqueueEvent(trx, event, { origin, now: new Date() });
+              await enqueueEvent(trx, event, { origins, now: new Date() });
             },
             onError: (error) => {
               log.error('webhook enqueue failed', { error });

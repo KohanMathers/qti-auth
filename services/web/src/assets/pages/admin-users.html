@@ -3,7 +3,10 @@
 <div data-slot="rows">
   <ul class="qtiauth-list" data-state="list">
     <template data-item="rows">
-      <li><span data-field="username"></span> — <span data-field="email"></span></li>
+      <li>
+        <a href="/admin/users" data-link data-bind-href="path" data-field="username"></a> —
+        <span data-field="email"></span>
+      </li>
     </template>
   </ul>
   <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>

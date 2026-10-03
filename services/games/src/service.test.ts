@@ -36,6 +36,7 @@ describe('games service', () => {
       'DELETE /api/v1/games/:slug/licensing/devices/:lease_id',
       'GET /.well-known/qtiauth-license-keys.json',
       'GET /api/v1/admin/entitlements',
+      'GET /api/v1/admin/entitlements/:entitlement_id',
       'GET /api/v1/admin/games',
       'GET /api/v1/admin/games/:slug',
       'GET /api/v1/admin/games/:slug/achievements',

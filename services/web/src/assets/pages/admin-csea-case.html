@@ -1,0 +1,77 @@
+<h2 data-t="routes.admin.cseaCase.title">CSEA case</h2>
+
+<div data-slot="case">
+  <p data-state="loading" role="status" data-t="admin.loading">Loading…</p>
+  <div data-state="ready">
+    <dl class="qtiauth-details">
+      <dt data-t="admin.csea.status">Status</dt>
+      <dd data-field="status"></dd>
+      <dt data-t="admin.csea.priority">NCA priority</dt>
+      <dd data-field="nca_priority"></dd>
+      <dt data-t="admin.csea.deadline">Submit by</dt>
+      <dd data-field="deadline"></dd>
+      <dt data-t="admin.csea.reference">NCA reference</dt>
+      <dd data-field="nca_reference"></dd>
+      <dt data-t="admin.csea.evidenceUntil">Evidence kept until</dt>
+      <dd data-field="evidence_until"></dd>
+      <dt data-t="admin.csea.target">Reported</dt>
+      <dd data-field="target"></dd>
+    </dl>
+    <p>
+      <a target="_blank" rel="noopener" data-bind-href="portal" data-t="admin.csea.portal"
+        >Open the NCA portal</a
+      >
+    </p>
+    <h3 data-t="admin.csea.evidence">Evidence</h3>
+    <ul class="qtiauth-list">
+      <template data-item="evidence">
+        <li>
+          <span data-field="label"></span>
+          <div class="qtiauth-document" data-field="content"></div>
+        </li>
+      </template>
+    </ul>
+  </div>
+  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+</div>
+
+<button type="button" data-action="protect" data-t="admin.csea.protect">Preserve evidence</button>
+<div class="qtiauth-feedback" aria-live="polite" data-part="case-feedback"></div>
+
+<h3 data-t="admin.csea.submit.heading">Record the NCA submission</h3>
+<form data-form="submit" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-reference" data-t="admin.csea.reference">NCA reference</label>
+    <input id="qtiauth-f-reference" name="nca_reference" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-field">
+    <input id="qtiauth-f-declaration" name="declaration" type="checkbox" />
+    <label for="qtiauth-f-declaration" data-t="admin.csea.declaration">
+      I confirm this report was submitted to the NCA.
+    </label>
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="admin.csea.submit">Record submission</button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="admin.csea.submitted">Submission recorded.</p>
+  </template>
+</form>
+
+<h3 data-t="admin.csea.close.heading">Close the case</h3>
+<form data-form="close" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-close-reason" data-t="admin.reason"
+      >Reason (recorded in the audit log)</label
+    >
+    <input id="qtiauth-f-close-reason" name="reason" type="text" autocomplete="off" required />
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" class="qtiauth-button qtiauth-button-danger" data-t="admin.csea.close">
+      Close case
+    </button>
+  </p>
+  <template data-message="success">
+    <p class="qtiauth-success" role="status" data-t="admin.csea.closed">Case closed.</p>
+  </template>
+</form>

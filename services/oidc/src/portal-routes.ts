@@ -8,18 +8,23 @@ import {
   CHECK_TEXT_METHOD,
   CHECK_TEXT_SERVICE,
   checkTextResponseSchema,
+  decodeCursor,
+  pageOf,
+  pageSchema,
+  paginationQuery,
   ProblemError,
   type Router,
 } from '@qtiauth/service-kit';
 import * as z from 'zod';
 
-import type { ClientRecord } from './clients.ts';
+import { type ClientRecord, findClient } from './clients.ts';
 import { childAccount } from './oauth-core.ts';
 import {
   type ClientWriteError,
   createClient,
   deleteClient,
   getOwnedClient,
+  listAllClients,
   listOwnedClients,
   regenerateSecret,
   suspendClient,
@@ -34,6 +39,8 @@ import { ADMIN_CLIENTS_PATH, CLIENTS_PATH } from './settings.ts';
 const NO_STORE = { 'cache-control': 'no-store' };
 
 const clientIdParam = z.object({ client_id: z.string().min(1).max(64) });
+
+const clientPosition = z.object({ created_at: z.iso.datetime(), id: z.uuid() });
 
 const createBody = z.object({
   name: z.string().trim().min(1).max(OIDC_CLIENT_NAME_MAX),
@@ -340,6 +347,61 @@ export function portalRoutes(router: Router<Context>): void {
         headers: NO_STORE,
         body: presentedSecret(result.client, result.secret),
       };
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: ADMIN_CLIENTS_PATH,
+    operation_id: 'listAllOauthClients',
+    summary: 'Every OAuth client, newest first, for review',
+    tags: ['oidc'],
+    auth: 'session',
+    permissions: ['oidc.clients.verify'],
+    rate_limit: 'global',
+    request: {
+      query: paginationQuery({ defaultLimit: 50, maxLimit: 200 }).extend({
+        verified: z
+          .enum(['true', 'false'])
+          .optional()
+          .describe('Only verified (including first-party) clients, or only unverified ones.'),
+      }),
+    },
+    responses: { 200: { description: 'OAuth clients', schema: pageSchema(clientSchema) } },
+    handler: async ({ ctx, query }) => {
+      const rows = await listAllClients(ctx.db, {
+        limit: query.limit,
+        after: decodeCursor(clientPosition, query.cursor),
+        verified: query.verified === undefined ? undefined : query.verified === 'true',
+      });
+      const page = pageOf(rows, query.limit, (client) => ({
+        created_at: client.created_at.toISOString(),
+        id: client.id,
+      }));
+      return {
+        status: 200,
+        headers: NO_STORE,
+        body: { next_cursor: page.next_cursor, items: page.items.map(presented) },
+      };
+    },
+  });
+
+  router.route({
+    method: 'GET',
+    path: `${ADMIN_CLIENTS_PATH}/:client_id`,
+    operation_id: 'getAnyOauthClient',
+    summary: 'One OAuth client, for review',
+    tags: ['oidc'],
+    auth: 'session',
+    permissions: ['oidc.clients.verify'],
+    rate_limit: 'global',
+    request: { params: clientIdParam },
+    responses: { 200: { description: 'The client', schema: clientSchema } },
+    errors: ['CLIENT_NOT_FOUND'],
+    handler: async ({ ctx, params }) => {
+      const client = await findClient(ctx.db, params.client_id);
+      if (!client) throw new ProblemError('CLIENT_NOT_FOUND');
+      return { status: 200, headers: NO_STORE, body: presented(client) };
     },
   });
 

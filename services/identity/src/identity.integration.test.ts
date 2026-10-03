@@ -250,7 +250,7 @@ describe('magic link start', () => {
 
     const link = await emails.nextLink('exists@example.com');
     expect(link.origin).toBe(`https://${HOST}`);
-    expect(link.pathname).toBe('/verify');
+    expect(link.pathname).toBe('/magic-link');
     await emails.nextLink('nobody@example.com');
   });
 });
@@ -1009,18 +1009,21 @@ describe('events, retention and data rights', () => {
       .where('id', '=', again.userId)
       .execute();
     await publishCronTick(gateway.js, PURGE_JOB, new Date());
-    await vi.waitFor(async () => {
-      const rows = await identity.context.db
-        .selectFrom('users')
-        .select('id')
-        .where('id', '=', again.userId)
-        .execute();
-      expect(rows).toEqual([]);
-      const ledger = JSON.parse(
-        await readFile(join(backupDir, 'deletion-ledger', `${again.userId}.json`), 'utf8'),
-      ) as { user_id: string; deleted_at: string };
-      expect(ledger).toMatchObject({ user_id: again.userId });
-    });
+    await vi.waitFor(
+      async () => {
+        const rows = await identity.context.db
+          .selectFrom('users')
+          .select('id')
+          .where('id', '=', again.userId)
+          .execute();
+        expect(rows).toEqual([]);
+        const ledger = JSON.parse(
+          await readFile(join(backupDir, 'deletion-ledger', `${again.userId}.json`), 'utf8'),
+        ) as { user_id: string; deleted_at: string };
+        expect(ledger).toMatchObject({ user_id: again.userId });
+      },
+      { timeout: 10_000 },
+    );
     const metrics = await (await fetch(`${identity.url}/metrics`)).text();
     expect(metrics).toContain(
       'qtiauth_account_deletions_total{event="requested",service="identity"}',

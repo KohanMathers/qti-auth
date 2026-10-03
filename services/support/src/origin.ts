@@ -26,7 +26,7 @@ export function guestTicketUrl(
 ): string | undefined {
   const origin = originOf(surfaces.support);
   if (origin === undefined) return undefined;
-  const url = new URL(withBase(origin, surfaces.support.base_path, '/guest'));
+  const url = new URL(withBase(origin, surfaces.support.base_path, '/guest/view'));
   url.searchParams.set('token', token);
   return url.toString();
 }
@@ -35,7 +35,11 @@ export function staffTicketUrl(
   surfaces: QtiauthConfig['surfaces'],
   ticketId: string,
 ): string | undefined {
-  const origin = originOf(surfaces.account);
+  const origin = originOf(surfaces.support);
   if (origin === undefined) return undefined;
-  return new URL(`/admin/support/tickets/${encodeURIComponent(ticketId)}`, origin).toString();
+  return withBase(
+    origin,
+    surfaces.support.base_path,
+    `/staff/tickets/${encodeURIComponent(ticketId)}`,
+  );
 }

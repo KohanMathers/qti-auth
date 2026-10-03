@@ -1,20 +1,12 @@
 <h2 data-t="routes.email.title">Change email</h2>
-<p class="qtiauth-lede" data-t="email.lede">Confirm with your password to change your email.</p>
+<p class="qtiauth-lede" data-t="email.lede">
+  We’ll email a link to the new address to confirm the change, and let your current address know.
+</p>
 
 <form data-form="email" novalidate>
   <p class="qtiauth-field">
     <label for="qtiauth-f-email" data-t="field.email.new">New email</label>
     <input id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-password" data-t="field.password">Password</label>
-    <input
-      id="qtiauth-f-password"
-      name="password"
-      type="password"
-      autocomplete="current-password"
-      required
-    />
   </p>
   <p class="qtiauth-actions">
     <button type="submit" data-t="email.submit">Change email</button>

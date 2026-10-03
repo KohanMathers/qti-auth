@@ -255,3 +255,7 @@ form {
 [hidden] {
   display: none !important;
 }
+
+.qtiauth-document {
+  white-space: pre-wrap;
+}

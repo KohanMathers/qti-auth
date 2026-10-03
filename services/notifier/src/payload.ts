@@ -1,6 +1,8 @@
 import type { WebhookEventName } from '@qtiauth/config';
 import type { EventEnvelope, EventSubject } from '@qtiauth/events';
 
+import { type AdminLink, type AdminOrigins, adminUrl } from './origin.ts';
+
 const ALLOWED_DATA = new Set([
   'account_state',
   'action',
@@ -41,30 +43,32 @@ export function minimizeData(data: Record<string, unknown>): Record<string, unkn
   return out;
 }
 
-export function adminPath(type: string, subject: EventSubject | null): string {
-  if (subject === null) return '/admin/webhooks';
-  if (type.startsWith('identity.user.')) return `/admin/users/${subject.id}`;
-  if (type.startsWith('safety.report.')) return `/admin/safety/reports/${subject.id}`;
-  if (type.startsWith('safety.appeal.')) return `/admin/safety/appeals/${subject.id}`;
-  if (type.startsWith('support.ticket.')) return `/admin/support/tickets/${subject.id}`;
-  if (type.startsWith('games.entitlement.')) return `/admin/games/entitlements/${subject.id}`;
-  if (type.startsWith('oidc.client.')) return `/admin/oidc/clients/${subject.id}`;
-  return '/admin/webhooks';
+export function adminLink(type: string, subject: EventSubject | null): AdminLink {
+  const account = (path: string): AdminLink => ({ surface: 'account', path });
+  if (subject === null) return account('/admin/webhooks');
+  const id = encodeURIComponent(subject.id);
+  if (type.startsWith('identity.user.')) return account(`/admin/users/${id}`);
+  if (type.startsWith('safety.report.')) return account(`/admin/moderation/${id}`);
+  if (type.startsWith('safety.appeal.')) return account('/admin/appeals');
+  if (type.startsWith('support.ticket.'))
+    return { surface: 'support', path: `/staff/tickets/${id}` };
+  if (type.startsWith('games.entitlement.')) return account(`/admin/entitlements/${id}`);
+  if (type.startsWith('oidc.client.')) return account(`/admin/oauth/${id}`);
+  return account('/admin/webhooks');
 }
 
 export function webhookPayload(
   event: Pick<EventEnvelope, 'event_id' | 'occurred_at' | 'subject' | 'data'>,
   type: WebhookEventName | 'webhook.test',
-  origin: string | undefined,
+  origins: AdminOrigins,
 ): WebhookPayload {
-  const path = adminPath(type, event.subject);
   return {
     event_id: event.event_id,
     type,
     occurred_at: event.occurred_at,
     subject: event.subject,
     data: minimizeData(event.data),
-    admin_url: origin === undefined ? null : new URL(path, origin).toString(),
+    admin_url: adminUrl(origins, adminLink(type, event.subject)) ?? null,
   };
 }
 

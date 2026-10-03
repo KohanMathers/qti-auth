@@ -1,0 +1,26 @@
+<h2 data-t="routes.family-leave.title">Leave your family account</h2>
+<p class="qtiauth-lede" data-t="familyLeave.lede">
+  Remove the link to your parent or guardian. Until you reach the age where you can decide this
+  yourself, they have to approve it.
+</p>
+
+<button type="button" data-action="leave" data-t="familyLeave.submit">Ask to leave</button>
+<button
+  type="button"
+  class="qtiauth-button qtiauth-button-ghost"
+  data-action="cancel"
+  data-t="familyLeave.cancel"
+>
+  Cancel my request
+</button>
+<div class="qtiauth-status" aria-live="polite" data-part="status"></div>
+
+<template data-message="left">
+  <p data-t="familyLeave.left">Done. Your account is no longer linked to a guardian.</p>
+</template>
+<template data-message="pending">
+  <p data-t="familyLeave.pending">We’ve asked your parent or guardian to approve it.</p>
+</template>
+<template data-message="cancelled">
+  <p data-t="familyLeave.cancelled">Request cancelled.</p>
+</template>

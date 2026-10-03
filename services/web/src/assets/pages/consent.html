@@ -1,24 +1,49 @@
 <h2 data-t="routes.consent.title">Authorize app</h2>
-<p class="qtiauth-lede" data-t="consent.lede">This app wants to access your account.</p>
 
-<dl class="qtiauth-details">
-  <dt data-t="consent.field.app">App</dt>
-  <dd data-field="client_id"></dd>
-  <dt data-t="consent.field.scope">Requested access</dt>
-  <dd data-field="scope"></dd>
-</dl>
+<div data-slot="request">
+  <p data-state="loading" role="status" data-t="consent.loading">Loading…</p>
 
-<form method="post" data-bind-action="authorize_url">
-  <input type="hidden" name="client_id" data-bind-value="client_id" />
-  <input type="hidden" name="scope" data-bind-value="scope" />
-  <button type="submit" name="decision" value="allow" data-t="consent.allow">Allow</button>
-  <button
-    type="submit"
-    class="qtiauth-button qtiauth-button-ghost"
-    name="decision"
-    value="deny"
-    data-t="consent.deny"
-  >
-    Deny
-  </button>
-</form>
+  <div data-state="consent">
+    <p class="qtiauth-alert" data-bind-hidden="verified" data-t="consent.unverified">
+      Unverified app. We haven’t checked who makes it.
+    </p>
+    <p class="qtiauth-lede" data-t="consent.lede">{name} wants to:</p>
+    <ul class="qtiauth-list">
+      <template data-item="scopes">
+        <li data-field="description"></li>
+      </template>
+    </ul>
+    <p class="qtiauth-actions">
+      <button type="button" data-action="allow" data-t="consent.allow">Allow</button>
+      <button
+        type="button"
+        class="qtiauth-button qtiauth-button-ghost"
+        data-action="deny"
+        data-t="consent.deny"
+      >
+        Deny
+      </button>
+    </p>
+  </div>
+
+  <div data-state="waiting">
+    <p class="qtiauth-lede" data-t="consent.waiting">
+      We’ve asked a parent or guardian to approve {name}. This page continues when they decide.
+    </p>
+    <button
+      type="button"
+      class="qtiauth-button qtiauth-button-ghost"
+      data-action="cancel"
+      data-t="consent.cancel"
+    >
+      Cancel
+    </button>
+  </div>
+
+  <p data-state="finishing" role="status" data-t="consent.finishing">Returning to the app…</p>
+
+  <p data-state="error" data-t="consent.error">
+    This request is unknown, has expired or has already been used. Go back to the app and try again.
+  </p>
+</div>
+<div class="qtiauth-feedback" aria-live="polite" data-part="feedback"></div>

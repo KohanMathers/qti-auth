@@ -392,7 +392,7 @@ describe('gateway handler', () => {
     const browse = await request('/api/v1/me', { headers: { accept: 'text/html' } });
     expect(browse.status).toBe(302);
     expect(browse.headers.get('location')).toBe(
-      `https://${HOST}/auth/login?return_to=%2Fapi%2Fv1%2Fme`,
+      `https://${HOST}/sign-in?return_to=%2Fapi%2Fv1%2Fme`,
     );
     expect(forwarded).toHaveLength(0);
   });
@@ -536,7 +536,7 @@ describe('gateway handler', () => {
     });
     expect(login.status).toBe(302);
     expect(login.headers.get('location')).toBe(
-      'https://account.example.co.uk/auth/login?return_to=%2Fauth%2Fbind%3Ftarget%3Dsupport%26return%3D%252F',
+      'https://account.example.co.uk/sign-in?return_to=%2Fauth%2Fbind%3Ftarget%3Dsupport%26return%3D%252F',
     );
   });
 

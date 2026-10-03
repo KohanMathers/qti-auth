@@ -1,11 +1,25 @@
 <h2 data-t="routes.devices.title">Game devices</h2>
-<p class="qtiauth-lede" data-t="devices.lede">Devices linked to your account for games.</p>
+<p class="qtiauth-lede" data-t="devices.lede">Devices that can play your games offline.</p>
+
+<form data-form="game" novalidate>
+  <p class="qtiauth-field">
+    <label for="qtiauth-f-game" data-t="field.game">Game</label>
+    <select id="qtiauth-f-game" name="game" required>
+      <template data-item="games">
+        <option data-bind-value="slug" data-field="name"></option>
+      </template>
+    </select>
+  </p>
+  <p class="qtiauth-actions">
+    <button type="submit" data-t="games.load">Load</button>
+  </p>
+</form>
 
 <div data-slot="devices">
   <ul class="qtiauth-list" data-state="list">
     <template data-item="devices">
       <li>
-        <span><span data-field="name"></span> — <span data-field="platform"></span></span>
+        <span data-t="devices.item">{name}, last seen {last_seen}</span>
         <button type="button" data-action="revoke" data-t="devices.revoke">Revoke</button>
       </li>
     </template>

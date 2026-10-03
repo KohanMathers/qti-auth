@@ -93,6 +93,14 @@ services:
       dockerfile: services/notifier/Dockerfile
     command: ['node', 'src/main.ts']
 
+  web:
+    <<: *qtiauth-service
+    image: qtiauth/web:dev
+    build:
+      context: ..
+      dockerfile: services/web/Dockerfile
+    command: ['node', 'src/main.ts']
+
   scheduler:
     <<: *qtiauth-service
     image: qtiauth/scheduler:dev

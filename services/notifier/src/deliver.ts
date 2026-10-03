@@ -17,6 +17,7 @@ import {
 import { endpointMatches, isDeliverableEvent } from './event-names.ts';
 import type { WebhookHttp } from './http.ts';
 import { type NotifierMetrics, noopNotifierMetrics } from './metrics.ts';
+import { type AdminOrigins, adminUrl } from './origin.ts';
 import {
   discordBody,
   slackBody,
@@ -43,7 +44,7 @@ export interface WebhookSenderOptions {
   db: Kysely<Database>;
   http: WebhookHttp;
   config: WebhookQueueConfig;
-  origin: string | undefined;
+  origins: AdminOrigins;
   alertEmail: string;
   locale: string;
   queueAlert: (request: QueueEmailRequest<'webhook_disabled'>) => Promise<unknown>;
@@ -98,7 +99,7 @@ function deliveryHeaders(
 export async function enqueueEvent(
   db: Kysely<Database>,
   event: EventEnvelope,
-  options: { origin: string | undefined; now: Date },
+  options: { origins: AdminOrigins; now: Date },
 ): Promise<number> {
   const type = isDeliverableEvent(event);
   if (type === undefined) return 0;
@@ -107,7 +108,7 @@ export async function enqueueEvent(
     .selectAll()
     .where('enabled', '=', true)
     .execute();
-  const payload = webhookPayload(event, type, options.origin);
+  const payload = webhookPayload(event, type, options.origins);
   let queued = 0;
   for (const row of endpoints) {
     const events = Array.isArray(row.events) ? row.events.map(String) : [];
@@ -148,7 +149,7 @@ export async function enqueueEvent(
 export async function enqueueTest(
   db: Kysely<Database>,
   endpoint: EndpointRecord,
-  options: { origin: string | undefined; now: Date },
+  options: { origins: AdminOrigins; now: Date },
 ): Promise<string> {
   const id = randomUUIDv7();
   const payload = webhookPayload(
@@ -159,7 +160,7 @@ export async function enqueueTest(
       data: { endpoint_id: endpoint.id },
     },
     'webhook.test',
-    options.origin,
+    options.origins,
   );
   await db
     .insertInto('webhook_deliveries')
@@ -345,9 +346,11 @@ export function createWebhookSender(options: WebhookSenderOptions) {
             description: endpoint.description,
             host: new URL(endpoint.url).host,
             failures: result.endpoint.consecutive_failures,
-            link: options.origin
-              ? new URL(`/admin/webhooks/${endpoint.id}`, options.origin).toString()
-              : `https://localhost/admin/webhooks/${endpoint.id}`,
+            link:
+              adminUrl(options.origins, {
+                surface: 'account',
+                path: `/admin/webhooks/${endpoint.id}`,
+              }) ?? `https://localhost/admin/webhooks/${endpoint.id}`,
           },
         });
       } catch (error) {

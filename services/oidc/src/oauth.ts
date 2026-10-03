@@ -32,6 +32,7 @@ import {
   addMs,
   authenticateClient,
   type AuthorizeQuery,
+  authorizationLocation,
   authorizationRedirect,
   AUTHORIZATION_REQUEST_TTL,
   childAccount,
@@ -39,6 +40,7 @@ import {
   issueTokens,
   loadUser,
   oauthJson,
+  redirect,
   seconds,
   storeConsent,
 } from './oauth-core.ts';
@@ -46,7 +48,7 @@ import { extraAuthorizeParams, readAuthorizationParams, takePushedRequest } from
 import { pkceMatches } from './pkce.ts';
 import { missingConsent, parseScopeString, requestedScopes } from './scopes.ts';
 import type { Context } from './service.ts';
-import { issuerUrl, resourceAudience } from './settings.ts';
+import { CONSENT_PAGE, issuerUrl, resourceAudience } from './settings.ts';
 import { hashToken, newToken } from './tokens.ts';
 
 export {
@@ -62,6 +64,8 @@ export {
   oauthJson,
   storeConsent,
 };
+
+export type ConsentOutcome = { status: 'redirect'; location: string } | { status: 'not_found' };
 
 async function grantedScopes(
   db: Kysely<Database>,
@@ -93,7 +97,7 @@ async function completeAuthorization(
     acr: string;
     now: Date;
   },
-): Promise<Response> {
+): Promise<string> {
   const code = newToken();
   await ctx.db.transaction().execute(async (trx: Transaction<Database>) => {
     const consent = await storeConsent(trx, {
@@ -153,7 +157,7 @@ async function completeAuthorization(
   });
   ctx.outbox.wake();
   oidcMetrics(ctx.metrics).authorization(options.client.type, 'granted');
-  return authorizationRedirect(options.redirectUri, {
+  return authorizationLocation(options.redirectUri, {
     code,
     ...(options.state === null ? {} : { state: options.state }),
   });
@@ -243,7 +247,7 @@ export async function authorize(
     client.first_party ||
     missingConsent(scopes, await grantedScopes(ctx.db, identity.sub, client.id)).length === 0
   ) {
-    return completeAuthorization(ctx, {
+    const location = await completeAuthorization(ctx, {
       client,
       userId: identity.sub,
       sessionId: identity.sid,
@@ -257,6 +261,7 @@ export async function authorize(
       acr: identity.acr ?? 'aal1',
       now,
     });
+    return redirect(location);
   }
   if (childAccount(identity.age_band)) {
     if (!(await childHasGuardians(ctx, identity.sub))) {
@@ -275,10 +280,7 @@ export async function authorize(
       acr: identity.acr ?? 'aal1',
       now,
     });
-    return new Response(null, {
-      status: 302,
-      headers: { location: `/consent?request_id=${requestId}` },
-    });
+    return redirect(`${CONSENT_PAGE}?request_id=${requestId}`);
   }
   const requestId = randomUUIDv7();
   await ctx.db
@@ -302,10 +304,7 @@ export async function authorize(
       created_at: now,
     })
     .execute();
-  return new Response(null, {
-    status: 302,
-    headers: { location: `/consent?request_id=${requestId}` },
-  });
+  return redirect(`${CONSENT_PAGE}?request_id=${requestId}`);
 }
 
 export async function loadAuthorizationRequest(
@@ -335,7 +334,7 @@ export async function finishAuthorizationRequest(
   identity: Identity,
   requestId: string,
   now = new Date(),
-): Promise<Response | { status: 'not_found' }> {
+): Promise<ConsentOutcome> {
   const loaded = await loadAuthorizationRequest(ctx, identity, requestId, now);
   if (!loaded || identity.sid === null || identity.sub === null) return { status: 'not_found' };
   const { row, client } = loaded;
@@ -348,7 +347,7 @@ export async function finishAuthorizationRequest(
     .where('guardian_status', '=', 'approved')
     .where('completed_at', 'is', null)
     .execute();
-  return completeAuthorization(ctx, {
+  const location = await completeAuthorization(ctx, {
     client,
     userId: identity.sub,
     sessionId: row.session_id,
@@ -362,15 +361,26 @@ export async function finishAuthorizationRequest(
     acr: row.acr,
     now,
   });
+  return { status: 'redirect', location };
+}
+
+function deniedOutcome(row: { redirect_uri: string; state: string | null }): ConsentOutcome {
+  return {
+    status: 'redirect',
+    location: authorizationLocation(row.redirect_uri, {
+      error: 'access_denied',
+      state: row.state ?? undefined,
+    }),
+  };
 }
 
 export async function decideConsent(
   ctx: Context,
   identity: Identity,
-  form: Record<string, string>,
+  decision: { request_id: string; decision: 'allow' | 'deny' },
   now = new Date(),
-): Promise<Response | { status: 'not_found' }> {
-  const requestId = form['request_id'] ?? '';
+): Promise<ConsentOutcome> {
+  const requestId = decision.request_id;
   const loaded = await loadAuthorizationRequest(ctx, identity, requestId, now);
   if (!loaded || identity.sid === null || identity.sub === null) return { status: 'not_found' };
   const { row, client } = loaded;
@@ -379,13 +389,10 @@ export async function decideConsent(
   }
   if (row.guardian_status === 'declined') {
     oidcMetrics(ctx.metrics).authorization(client.type, 'denied');
-    return authorizationRedirect(row.redirect_uri, {
-      error: 'access_denied',
-      state: row.state ?? undefined,
-    });
+    return deniedOutcome(row);
   }
   if (row.guardian_status === 'pending') {
-    if (form['decision'] === 'allow') return { status: 'not_found' };
+    if (decision.decision === 'allow') return { status: 'not_found' };
     await ctx.db
       .updateTable('authorization_requests')
       .set({ guardian_status: 'declined', completed_at: now })
@@ -393,24 +400,18 @@ export async function decideConsent(
       .where('guardian_status', '=', 'pending')
       .execute();
     oidcMetrics(ctx.metrics).authorization(client.type, 'denied');
-    return authorizationRedirect(row.redirect_uri, {
-      error: 'access_denied',
-      state: row.state ?? undefined,
-    });
+    return deniedOutcome(row);
   }
   await ctx.db
     .updateTable('authorization_requests')
     .set({ completed_at: now })
     .where('id', '=', row.id)
     .execute();
-  if (form['decision'] !== 'allow') {
+  if (decision.decision !== 'allow') {
     oidcMetrics(ctx.metrics).authorization(client.type, 'denied');
-    return authorizationRedirect(row.redirect_uri, {
-      error: 'access_denied',
-      state: row.state ?? undefined,
-    });
+    return deniedOutcome(row);
   }
-  return completeAuthorization(ctx, {
+  const location = await completeAuthorization(ctx, {
     client,
     userId: identity.sub,
     sessionId: identity.sid,
@@ -424,6 +425,7 @@ export async function decideConsent(
     acr: row.acr,
     now,
   });
+  return { status: 'redirect', location };
 }
 
 async function exchangeCode(

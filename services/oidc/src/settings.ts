@@ -15,6 +15,11 @@ export const JWKS_PATH = '/.well-known/jwks.json';
 export const AUTHORIZED_PATH = '/api/v1/oauth/authorized';
 export const CLIENT_PATH = '/api/v1/oauth/client';
 export const CLIENTS_PATH = '/api/v1/oauth/clients';
+export const CONSENT_PATH = '/api/v1/oauth/consent';
+export const DEVICE_PATH = '/api/v1/oauth/device';
+export const DEVICE_VERIFY_PATH = '/api/v1/oauth/device/verify';
+export const CONSENT_PAGE = '/consent';
+export const DEVICE_PAGE = '/device';
 export const ADMIN_CLIENTS_PATH = '/api/v1/admin/oauth/clients';
 
 export class OidcConfigError extends Error {

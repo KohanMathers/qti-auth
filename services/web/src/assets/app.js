@@ -103,9 +103,18 @@ function surfaceFor(features, name) {
   return features.surfaces.find((surface) => surface.name === name);
 }
 
-function currentSurface(features, location) {
-  const { origin } = location;
-  return features.surfaces.find((surface) => surface.origins.includes(origin))?.name ?? 'account';
+function underBase(base, path) {
+  return base === '/' || path === base || path.startsWith(`${base}/`);
+}
+
+export function currentSurface(features, location) {
+  let best;
+  for (const surface of features.surfaces) {
+    if (!surface.origins.includes(location.origin)) continue;
+    if (!underBase(surface.base_path, location.pathname)) continue;
+    if (best === undefined || surface.base_path.length > best.base_path.length) best = surface;
+  }
+  return best ?? { name: 'account', base_path: '/' };
 }
 
 export function surfaceHref(features, current, target, path) {
@@ -131,7 +140,7 @@ export function availableRoutes(features, current) {
   if (features.modules.oidc) routes.push({ id: 'apps', path: '/apps', surface: 'account' });
   if (features.modules.admin) routes.push({ id: 'admin', path: '/admin', surface: 'account' });
   if (features.modules.support) {
-    routes.push({ id: 'support', path: '/support', surface: 'support' });
+    routes.push({ id: 'support', path: '/', surface: 'support' });
   }
   return routes.map((route) => ({
     ...route,
@@ -196,14 +205,10 @@ function renderProblem(main, t, problem) {
   announce(heading.textContent);
 }
 
-function currentPath(bootstrap, location) {
-  const base = bootstrap.basePath === '/' ? '' : bootstrap.basePath;
+function currentPath(basePath, location) {
+  const base = basePath === '/' ? '' : basePath;
   if (base === '' || !location.pathname.startsWith(base)) return location.pathname;
   return location.pathname.slice(base.length) || '/';
-}
-
-function absoluteHref(bootstrap, path) {
-  return joinBase(bootstrap.basePath, path);
 }
 
 export async function bootstrap(config) {
@@ -241,9 +246,10 @@ export async function bootstrap(config) {
   }
   const catalogue = await loadLocale(bootstrapData);
   const t = translator(catalogue);
-  const current = currentSurface(features, location);
+  const surface = currentSurface(features, location);
+  const current = surface.name;
   const routes = availableRoutes(features, current);
-  const pages = availablePages(features);
+  const pages = availablePages(features, current);
   const api = apiClient(bootstrapData);
   const ctx = {
     features,
@@ -251,9 +257,10 @@ export async function bootstrap(config) {
     apiBase: bootstrapData.metaOrigin ?? bootstrapData.basePath.replace(/\/$/, ''),
     location,
     bootstrap: bootstrapData,
-    href: (path) => absoluteHref(bootstrapData, path),
+    surface: current,
+    href: (path) => joinBase(surface.base_path, path),
     navigate: (path) => {
-      history.pushState({}, '', absoluteHref(bootstrapData, path));
+      history.pushState({}, '', joinBase(surface.base_path, path));
       renderCurrent(path);
     },
   };
@@ -277,9 +284,9 @@ export async function bootstrap(config) {
   if (popstateHandler !== null) {
     window.removeEventListener('popstate', popstateHandler);
   }
-  popstateHandler = () => renderCurrent(currentPath(bootstrapData, location));
+  popstateHandler = () => renderCurrent(currentPath(surface.base_path, location));
   window.addEventListener('popstate', popstateHandler);
-  renderCurrent(currentPath(bootstrapData, location));
+  renderCurrent(currentPath(surface.base_path, location));
   app.setAttribute('aria-busy', 'false');
 }
 

@@ -4,7 +4,13 @@
 <form data-form="appeal" novalidate>
   <p class="qtiauth-field">
     <label for="qtiauth-f-action-id" data-t="field.actionId">Action ID (optional)</label>
-    <input id="qtiauth-f-action-id" name="action_id" type="text" autocomplete="off" />
+    <input
+      id="qtiauth-f-action-id"
+      name="action_id"
+      type="text"
+      autocomplete="off"
+      data-bind-value="action_id"
+    />
   </p>
   <p class="qtiauth-field">
     <label for="qtiauth-f-body" data-t="field.message">Message</label>

@@ -6,7 +6,14 @@
 <form data-form="view" novalidate>
   <p class="qtiauth-field">
     <label for="qtiauth-f-token" data-t="field.token">Code</label>
-    <input id="qtiauth-f-token" name="token" type="text" autocomplete="off" required />
+    <input
+      id="qtiauth-f-token"
+      name="token"
+      type="text"
+      autocomplete="off"
+      data-bind-value="token"
+      required
+    />
   </p>
   <p class="qtiauth-actions">
     <button type="submit" data-t="guest.view.submit">View ticket</button>
