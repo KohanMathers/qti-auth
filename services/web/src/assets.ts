@@ -53,7 +53,7 @@ export async function loadAssets(dir: string = DEFAULT_ASSETS_DIR): Promise<Asse
   const entries = await readdir(dir, { withFileTypes: true });
   const set = new Map<string, Asset>();
   for (const entry of entries) {
-    if (!entry.isFile()) continue;
+    if (!entry.isFile() || entry.name.endsWith('.d.ts')) continue;
     if (!ASSET_NAME.test(entry.name)) {
       throw new AssetSetError(`Asset ${entry.name} must be lowercase, numbers, . _ or -`);
     }

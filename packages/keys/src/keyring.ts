@@ -78,6 +78,16 @@ export async function openKeyring(options: KeyringOptions): Promise<Keyring> {
         Date.parse(key.replaced_at) + options.retainAfterRotation > now(),
     );
 
+  const decryptKey = (key: StoredKey): Buffer => {
+    try {
+      return open(key.private_key, encryptionKey, key.kid);
+    } catch (error) {
+      throw new KeyringError(
+        `Can't decrypt ${purpose} key ${key.kid}. Is ${setting} the key it was created with? (${error instanceof Error ? error.message : String(error)})`,
+      );
+    }
+  };
+
   const apply = (keys: KeySet) => {
     for (const key of keys.keys) {
       if (!publicJwkMatches(key.public_jwk, algorithm)) {
@@ -87,15 +97,10 @@ export async function openKeyring(options: KeyringOptions): Promise<Keyring> {
     const active = activeKey(keys);
     if (!active) throw new KeyringError(`The ${purpose} key set has no active key`);
     if (!privateKeys.has(active.kid)) {
-      let der: Buffer;
-      try {
-        der = open(active.private_key, encryptionKey, active.kid);
-      } catch (error) {
-        throw new KeyringError(
-          `Can't decrypt ${purpose} key ${active.kid}. Is ${setting} the key it was created with? (${error instanceof Error ? error.message : String(error)})`,
-        );
-      }
-      privateKeys.set(active.kid, createPrivateKey({ key: der, format: 'der', type: 'pkcs8' }));
+      privateKeys.set(
+        active.kid,
+        createPrivateKey({ key: decryptKey(active), format: 'der', type: 'pkcs8' }),
+      );
     }
     for (const kid of privateKeys.keys()) {
       if (!keys.keys.some((key) => key.kid === kid)) privateKeys.delete(kid);
@@ -121,6 +126,8 @@ export async function openKeyring(options: KeyringOptions): Promise<Keyring> {
   };
 
   const replaceActive = (keys: KeySet): KeySet => {
+    const current = activeKey(keys);
+    if (current) decryptKey(current);
     const at = now();
     const replacedAt = new Date(at).toISOString();
     return {

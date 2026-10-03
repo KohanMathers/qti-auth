@@ -112,6 +112,25 @@ describe('openKeyring', () => {
     ).rejects.toThrow(KeyringError);
   });
 
+  it('refuses to rotate with the wrong encryption key, leaving the stored keys alone', async () => {
+    const { store, open } = setup();
+    await open();
+    const before = JSON.stringify(store.value());
+    await expect(
+      openKeyring({
+        store,
+        encryptionKey: randomBytes(32),
+        algorithm: 'EdDSA',
+        rotateAfter: 30 * DAY,
+        retainAfterRotation: 3_600_000,
+        purpose: 'identity',
+        setting: 'gateway.identity_keys.encryption_key',
+        now: () => Date.parse('2026-12-01T00:00:00Z'),
+      }),
+    ).rejects.toThrow(KeyringError);
+    expect(JSON.stringify(store.value())).toBe(before);
+  });
+
   it('refuses a stored key from a different algorithm', async () => {
     const store = memoryKeySetStore();
     await openKeyring({

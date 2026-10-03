@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { assetResponse, AssetSetError, loadAssets } from './assets.ts';
+import { assetResponse, AssetSetError, DEFAULT_ASSETS_DIR, loadAssets } from './assets.ts';
 
 async function stageAssets(files: Record<string, string>): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'qtiauth-assets-'));
@@ -41,6 +41,17 @@ describe('loadAssets', () => {
   it('rejects an unknown extension', async () => {
     dir = await stageAssets({ 'app.wat': 'binary' });
     await expect(loadAssets(dir)).rejects.toBeInstanceOf(AssetSetError);
+  });
+
+  it('skips TypeScript declarations, which describe the scripts and are not served', async () => {
+    dir = await stageAssets({ 'app.js': 'export {};', 'app.d.ts': 'export {};' });
+    const set = await loadAssets(dir);
+    expect([...set.keys()]).toEqual(['app.js']);
+  });
+
+  it('loads the assets the service ships', async () => {
+    const set = await loadAssets(DEFAULT_ASSETS_DIR);
+    expect(set.has('pages.js')).toBe(true);
   });
 
   it('rejects a filename that is not lowercase asset-safe', async () => {
