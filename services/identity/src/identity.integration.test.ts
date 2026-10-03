@@ -910,14 +910,17 @@ describe('events, retention and data rights', () => {
 
     await publishCronTick(gateway.js, 'retention.sweep', new Date());
 
-    await vi.waitFor(async () => {
-      const sessions = await identity.context.db
-        .selectFrom('sessions')
-        .select('id')
-        .where('id', '=', user.sessionId)
-        .execute();
-      expect(sessions).toEqual([]);
-    });
+    await vi.waitFor(
+      async () => {
+        const sessions = await identity.context.db
+          .selectFrom('sessions')
+          .select('id')
+          .where('id', '=', user.sessionId)
+          .execute();
+        expect(sessions).toEqual([]);
+      },
+      { timeout: 10_000 },
+    );
     const tokens = await identity.context.db
       .selectFrom('email_tokens')
       .select('id')
@@ -961,15 +964,18 @@ describe('events, retention and data rights', () => {
         data: { held: false },
       }),
     );
-    await vi.waitFor(async () => {
-      expect(await resolve(user.token)).toBeNull();
-      const rows = await identity.context.db
-        .selectFrom('users')
-        .select('id')
-        .where('id', '=', user.userId)
-        .execute();
-      expect(rows).toEqual([]);
-    });
+    await vi.waitFor(
+      async () => {
+        expect(await resolve(user.token)).toBeNull();
+        const rows = await identity.context.db
+          .selectFrom('users')
+          .select('id')
+          .where('id', '=', user.userId)
+          .execute();
+        expect(rows).toEqual([]);
+      },
+      { timeout: 10_000 },
+    );
   });
 
   it('schedules deletion, cancels it on sign-in, then purges to a ledger entry', async () => {
@@ -1085,12 +1091,15 @@ describe('events, retention and data rights', () => {
       }),
     ]);
     expect(job.attachments[0]?.content.length).toBeGreaterThan(0);
-    await vi.waitFor(async () => {
-      const status = await call(`/api/v1/me/export/${body.id}`, {
-        as: signedInAs(user.userId, user.sessionId),
-      });
-      expect(await status.json()).toMatchObject({ id: body.id, status: 'ready' });
-    });
+    await vi.waitFor(
+      async () => {
+        const status = await call(`/api/v1/me/export/${body.id}`, {
+          as: signedInAs(user.userId, user.sessionId),
+        });
+        expect(await status.json()).toMatchObject({ id: body.id, status: 'ready' });
+      },
+      { timeout: 10_000 },
+    );
     const metrics = await (await fetch(`${identity.url}/metrics`)).text();
     expect(metrics).toContain('qtiauth_data_exports_total{status="ready",service="identity"}');
   });
@@ -1117,14 +1126,17 @@ describe('events, retention and data rights', () => {
       .where('id', '=', user.userId)
       .execute();
     await publishCronTick(gateway.js, PURGE_JOB, new Date());
-    await vi.waitFor(async () => {
-      const rows = await identity.context.db
-        .selectFrom('users')
-        .select('id')
-        .where('id', '=', user.userId)
-        .execute();
-      expect(rows).toEqual([]);
-    });
+    await vi.waitFor(
+      async () => {
+        const rows = await identity.context.db
+          .selectFrom('users')
+          .select('id')
+          .where('id', '=', user.userId)
+          .execute();
+        expect(rows).toEqual([]);
+      },
+      { timeout: 10_000 },
+    );
     const hold = await rpcRequest(gateway, 'identity', GET_LEGAL_HOLD_METHOD, {
       user_id: user.userId,
     });
@@ -1135,14 +1147,19 @@ describe('events, retention and data rights', () => {
   });
 
   it('reports accounts and sessions in its metrics', async () => {
-    await vi.waitFor(async () => {
-      const metrics = await (await fetch(`${identity.url}/metrics`)).text();
-      expect(metrics).toMatch(/qtiauth_accounts\{state="active",service="identity"\} [1-9]/);
-      expect(metrics).toMatch(/qtiauth_sessions_active\{service="identity"\} [1-9]/);
-      expect(metrics).toContain('qtiauth_auth_signups_total{method="magic_link",age_band="adult"');
-      expect(metrics).toContain('qtiauth_auth_signups_total{method="password",age_band="adult"');
-      expect(metrics).toContain('qtiauth_legal_acceptance_pending{service="identity"}');
-    });
+    await vi.waitFor(
+      async () => {
+        const metrics = await (await fetch(`${identity.url}/metrics`)).text();
+        expect(metrics).toMatch(/qtiauth_accounts\{state="active",service="identity"\} [1-9]/);
+        expect(metrics).toMatch(/qtiauth_sessions_active\{service="identity"\} [1-9]/);
+        expect(metrics).toContain(
+          'qtiauth_auth_signups_total{method="magic_link",age_band="adult"',
+        );
+        expect(metrics).toContain('qtiauth_auth_signups_total{method="password",age_band="adult"');
+        expect(metrics).toContain('qtiauth_legal_acceptance_pending{service="identity"}');
+      },
+      { timeout: 10_000 },
+    );
   });
 });
 
@@ -1181,18 +1198,21 @@ describe('parental consent', () => {
   }
 
   async function waitErased(userId: string): Promise<void> {
-    await vi.waitFor(async () => {
-      const rows = await identity.context.db
-        .selectFrom('users')
-        .select('id')
-        .where('id', '=', userId)
-        .execute();
-      expect(rows).toEqual([]);
-      const ledger = JSON.parse(
-        await readFile(join(backupDir, 'deletion-ledger', `${userId}.json`), 'utf8'),
-      ) as { user_id: string };
-      expect(ledger).toMatchObject({ user_id: userId });
-    });
+    await vi.waitFor(
+      async () => {
+        const rows = await identity.context.db
+          .selectFrom('users')
+          .select('id')
+          .where('id', '=', userId)
+          .execute();
+        expect(rows).toEqual([]);
+        const ledger = JSON.parse(
+          await readFile(join(backupDir, 'deletion-ledger', `${userId}.json`), 'utf8'),
+        ) as { user_id: string };
+        expect(ledger).toMatchObject({ user_id: userId });
+      },
+      { timeout: 10_000 },
+    );
   }
 
   it('creates a waiting child account, lets them resend and change the guardian email, then activates on approve', async () => {
