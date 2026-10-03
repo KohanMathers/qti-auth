@@ -133,6 +133,12 @@ function lookupMethod(method: string): string {
   return method === 'HEAD' ? 'GET' : method;
 }
 
+function parseOrigin(raw: string | null): string | null {
+  if (raw === null) return null;
+  const values = [...new Set(raw.split(',').map((value) => value.trim()).filter(Boolean))];
+  return values.length === 1 ? (values[0] ?? null) : raw;
+}
+
 function denialRedirect(input: {
   code: string;
   cookies: GatewayConfig['cookies'];
@@ -187,7 +193,7 @@ export function createGatewayHandler(options: GatewayHandlerOptions): GatewayHan
     const started = performance.now();
     const url = new URL(request.url);
     const requestId = requestIdOf(request);
-    const origin = request.headers.get('origin');
+    const origin = parseOrigin(request.headers.get('origin'));
     const host = requestHost(request.headers.get('host'));
     const ip = clientIp(connection.peer, request.headers.get('x-forwarded-for'), options.proxies);
     const matched = matchSurface(options.surfaces, host, connection.localPort, url.pathname);
