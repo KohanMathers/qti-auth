@@ -654,7 +654,7 @@ describe('email change', () => {
         (await emails.nextJob('old-mail@example.com', 'email_change_notice')).variables['link'],
       ),
     );
-    expect(confirmLink.pathname).toBe('/verify');
+    expect(confirmLink.pathname).toBe('/confirm-email');
     expect(revertLink.pathname).toBe('/revert-email');
     const confirmToken = confirmLink.searchParams.get('token') ?? '';
     const revertToken = revertLink.searchParams.get('token') ?? '';

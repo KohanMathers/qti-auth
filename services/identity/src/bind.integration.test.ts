@@ -1,3 +1,5 @@
+import { request as httpRequest } from 'node:http';
+
 import { type Bus, connectBus } from '@qtiauth/bus';
 import { sections } from '@qtiauth/config';
 import {
@@ -41,6 +43,42 @@ function port(): number {
   return gateway.ports[0] ?? 0;
 }
 
+function send(
+  path: string,
+  method: string,
+  headers: Headers,
+  body: string | undefined,
+): Promise<Response> {
+  if (body !== undefined) headers.set('content-length', String(Buffer.byteLength(body)));
+  return new Promise((resolve, reject) => {
+    const outgoing = httpRequest(
+      { host: '127.0.0.1', port: port(), path, method, headers: Object.fromEntries(headers) },
+      (incoming) => {
+        const chunks: Buffer[] = [];
+        incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+        incoming.on('end', () => {
+          const responseHeaders = new Headers();
+          for (const [name, value] of Object.entries(incoming.headers)) {
+            for (const item of Array.isArray(value) ? value : [value ?? '']) {
+              responseHeaders.append(name, item);
+            }
+          }
+          const status = incoming.statusCode ?? 0;
+          const empty = status === 204 || status === 304;
+          resolve(
+            new Response(empty ? null : Buffer.concat(chunks), {
+              status,
+              headers: responseHeaders,
+            }),
+          );
+        });
+      },
+    );
+    outgoing.on('error', reject);
+    outgoing.end(body);
+  });
+}
+
 class Browser {
   readonly cookies = new Map<string, string>();
 
@@ -59,11 +97,12 @@ class Browser {
       .filter(([key]) => key.startsWith(`${host}:`))
       .map(([key, value]) => `${key.slice(host.length + 1)}=${value}`);
     if (jar.length > 0) headers.set('cookie', jar.join('; '));
-    const response = await fetch(`http://127.0.0.1:${String(port())}${path}`, {
-      ...init,
+    const response = await send(
+      path,
+      init.method ?? 'GET',
       headers,
-      redirect: 'manual',
-    });
+      typeof init.body === 'string' ? init.body : undefined,
+    );
     for (const set of response.headers.getSetCookie()) {
       const pair = set.split(';')[0] ?? '';
       const eq = pair.indexOf('=');

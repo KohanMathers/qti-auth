@@ -1,4 +1,4 @@
-ARG NODE_IMAGE=node:26.8.2-alpine3.24
+ARG NODE_IMAGE=node:26.10.0-alpine3.24
 
 FROM ${NODE_IMAGE} AS deps
 ARG PACKAGE=@qtiauth/web
@@ -17,6 +17,9 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts --filter-prod "${PACK
 
 FROM ${NODE_IMAGE}
 ENV NODE_ENV=production
+RUN apk upgrade --no-cache \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 WORKDIR /srv
 COPY --from=deps --chown=node:node /out .
 WORKDIR /srv/app

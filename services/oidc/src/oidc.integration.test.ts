@@ -496,6 +496,9 @@ beforeAll(async () => {
       surfaces,
       geoip: { source: 'header', header: 'cf-ipcountry' },
       rate_limits: {
+        global: { per: 'ip', limit: 10_000, window: '1m' },
+        oauth_authorize: { per: 'ip', limit: 1000, window: '1m' },
+        oauth_token: { per: 'ip', limit: 1000, window: '1m', on_store_failure: 'closed' },
         magic_link_email: { per: 'email', limit: 1000, window: '1h', on_store_failure: 'closed' },
         magic_link_ip: { per: 'ip', limit: 1000, window: '1h', on_store_failure: 'closed' },
         magic_link_ip_day: { per: 'ip', limit: 1000, window: '1d', on_store_failure: 'closed' },
