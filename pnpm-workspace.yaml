@@ -14,3 +14,6 @@ minimumReleaseAgeExclude:
   - '@types/node@26.6.1'
   - prettier@3.9.7
   - kysely@0.29.6
+
+overrides:
+  '@grpc/grpc-js': ^1.14.5
