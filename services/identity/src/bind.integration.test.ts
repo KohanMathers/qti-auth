@@ -262,7 +262,10 @@ describe('multi-surface sessions', () => {
     expect(logout.status).toBe(204);
     expect(client.cookie(SUPPORT, COOKIE)).toBeUndefined();
 
-    expect((await client.request(ACCOUNT, '/api/v1/me')).status).toBe(401);
+    const signedOut = await client.request(ACCOUNT, '/api/v1/me', {
+      headers: { accept: 'application/json' },
+    });
+    expect(signedOut.status).toBe(401);
   });
 
   it('keeps tokens and user IDs out of the logs', () => {

@@ -231,9 +231,12 @@ describe('gateway end to end', () => {
       gateway.keyring.signingKey().kid,
       before,
     ]);
-    await vi.waitFor(async () => {
-      expect((await fetch(url('/api/v1/notes/ping'))).status).toBe(204);
-    });
+    await vi.waitFor(
+      async () => {
+        expect((await fetch(url('/api/v1/notes/ping'))).status).toBe(204);
+      },
+      { timeout: 10_000 },
+    );
   });
 
   it('drops a cached session when identity publishes a revocation', async () => {

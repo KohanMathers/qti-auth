@@ -997,7 +997,7 @@ describe('oidc through the gateway', () => {
       '/oauth/device_authorization',
       form({
         client_id: GAME,
-        scope: 'openid profile',
+        scope: 'openid profile email',
       }),
     );
     expect(started.status).toBe(200);
