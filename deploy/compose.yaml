@@ -80,6 +80,7 @@ services:
       context: ..
       dockerfile: services/identity/Dockerfile
     command: ['node', 'src/main.ts']
+    networks: [internal, public]
     volumes:
       - ../config:/srv/app/config:ro
       - geoip:/var/lib/qtiauth/geoip:ro
@@ -92,6 +93,7 @@ services:
       context: ..
       dockerfile: services/notifier/Dockerfile
     command: ['node', 'src/main.ts']
+    networks: [internal, public]
 
   web:
     <<: *qtiauth-service
