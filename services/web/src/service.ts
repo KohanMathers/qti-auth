@@ -82,7 +82,80 @@ function nameFromPath(path: string): string {
   return head ?? 'account';
 }
 
-const rootPageId = Object.entries(PAGES).find(([, page]) => page.path === '/')?.[0] ?? 'account';
+const PUBLIC_PAGES = new Set<string>([
+  'sign-in',
+  'sign-up',
+  'forgot',
+  'reset',
+  'verify',
+  'magic-link',
+  'confirm-email',
+  'revert-email',
+  'methods',
+  'device',
+  'waiting',
+  'social-callback',
+  'legal',
+  'legal-document',
+  'support',
+  'support-kb',
+  'support-kb-article',
+  'support-kb-category',
+  'support-kb-search',
+  'support-guest',
+  'support-guest-verify',
+  'support-guest-view',
+  'guardian-approve',
+  'guardian-decline',
+  'family-invite',
+  'report',
+]);
+
+const SESSION_COOKIE_PATTERN = /(?:^|;\s*)(?:__Host-)?qtiauth_session=([^;]+)/;
+
+function hasSessionCookie(request: Request): boolean {
+  const header = request.headers.get('cookie');
+  return header !== null && SESSION_COOKIE_PATTERN.test(header);
+}
+
+function requestHost(request: Request): string | null {
+  const header = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  if (header === null) return null;
+  const match = /^(\[[0-9a-fA-F:.]+\]|[^:]+)(?::\d+)?$/.exec(header.trim());
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+function rootPageIdFor(request: Request, ctx: Context): string {
+  const host = requestHost(request);
+  if (host !== null) {
+    const support = ctx.config.surfaces.support;
+    if (support?.hosts.map((h) => h.toLowerCase()).includes(host)) return 'support';
+  }
+  return 'account';
+}
+
+function signInRedirect(basePath: string, returnTo: string): Response {
+  const base = basePath === '/' ? '' : basePath;
+  const target = `${base}/sign-in?return_to=${encodeURIComponent(returnTo)}`;
+  return new Response(null, {
+    status: 303,
+    headers: { location: target, 'cache-control': 'no-store' },
+  });
+}
+
+function gateOrRender(
+  ctx: Context,
+  request: Request,
+  pageId: string,
+  params: Record<string, string>,
+  returnTo: string,
+): Promise<Response> {
+  if (!PUBLIC_PAGES.has(pageId) && !hasSessionCookie(request)) {
+    const basePath = requireWebState(ctx).basePath;
+    return Promise.resolve(signInRedirect(basePath, returnTo));
+  }
+  return renderShell(ctx, request, pageId, params);
+}
 
 router.route({
   method: 'GET',
@@ -93,7 +166,10 @@ router.route({
   auth: 'none',
   rate_limit: 'global',
   responses: htmlOk,
-  handler: ({ ctx, request }) => renderShell(ctx, request, rootPageId, {}),
+  handler: ({ ctx, request }) => {
+    const rootPageId = rootPageIdFor(request, ctx);
+    return gateOrRender(ctx, request, rootPageId, {}, '/');
+  },
 });
 
 for (const [id, page] of Object.entries(PAGES)) {
@@ -115,8 +191,11 @@ for (const [id, page] of Object.entries(PAGES)) {
           },
         }),
     responses: htmlOk,
-    handler: ({ ctx, request, params }) =>
-      renderShell(ctx, request, id, (params ?? {}) as Record<string, string>),
+    handler: ({ ctx, request, params }) => {
+      const resolved = (params ?? {}) as Record<string, string>;
+      const url = new URL(request.url);
+      return gateOrRender(ctx, request, id, resolved, `${url.pathname}${url.search}`);
+    },
   });
 }
 
