@@ -9,8 +9,11 @@ import * as z from 'zod';
 import packageJson from '../package.json' with { type: 'json' };
 import { assetResponse } from './assets.ts';
 import { PAGES } from './assets/pages.js';
+import { makeLoadContext } from './data.ts';
 import { WEB_ERRORS } from './errors.ts';
+import { catalogueFor, resolveLocale, translatorFor } from './i18n.ts';
 import { localeResponse } from './locale.ts';
+import { renderPage } from './render.ts';
 import { shellResponse } from './shell.ts';
 import { themeResponse } from './theme.ts';
 import { requireWebState, type WebState } from './web-state.ts';
@@ -19,7 +22,7 @@ export const definition = defineService({
   name: 'web',
   version: packageJson.version,
   module: 'core',
-  sections: ['branding', 'surfaces'],
+  sections: ['branding', 'surfaces', 'cookies'],
   errors: WEB_ERRORS,
 });
 
@@ -27,33 +30,71 @@ export type Context = ServiceContext<typeof definition>;
 
 export const router = createServiceRouter<Context>(definition);
 
-const htmlOk = { 200: { description: 'The app shell' } };
+const htmlOk = { 200: { description: 'A rendered page' } };
 const cssOk = { 200: { description: 'A stylesheet' } };
 const jsOk = { 200: { description: 'A JavaScript asset' } };
 const jsonOk = { 200: { description: 'A JSON catalogue' } };
+const redirectOk = { 303: { description: 'Redirect to the referrer' } };
 
-function appShell(ctx: Context): Promise<Response> {
-  const state = requireWebState(ctx);
-  return Promise.resolve(
-    shellResponse(ctx.config, { basePath: state.basePath, metaOrigin: state.metaOrigin }),
-  );
+const THEME_COOKIE = 'qtiauth_theme';
+const LOCALE_COOKIE = 'qtiauth_locale';
+const THEME_VALUES = new Set(['light', 'dark', 'system']);
+const THEME_PATTERN = new RegExp(`(?:^|;\\s*)${THEME_COOKIE}=([^;]+)`);
+
+function themePreference(request: Request): 'light' | 'dark' | 'system' | undefined {
+  const header = request.headers.get('cookie');
+  if (header === null) return undefined;
+  const match = THEME_PATTERN.exec(header);
+  if (match === null) return undefined;
+  const value = decodeURIComponent(match[1] ?? '').trim();
+  if (!THEME_VALUES.has(value)) return undefined;
+  return value === 'system' ? undefined : (value as 'light' | 'dark');
 }
+
+async function renderShell(
+  ctx: Context,
+  request: Request,
+  pageName: string,
+  params: Record<string, string>,
+): Promise<Response> {
+  const state = requireWebState(ctx);
+  const locale = resolveLocale({ request, locales: state.locales });
+  const catalogue = catalogueFor(state.locales, locale);
+  const t = translatorFor(catalogue);
+  const loadCtx = makeLoadContext(request, ctx.config, params);
+  const content = await renderPage({ name: pageName, ctx: loadCtx, t });
+  return shellResponse(ctx.config, {
+    basePath: state.basePath,
+    metaOrigin: state.metaOrigin,
+    content,
+    locale,
+    theme: themePreference(request),
+  });
+}
+
+function operationId(pageId: string): string {
+  return `page${pageId.replaceAll(/(?:^|-)([a-z])/g, (_, letter: string) => letter.toUpperCase())}`;
+}
+
+function nameFromPath(path: string): string {
+  if (path === '/') return 'account';
+  const [, head] = path.split('/');
+  return head ?? 'account';
+}
+
+const rootPageId = Object.entries(PAGES).find(([, page]) => page.path === '/')?.[0] ?? 'account';
 
 router.route({
   method: 'GET',
   path: '/',
   operation_id: 'appShell',
-  summary: 'Render the vanilla web app shell',
+  summary: 'Render the account landing page',
   tags: ['web'],
   auth: 'none',
   rate_limit: 'global',
   responses: htmlOk,
-  handler: ({ ctx }) => appShell(ctx),
+  handler: ({ ctx, request }) => renderShell(ctx, request, rootPageId, {}),
 });
-
-function operationId(pageId: string): string {
-  return `page${pageId.replaceAll(/(?:^|-)([a-z])/g, (_, letter: string) => letter.toUpperCase())}`;
-}
 
 for (const [id, page] of Object.entries(PAGES)) {
   if (page.path === '/') continue;
@@ -62,7 +103,7 @@ for (const [id, page] of Object.entries(PAGES)) {
     method: 'GET',
     path: page.path,
     operation_id: operationId(id),
-    summary: `Render the web app shell for the ${id} page`,
+    summary: `Render the ${id} page`,
     tags: ['web'],
     auth: 'none',
     rate_limit: 'global',
@@ -74,7 +115,8 @@ for (const [id, page] of Object.entries(PAGES)) {
           },
         }),
     responses: htmlOk,
-    handler: ({ ctx }) => appShell(ctx),
+    handler: ({ ctx, request, params }) =>
+      renderShell(ctx, request, id, (params ?? {}) as Record<string, string>),
   });
 }
 
@@ -108,7 +150,7 @@ router.route({
   method: 'GET',
   path: '/app.js',
   operation_id: 'appScript',
-  summary: 'Client-side router and bootstrap',
+  summary: 'Progressive-enhancement script for toggles, dialogs and async forms',
   tags: ['web'],
   auth: 'none',
   rate_limit: 'global',
@@ -209,6 +251,83 @@ router.route({
   },
 });
 
+router.route({
+  method: 'POST',
+  path: '/theme',
+  operation_id: 'setTheme',
+  summary: 'Store the user colour-scheme preference',
+  tags: ['web'],
+  auth: 'none',
+  rate_limit: 'global',
+  request: {
+    body: z.object({
+      theme: z.enum(['light', 'dark', 'system']),
+      return_to: z.string().max(2048).optional(),
+    }),
+  },
+  responses: redirectOk,
+  handler: ({ body, request }) => Promise.resolve(setPreferenceCookie(THEME_COOKIE, body.theme, body.return_to, request)),
+});
+
+router.route({
+  method: 'POST',
+  path: '/locale',
+  operation_id: 'setLocale',
+  summary: 'Store the user locale preference',
+  tags: ['web'],
+  auth: 'none',
+  rate_limit: 'global',
+  request: {
+    body: z.object({
+      locale: z.string().min(1).max(32),
+      return_to: z.string().max(2048).optional(),
+    }),
+  },
+  responses: redirectOk,
+  handler: ({ body, ctx, request }) => {
+    const state = requireWebState(ctx);
+    if (!state.locales.has(body.locale)) {
+      throw new ProblemError('LOCALE_NOT_AVAILABLE', { detail: `No catalogue for ${body.locale}` });
+    }
+    return Promise.resolve(setPreferenceCookie(LOCALE_COOKIE, body.locale, body.return_to, request));
+  },
+});
+
+const SAFE_RETURN = /^\/(?![/\\])[^\s\\]*$/u;
+
+function sanitiseReturn(value: string | undefined, fallback: string): string {
+  if (value === undefined) return fallback;
+  if (value.length > 2048) return fallback;
+  return SAFE_RETURN.test(value) ? value : fallback;
+}
+
+function setPreferenceCookie(
+  name: string,
+  value: string,
+  returnTo: string | undefined,
+  request: Request,
+): Response {
+  const referer = request.headers.get('referer');
+  let fallback = '/';
+  if (referer !== null) {
+    try {
+      fallback = new URL(referer).pathname;
+    } catch {
+      fallback = '/';
+    }
+  }
+  const target = sanitiseReturn(returnTo, fallback);
+  const cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  return new Response(null, {
+    status: 303,
+    headers: {
+      location: target,
+      'set-cookie': cookie,
+      'cache-control': 'no-store',
+    },
+  });
+}
+
 function serveAsset(state: WebState, request: Request, name: string): Response {
   const asset = state.assets.get(name);
   if (asset === undefined) {
@@ -216,3 +335,5 @@ function serveAsset(state: WebState, request: Request, name: string): Response {
   }
   return assetResponse(asset, request);
 }
+
+export { nameFromPath };

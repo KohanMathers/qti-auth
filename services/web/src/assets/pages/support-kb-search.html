@@ -1,23 +1,53 @@
-<h2 data-t="routes.kb.search.title">Search the help centre</h2>
-<p class="qtiauth-lede" data-t="kb.search.lede">
-  Look up an article by keywords in its title or body.
-</p>
+<div class="qt-kb-shell">
+  <header class="qt-kb-topbar qt-container">
+    <a class="qt-brand" href="/support" data-link><span data-field="product_name"></span> Help</a>
+    <form class="qt-kb-search" data-form="kb-search" novalidate>
+      <input type="search" name="q" placeholder="Search help" aria-label="Search help" />
+    </form>
+    <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  </header>
 
-<form data-form="search" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-q" data-t="field.query">Search</label>
-    <input id="qtiauth-f-q" name="q" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="kb.search.submit">Search</button>
-  </p>
-</form>
+  <section class="qt-kb-article qt-prose">
+    <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="/support" data-link>Home</a></li>
+        <li aria-current="page" data-t="routes.kb.search.title">Search</li>
+      </ol>
+    </nav>
 
-<div data-slot="results">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="results">
-      <li><a data-link data-bind-href="path" data-field="title"></a></li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="kb.search.empty">No matching articles.</p>
+    <h2 data-t="routes.kb.search.title">Search the help centre</h2>
+    <p class="qtiauth-lede" data-t="kb.search.lede">
+      Look up an article by keywords in its title or body.
+    </p>
+
+    <form class="qt-form qt-kb-search-form" data-form="search" novalidate>
+      <p class="qtiauth-field qt-field">
+        <label class="qt-label" for="qtiauth-f-q" data-t="field.query">Search</label>
+        <input id="qtiauth-f-q" class="qt-input" name="q" type="search" autocomplete="off" required />
+      </p>
+      <p class="qtiauth-actions qt-actions">
+        <button type="submit" class="qt-button" data-variant="primary" data-t="kb.search.submit">Search</button>
+      </p>
+    </form>
+
+    <div data-slot="results">
+      <ul class="qtiauth-list qt-kb-article-list" data-state="list" aria-live="polite">
+        <template data-item="results">
+          <li class="qt-kb-article-list__item">
+            <a class="qt-kb-article-list__link" data-link data-bind-href="path">
+              <span class="qt-kb-article-list__title" data-field="title">
+                <mark data-part="match"></mark>
+              </span>
+              <span class="qt-kb-article-list__excerpt qt-text-muted" data-field="excerpt">
+                <mark data-part="match"></mark>
+              </span>
+            </a>
+          </li>
+        </template>
+      </ul>
+      <div class="qt-empty qt-empty-state qtiauth-empty" data-state="empty">
+        <h3 class="qt-empty-state__title" data-t="kb.search.empty">No matching articles.</h3>
+      </div>
+    </div>
+  </section>
 </div>

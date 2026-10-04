@@ -1,214 +1,231 @@
-<h2 data-t="routes.security.title">Security</h2>
-<p class="qtiauth-lede" data-t="security.lede">Keep your account protected.</p>
-<div class="qtiauth-feedback" aria-live="polite" data-part="factors-feedback"></div>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link data-current="page">Account</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<div data-slot="step-up">
-  <div data-state="hidden"></div>
-  <section data-state="prompt">
-    <h3 data-t="security.stepUp.heading">Confirm it’s you</h3>
-    <p data-t="security.stepUp.body">
-      This needs a recent second factor. Enter a code from your authenticator app or a recovery
-      code, or use a passkey.
-    </p>
-    <form data-form="step-up" novalidate>
-      <p class="qtiauth-field">
-        <label for="qtiauth-f-step-up" data-t="security.stepUp.code">Code</label>
-        <input
-          id="qtiauth-f-step-up"
-          name="code"
-          type="text"
-          autocomplete="one-time-code"
-          required
-        />
-      </p>
-      <p class="qtiauth-actions">
-        <button type="submit" data-t="security.stepUp.submit">Confirm</button>
-      </p>
-    </form>
-    <button
-      type="button"
-      class="qtiauth-button qtiauth-button-ghost"
-      data-action="step-up-passkey"
-      data-t="security.stepUp.passkey"
-    >
-      Use a passkey
-    </button>
-    <div class="qtiauth-feedback" aria-live="polite" data-part="step-up-feedback"></div>
-  </section>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Account sections">
+      <nav class="qt-nav-list" aria-label="Account sections">
+        <a href="/account" data-link>Overview</a>
+        <a href="/account/profile" data-link>Profile</a>
+        <a href="/account/email" data-link>Change email</a>
+        <a href="/account/security" data-link data-current="page">Security</a>
+        <a href="/account/sessions" data-link>Signed-in sessions</a>
+        <a href="/account/methods" data-link>Connected sign-in methods</a>
+        <a href="/account/notifications" data-link>Notification preferences</a>
+        <a href="/account/legal" data-link>Legal acceptance</a>
+        <a href="/account/data" data-link>Data export and deletion</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.security.title">Security</h2>
+        <p class="qtiauth-lede" data-t="security.lede">Keep your account protected.</p>
+        <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="factors-feedback"></div>
+      </header>
+
+      <article class="qt-card" data-slot="step-up">
+        <div data-state="hidden"></div>
+        <section data-state="prompt">
+          <header class="qt-card__header">
+            <h3 data-t="security.stepUp.heading">Confirm it's you</h3>
+            <p class="qt-text-muted" data-t="security.stepUp.body">
+              This needs a recent second factor. Enter a code from your authenticator app or a recovery code, or use a passkey.
+            </p>
+          </header>
+          <div class="qt-card__body">
+            <form class="qt-form" data-form="step-up" novalidate>
+              <p class="qtiauth-field qt-field">
+                <label class="qt-label" for="qtiauth-f-step-up" data-t="security.stepUp.code">Code</label>
+                <input class="qt-input" id="qtiauth-f-step-up" name="code" type="text" autocomplete="one-time-code" required />
+              </p>
+              <p class="qtiauth-actions qt-actions">
+                <button type="submit" class="qt-button" data-variant="primary" data-t="security.stepUp.submit">Confirm</button>
+                <button type="button" class="qtiauth-button qtiauth-button-ghost qt-button" data-variant="ghost" data-action="step-up-passkey" data-t="security.stepUp.passkey">Use a passkey</button>
+              </p>
+            </form>
+            <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="step-up-feedback"></div>
+          </div>
+        </section>
+      </article>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="security.password.heading">Set or change password</h3>
+        </header>
+        <div class="qt-card__body">
+          <form class="qt-form" data-form="password" novalidate>
+            <p class="qtiauth-field qt-field">
+              <label class="qt-label" for="qtiauth-f-current" data-t="field.password.current">
+                Current password (leave empty if you don't have one yet)
+              </label>
+              <input class="qt-input" id="qtiauth-f-current" name="current" type="password" autocomplete="current-password" />
+            </p>
+            <p class="qtiauth-field qt-field">
+              <label class="qt-label" for="qtiauth-f-next" data-t="field.password.new">New password</label>
+              <input class="qt-input" id="qtiauth-f-next" name="next" type="password" autocomplete="new-password" minlength="12" required />
+            </p>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-t="security.password.submit">Change password</button>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="security.password.success">Password changed.</p>
+            </template>
+          </form>
+        </div>
+      </article>
+
+      <article class="qt-card" data-show="totp">
+        <header class="qt-card__header">
+          <h3 data-t="security.twoFactor.heading">Authenticator app</h3>
+        </header>
+        <div class="qt-card__body">
+          <div data-slot="totp">
+            <p class="qtiauth-status" data-state="loading" role="status" data-t="security.totp.loading">Loading...</p>
+            <div data-state="off" class="qt-stack">
+              <p data-t="security.totp.off">
+                Add an authenticator app to ask for a code when you sign in with a password.
+              </p>
+              <p class="qtiauth-actions qt-actions">
+                <button type="button" class="qt-button" data-variant="primary" data-action="totp-start" data-t="security.totp.start">
+                  Set up an authenticator app
+                </button>
+              </p>
+              <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="totp-feedback"></div>
+            </div>
+            <div data-state="setup" class="qt-stack">
+              <p data-t="security.totp.setup">
+                Add this account to your authenticator app, then enter the code it shows.
+              </p>
+              <p>
+                <a data-bind-href="otpauth" data-t="security.totp.link">Open in your authenticator app</a>
+              </p>
+              <p data-t="security.totp.secret">Or enter this key by hand: {secret}</p>
+              <form class="qt-form" data-form="totp-confirm" novalidate>
+                <p class="qtiauth-field qt-field">
+                  <label class="qt-label" for="qtiauth-f-totp-code" data-t="security.totp.code">Code</label>
+                  <input class="qt-input" id="qtiauth-f-totp-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required />
+                </p>
+                <p class="qtiauth-actions qt-actions">
+                  <button type="submit" class="qt-button" data-variant="primary" data-t="security.totp.confirm">Turn on</button>
+                </p>
+              </form>
+            </div>
+            <div data-state="on" class="qt-stack">
+              <p data-t="security.totp.on">Your authenticator app is on.</p>
+              <form class="qt-form" data-form="totp-disable" novalidate>
+                <p class="qtiauth-field qt-field">
+                  <label class="qt-label" for="qtiauth-f-totp-off" data-t="security.totp.disableCode">
+                    Enter a code to turn it off
+                  </label>
+                  <input class="qt-input" id="qtiauth-f-totp-off" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required />
+                </p>
+                <p class="qtiauth-actions qt-actions">
+                  <button type="submit" class="qtiauth-button qtiauth-button-danger qt-button" data-variant="danger" data-t="security.totp.disable">Turn off</button>
+                </p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="security.recovery.heading">Recovery codes</h3>
+          <p class="qt-text-muted" data-t="security.recovery.body">
+            One-time codes to sign in if you lose your device. You have {recovery_remaining} left.
+          </p>
+        </header>
+        <div class="qt-card__body">
+          <div data-slot="codes">
+            <div data-state="list" class="qt-stack">
+              <p class="qtiauth-alert qt-message" data-variant="warning" role="status" data-t="security.recovery.save">
+                Save these codes somewhere safe. They won't be shown again.
+              </p>
+              <ul class="qtiauth-list qt-recovery-codes">
+                <template data-item="codes">
+                  <li><code data-field="code"></code></li>
+                </template>
+              </ul>
+            </div>
+          </div>
+          <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="recovery-feedback"></div>
+        </div>
+        <footer class="qt-card__footer">
+          <button type="button" class="qt-button" data-variant="secondary" data-action="recovery" data-t="security.recovery.generate">
+            Generate new codes
+          </button>
+        </footer>
+      </article>
+
+      <article class="qt-card" data-show="passkeys">
+        <header class="qt-card__header">
+          <h3 data-t="security.passkeys.heading">Passkeys</h3>
+        </header>
+        <div class="qt-card__body">
+          <div data-slot="passkeys">
+            <div class="qt-table-wrap" data-state="list">
+              <table class="qt-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Passkey</th>
+                    <th scope="col">New name</th>
+                    <th scope="col" class="qt-table__actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template data-item="passkeys">
+                    <tr>
+                      <td>
+                        <span data-t="security.passkeys.item">{name}, last used {last_used}</span>
+                      </td>
+                      <td>
+                        <input class="qt-input" name="passkey_name" type="text" autocomplete="off" aria-label="New name" data-bind-value="name" />
+                      </td>
+                      <td class="qt-table__actions">
+                        <button type="button" class="qtiauth-button qtiauth-button-ghost qt-button" data-variant="ghost" data-size="sm" data-action="rename-passkey" data-t="security.passkeys.rename">Rename</button>
+                        <button type="button" class="qtiauth-button qtiauth-button-danger qt-button" data-variant="danger" data-size="sm" data-action="remove-passkey" data-t="security.passkeys.remove">Remove</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <p class="qtiauth-empty qt-empty-state" data-state="empty" data-t="security.passkeys.empty">
+              No passkeys yet.
+            </p>
+          </div>
+          <form class="qt-form" data-form="passkey-add" novalidate>
+            <p class="qtiauth-field qt-field">
+              <label class="qt-label" for="qtiauth-f-passkey-name" data-t="security.passkeys.name">Name</label>
+              <input class="qt-input" id="qtiauth-f-passkey-name" name="name" type="text" autocomplete="off" maxlength="64" required />
+            </p>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-t="security.passkeys.add">Add a passkey</button>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="security.passkeys.added">Passkey added.</p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </section>
+  </div>
 </div>
-
-<h3 data-t="security.password.heading">Set or change password</h3>
-<form data-form="password" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-current" data-t="field.password.current">
-      Current password (leave empty if you don’t have one yet)
-    </label>
-    <input id="qtiauth-f-current" name="current" type="password" autocomplete="current-password" />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-next" data-t="field.password.new">New password</label>
-    <input
-      id="qtiauth-f-next"
-      name="next"
-      type="password"
-      autocomplete="new-password"
-      minlength="12"
-      required
-    />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="security.password.submit">Change password</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="security.password.success">
-      Password changed.
-    </p>
-  </template>
-</form>
-
-<section data-show="totp">
-  <h3 data-t="security.twoFactor.heading">Authenticator app</h3>
-  <div data-slot="totp">
-    <p data-state="loading" role="status" data-t="security.totp.loading">Loading…</p>
-    <div data-state="off">
-      <p data-t="security.totp.off">
-        Add an authenticator app to ask for a code when you sign in with a password.
-      </p>
-      <button type="button" data-action="totp-start" data-t="security.totp.start">
-        Set up an authenticator app
-      </button>
-      <div class="qtiauth-feedback" aria-live="polite" data-part="totp-feedback"></div>
-    </div>
-    <div data-state="setup">
-      <p data-t="security.totp.setup">
-        Add this account to your authenticator app, then enter the code it shows.
-      </p>
-      <p>
-        <a data-bind-href="otpauth" data-t="security.totp.link">Open in your authenticator app</a>
-      </p>
-      <p data-t="security.totp.secret">Or enter this key by hand: {secret}</p>
-      <form data-form="totp-confirm" novalidate>
-        <p class="qtiauth-field">
-          <label for="qtiauth-f-totp-code" data-t="security.totp.code">Code</label>
-          <input
-            id="qtiauth-f-totp-code"
-            name="code"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            required
-          />
-        </p>
-        <p class="qtiauth-actions">
-          <button type="submit" data-t="security.totp.confirm">Turn on</button>
-        </p>
-      </form>
-    </div>
-    <div data-state="on">
-      <p data-t="security.totp.on">Your authenticator app is on.</p>
-      <form data-form="totp-disable" novalidate>
-        <p class="qtiauth-field">
-          <label for="qtiauth-f-totp-off" data-t="security.totp.disableCode">
-            Enter a code to turn it off
-          </label>
-          <input
-            id="qtiauth-f-totp-off"
-            name="code"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            required
-          />
-        </p>
-        <p class="qtiauth-actions">
-          <button
-            type="submit"
-            class="qtiauth-button qtiauth-button-danger"
-            data-t="security.totp.disable"
-          >
-            Turn off
-          </button>
-        </p>
-      </form>
-    </div>
-  </div>
-</section>
-
-<h3 data-t="security.recovery.heading">Recovery codes</h3>
-<p data-t="security.recovery.body">
-  One-time codes to sign in if you lose your device. You have {recovery_remaining} left.
-</p>
-<div data-slot="codes">
-  <div data-state="list">
-    <p class="qtiauth-alert" data-t="security.recovery.save">
-      Save these codes somewhere safe. They won’t be shown again.
-    </p>
-    <ul class="qtiauth-list">
-      <template data-item="codes">
-        <li><code data-field="code"></code></li>
-      </template>
-    </ul>
-  </div>
-</div>
-<button type="button" data-action="recovery" data-t="security.recovery.generate">
-  Generate new codes
-</button>
-<div class="qtiauth-feedback" aria-live="polite" data-part="recovery-feedback"></div>
-
-<section data-show="passkeys">
-  <h3 data-t="security.passkeys.heading">Passkeys</h3>
-  <div data-slot="passkeys">
-    <ul class="qtiauth-list" data-state="list">
-      <template data-item="passkeys">
-        <li>
-          <span data-t="security.passkeys.item">{name}, last used {last_used}</span>
-          <input
-            name="passkey_name"
-            type="text"
-            autocomplete="off"
-            aria-label="New name"
-            data-bind-value="name"
-          />
-          <button
-            type="button"
-            class="qtiauth-button qtiauth-button-ghost"
-            data-action="rename-passkey"
-            data-t="security.passkeys.rename"
-          >
-            Rename
-          </button>
-          <button
-            type="button"
-            class="qtiauth-button qtiauth-button-danger"
-            data-action="remove-passkey"
-            data-t="security.passkeys.remove"
-          >
-            Remove
-          </button>
-        </li>
-      </template>
-    </ul>
-    <p class="qtiauth-empty" data-state="empty" data-t="security.passkeys.empty">
-      No passkeys yet.
-    </p>
-  </div>
-  <form data-form="passkey-add" novalidate>
-    <p class="qtiauth-field">
-      <label for="qtiauth-f-passkey-name" data-t="security.passkeys.name">Name</label>
-      <input
-        id="qtiauth-f-passkey-name"
-        name="name"
-        type="text"
-        autocomplete="off"
-        maxlength="64"
-        required
-      />
-    </p>
-    <p class="qtiauth-actions">
-      <button type="submit" data-t="security.passkeys.add">Add a passkey</button>
-    </p>
-    <template data-message="success">
-      <p class="qtiauth-success" role="status" data-t="security.passkeys.added">Passkey added.</p>
-    </template>
-  </form>
-</section>

@@ -1,84 +1,233 @@
-<h2 data-t="routes.admin.user.title">User</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Admin">
+    <a class="qt-brand qt-brand--compact" href="/admin" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Admin sections">
+      <a href="/admin" data-link data-t="admin.section.overview">Overview</a>
+      <a href="/admin/users" data-link data-current="page" data-t="admin.section.users">Users</a>
+      <a href="/admin/roles" data-link data-t="admin.section.roles">Roles</a>
+      <a href="/admin/audit" data-link data-t="admin.section.audit">Audit log</a>
+      <a href="/admin/webhooks" data-link data-t="admin.section.webhooks">Webhooks</a>
+      <a href="/admin/filter" data-link data-t="admin.section.filter">Text filter tuning</a>
+      <a href="/admin/moderation" data-link data-t="admin.section.moderation">Moderation queue</a>
+      <a href="/admin/appeals" data-link data-t="admin.section.appeals">Appeals</a>
+      <a href="/admin/csea" data-link data-t="admin.section.csea">CSEA cases</a>
+      <a href="/admin/oauth" data-link data-t="admin.section.oauth">OAuth client verification</a>
+      <a href="/admin/games" data-link data-t="admin.section.games">Games catalog</a>
+      <a href="/admin/health" data-link data-t="admin.section.health">Service health</a>
+    </nav>
+  </aside>
 
-<div data-slot="user">
-  <p data-state="loading" role="status" data-t="admin.loading">Loading…</p>
-  <div data-state="ready">
-    <dl class="qtiauth-details">
-      <dt data-t="admin.user.email">Email</dt>
-      <dd data-field="email"></dd>
-      <dt data-t="admin.user.username">Username</dt>
-      <dd data-field="username"></dd>
-      <dt data-t="admin.user.state">State</dt>
-      <dd data-field="state"></dd>
-      <dt data-t="admin.user.ageBand">Age band</dt>
-      <dd data-field="age_band"></dd>
-      <dt data-t="admin.user.dateOfBirth">Date of birth</dt>
-      <dd data-field="date_of_birth"></dd>
-      <dt data-t="admin.user.lockedUntil">Locked until</dt>
-      <dd data-field="locked_until"></dd>
-      <dt data-t="admin.user.roles">Roles</dt>
-      <dd data-field="roles"></dd>
-      <dt data-t="admin.user.created">Created</dt>
-      <dd data-field="created"></dd>
-    </dl>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/admin" data-link data-t="routes.admin.title">Admin</a></li>
+          <li><a href="/admin/users" data-link data-t="routes.admin.users.title">Users</a></li>
+          <li aria-current="page"><span data-field="username" data-t="routes.admin.user.title">User</span></li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
 
-    <h3 data-t="admin.user.actions">Actions</h3>
-    <p class="qtiauth-field" data-part="reason">
-      <label for="qtiauth-f-reason" data-t="admin.reason">Reason (recorded in the audit log)</label>
-      <input id="qtiauth-f-reason" name="reason" type="text" autocomplete="off" maxlength="500" />
-    </p>
-    <p class="qtiauth-field" data-part="lock-until">
-      <label for="qtiauth-f-lock-until" data-t="admin.user.lockUntil">Lock until</label>
-      <input id="qtiauth-f-lock-until" name="lock_until" type="datetime-local" />
-    </p>
-    <p class="qtiauth-actions">
-      <button type="button" data-action="lock" data-t="admin.user.lock">Lock</button>
-      <button type="button" data-action="unlock" data-t="admin.user.unlock">Unlock</button>
-      <button
-        type="button"
-        class="qtiauth-button qtiauth-button-danger"
-        data-action="ban"
-        data-t="admin.user.ban"
-      >
-        Ban
-      </button>
-      <button type="button" data-action="unban" data-t="admin.user.unban">Unban</button>
-      <button type="button" data-action="reauth" data-t="admin.user.reauth">
-        Force sign-in again
-      </button>
-      <button type="button" data-action="revoke-sessions" data-t="admin.user.revokeSessions">
-        Sign out everywhere
-      </button>
-      <button type="button" data-action="username-reset" data-t="admin.user.usernameReset">
-        Reset username
-      </button>
-    </p>
-    <div class="qtiauth-feedback" aria-live="polite" data-part="actions-feedback"></div>
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.admin.user.title">User</h2>
+      </header>
 
-    <h3 data-t="admin.user.methods">Sign-in methods</h3>
-    <ul class="qtiauth-list">
-      <template data-item="methods">
-        <li data-field="label"></li>
-      </template>
-    </ul>
-    <h3 data-t="admin.user.sessions">Sessions</h3>
-    <ul class="qtiauth-list">
-      <template data-item="sessions">
-        <li data-field="label"></li>
-      </template>
-    </ul>
-    <h3 data-t="admin.user.entitlements">Games</h3>
-    <ul class="qtiauth-list">
-      <template data-item="entitlements">
-        <li><a href="/admin" data-link data-bind-href="path" data-field="label"></a></li>
-      </template>
-    </ul>
-    <h3 data-t="admin.user.history">Staff actions</h3>
-    <ul class="qtiauth-list">
-      <template data-item="history">
-        <li data-field="label"></li>
-      </template>
-    </ul>
+      <div data-slot="user">
+        <p class="qtiauth-status" data-state="loading" role="status" data-t="admin.loading">Loading…</p>
+
+        <div data-state="ready" class="qt-stack qt-stack--lg">
+          <article class="qt-card qt-user-summary">
+            <header class="qt-card__header">
+              <div class="qt-cluster">
+                <span class="qt-avatar" data-size="lg" data-field="initials"></span>
+                <div>
+                  <h3 data-field="username" data-t="admin.user.summary">User</h3>
+                  <p class="qt-text-muted qt-text-small" data-field="email"></p>
+                </div>
+                <span class="qt-badge" data-variant="neutral" data-field="state"></span>
+              </div>
+            </header>
+            <div class="qt-card__body">
+              <dl class="qtiauth-details">
+                <dt data-t="admin.user.email">Email</dt>
+                <dd data-field="email"></dd>
+                <dt data-t="admin.user.username">Username</dt>
+                <dd data-field="username"></dd>
+                <dt data-t="admin.user.state">State</dt>
+                <dd data-field="state"></dd>
+                <dt data-t="admin.user.ageBand">Age band</dt>
+                <dd data-field="age_band"></dd>
+                <dt data-t="admin.user.dateOfBirth">Date of birth</dt>
+                <dd data-field="date_of_birth"></dd>
+                <dt data-t="admin.user.lockedUntil">Locked until</dt>
+                <dd data-field="locked_until"></dd>
+                <dt data-t="admin.user.roles">Roles</dt>
+                <dd data-field="roles"></dd>
+                <dt data-t="admin.user.created">Created</dt>
+                <dd data-field="created"></dd>
+              </dl>
+            </div>
+          </article>
+
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <h3 data-t="admin.user.actions">Actions</h3>
+              <p class="qt-text-muted" data-t="admin.user.actions.body">
+                Enter a reason so the audit log records why this action was taken.
+              </p>
+            </header>
+            <div class="qt-card__body">
+              <p class="qtiauth-field" data-part="reason">
+                <label for="qtiauth-f-reason" data-t="admin.reason">Reason (recorded in the audit log)</label>
+                <input id="qtiauth-f-reason" name="reason" type="text" autocomplete="off" maxlength="500" />
+              </p>
+              <p class="qtiauth-field" data-part="lock-until">
+                <label for="qtiauth-f-lock-until" data-t="admin.user.lockUntil">Lock until</label>
+                <input id="qtiauth-f-lock-until" name="lock_until" type="datetime-local" />
+              </p>
+              <p class="qtiauth-actions">
+                <button type="button" data-action="lock" data-t="admin.user.lock">Lock</button>
+                <button
+                  type="button"
+                  class="qtiauth-button qtiauth-button-ghost"
+                  data-variant="ghost"
+                  data-action="unlock"
+                  data-t="admin.user.unlock"
+                >
+                  Unlock
+                </button>
+                <button
+                  type="button"
+                  class="qtiauth-button qtiauth-button-danger"
+                  data-variant="danger"
+                  data-action="ban"
+                  data-t="admin.user.ban"
+                >
+                  Ban
+                </button>
+                <button
+                  type="button"
+                  class="qtiauth-button qtiauth-button-ghost"
+                  data-variant="ghost"
+                  data-action="unban"
+                  data-t="admin.user.unban"
+                >
+                  Unban
+                </button>
+                <button
+                  type="button"
+                  class="qtiauth-button qtiauth-button-danger"
+                  data-variant="danger"
+                  data-action="reauth"
+                  data-t="admin.user.reauth"
+                >
+                  Force sign-in again
+                </button>
+                <button
+                  type="button"
+                  class="qtiauth-button qtiauth-button-danger"
+                  data-variant="danger"
+                  data-action="revoke-sessions"
+                  data-t="admin.user.revokeSessions"
+                >
+                  Sign out everywhere
+                </button>
+                <button
+                  type="button"
+                  class="qtiauth-button qtiauth-button-danger"
+                  data-variant="danger"
+                  data-action="username-reset"
+                  data-t="admin.user.usernameReset"
+                >
+                  Reset username
+                </button>
+              </p>
+              <div class="qtiauth-feedback" aria-live="polite" data-part="actions-feedback"></div>
+            </div>
+          </article>
+
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <h3 data-t="admin.user.methods">Sign-in methods</h3>
+            </header>
+            <div class="qt-card__body">
+              <ul class="qtiauth-list">
+                <template data-item="methods">
+                  <li data-field="label"></li>
+                </template>
+              </ul>
+            </div>
+          </article>
+
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <h3 data-t="admin.user.sessions">Sessions</h3>
+            </header>
+            <div class="qt-card__body">
+              <div class="qt-table-wrap">
+                <table class="qt-table" data-variant="zebra" data-size="sm" data-state="list">
+                  <thead>
+                    <tr>
+                      <th scope="col" data-t="admin.user.sessions.col.session">Session</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template data-item="sessions">
+                      <tr>
+                        <td data-field="label"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </article>
+
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <h3 data-t="admin.user.entitlements">Games</h3>
+            </header>
+            <div class="qt-card__body">
+              <ul class="qtiauth-list">
+                <template data-item="entitlements">
+                  <li>
+                    <a href="/admin" data-link data-bind-href="path" data-field="label"></a>
+                  </li>
+                </template>
+              </ul>
+            </div>
+          </article>
+
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <h3 data-t="admin.user.history">Staff actions</h3>
+              <p class="qt-text-muted" data-t="admin.user.history.body">
+                Audit snippet for this user.
+              </p>
+            </header>
+            <div class="qt-card__body">
+              <ul class="qtiauth-list qt-stack qt-stack--sm">
+                <template data-item="history">
+                  <li data-field="label"></li>
+                </template>
+              </ul>
+            </div>
+            <footer class="qt-card__footer">
+              <a class="qt-button" data-variant="ghost" href="/admin/audit" data-link data-t="admin.user.history.viewAll">
+                View full audit log
+              </a>
+            </footer>
+          </article>
+        </div>
+
+        <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+      </div>
+    </main>
   </div>
-  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
 </div>

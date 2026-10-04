@@ -1,4 +1,23 @@
-<h2 data-t="routes.waiting.title">Waiting for a guardian</h2>
-<p data-t="waiting.body">
-  Ask a parent or guardian to approve your account. This page will refresh when they do.
-</p>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-waiting-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+    </header>
+    <div class="qt-auth-card__body qt-stack qt-stack--lg">
+      <header>
+        <h1 id="qt-waiting-title" data-t="routes.waiting.title">Waiting for a guardian</h1>
+        <p class="qt-prose__lede" data-t="waiting.body">
+          Ask a parent or guardian to approve your account. This page will refresh when they do.
+        </p>
+      </header>
+      <p class="qt-message" data-variant="info" role="status">
+        <span class="qt-spinner" aria-hidden="true"></span>
+        <span data-t="waiting.body">Ask a parent or guardian to approve your account. This page will refresh when they do.</span>
+      </p>
+    </div>
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>&copy; <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
+</div>

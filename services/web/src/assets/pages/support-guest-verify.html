@@ -1,48 +1,90 @@
-<h2 data-t="routes.guest.verify.title">Open a guest ticket</h2>
-<p class="qtiauth-lede" data-t="guest.verify.lede">
-  Fill in your ticket and paste the code we emailed.
-</p>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-guest-verify-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link>
+        <span class="qt-brand__name" data-field="product_name"></span>
+      </a>
+    </header>
 
-<form data-form="ticket" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-email" data-t="field.email">Email</label>
-    <input
-      id="qtiauth-f-email"
-      name="email"
-      type="email"
-      autocomplete="off"
-      data-bind-value="email"
-      required
-    />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-code" data-t="field.code">Code</label>
-    <input id="qtiauth-f-code" name="code" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-category" data-t="field.category">Category</label>
-    <select id="qtiauth-f-category" name="category_id" data-part="categories" required>
-      <option value="" data-t="tickets.new.pickCategory">Choose a category</option>
-      <template data-item="categories">
-        <option data-bind-value="id" data-field="name"></option>
-      </template>
-    </select>
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-subject" data-t="field.subject">Subject</label>
-    <input id="qtiauth-f-subject" name="subject" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-body" data-t="field.message">Message</label>
-    <input id="qtiauth-f-body" name="body" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="guest.verify.submit">Open ticket</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="guest.verify.success">Ticket opened.</p>
-  </template>
-</form>
+    <div class="qt-auth-card__body qt-stack qt-stack--lg">
+      <header>
+        <h2 id="qt-guest-verify-title" data-t="routes.guest.verify.title">Open a guest ticket</h2>
+        <p class="qtiauth-lede" data-t="guest.verify.lede">
+          Fill in your ticket and paste the code we emailed.
+        </p>
+      </header>
+
+      <form data-form="ticket" class="qt-form" novalidate>
+        <p class="qtiauth-field qt-field">
+          <label for="qtiauth-f-email" class="qt-label" data-t="field.email">Email</label>
+          <input
+            id="qtiauth-f-email"
+            class="qt-input"
+            name="email"
+            type="email"
+            autocomplete="off"
+            data-bind-value="email"
+            required
+          />
+        </p>
+        <p class="qtiauth-field qt-field">
+          <label for="qtiauth-f-code" class="qt-label" data-t="field.code">Code</label>
+          <input
+            id="qtiauth-f-code"
+            class="qt-input"
+            name="code"
+            type="text"
+            autocomplete="one-time-code"
+            required
+          />
+        </p>
+        <p class="qtiauth-field qt-field">
+          <label for="qtiauth-f-category" class="qt-label" data-t="field.category">Category</label>
+          <select id="qtiauth-f-category" class="qt-select" name="category_id" data-part="categories" required>
+            <option value="" data-t="tickets.new.pickCategory">Choose a category</option>
+            <template data-item="categories">
+              <option data-bind-value="id" data-field="name"></option>
+            </template>
+          </select>
+        </p>
+        <p class="qtiauth-field qt-field">
+          <label for="qtiauth-f-subject" class="qt-label" data-t="field.subject">Subject</label>
+          <input
+            id="qtiauth-f-subject"
+            class="qt-input"
+            name="subject"
+            type="text"
+            autocomplete="off"
+            required
+          />
+        </p>
+        <p class="qtiauth-field qt-field">
+          <label for="qtiauth-f-body" class="qt-label" data-t="field.message">Message</label>
+          <textarea
+            id="qtiauth-f-body"
+            class="qt-textarea"
+            name="body"
+            rows="5"
+            autocomplete="off"
+            required
+          ></textarea>
+        </p>
+        <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="form-feedback"></div>
+        <p class="qtiauth-actions qt-actions">
+          <button type="submit" class="qt-button" data-variant="primary" data-t="guest.verify.submit">Open ticket</button>
+        </p>
+        <template data-message="success">
+          <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="guest.verify.success">Ticket opened.</p>
+        </template>
+      </form>
+    </div>
+
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>&copy; <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
+</div>
 
 <template data-message="categories-error">
   <option value="" disabled data-t="tickets.new.categoryLoadError">

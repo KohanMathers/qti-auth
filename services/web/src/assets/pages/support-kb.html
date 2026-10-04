@@ -1,14 +1,43 @@
-<h2 data-t="routes.kb.title">Help centre</h2>
-<p class="qtiauth-lede" data-t="kb.lede">Choose a category to browse published articles.</p>
+<div class="qt-kb-shell">
+  <header class="qt-kb-topbar qt-container">
+    <a class="qt-brand" href="/support" data-link><span data-field="product_name"></span> Help</a>
+    <form class="qt-kb-search" data-form="kb-search" novalidate>
+      <input type="search" name="q" placeholder="Search help" aria-label="Search help" />
+    </form>
+    <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  </header>
 
-<div data-slot="categories">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="categories">
-      <li><a data-link data-bind-href="path" data-field="name"></a></li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="kb.empty">
-    No articles have been published yet.
-  </p>
-  <p class="qtiauth-empty" data-state="error" data-t="kb.load.error">Could not load help centre.</p>
+  <section class="qt-kb-hero qt-container">
+    <h2 data-t="routes.kb.title">Help centre</h2>
+    <p class="qtiauth-lede" data-t="kb.lede">Choose a category to browse published articles.</p>
+    <form class="qt-kb-hero__search qt-form" data-form="search" novalidate>
+      <p class="qtiauth-field">
+        <label class="qt-visually-hidden" for="qtiauth-f-q" data-t="field.query">Search</label>
+        <input id="qtiauth-f-q" class="qt-input" name="q" type="search" autocomplete="off" placeholder="Search help articles" />
+      </p>
+      <p class="qtiauth-actions">
+        <button type="submit" class="qt-button" data-variant="primary" data-t="kb.search.submit">Search</button>
+      </p>
+    </form>
+  </section>
+
+  <section class="qt-kb-categories qt-container">
+    <div data-slot="categories">
+      <ul class="qtiauth-list qt-kb-grid" data-state="list">
+        <template data-item="categories">
+          <li>
+            <a class="qt-card" data-link data-bind-href="path">
+              <span class="qt-card__header">
+                <span class="qt-card__title" data-field="name"></span>
+              </span>
+            </a>
+          </li>
+        </template>
+      </ul>
+      <div class="qt-empty-state qtiauth-empty" data-state="empty">
+        <h3 class="qt-empty-state__title" data-t="kb.empty">No articles have been published yet.</h3>
+      </div>
+      <p class="qt-message qtiauth-empty" data-variant="danger" data-state="error" role="alert" data-t="kb.load.error">Could not load help centre.</p>
+    </div>
+  </section>
 </div>

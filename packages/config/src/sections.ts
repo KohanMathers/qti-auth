@@ -32,6 +32,14 @@ function isIpOrCidr(value: string): boolean {
 
 const email = z.email('Must be an email address');
 
+function hexColor(defaultValue: string, description: string) {
+  return z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a hex colour like #3b82f6')
+    .default(defaultValue)
+    .describe(description);
+}
+
 const sender = (name: string, address: string, purpose: string) =>
   z
     .strictObject({
@@ -64,14 +72,46 @@ export const branding = z
       .describe('Logo path, relative to the config directory. null shows the product name.'),
     colors: z
       .strictObject({
-        primary: z
-          .string()
-          .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a hex colour like #3b82f6')
-          .default('#3b82f6')
-          .describe('Primary brand colour.'),
+        primary: hexColor('#3b82f6', 'Primary brand colour used for calls to action and links.'),
+        accent: hexColor(
+          '#BC6DE0',
+          'Secondary accent used for hero gradients and decorative highlights.',
+        ),
+        success: hexColor('#80D35D', 'Success colour for confirmations and healthy state badges.'),
+        warning: hexColor('#F7DA47', 'Warning colour for cautionary notices.'),
+        danger: hexColor('#DD5F5F', 'Danger colour for destructive actions and error messages.'),
+        text: hexColor('#222034', 'Primary text colour in light mode.'),
+        text_muted: hexColor('#666577', 'Secondary text colour for hints, metadata and timestamps.'),
+        bg: hexColor('#ffffff', 'Page background in light mode.'),
+        bg_secondary: hexColor(
+          '#f5f5f7',
+          'Elevated surface background (cards, nav rails) in light mode.',
+        ),
+        border: hexColor('#d1d1d6', 'Default border colour for inputs, cards and dividers.'),
+        gradient_from: hexColor('#5BB1EF', 'Starting colour for the brand hero gradient.'),
+        gradient_to: hexColor('#BC6DE0', 'Ending colour for the brand hero gradient.'),
       })
       .prefault({})
-      .describe('Brand colours.'),
+      .describe('Brand colours. All exposed to the web shell as CSS custom properties.'),
+    backgrounds: z
+      .strictObject({
+        auth_light: z
+          .url()
+          .nullable()
+          .default(null)
+          .describe(
+            'Full-bleed background image used on auth pages in light mode. null disables it.',
+          ),
+        auth_dark: z
+          .url()
+          .nullable()
+          .default(null)
+          .describe(
+            'Full-bleed background image used on auth pages in dark mode. null disables it.',
+          ),
+      })
+      .prefault({})
+      .describe('Background images used on specific page shells.'),
   })
   .prefault({})
   .describe('Product and company branding.');

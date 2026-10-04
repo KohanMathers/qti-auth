@@ -1,44 +1,101 @@
-<h2 data-t="routes.report.title">Report user or content</h2>
-<p class="qtiauth-lede" data-t="report.lede">Tell us what happened. Reports are private.</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link>Account</a>
+        <a href="/support" data-link data-current="page">Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<form data-form="report" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-target-type" data-t="field.targetType">What are you reporting?</label>
-    <select id="qtiauth-f-target-type" name="target_type" data-bind-value="target_type">
-      <option value="user" data-t="report.target.user">A user</option>
-      <option value="content" data-t="report.target.content">Something someone posted</option>
-    </select>
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-target" data-t="field.target">User or content ID</label>
-    <input
-      id="qtiauth-f-target"
-      name="target"
-      type="text"
-      autocomplete="off"
-      data-bind-value="target"
-      required
-    />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-reason" data-t="field.reason">Reason</label>
-    <select id="qtiauth-f-reason" name="reason" required>
-      <template data-item="reasons">
-        <option data-bind-value="value" data-field="label"></option>
-      </template>
-    </select>
-  </p>
-  <div class="qtiauth-feedback" aria-live="polite" data-part="reasons-feedback"></div>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-note" data-t="field.detail">Details (optional)</label>
-    <textarea id="qtiauth-f-note" name="note" rows="4" maxlength="2000"></textarea>
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="report.submit">Send report</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="report.success">
-      Thanks. We will review your report.
-    </p>
-  </template>
-</form>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Support sections">
+      <nav class="qt-nav-list" aria-label="Support sections">
+        <a href="/support" data-link>Overview</a>
+        <a href="/kb" data-link data-t="support.section.kb">Help centre</a>
+        <a href="/kb/search" data-link data-t="support.section.search">Search articles</a>
+        <a href="/tickets" data-link data-t="support.section.tickets">Your tickets</a>
+        <a href="/tickets/new" data-link data-t="support.section.newTicket">Open a ticket</a>
+        <a href="/appeals/new" data-link data-t="support.section.appeal">Appeal a decision</a>
+        <a href="/guest/start" data-link data-t="support.section.guest">Guest support</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.report.title">Report user or content</h2>
+        <p class="qtiauth-lede" data-t="report.lede">Tell us what happened. Reports are private.</p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="report.heading">Send a report</h3>
+          <p class="qt-text-muted" data-t="report.body">The safety team reviews every report.</p>
+        </header>
+        <div class="qt-card__body">
+          <form data-form="report" class="qt-form" novalidate>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-target-type" class="qt-label" data-t="field.targetType">What are you reporting?</label>
+              <select id="qtiauth-f-target-type" class="qt-select" name="target_type" data-bind-value="target_type">
+                <option value="user" data-t="report.target.user">A user</option>
+                <option value="content" data-t="report.target.content">Something someone posted</option>
+              </select>
+            </p>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-target" class="qt-label" data-t="field.target">User or content ID</label>
+              <input
+                id="qtiauth-f-target"
+                class="qt-input"
+                name="target"
+                type="text"
+                autocomplete="off"
+                data-bind-value="target"
+                required
+              />
+            </p>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-reason" class="qt-label" data-t="field.reason">Reason</label>
+              <select id="qtiauth-f-reason" class="qt-select" name="reason" required>
+                <template data-item="reasons">
+                  <option data-bind-value="value" data-field="label"></option>
+                </template>
+              </select>
+            </p>
+            <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="reasons-feedback"></div>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-note" class="qt-label" data-t="field.detail">Details (optional)</label>
+              <textarea
+                id="qtiauth-f-note"
+                class="qt-textarea"
+                name="note"
+                rows="5"
+                maxlength="2000"
+              ></textarea>
+              <small class="qt-help" data-t="report.detailHelp">Up to 2000 characters.</small>
+            </p>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-t="report.submit">Send report</button>
+              <a class="qt-button" data-variant="ghost" href="/support" data-link data-t="report.cancel">Cancel</a>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="report.success">
+                Thanks. We will review your report.
+              </p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </section>
+  </div>
+</div>

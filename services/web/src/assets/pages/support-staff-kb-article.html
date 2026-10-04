@@ -1,76 +1,141 @@
-<h2 data-t="routes.support.staff.kb.article.title" data-field="title">Article</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Support staff">
+    <a class="qt-brand qt-brand--compact" href="/staff" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Support staff">
+      <a href="/staff" data-link data-t="support.staff.section.overview">Support staff</a>
+      <a href="/staff/tickets" data-link data-t="support.staff.section.queue">Queue</a>
+      <a href="/staff/metrics" data-link data-t="support.staff.section.metrics">Metrics</a>
+      <a href="/staff/macros" data-link data-t="support.staff.section.macros">Canned responses</a>
+      <a href="/staff/kb" data-link data-current="page" data-t="support.staff.section.kb">Knowledge base</a>
+    </nav>
+  </aside>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/staff" data-link>Support staff</a></li>
+          <li><a href="/staff/kb" data-link>Knowledge base</a></li>
+          <li aria-current="page" data-t="routes.support.staff.kb.article.title">Article</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.support.staff.kb.article.title" data-field="title">Article</h2>
+      </header>
 
-<div data-slot="article">
-  <form data-form="article" data-state="ready" novalidate>
-    <p class="qtiauth-field">
-      <label for="qtiauth-f-title" data-t="field.title">Title</label>
-      <input
-        id="qtiauth-f-title"
-        name="title"
-        type="text"
-        autocomplete="off"
-        data-bind-value="title"
-        required
-      />
-    </p>
-    <p class="qtiauth-field">
-      <label for="qtiauth-f-slug" data-t="field.slug">Slug</label>
-      <input
-        id="qtiauth-f-slug"
-        name="slug"
-        type="text"
-        autocomplete="off"
-        data-bind-value="slug"
-        required
-      />
-    </p>
-    <p class="qtiauth-field">
-      <label for="qtiauth-f-body" data-t="field.body">Body</label>
-      <input
-        id="qtiauth-f-body"
-        name="body"
-        type="text"
-        autocomplete="off"
-        data-bind-value="body"
-        required
-      />
-    </p>
-    <p class="qtiauth-actions">
-      <button type="submit" data-t="support.staff.kb.article.submit">Save article</button>
-    </p>
-    <template data-message="success">
-      <p class="qtiauth-success" role="status" data-t="support.staff.kb.article.success">
-        Article saved.
-      </p>
-    </template>
-  </form>
-  <p class="qtiauth-empty" data-state="missing" data-t="support.staff.kb.missing">
-    That article is not available.
-  </p>
-  <p class="qtiauth-empty" data-state="error" data-t="support.staff.kb.article.load.error">
-    Could not load article.
-  </p>
-</div>
+      <div data-slot="article">
+        <div class="qt-cluster qt-stack--lg">
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <h3 data-t="support.staff.kb.article.editor">Editor</h3>
+            </header>
+            <div class="qt-card__body">
+              <form data-form="article" data-state="ready" class="qt-form" novalidate>
+                <p class="qtiauth-field">
+                  <label for="qtiauth-f-title" data-t="field.title">Title</label>
+                  <input
+                    id="qtiauth-f-title"
+                    name="title"
+                    type="text"
+                    autocomplete="off"
+                    data-bind-value="title"
+                    required
+                  />
+                </p>
+                <p class="qtiauth-field">
+                  <label for="qtiauth-f-slug" data-t="field.slug">Slug</label>
+                  <input
+                    id="qtiauth-f-slug"
+                    name="slug"
+                    type="text"
+                    autocomplete="off"
+                    data-bind-value="slug"
+                    required
+                  />
+                </p>
+                <p class="qtiauth-field">
+                  <label for="qtiauth-f-body" data-t="field.body">Body</label>
+                  <textarea
+                    id="qtiauth-f-body"
+                    class="qt-textarea"
+                    name="body"
+                    autocomplete="off"
+                    data-bind-value="body"
+                    required
+                  ></textarea>
+                </p>
+                <p class="qtiauth-actions">
+                  <button type="submit" data-t="support.staff.kb.article.submit">Save article</button>
+                </p>
+                <template data-message="success">
+                  <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="support.staff.kb.article.success">
+                    Article saved.
+                  </p>
+                </template>
+              </form>
+            </div>
+          </article>
 
-<h3 data-t="support.staff.kb.revisions">Revisions</h3>
-<div data-slot="revisions">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="revisions">
-      <li>
-        <span
-          >r<span data-field="revision"></span> — <span data-field="title"></span> —
-          <span data-field="created_at"></span
-        ></span>
-        <button type="button" data-action="restore" data-t="support.staff.kb.revisions.restore">
-          Restore
-        </button>
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="support.staff.kb.revisions.empty">
-    No revisions yet.
-  </p>
-  <p class="qtiauth-empty" data-state="error" data-t="support.staff.kb.revisions.load.error">
-    Could not load revisions.
-  </p>
+          <article class="qt-card" aria-label="Preview">
+            <header class="qt-card__header">
+              <h3 data-t="support.staff.kb.article.preview">Preview</h3>
+            </header>
+            <div class="qt-card__body qtiauth-article qt-prose" data-part="preview"></div>
+          </article>
+        </div>
+        <p class="qtiauth-empty" data-state="missing" data-t="support.staff.kb.missing">
+          That article is not available.
+        </p>
+        <p class="qtiauth-empty" data-state="error" data-t="support.staff.kb.article.load.error">
+          Could not load article.
+        </p>
+      </div>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="support.staff.kb.revisions">Revisions</h3>
+        </header>
+        <div class="qt-card__body">
+          <div data-slot="revisions" class="qt-table-wrap">
+            <table class="qt-table" data-variant="zebra" data-state="list">
+              <thead>
+                <tr>
+                  <th scope="col" data-t="support.staff.kb.revisions.col.revision">Revision</th>
+                  <th scope="col" data-t="support.staff.kb.revisions.col.title">Title</th>
+                  <th scope="col" data-t="support.staff.kb.revisions.col.created">Created</th>
+                  <th scope="col" class="qt-table__actions" data-t="support.staff.kb.revisions.col.actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template data-item="revisions">
+                  <tr>
+                    <td>r<span data-field="revision"></span></td>
+                    <td><span data-field="title"></span></td>
+                    <td><span data-field="created_at"></span></td>
+                    <td class="qt-table__actions">
+                      <button type="button" class="qt-button" data-variant="secondary" data-size="sm" data-action="restore" data-t="support.staff.kb.revisions.restore">
+                        Restore
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="qtiauth-empty" data-state="empty" data-t="support.staff.kb.revisions.empty">
+              No revisions yet.
+            </p>
+            <p class="qtiauth-empty" data-state="error" data-t="support.staff.kb.revisions.load.error">
+              Could not load revisions.
+            </p>
+          </div>
+        </div>
+      </article>
+    </main>
+  </div>
 </div>

@@ -1,13 +1,80 @@
-<h2 data-t="routes.legal-document.title">Legal document</h2>
+<div class="qt-kb-shell">
+  <header class="qt-kb-topbar qt-container">
+    <a class="qt-brand" href="/" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-app-nav__links" aria-label="Primary">
+      <a href="/account" data-link>Account</a>
+      <a href="/legal" data-link data-current="page">Legal</a>
+      <a href="/support" data-link>Support</a>
+    </nav>
+    <div class="qt-cluster">
+      <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+    </div>
+  </header>
 
-<div data-slot="document">
-  <p data-state="loading" role="status" data-t="legalDocument.loading">Loading…</p>
-  <article data-state="ready">
-    <p class="qtiauth-lede" data-field="summary"></p>
-    <p class="qtiauth-muted" data-t="legalDocument.version">Version {version}, from {effective}</p>
-    <div class="qtiauth-document" data-field="body"></div>
+  <nav class="qt-breadcrumb qt-container" aria-label="Breadcrumb">
+    <ol>
+      <li><a href="/legal" data-link data-t="legalDocument.crumb.legal">Legal</a></li>
+      <li aria-current="page" data-field="title" data-t="routes.legal-document.title">Legal document</li>
+    </ol>
+  </nav>
+
+  <article class="qt-kb-article qt-prose qt-stack qt-stack--lg">
+    <header class="qt-stack qt-stack--sm">
+      <h2 data-t="routes.legal-document.title" data-field="title">Legal document</h2>
+    </header>
+
+    <div data-slot="document" class="qt-stack qt-stack--lg">
+      <p class="qtiauth-status" data-state="loading" role="status" data-t="legalDocument.loading">Loading…</p>
+
+      <article data-state="ready" class="qt-stack qt-stack--lg">
+        <header class="qt-stack qt-stack--sm">
+          <p class="qtiauth-lede" data-field="summary"></p>
+          <p class="qt-cluster qt-text-small qt-text-muted qtiauth-muted">
+            <span class="qt-badge" data-variant="info">
+              v<span data-field="version"></span>
+            </span>
+            <span data-t="legalDocument.version">Version {version}, from {effective}</span>
+          </p>
+        </header>
+
+        <div class="qtiauth-document qt-prose" data-field="body" data-part="body"></div>
+      </article>
+
+      <p
+        class="qt-message qtiauth-empty"
+        data-variant="danger"
+        data-state="error"
+        role="alert"
+        data-t="legalDocument.load.error"
+      >
+        Could not load this document.
+      </p>
+    </div>
   </article>
-  <p class="qtiauth-empty" data-state="error" data-t="legalDocument.load.error">
-    Could not load this document.
-  </p>
+
+  <aside class="qtiauth-legal-accept" data-slot="accept" data-state="pending" aria-label="Acceptance">
+    <div class="qt-container qt-cluster">
+      <p class="qt-text-small qt-text-muted" data-t="legalDocument.accept.lede">
+        You still need to accept this document.
+      </p>
+      <div class="qt-actions">
+        <a
+          class="qt-button"
+          data-variant="ghost"
+          href="/legal"
+          data-link
+          data-t="legalDocument.accept.back"
+        >Back to legal</a>
+        <button
+          type="button"
+          class="qt-button"
+          data-variant="primary"
+          data-action="accept"
+          data-t="legalDocument.accept.submit"
+        >Accept and continue</button>
+      </div>
+    </div>
+  </aside>
 </div>

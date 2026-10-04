@@ -1,36 +1,194 @@
-<h2 data-t="routes.admin.filter.title">Text filter tuning</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Admin">
+    <a class="qt-brand qt-brand--compact" href="/admin" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Admin sections">
+      <a href="/admin" data-link data-t="admin.section.overview">Overview</a>
+      <a href="/admin/users" data-link data-t="admin.section.users">Users</a>
+      <a href="/admin/roles" data-link data-t="admin.section.roles">Roles</a>
+      <a href="/admin/audit" data-link data-t="admin.section.audit">Audit log</a>
+      <a href="/admin/webhooks" data-link data-t="admin.section.webhooks">Webhooks</a>
+      <a href="/admin/filter" data-link data-current="page" data-t="admin.section.filter">Text filter tuning</a>
+      <a href="/admin/moderation" data-link data-t="admin.section.moderation">Moderation queue</a>
+      <a href="/admin/appeals" data-link data-t="admin.section.appeals">Appeals</a>
+      <a href="/admin/csea" data-link data-t="admin.section.csea">CSEA cases</a>
+      <a href="/admin/oauth" data-link data-t="admin.section.oauth">OAuth client verification</a>
+      <a href="/admin/games" data-link data-t="admin.section.games">Games catalog</a>
+      <a href="/admin/health" data-link data-t="admin.section.health">Service health</a>
+    </nav>
+  </aside>
 
-<div>
-  <h3 data-t="admin.filter.blocks">Recent blocks</h3>
-  <div data-slot="blocks">
-    <ul class="qtiauth-list" data-state="list">
-      <template data-item="blocks">
-        <li data-field="label"></li>
-      </template>
-    </ul>
-    <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
-    <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
-  </div>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/admin" data-link data-t="routes.admin.title">Admin</a></li>
+          <li aria-current="page" data-t="routes.admin.filter.title">Text filter tuning</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
 
-  <h3 data-t="admin.filter.allowlist">Allowlist</h3>
-  <div data-slot="allowlist">
-    <ul class="qtiauth-list" data-state="list">
-      <template data-item="allowlist">
-        <li data-field="label"></li>
-      </template>
-    </ul>
-    <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
-    <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
-  </div>
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.admin.filter.title">Text filter tuning</h2>
+        <p class="qtiauth-lede" data-t="admin.filter.lede">
+          Tune blocklist, allowlist and review recent filter decisions.
+        </p>
+      </header>
 
-  <h3 data-t="admin.filter.blocklist">Blocklist</h3>
-  <div data-slot="blocklist">
-    <ul class="qtiauth-list" data-state="list">
-      <template data-item="blocklist">
-        <li data-field="label"></li>
-      </template>
-    </ul>
-    <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
-    <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="admin.filter.blocks">Recent blocks</h3>
+          <p class="qt-text-muted" data-t="admin.filter.blocks.body">
+            The latest strings the filter rejected.
+          </p>
+        </header>
+        <div class="qt-card__body">
+          <div data-slot="blocks">
+            <ul class="qtiauth-list qt-stack qt-stack--sm" data-state="list">
+              <template data-item="blocks">
+                <li data-field="label"></li>
+              </template>
+            </ul>
+            <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
+            <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="admin.filter.allowlist">Allowlist</h3>
+          <p class="qt-text-muted" data-t="admin.filter.allowlist.body">
+            Strings explicitly allowed through the filter.
+          </p>
+        </header>
+        <div class="qt-card__body">
+          <form class="qt-form" data-form="allowlist-add" novalidate>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-allowlist-term" data-t="admin.filter.allowlist.term">Term</label>
+              <input
+                id="qtiauth-f-allowlist-term"
+                name="term"
+                type="text"
+                autocomplete="off"
+                data-field="term"
+              />
+            </p>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-allowlist-reason" data-t="admin.reason">Reason (recorded in the audit log)</label>
+              <input
+                id="qtiauth-f-allowlist-reason"
+                name="reason"
+                type="text"
+                autocomplete="off"
+                maxlength="500"
+                data-field="reason"
+              />
+            </p>
+            <p class="qtiauth-actions">
+              <button type="submit" data-action="add-allowlist" data-t="admin.filter.allowlist.add">Add</button>
+            </p>
+            <div class="qtiauth-feedback" aria-live="polite" data-part="allowlist-feedback"></div>
+          </form>
+
+          <div data-slot="allowlist">
+            <ul class="qtiauth-list qt-stack qt-stack--sm" data-state="list">
+              <template data-item="allowlist">
+                <li class="qt-cluster">
+                  <span data-field="label"></span>
+                  <button
+                    type="button"
+                    class="qtiauth-button qtiauth-button-ghost"
+                    data-variant="ghost"
+                    data-size="sm"
+                    data-action="remove-allowlist"
+                    data-bind-value="id"
+                    data-t="admin.filter.remove"
+                  >
+                    Remove
+                  </button>
+                </li>
+              </template>
+            </ul>
+            <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
+            <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="admin.filter.blocklist">Blocklist</h3>
+          <p class="qt-text-muted" data-t="admin.filter.blocklist.body">
+            Strings explicitly rejected by the filter.
+          </p>
+        </header>
+        <div class="qt-card__body">
+          <form class="qt-form" data-form="blocklist-add" novalidate>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-blocklist-term" data-t="admin.filter.blocklist.term">Term</label>
+              <input
+                id="qtiauth-f-blocklist-term"
+                name="term"
+                type="text"
+                autocomplete="off"
+                data-field="term"
+              />
+            </p>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-blocklist-reason" data-t="admin.reason">Reason (recorded in the audit log)</label>
+              <input
+                id="qtiauth-f-blocklist-reason"
+                name="reason"
+                type="text"
+                autocomplete="off"
+                maxlength="500"
+                data-field="reason"
+              />
+            </p>
+            <p class="qtiauth-actions">
+              <button
+                type="submit"
+                class="qtiauth-button qtiauth-button-danger"
+                data-variant="danger"
+                data-action="add-blocklist"
+                data-t="admin.filter.blocklist.add"
+              >
+                Add
+              </button>
+            </p>
+            <div class="qtiauth-feedback" aria-live="polite" data-part="blocklist-feedback"></div>
+          </form>
+
+          <div data-slot="blocklist">
+            <ul class="qtiauth-list qt-stack qt-stack--sm" data-state="list">
+              <template data-item="blocklist">
+                <li class="qt-cluster">
+                  <span data-field="label"></span>
+                  <button
+                    type="button"
+                    class="qtiauth-button qtiauth-button-ghost"
+                    data-variant="ghost"
+                    data-size="sm"
+                    data-action="remove-blocklist"
+                    data-bind-value="id"
+                    data-t="admin.filter.remove"
+                  >
+                    Remove
+                  </button>
+                </li>
+              </template>
+            </ul>
+            <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
+            <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+          </div>
+        </div>
+      </article>
+    </main>
   </div>
 </div>

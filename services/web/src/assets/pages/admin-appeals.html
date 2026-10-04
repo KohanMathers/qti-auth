@@ -1,23 +1,110 @@
-<h2 data-t="routes.admin.appeals.title">Appeals</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Admin">
+    <a class="qt-brand qt-brand--compact" href="/admin" data-link>
+      <span data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Admin sections">
+      <a href="/admin/users" data-link>Users</a>
+      <a href="/admin/moderation" data-link>Moderation</a>
+      <a href="/admin/appeals" data-link data-current="page">Appeals</a>
+      <a href="/admin/csea" data-link>CSEA</a>
+      <a href="/admin/audit" data-link>Audit</a>
+    </nav>
+  </aside>
 
-<div data-slot="rows">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="rows">
-      <li>
-        <span class="qtiauth-muted" data-field="created"></span>
-        <span data-field="body"></span>
-        <button type="button" data-action="lift" data-t="admin.appeals.lift">Lift</button>
-        <button
-          type="button"
-          class="qtiauth-button qtiauth-button-ghost"
-          data-action="uphold"
-          data-t="admin.appeals.uphold"
-        >
-          Uphold
-        </button>
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="admin.appeals.empty">No open appeals.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/admin" data-link>Admin</a></li>
+          <li aria-current="page">Appeals</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header class="qt-stack qt-stack--sm">
+        <h2 data-t="routes.admin.appeals.title">Appeals</h2>
+        <p class="qtiauth-lede" data-t="admin.appeals.lede">
+          Review user appeals and resolve them inline.
+        </p>
+      </header>
+
+      <div data-slot="rows">
+        <div class="qt-table-wrap" data-state="list">
+          <table class="qt-table" data-variant="zebra" data-size="md">
+            <thead>
+              <tr>
+                <th scope="col" data-t="admin.appeals.col.created">Submitted</th>
+                <th scope="col" data-t="admin.appeals.col.user">User</th>
+                <th scope="col" data-t="admin.appeals.col.state">State</th>
+                <th scope="col" data-t="admin.appeals.col.body">Appeal</th>
+                <th scope="col" class="qt-table__actions" data-t="admin.appeals.col.resolve">Resolve</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template data-item="rows">
+                <tr>
+                  <td><span class="qtiauth-muted qt-text-muted" data-field="created"></span></td>
+                  <td><span data-field="user"></span></td>
+                  <td><span class="qt-badge" data-variant="warning" data-field="state"></span></td>
+                  <td><span data-field="body"></span></td>
+                  <td class="qt-table__actions">
+                    <form data-form="resolve" class="qt-cluster" novalidate>
+                      <label class="qt-visually-hidden" data-bind-value="field_id" data-t="admin.appeals.reason.label">Resolution note</label>
+                      <input
+                        class="qt-input"
+                        type="text"
+                        name="reason"
+                        data-field="reason_placeholder"
+                        aria-label="Resolution note"
+                      />
+                      <button
+                        type="submit"
+                        class="qtiauth-button qt-button"
+                        data-variant="primary"
+                        data-size="sm"
+                        data-action="lift"
+                        data-t="admin.appeals.lift"
+                      >Lift</button>
+                      <button
+                        type="button"
+                        class="qtiauth-button qtiauth-button-ghost qt-button"
+                        data-variant="ghost"
+                        data-size="sm"
+                        data-action="uphold"
+                        data-t="admin.appeals.uphold"
+                      >Uphold</button>
+                    </form>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="qt-empty-state" data-state="empty">
+          <h3 class="qt-empty-state__title" data-t="admin.appeals.empty">No open appeals.</h3>
+          <p class="qt-empty-state__desc" data-t="admin.appeals.empty.desc">
+            Resolved appeals move to the audit log.
+          </p>
+        </div>
+        <p class="qt-message" data-variant="danger" data-state="error" role="alert" data-t="admin.load.error">
+          Could not load data.
+        </p>
+      </div>
+
+      <nav class="qt-pagination" aria-label="Pagination" data-slot="pagination">
+        <a class="qt-button" data-variant="ghost" data-size="sm" data-link data-bind-href="prev_path" href="?page=1" rel="prev" data-t="admin.pagination.prev">Previous</a>
+        <ol>
+          <template data-item="pages">
+            <li><a data-link data-bind-href="path" data-field="label" href="?page=1"></a></li>
+          </template>
+        </ol>
+        <a class="qt-button" data-variant="ghost" data-size="sm" data-link data-bind-href="next_path" href="?page=2" rel="next" data-t="admin.pagination.next">Next</a>
+      </nav>
+    </main>
+  </div>
 </div>

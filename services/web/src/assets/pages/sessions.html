@@ -1,38 +1,92 @@
-<h2 data-t="routes.sessions.title">Signed-in sessions</h2>
-<p class="qtiauth-lede" data-t="sessions.lede">Devices signed in to your account.</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link data-current="page">Account</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<div class="qtiauth-sessions" data-slot="sessions">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="sessions">
-      <li class="qtiauth-session">
-        <span class="qtiauth-session-label" data-t="sessions.item">
-          {device} {country}, last active {last_active}
-        </span>
-        <span class="qtiauth-muted" data-bind-hidden="not_current" data-t="sessions.current">
-          This device
-        </span>
-        <button
-          type="button"
-          data-action="revoke"
-          data-bind-hidden="current"
-          data-t="sessions.revoke"
-        >
-          Revoke
-        </button>
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="sessions.empty">No other sessions.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="sessions.load.error">
-    Could not load sessions.
-  </p>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Account sections">
+      <nav class="qt-nav-list" aria-label="Account sections">
+        <a href="/account" data-link>Overview</a>
+        <a href="/account/profile" data-link>Profile</a>
+        <a href="/account/email" data-link>Change email</a>
+        <a href="/account/security" data-link>Security</a>
+        <a href="/account/sessions" data-link data-current="page">Signed-in sessions</a>
+        <a href="/account/methods" data-link>Connected sign-in methods</a>
+        <a href="/account/notifications" data-link>Notification preferences</a>
+        <a href="/account/legal" data-link>Legal acceptance</a>
+        <a href="/account/data" data-link>Data export and deletion</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.sessions.title">Signed-in sessions</h2>
+        <p class="qtiauth-lede" data-t="sessions.lede">Devices signed in to your account.</p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="sessions.list.heading">Active sessions</h3>
+          <p class="qt-text-muted" data-t="sessions.list.body">Review every device and revoke anything unfamiliar.</p>
+        </header>
+        <div class="qt-card__body">
+          <div class="qtiauth-sessions" data-slot="sessions">
+            <div class="qt-table-wrap" data-state="list">
+              <table class="qt-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Session</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="qt-table__actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template data-item="sessions">
+                    <tr class="qtiauth-session">
+                      <td>
+                        <span class="qtiauth-session-label" data-t="sessions.item">
+                          {device} {country}, last active {last_active}
+                        </span>
+                      </td>
+                      <td>
+                        <span class="qtiauth-muted qt-badge" data-variant="info" data-bind-hidden="not_current" data-t="sessions.current">This device</span>
+                      </td>
+                      <td class="qt-table__actions">
+                        <button type="button" class="qt-button" data-variant="danger" data-size="sm" data-action="revoke" data-bind-hidden="current" data-t="sessions.revoke">Revoke</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <p class="qtiauth-empty qt-empty-state" data-state="empty" data-t="sessions.empty">No other sessions.</p>
+            <p class="qtiauth-empty qt-message" data-variant="danger" role="alert" data-state="error" data-t="sessions.load.error">
+              Could not load sessions.
+            </p>
+          </div>
+        </div>
+        <footer class="qt-card__footer">
+          <button type="button" class="qtiauth-button qtiauth-button-ghost qt-button" data-variant="danger" data-action="revoke-others" data-t="sessions.revokeOthers">
+            Sign out other sessions
+          </button>
+        </footer>
+      </article>
+    </section>
+  </div>
 </div>
-
-<button
-  type="button"
-  class="qtiauth-button qtiauth-button-ghost"
-  data-action="revoke-others"
-  data-t="sessions.revokeOthers"
->
-  Sign out other sessions
-</button>

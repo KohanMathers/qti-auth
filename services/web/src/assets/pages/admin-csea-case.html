@@ -1,77 +1,212 @@
-<h2 data-t="routes.admin.cseaCase.title">CSEA case</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Admin">
+    <a class="qt-brand qt-brand--compact" href="/admin" data-link>
+      <span data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Admin sections">
+      <a href="/admin/users" data-link>Users</a>
+      <a href="/admin/moderation" data-link>Moderation</a>
+      <a href="/admin/appeals" data-link>Appeals</a>
+      <a href="/admin/csea" data-link data-current="page">CSEA</a>
+      <a href="/admin/audit" data-link>Audit</a>
+    </nav>
+  </aside>
 
-<div data-slot="case">
-  <p data-state="loading" role="status" data-t="admin.loading">Loading…</p>
-  <div data-state="ready">
-    <dl class="qtiauth-details">
-      <dt data-t="admin.csea.status">Status</dt>
-      <dd data-field="status"></dd>
-      <dt data-t="admin.csea.priority">NCA priority</dt>
-      <dd data-field="nca_priority"></dd>
-      <dt data-t="admin.csea.deadline">Submit by</dt>
-      <dd data-field="deadline"></dd>
-      <dt data-t="admin.csea.reference">NCA reference</dt>
-      <dd data-field="nca_reference"></dd>
-      <dt data-t="admin.csea.evidenceUntil">Evidence kept until</dt>
-      <dd data-field="evidence_until"></dd>
-      <dt data-t="admin.csea.target">Reported</dt>
-      <dd data-field="target"></dd>
-    </dl>
-    <p>
-      <a target="_blank" rel="noopener" data-bind-href="portal" data-t="admin.csea.portal"
-        >Open the NCA portal</a
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/admin" data-link>Admin</a></li>
+          <li><a href="/admin/csea" data-link>CSEA</a></li>
+          <li aria-current="page">Case</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <p
+        class="qt-message qtiauth-alert"
+        data-variant="danger"
+        role="alert"
+        data-t="admin.csea.case.banner"
       >
-    </p>
-    <h3 data-t="admin.csea.evidence">Evidence</h3>
-    <ul class="qtiauth-list">
-      <template data-item="evidence">
-        <li>
-          <span data-field="label"></span>
-          <div class="qtiauth-document" data-field="content"></div>
-        </li>
-      </template>
-    </ul>
+        Restricted CSEA case data. Every byte on this page is treated as evidence: viewing it is
+        logged, screenshots are prohibited, and the content must not be shared outside the
+        safeguarding workflow. Use the protective lock to preserve evidence before taking any
+        destructive action.
+      </p>
+
+      <header class="qt-stack qt-stack--sm">
+        <h2 data-t="routes.admin.cseaCase.title">CSEA case</h2>
+        <p class="qt-text-muted" data-t="admin.csea.case.lede">
+          Protected case file. Review, submit to the NCA, and close out.
+        </p>
+      </header>
+
+      <div data-slot="case">
+        <p class="qtiauth-status" data-state="loading" role="status" data-t="admin.loading">Loading…</p>
+
+        <div data-state="ready" class="qt-stack qt-stack--lg">
+          <article class="qt-card">
+            <header class="qt-card__header qt-cluster">
+              <h3 data-t="admin.csea.summary">Case summary</h3>
+              <span class="qt-badge" data-variant="danger" data-field="status"></span>
+              <span class="qt-badge" data-variant="warning" data-field="nca_priority"></span>
+              <span
+                class="qt-badge"
+                data-variant="success"
+                data-part="lock-indicator"
+                data-field="protective_lock"
+                aria-label="Protective lock status"
+              ></span>
+            </header>
+            <div class="qt-card__body">
+              <dl class="qtiauth-details">
+                <dt data-t="admin.csea.status">Status</dt>
+                <dd data-field="status"></dd>
+                <dt data-t="admin.csea.priority">NCA priority</dt>
+                <dd data-field="nca_priority"></dd>
+                <dt data-t="admin.csea.deadline">Submit by</dt>
+                <dd data-field="deadline"></dd>
+                <dt data-t="admin.csea.reference">NCA reference</dt>
+                <dd data-field="nca_reference"></dd>
+                <dt data-t="admin.csea.evidenceUntil">Evidence kept until</dt>
+                <dd data-field="evidence_until"></dd>
+                <dt data-t="admin.csea.target">Reported</dt>
+                <dd data-field="target"></dd>
+              </dl>
+              <p>
+                <a
+                  class="qt-button"
+                  data-variant="secondary"
+                  data-size="sm"
+                  target="_blank"
+                  rel="noopener"
+                  data-bind-href="portal"
+                  data-t="admin.csea.portal"
+                >Open the NCA portal</a>
+              </p>
+            </div>
+          </article>
+
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <h3 data-t="admin.csea.evidence">Evidence snapshot refs</h3>
+              <p class="qt-text-muted" data-t="admin.csea.evidence.desc">
+                Immutable snapshots preserved under the protective lock.
+              </p>
+            </header>
+            <div class="qt-card__body">
+              <ul class="qtiauth-list qt-stack qt-stack--sm">
+                <template data-item="evidence">
+                  <li class="qt-stack qt-stack--sm">
+                    <strong data-field="label"></strong>
+                    <div class="qtiauth-document qt-pre" data-field="content"></div>
+                  </li>
+                </template>
+              </ul>
+            </div>
+            <footer class="qt-card__footer">
+              <button
+                type="button"
+                class="qtiauth-button qt-button"
+                data-variant="primary"
+                data-action="protect"
+                data-t="admin.csea.protect"
+              >Preserve evidence</button>
+            </footer>
+          </article>
+        </div>
+
+        <p class="qt-message" data-variant="danger" data-state="error" role="alert" data-t="admin.load.error">
+          Could not load data.
+        </p>
+      </div>
+
+      <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="case-feedback"></div>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="admin.csea.submit.heading">Record the NCA submission</h3>
+          <p class="qt-text-muted" data-t="admin.csea.submit.desc">
+            Enter the NCA reference once the report has been filed through their portal.
+          </p>
+        </header>
+        <div class="qt-card__body">
+          <form data-form="submit" class="qt-form" novalidate>
+            <p class="qtiauth-field qt-field">
+              <label class="qt-label" for="qtiauth-f-reference" data-t="admin.csea.reference">NCA reference</label>
+              <input
+                class="qt-input"
+                id="qtiauth-f-reference"
+                name="nca_reference"
+                type="text"
+                autocomplete="off"
+                required
+              />
+            </p>
+            <label class="qt-check">
+              <input id="qtiauth-f-declaration" name="declaration" type="checkbox" required />
+              <span data-t="admin.csea.declaration">
+                I confirm this report was submitted to the NCA.
+              </span>
+            </label>
+            <p class="qtiauth-actions qt-actions">
+              <button
+                type="submit"
+                class="qtiauth-button qt-button"
+                data-variant="primary"
+                data-t="admin.csea.submit"
+              >Record submission</button>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="admin.csea.submitted">
+                Submission recorded.
+              </p>
+            </template>
+          </form>
+        </div>
+      </article>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="admin.csea.close.heading">Close the case</h3>
+          <p class="qt-text-muted" data-t="admin.csea.close.desc">
+            Closing is final. The reason is recorded in the audit log.
+          </p>
+        </header>
+        <div class="qt-card__body">
+          <form data-form="close" class="qt-form" novalidate>
+            <p class="qtiauth-field qt-field">
+              <label class="qt-label" for="qtiauth-f-close-reason" data-t="admin.reason">Reason (recorded in the audit log)</label>
+              <input
+                class="qt-input"
+                id="qtiauth-f-close-reason"
+                name="reason"
+                type="text"
+                autocomplete="off"
+                required
+              />
+            </p>
+            <p class="qtiauth-actions qt-actions">
+              <button
+                type="submit"
+                class="qtiauth-button qtiauth-button-danger qt-button"
+                data-variant="danger"
+                data-t="admin.csea.close"
+              >Close case</button>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="admin.csea.closed">
+                Case closed.
+              </p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </main>
   </div>
-  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
 </div>
-
-<button type="button" data-action="protect" data-t="admin.csea.protect">Preserve evidence</button>
-<div class="qtiauth-feedback" aria-live="polite" data-part="case-feedback"></div>
-
-<h3 data-t="admin.csea.submit.heading">Record the NCA submission</h3>
-<form data-form="submit" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-reference" data-t="admin.csea.reference">NCA reference</label>
-    <input id="qtiauth-f-reference" name="nca_reference" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-field">
-    <input id="qtiauth-f-declaration" name="declaration" type="checkbox" />
-    <label for="qtiauth-f-declaration" data-t="admin.csea.declaration">
-      I confirm this report was submitted to the NCA.
-    </label>
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="admin.csea.submit">Record submission</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="admin.csea.submitted">Submission recorded.</p>
-  </template>
-</form>
-
-<h3 data-t="admin.csea.close.heading">Close the case</h3>
-<form data-form="close" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-close-reason" data-t="admin.reason"
-      >Reason (recorded in the audit log)</label
-    >
-    <input id="qtiauth-f-close-reason" name="reason" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" class="qtiauth-button qtiauth-button-danger" data-t="admin.csea.close">
-      Close case
-    </button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="admin.csea.closed">Case closed.</p>
-  </template>
-</form>

@@ -1,11 +1,81 @@
-<h2 data-t="routes.admin.games.title">Games catalog</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Admin">
+    <a class="qt-brand qt-brand--compact" href="/admin" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Admin sections">
+      <a href="/admin" data-link data-t="admin.section.overview">Overview</a>
+      <a href="/admin/users" data-link data-t="admin.section.users">Users</a>
+      <a href="/admin/moderation" data-link data-t="admin.section.moderation">Moderation</a>
+      <a href="/admin/oauth" data-link data-t="admin.section.oauth">OAuth clients</a>
+      <a href="/admin/webhooks" data-link data-t="admin.section.webhooks">Webhooks</a>
+      <a href="/admin/games" data-link data-current="page" data-t="admin.section.games">Games</a>
+      <a href="/admin/audit" data-link data-t="admin.section.audit">Audit log</a>
+    </nav>
+  </aside>
 
-<div data-slot="rows">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="rows">
-      <li data-field="title"></li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/admin" data-link data-t="admin.breadcrumb.root">Admin</a></li>
+          <li aria-current="page" data-t="routes.admin.games.title">Games catalog</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.admin.games.title">Games catalog</h2>
+        <p class="qtiauth-lede" data-t="routes.admin.games.body">
+          Browse titles registered against this tenant. Open a title to see its entitlements and SKUs.
+        </p>
+      </header>
+
+      <form class="qt-form qt-cluster" data-form="filter" novalidate>
+        <p class="qt-field">
+          <label class="qt-visually-hidden" for="qt-f-games-search" data-t="admin.games.search">Search games</label>
+          <input id="qt-f-games-search" class="qt-input" name="q" type="search" autocomplete="off" placeholder="Search by title" />
+        </p>
+        <p class="qt-actions">
+          <button type="submit" class="qt-button" data-variant="secondary" data-t="admin.games.apply">Apply</button>
+        </p>
+      </form>
+
+      <div data-slot="rows" class="qt-stack">
+        <div class="qt-table-wrap">
+          <table class="qt-table" data-variant="hoverable" data-size="md" data-state="list">
+            <thead>
+              <tr>
+                <th scope="col" data-t="admin.games.col.title">Title</th>
+                <th scope="col" class="qt-table__actions" data-t="admin.games.col.actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template data-item="rows">
+                <tr>
+                  <td>
+                    <span class="qtiauth-list" data-field="title"></span>
+                  </td>
+                  <td class="qt-table__actions">
+                    <a href="/admin/games" class="qt-button" data-variant="ghost" data-size="sm" data-link data-bind-href="path" data-t="admin.games.open">
+                      Open
+                    </a>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="qt-empty-state qtiauth-empty" data-state="empty">
+          <h3 class="qt-empty-state__title" data-t="admin.empty">Nothing to show.</h3>
+          <p class="qt-empty-state__desc" data-t="admin.games.empty.desc">No games match the current filter.</p>
+        </div>
+        <p class="qt-message qtiauth-empty" data-variant="danger" data-state="error" role="alert" data-t="admin.load.error">Could not load data.</p>
+      </div>
+    </main>
+  </div>
 </div>

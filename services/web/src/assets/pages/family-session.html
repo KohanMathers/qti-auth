@@ -1,21 +1,72 @@
-<h2 data-t="routes.family.session.title">Open the family dashboard</h2>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link>Account</a>
+        <a href="/family" data-link data-current="page">Family</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<form data-form="session" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-token" data-t="field.token">Code</label>
-    <input
-      id="qtiauth-f-token"
-      name="token"
-      type="text"
-      autocomplete="off"
-      data-bind-value="token"
-      required
-    />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="family.session.submit">Open dashboard</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="family.session.success">Done.</p>
-  </template>
-</form>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Family sections">
+      <nav class="qt-nav-list" aria-label="Family sections">
+        <a href="/family" data-link>Overview</a>
+        <a href="/family/invite" data-link>Accept invite</a>
+        <a href="/family/session" data-link data-current="page">Open dashboard</a>
+        <a href="/family/leave" data-link>Leave family</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.family.session.title">Open the family dashboard</h2>
+        <p class="qtiauth-lede" data-t="family.session.lede">
+          Enter the one-time code you received to confirm it is you, then we will open the dashboard.
+        </p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="family.session.card.heading">Confirm with a code</h3>
+          <p class="qt-text-muted" data-t="family.session.card.body">We ask for this short code every time to protect your children's accounts.</p>
+        </header>
+        <div class="qt-card__body">
+          <form data-form="session" class="qt-form" novalidate>
+            <p class="qtiauth-field qt-field">
+              <label class="qt-label" for="qtiauth-f-token" data-t="field.token">Code</label>
+              <input
+                id="qtiauth-f-token"
+                class="qt-input"
+                name="token"
+                type="text"
+                autocomplete="off"
+                data-bind-value="token"
+                required
+              />
+            </p>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-t="family.session.submit">Open dashboard</button>
+              <a class="qt-button" data-variant="ghost" href="/family" data-link data-t="family.session.cancel">Back</a>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="family.session.success">Done.</p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </section>
+  </div>
+</div>

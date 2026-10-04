@@ -1,18 +1,68 @@
-<h2 data-t="routes.support.staff.metrics.title">Support metrics</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Support staff">
+    <a class="qt-brand qt-brand--compact" href="/staff" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Support staff">
+      <a href="/staff" data-link data-t="support.staff.section.overview">Support staff</a>
+      <a href="/staff/tickets" data-link data-t="support.staff.section.queue">Queue</a>
+      <a href="/staff/metrics" data-link data-current="page" data-t="support.staff.section.metrics">Metrics</a>
+      <a href="/staff/macros" data-link data-t="support.staff.section.macros">Canned responses</a>
+      <a href="/staff/kb" data-link data-t="support.staff.section.kb">Knowledge base</a>
+    </nav>
+  </aside>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/staff" data-link>Support staff</a></li>
+          <li aria-current="page" data-t="routes.support.staff.metrics.title">Metrics</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.support.staff.metrics.title">Support metrics</h2>
+        <p class="qtiauth-lede" data-t="support.staff.metrics.lede">SLA stats across the queue.</p>
+      </header>
 
-<div data-slot="metrics">
-  <dl class="qtiauth-details" data-state="ready">
-    <dt data-t="support.staff.metrics.firstResponse">Average first response (seconds)</dt>
-    <dd data-field="first_response">0</dd>
-    <dt data-t="support.staff.metrics.resolution">Average resolution (seconds)</dt>
-    <dd data-field="resolution">0</dd>
-    <dt data-t="support.staff.metrics.guest">Guest tickets</dt>
-    <dd data-field="guest">0</dd>
-  </dl>
-  <p class="qtiauth-empty" data-state="empty" data-t="support.staff.metrics.empty">
-    No metrics available.
-  </p>
-  <p class="qtiauth-empty" data-state="error" data-t="support.staff.metrics.load.error">
-    Could not load metrics.
-  </p>
+      <div data-slot="metrics">
+        <dl class="qtiauth-details qt-cluster" data-state="ready">
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <dt data-t="support.staff.metrics.firstResponse">Average first response (seconds)</dt>
+            </header>
+            <div class="qt-card__body">
+              <dd data-field="first_response">0</dd>
+            </div>
+          </article>
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <dt data-t="support.staff.metrics.resolution">Average resolution (seconds)</dt>
+            </header>
+            <div class="qt-card__body">
+              <dd data-field="resolution">0</dd>
+            </div>
+          </article>
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <dt data-t="support.staff.metrics.guest">Guest tickets</dt>
+            </header>
+            <div class="qt-card__body">
+              <dd data-field="guest">0</dd>
+            </div>
+          </article>
+        </dl>
+        <p class="qtiauth-empty" data-state="empty" data-t="support.staff.metrics.empty">
+          No metrics available.
+        </p>
+        <p class="qtiauth-empty" data-state="error" data-t="support.staff.metrics.load.error">
+          Could not load metrics.
+        </p>
+      </div>
+    </main>
+  </div>
 </div>

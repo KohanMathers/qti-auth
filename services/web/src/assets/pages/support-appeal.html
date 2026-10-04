@@ -1,25 +1,84 @@
-<h2 data-t="routes.appeals.title">Appeal a decision</h2>
-<p class="qtiauth-lede" data-t="appeals.lede">Ask for a lock, ban or restriction to be reviewed.</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link>Account</a>
+        <a href="/support" data-link data-current="page">Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<form data-form="appeal" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-action-id" data-t="field.actionId">Action ID (optional)</label>
-    <input
-      id="qtiauth-f-action-id"
-      name="action_id"
-      type="text"
-      autocomplete="off"
-      data-bind-value="action_id"
-    />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-body" data-t="field.message">Message</label>
-    <input id="qtiauth-f-body" name="body" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="appeals.submit">Send appeal</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="appeals.success">Appeal submitted.</p>
-  </template>
-</form>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Support sections">
+      <nav class="qt-nav-list" aria-label="Support sections">
+        <a href="/support" data-link>Overview</a>
+        <a href="/kb" data-link data-t="support.section.kb">Help centre</a>
+        <a href="/kb/search" data-link data-t="support.section.search">Search articles</a>
+        <a href="/tickets" data-link data-t="support.section.tickets">Your tickets</a>
+        <a href="/tickets/new" data-link data-t="support.section.newTicket">Open a ticket</a>
+        <a href="/appeals/new" data-link data-current="page" data-t="support.section.appeal">Appeal a decision</a>
+        <a href="/guest/start" data-link data-t="support.section.guest">Guest support</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.appeals.title">Appeal a decision</h2>
+        <p class="qtiauth-lede" data-t="appeals.lede">Ask for a lock, ban or restriction to be reviewed.</p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="appeals.heading">Submit an appeal</h3>
+          <p class="qt-text-muted" data-t="appeals.body">A moderator will reply by email.</p>
+        </header>
+        <div class="qt-card__body">
+          <form data-form="appeal" class="qt-form" novalidate>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-action-id" class="qt-label" data-t="field.actionId">Action ID (optional)</label>
+              <input
+                id="qtiauth-f-action-id"
+                class="qt-input"
+                name="action_id"
+                type="text"
+                autocomplete="off"
+                data-bind-value="action_id"
+              />
+              <small class="qt-help" data-t="appeals.actionIdHelp">Find this in the email we sent you.</small>
+            </p>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-body" class="qt-label" data-t="field.message">Message</label>
+              <textarea
+                id="qtiauth-f-body"
+                class="qt-textarea"
+                name="body"
+                rows="6"
+                autocomplete="off"
+                required
+              ></textarea>
+            </p>
+            <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="form-feedback"></div>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-t="appeals.submit">Send appeal</button>
+              <a class="qt-button" data-variant="ghost" href="/support" data-link data-t="appeals.cancel">Cancel</a>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="appeals.success">Appeal submitted.</p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </section>
+  </div>
+</div>

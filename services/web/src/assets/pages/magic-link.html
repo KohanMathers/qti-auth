@@ -1,46 +1,59 @@
-<h2 data-t="routes.magic-link.title">Continue signing in</h2>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-magic-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+    </header>
+    <div class="qt-auth-card__body qt-stack qt-stack--lg">
+      <h1 id="qt-magic-title" data-t="routes.magic-link.title">Continue signing in</h1>
 
-<div data-slot="step">
-  <form data-form="confirm" data-state="confirm" novalidate>
-    <p class="qtiauth-lede" data-t="magicLink.lede">
-      Continue to sign in with the link we emailed you.
-    </p>
-    <input type="hidden" name="token" data-bind-value="token" />
-    <p class="qtiauth-actions">
-      <button type="submit" data-t="magicLink.submit">Continue</button>
-    </p>
-  </form>
+      <div data-slot="step">
+        <form data-form="confirm" data-state="confirm" class="qt-form qt-stack" novalidate>
+          <p class="qt-prose__lede" data-t="magicLink.lede">
+            Continue to sign in with the link we emailed you.
+          </p>
+          <input type="hidden" name="token" data-bind-value="token" />
+          <p class="qt-actions">
+            <button type="submit" class="qt-button" data-variant="primary" data-t="magicLink.submit">Continue</button>
+          </p>
+        </form>
 
-  <div data-state="choose">
-    <p data-t="magicLink.choose">This email address has more than one account. Choose one.</p>
-    <ul class="qtiauth-list">
-      <template data-item="accounts">
-        <li>
-          <button type="button" data-action="choose" data-t="account.choose">
-            Account created {created}
-          </button>
-        </li>
-      </template>
-    </ul>
-    <div class="qtiauth-feedback" aria-live="polite" data-part="choose-feedback"></div>
-  </div>
+        <div data-state="choose" class="qt-stack">
+          <p data-t="magicLink.choose">This email address has more than one account. Choose one.</p>
+          <ul class="qt-nav-list">
+            <template data-item="accounts">
+              <li>
+                <button type="button" class="qt-button" data-variant="secondary" data-action="choose" data-t="account.choose">
+                  Account created {created}
+                </button>
+              </li>
+            </template>
+          </ul>
+          <div class="qt-message" aria-live="polite" data-part="choose-feedback"></div>
+        </div>
 
-  <form data-form="signup" data-state="signup" novalidate>
-    <p class="qtiauth-lede" data-t="magicLink.signup.lede">
-      There’s no account for this address yet. Enter your date of birth to create one.
-    </p>
-    <p class="qtiauth-field">
-      <label for="qtiauth-f-dob" data-t="field.dateOfBirth">Date of birth</label>
-      <input id="qtiauth-f-dob" name="date_of_birth" type="date" autocomplete="bday" required />
-    </p>
-    <p class="qtiauth-field">
-      <label for="qtiauth-f-guardian" data-t="field.guardianEmail.optional">
-        Parent or guardian email, if you need their permission
-      </label>
-      <input id="qtiauth-f-guardian" name="guardian_email" type="email" autocomplete="off" />
-    </p>
-    <p class="qtiauth-actions">
-      <button type="submit" data-t="magicLink.signup.submit">Create account</button>
-    </p>
-  </form>
+        <form data-form="signup" data-state="signup" class="qt-form qt-stack" novalidate>
+          <p class="qt-prose__lede" data-t="magicLink.signup.lede">
+            There's no account for this address yet. Enter your date of birth to create one.
+          </p>
+          <p class="qt-form-group">
+            <label class="qt-label" for="qtiauth-f-dob" data-t="field.dateOfBirth">Date of birth</label>
+            <input class="qt-input" id="qtiauth-f-dob" name="date_of_birth" type="date" autocomplete="bday" required />
+          </p>
+          <p class="qt-form-group">
+            <label class="qt-label" for="qtiauth-f-guardian" data-t="field.guardianEmail.optional">
+              Parent or guardian email, if you need their permission
+            </label>
+            <input class="qt-input" id="qtiauth-f-guardian" name="guardian_email" type="email" autocomplete="off" />
+          </p>
+          <p class="qt-actions">
+            <button type="submit" class="qt-button" data-variant="primary" data-t="magicLink.signup.submit">Create account</button>
+          </p>
+        </form>
+      </div>
+    </div>
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>&copy; <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
 </div>

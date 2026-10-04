@@ -1,53 +1,69 @@
-<h2 data-t="routes.sign-up.title">Create an account</h2>
-<p class="qtiauth-lede" data-t="signUp.lede">It takes a minute.</p>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-signup-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+    </header>
+    <div class="qt-auth-card__body qt-stack qt-stack--lg">
+      <header>
+        <h1 id="qt-signup-title" data-t="routes.sign-up.title">Create an account</h1>
+        <p class="qt-prose__lede" data-t="signUp.lede">It takes a minute.</p>
+      </header>
 
-<form data-form="password" data-show="password" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-email" data-t="field.email">Email</label>
-    <input id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-password" data-t="field.password">Password</label>
-    <input
-      id="qtiauth-f-password"
-      name="password"
-      type="password"
-      autocomplete="new-password"
-      minlength="12"
-      required
-    />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-dob" data-t="field.dateOfBirth">Date of birth</label>
-    <input id="qtiauth-f-dob" name="date_of_birth" type="date" autocomplete="bday" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-guardian" data-t="field.guardianEmail.optional">
-      Parent or guardian email, if you need their permission
-    </label>
-    <input id="qtiauth-f-guardian" name="guardian_email" type="email" autocomplete="off" />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="signUp.submit">Create account</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="signUp.success">
-      Account created. Check your email to verify it.
-    </p>
-  </template>
-</form>
+      <form data-form="password" data-show="password" class="qt-form" novalidate>
+        <p class="qt-form-group">
+          <label class="qt-label" for="qtiauth-f-email" data-t="field.email">Email</label>
+          <input class="qt-input" id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
+        </p>
+        <p class="qt-form-group">
+          <label class="qt-label" for="qtiauth-f-password" data-t="field.password">Password</label>
+          <input
+            class="qt-input"
+            id="qtiauth-f-password"
+            name="password"
+            type="password"
+            autocomplete="new-password"
+            minlength="12"
+            required
+          />
+        </p>
+        <p class="qt-form-group">
+          <label class="qt-label" for="qtiauth-f-dob" data-t="field.dateOfBirth">Date of birth</label>
+          <input class="qt-input" id="qtiauth-f-dob" name="date_of_birth" type="date" autocomplete="bday" required />
+        </p>
+        <p class="qt-form-group">
+          <label class="qt-label" for="qtiauth-f-guardian" data-t="field.guardianEmail.optional">
+            Parent or guardian email, if you need their permission
+          </label>
+          <input class="qt-input" id="qtiauth-f-guardian" name="guardian_email" type="email" autocomplete="off" />
+        </p>
+        <p class="qt-actions">
+          <button type="submit" class="qt-button" data-variant="primary" data-t="signUp.submit">Create account</button>
+        </p>
+        <template data-message="success">
+          <p class="qt-message" data-variant="success" role="status" data-t="signUp.success">
+            Account created. Check your email to verify it.
+          </p>
+        </template>
+      </form>
 
-<form data-form="magic" data-show="magic_only" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-magic-email" data-t="field.email">Email</label>
-    <input id="qtiauth-f-magic-email" name="email" type="email" autocomplete="email" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="signUp.magic.submit">Send me a sign-up link</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="signUp.magic.success">
-      Check your email to finish signing up.
-    </p>
-  </template>
-</form>
+      <form data-form="magic" data-show="magic_only" class="qt-form" novalidate>
+        <p class="qt-form-group">
+          <label class="qt-label" for="qtiauth-f-magic-email" data-t="field.email">Email</label>
+          <input class="qt-input" id="qtiauth-f-magic-email" name="email" type="email" autocomplete="email" required />
+        </p>
+        <p class="qt-actions">
+          <button type="submit" class="qt-button" data-variant="primary" data-t="signUp.magic.submit">Send me a sign-up link</button>
+        </p>
+        <template data-message="success">
+          <p class="qt-message" data-variant="success" role="status" data-t="signUp.magic.success">
+            Check your email to finish signing up.
+          </p>
+        </template>
+      </form>
+    </div>
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>&copy; <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
+</div>

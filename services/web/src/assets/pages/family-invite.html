@@ -1,31 +1,50 @@
-<h2 data-t="routes.family.invite.title">Become a parent or guardian</h2>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-family-invite-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+    </header>
 
-<form data-form="invite" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-token" data-t="field.token">Code</label>
-    <input
-      id="qtiauth-f-token"
-      name="token"
-      type="text"
-      autocomplete="off"
-      data-bind-value="token"
-      required
-    />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-date-of-birth" data-t="field.dateOfBirth">Date of birth</label>
-    <input
-      id="qtiauth-f-date-of-birth"
-      name="date_of_birth"
-      type="date"
-      autocomplete="off"
-      required
-    />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="family.invite.submit">Accept invite</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="family.invite.success">Done.</p>
-  </template>
-</form>
+    <h2 id="qt-family-invite-title" data-t="routes.family.invite.title">Become a parent or guardian</h2>
+    <p class="qtiauth-lede" data-t="family.invite.lede">
+      Enter the invite code you were given and confirm your date of birth to link this child to your account.
+    </p>
+
+    <form data-form="invite" class="qt-form" novalidate>
+      <p class="qtiauth-field qt-field">
+        <label class="qt-label" for="qtiauth-f-token" data-t="field.token">Code</label>
+        <input
+          id="qtiauth-f-token"
+          class="qt-input"
+          name="token"
+          type="text"
+          autocomplete="off"
+          data-bind-value="token"
+          required
+        />
+      </p>
+      <p class="qtiauth-field qt-field">
+        <label class="qt-label" for="qtiauth-f-date-of-birth" data-t="field.dateOfBirth">Date of birth</label>
+        <input
+          id="qtiauth-f-date-of-birth"
+          class="qt-input"
+          name="date_of_birth"
+          type="date"
+          autocomplete="off"
+          required
+        />
+      </p>
+      <p class="qtiauth-actions qt-actions">
+        <button type="submit" class="qt-button" data-variant="primary" data-t="family.invite.submit">Accept invite</button>
+        <a class="qt-button" data-variant="ghost" href="/family" data-link data-t="family.invite.cancel">Cancel</a>
+      </p>
+      <template data-message="success">
+        <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="family.invite.success">Done.</p>
+      </template>
+    </form>
+
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>(c) <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
+</div>

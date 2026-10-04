@@ -1,11 +1,158 @@
-<h2 data-t="routes.tickets.detail.title" data-part="heading">Ticket</h2>
-<template data-message="heading"
-  >#<span data-field="number"></span> — <span data-field="subject"></span
-></template>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link>Account</a>
+        <a href="/support" data-link data-current="page">Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<div data-slot="ticket">
-  <div data-state="ready" data-part="ticket"></div>
-  <p class="qtiauth-empty" data-state="error" data-t="tickets.detail.load.error">
-    Could not load ticket.
-  </p>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Support sections">
+      <nav class="qt-nav-list" aria-label="Support sections">
+        <a href="/support" data-link>Overview</a>
+        <a href="/kb" data-link data-t="support.section.kb">Help centre</a>
+        <a href="/kb/search" data-link data-t="support.section.search">Search articles</a>
+        <a href="/tickets" data-link data-current="page" data-t="support.section.tickets">Your tickets</a>
+        <a href="/tickets/new" data-link data-t="support.section.newTicket">Open a ticket</a>
+        <a href="/appeals/new" data-link data-t="support.section.appeal">Appeal a decision</a>
+        <a href="/guest/start" data-link data-t="support.section.guest">Guest support</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/support" data-link>Support</a></li>
+          <li><a href="/tickets" data-link data-t="support.section.tickets">Your tickets</a></li>
+          <li aria-current="page" data-t="routes.tickets.detail.title">Ticket</li>
+        </ol>
+      </nav>
+
+      <header class="qt-stack qt-stack--sm">
+        <h2 data-t="routes.tickets.detail.title" data-part="heading">Ticket</h2>
+        <template data-message="heading"
+          >#<span data-field="number"></span> &mdash; <span data-field="subject"></span
+        ></template>
+        <div class="qt-cluster">
+          <span class="qt-badge" data-bind-variant="status_variant" data-field="status"></span>
+          <span class="qt-badge" data-bind-variant="priority_variant" data-field="priority"></span>
+          <span class="qt-text-muted qt-text-small" data-field="created_at"></span>
+        </div>
+      </header>
+
+      <div data-slot="ticket">
+        <div data-state="ready" data-part="ticket" class="qt-stack qt-stack--lg">
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <h3 data-t="tickets.thread.heading">Conversation</h3>
+              <p class="qt-text-muted">
+                <span data-field="status"></span> &mdash; <span data-field="priority"></span> &mdash;
+                <span data-field="created_at"></span>
+              </p>
+            </header>
+            <div class="qt-card__body">
+              <ol class="qtiauth-thread qt-stack qt-stack--lg">
+                <template data-item="messages">
+                  <li data-bind-class="class" data-bind-variant="author_variant" class="qt-card qt-card--plain">
+                    <header class="qt-card__header">
+                      <p class="qt-cluster">
+                        <span class="qt-avatar" data-size="sm" data-field="initials"></span>
+                        <strong>
+                          <span data-show="staff" data-t="tickets.staff">Staff</span
+                          ><span data-show="!staff" data-t="tickets.you">You</span>
+                        </strong>
+                        <span class="qt-text-muted qt-text-small" data-field="created_at"></span>
+                      </p>
+                    </header>
+                    <div class="qt-card__body">
+                      <p data-field="body"></p>
+                    </div>
+                  </li>
+                </template>
+              </ol>
+            </div>
+          </article>
+
+          <article class="qt-card" data-show="attachments">
+            <header class="qt-card__header">
+              <h3 data-t="tickets.attachments">Attachments</h3>
+            </header>
+            <div class="qt-card__body">
+              <ul class="qtiauth-list qt-stack qt-stack--sm">
+                <template data-item="attachments">
+                  <li class="qt-cluster">
+                    <span><span data-field="filename"></span> (<span data-field="content_type"></span>)</span>
+                    <button type="button" class="qt-button" data-variant="ghost" data-size="sm" data-action="download" data-t="tickets.download">Download</button>
+                  </li>
+                </template>
+              </ul>
+            </div>
+          </article>
+
+          <article class="qt-card" data-show="open">
+            <header class="qt-card__header">
+              <h3 data-t="tickets.reply.heading">Reply</h3>
+              <p class="qt-text-muted" data-t="tickets.reply.body">Add more detail or respond to staff.</p>
+            </header>
+            <div class="qt-card__body">
+              <form data-form="reply" class="qt-form" novalidate>
+                <p class="qtiauth-field qt-field">
+                  <label for="qtiauth-f-reply" class="qt-label" data-t="field.message">Message</label>
+                  <textarea id="qtiauth-f-reply" class="qt-textarea" name="body" rows="5" autocomplete="off" required></textarea>
+                </p>
+                <p class="qtiauth-actions qt-actions">
+                  <button type="submit" class="qt-button" data-variant="primary" data-t="tickets.reply.submit">Send reply</button>
+                  <button type="button" class="qtiauth-button qtiauth-button-ghost qt-button" data-variant="ghost" data-action="close" data-t="tickets.close">Close ticket</button>
+                </p>
+                <template data-message="success">
+                  <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="tickets.reply.success">Reply sent.</p>
+                </template>
+              </form>
+            </div>
+          </article>
+
+          <article class="qt-card" data-show="!open">
+            <header class="qt-card__header">
+              <h3 data-t="tickets.closed.heading">Ticket closed</h3>
+              <p class="qt-text-muted" data-t="tickets.closed.body">You can reopen or rate your experience.</p>
+            </header>
+            <div class="qt-card__body qt-stack qt-stack--lg">
+              <div class="qt-actions">
+                <button type="button" class="qt-button" data-variant="secondary" data-action="reopen" data-t="tickets.reopen">Reopen ticket</button>
+              </div>
+              <section data-show="unrated" class="qt-stack qt-stack--sm">
+                <h4 data-t="tickets.rate.heading">Rate this ticket</h4>
+                <div class="qtiauth-actions qt-actions">
+                  <button type="button" class="qt-button" data-variant="ghost" data-action="rate" value="1">1</button>
+                  <button type="button" class="qt-button" data-variant="ghost" data-action="rate" value="2">2</button>
+                  <button type="button" class="qt-button" data-variant="ghost" data-action="rate" value="3">3</button>
+                  <button type="button" class="qt-button" data-variant="ghost" data-action="rate" value="4">4</button>
+                  <button type="button" class="qt-button" data-variant="ghost" data-action="rate" value="5">5</button>
+                </div>
+              </section>
+            </div>
+          </article>
+
+          <div class="qt-message" data-variant="danger" data-part="errors" role="alert"></div>
+        </div>
+
+        <div class="qt-message" data-variant="danger" data-state="error" role="alert" data-t="tickets.detail.load.error">
+          Could not load ticket.
+        </div>
+      </div>
+    </section>
+  </div>
 </div>

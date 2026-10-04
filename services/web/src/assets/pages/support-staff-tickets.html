@@ -1,22 +1,103 @@
-<h2 data-t="routes.support.staff.queue.title">Support queue</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Support staff">
+    <a class="qt-brand qt-brand--compact" href="/staff" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Support staff">
+      <a href="/staff" data-link data-t="support.staff.section.overview">Support staff</a>
+      <a href="/staff/tickets" data-link data-current="page" data-t="support.staff.section.queue">Queue</a>
+      <a href="/staff/metrics" data-link data-t="support.staff.section.metrics">Metrics</a>
+      <a href="/staff/macros" data-link data-t="support.staff.section.macros">Canned responses</a>
+      <a href="/staff/kb" data-link data-t="support.staff.section.kb">Knowledge base</a>
+    </nav>
+  </aside>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/staff" data-link>Support staff</a></li>
+          <li aria-current="page" data-t="routes.support.staff.queue.title">Queue</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.support.staff.queue.title">Support queue</h2>
+      </header>
 
-<div data-slot="tickets">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="tickets">
-      <li>
-        <a data-link data-bind-href="path"
-          >#<span data-field="number"></span> — <span data-field="subject"></span> (<span
-            data-field="status"
-          ></span
-          >, <span data-field="priority"></span>)</a
-        >
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="support.staff.queue.empty">
-    No tickets in the queue.
-  </p>
-  <p class="qtiauth-empty" data-state="error" data-t="support.staff.queue.load.error">
-    Could not load queue.
-  </p>
+      <form class="qt-form qt-cluster" data-form="filters" novalidate>
+        <p class="qtiauth-field">
+          <label for="qtiauth-f-status" data-t="field.status">Status</label>
+          <select id="qtiauth-f-status" name="status" class="qt-select">
+            <option value="" data-t="support.staff.queue.filter.any">Any</option>
+            <option value="open" data-t="support.staff.queue.filter.open">Open</option>
+            <option value="pending" data-t="support.staff.queue.filter.pending">Pending</option>
+            <option value="resolved" data-t="support.staff.queue.filter.resolved">Resolved</option>
+            <option value="closed" data-t="support.staff.queue.filter.closed">Closed</option>
+          </select>
+        </p>
+        <p class="qtiauth-field">
+          <label for="qtiauth-f-priority" data-t="field.priority">Priority</label>
+          <select id="qtiauth-f-priority" name="priority" class="qt-select">
+            <option value="" data-t="support.staff.queue.filter.any">Any</option>
+            <option value="low" data-t="support.staff.queue.filter.low">Low</option>
+            <option value="normal" data-t="support.staff.queue.filter.normal">Normal</option>
+            <option value="high" data-t="support.staff.queue.filter.high">High</option>
+            <option value="urgent" data-t="support.staff.queue.filter.urgent">Urgent</option>
+          </select>
+        </p>
+        <p class="qtiauth-field">
+          <label for="qtiauth-f-assignee" data-t="field.assignee">Assignee</label>
+          <input id="qtiauth-f-assignee" name="assignee" type="text" autocomplete="off" />
+        </p>
+        <p class="qtiauth-actions">
+          <button type="submit" data-t="support.staff.queue.filter.apply">Apply</button>
+        </p>
+      </form>
+
+      <div class="qt-cluster qt-card" data-slot="bulk" role="toolbar" aria-label="Bulk actions">
+        <span class="qt-text-muted" data-t="support.staff.queue.bulk.label">Bulk action</span>
+        <button type="button" class="qt-button" data-variant="secondary" data-action="bulk-assign" data-t="support.staff.queue.bulk.assign">Assign</button>
+        <button type="button" class="qt-button" data-variant="secondary" data-action="bulk-priority" data-t="support.staff.queue.bulk.priority">Set priority</button>
+        <button type="button" class="qt-button" data-variant="secondary" data-action="bulk-status" data-t="support.staff.queue.bulk.status">Set status</button>
+        <button type="button" class="qt-button" data-variant="danger" data-action="bulk-close" data-t="support.staff.queue.bulk.close">Close</button>
+      </div>
+
+      <div data-slot="tickets" class="qt-table-wrap">
+        <table class="qt-table" data-variant="hoverable" data-state="list">
+          <thead>
+            <tr>
+              <th scope="col" class="qt-table__select"><span class="qt-visually-hidden" data-t="support.staff.queue.col.select">Select</span></th>
+              <th scope="col" data-t="support.staff.queue.col.number">#</th>
+              <th scope="col" data-t="support.staff.queue.col.subject">Subject</th>
+              <th scope="col" data-t="support.staff.queue.col.status">Status</th>
+              <th scope="col" data-t="support.staff.queue.col.priority">Priority</th>
+              <th scope="col" data-t="support.staff.queue.col.assignee">Assignee</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template data-item="tickets">
+              <tr>
+                <td><input type="checkbox" data-action="select" /></td>
+                <td><a data-link data-bind-href="path">#<span data-field="number"></span></a></td>
+                <td><span data-field="subject"></span></td>
+                <td><span class="qt-badge" data-variant="neutral" data-field="status"></span></td>
+                <td><span class="qt-badge" data-variant="info" data-field="priority"></span></td>
+                <td><span data-field="assignee"></span></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <p class="qtiauth-empty" data-state="empty" data-t="support.staff.queue.empty">
+          No tickets in the queue.
+        </p>
+        <p class="qtiauth-empty" data-state="error" data-t="support.staff.queue.load.error">
+          Could not load queue.
+        </p>
+      </div>
+    </main>
+  </div>
 </div>

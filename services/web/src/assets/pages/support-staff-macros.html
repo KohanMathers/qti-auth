@@ -1,40 +1,94 @@
-<h2 data-t="routes.support.staff.macros.title">Canned responses</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Support staff">
+    <a class="qt-brand qt-brand--compact" href="/staff" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Support staff">
+      <a href="/staff" data-link data-t="support.staff.section.overview">Support staff</a>
+      <a href="/staff/tickets" data-link data-t="support.staff.section.queue">Queue</a>
+      <a href="/staff/metrics" data-link data-t="support.staff.section.metrics">Metrics</a>
+      <a href="/staff/macros" data-link data-current="page" data-t="support.staff.section.macros">Canned responses</a>
+      <a href="/staff/kb" data-link data-t="support.staff.section.kb">Knowledge base</a>
+    </nav>
+  </aside>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/staff" data-link>Support staff</a></li>
+          <li aria-current="page" data-t="routes.support.staff.macros.title">Canned responses</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.support.staff.macros.title">Canned responses</h2>
+      </header>
 
-<div data-slot="macros">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="macros">
-      <li>
-        <span data-field="name"></span>
-        <button type="button" data-action="delete" data-t="support.staff.macros.delete">
-          Delete
-        </button>
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="support.staff.macros.empty">
-    No canned responses yet.
-  </p>
-  <p class="qtiauth-empty" data-state="error" data-t="support.staff.macros.load.error">
-    Could not load macros.
-  </p>
+      <div data-slot="macros" class="qt-table-wrap">
+        <table class="qt-table" data-variant="zebra" data-state="list">
+          <thead>
+            <tr>
+              <th scope="col" data-t="support.staff.macros.col.name">Name</th>
+              <th scope="col" data-t="support.staff.macros.col.body">Message</th>
+              <th scope="col" class="qt-table__actions" data-t="support.staff.macros.col.actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template data-item="macros">
+              <tr>
+                <td>
+                  <input class="qt-input" type="text" data-bind-value="name" data-field="name" data-action="edit-name" />
+                </td>
+                <td>
+                  <input class="qt-input" type="text" data-bind-value="body" data-action="edit-body" />
+                </td>
+                <td class="qt-table__actions">
+                  <button type="button" class="qt-button" data-variant="ghost" data-size="sm" data-action="save" data-t="support.staff.macros.save">Save</button>
+                  <button type="button" class="qt-button" data-variant="danger" data-size="sm" data-action="delete" data-t="support.staff.macros.delete">
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <p class="qtiauth-empty" data-state="empty" data-t="support.staff.macros.empty">
+          No canned responses yet.
+        </p>
+        <p class="qtiauth-empty" data-state="error" data-t="support.staff.macros.load.error">
+          Could not load macros.
+        </p>
+      </div>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="support.staff.macros.new">Add a canned response</h3>
+        </header>
+        <div class="qt-card__body">
+          <form data-form="macro" class="qt-form" novalidate>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-name" data-t="field.name">Name</label>
+              <input id="qtiauth-f-name" name="name" type="text" autocomplete="off" required />
+            </p>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-body" data-t="field.message">Message</label>
+              <input id="qtiauth-f-body" name="body" type="text" autocomplete="off" required />
+            </p>
+            <p class="qtiauth-actions">
+              <button type="submit" data-t="support.staff.macros.submit">Save canned response</button>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="support.staff.macros.success">
+                Canned response saved.
+              </p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </main>
+  </div>
 </div>
-
-<h3 data-t="support.staff.macros.new">Add a canned response</h3>
-<form data-form="macro" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-name" data-t="field.name">Name</label>
-    <input id="qtiauth-f-name" name="name" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-body" data-t="field.message">Message</label>
-    <input id="qtiauth-f-body" name="body" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="support.staff.macros.submit">Save canned response</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="support.staff.macros.success">
-      Canned response saved.
-    </p>
-  </template>
-</form>

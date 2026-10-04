@@ -1,43 +1,94 @@
-<h2 data-t="routes.support.staff.kb.title">Knowledge base editor</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Support staff">
+    <a class="qt-brand qt-brand--compact" href="/staff" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Support staff">
+      <a href="/staff" data-link data-t="support.staff.section.overview">Support staff</a>
+      <a href="/staff/tickets" data-link data-t="support.staff.section.queue">Queue</a>
+      <a href="/staff/metrics" data-link data-t="support.staff.section.metrics">Metrics</a>
+      <a href="/staff/macros" data-link data-t="support.staff.section.macros">Canned responses</a>
+      <a href="/staff/kb" data-link data-current="page" data-t="support.staff.section.kb">Knowledge base</a>
+    </nav>
+  </aside>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/staff" data-link>Support staff</a></li>
+          <li aria-current="page" data-t="routes.support.staff.kb.title">Knowledge base editor</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.support.staff.kb.title">Knowledge base editor</h2>
+      </header>
 
-<div data-slot="articles">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="articles">
-      <li>
-        <a data-link data-bind-href="path"
-          ><span data-field="title"></span> (<span data-field="status"></span>)</a
-        >
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="support.staff.kb.empty">No articles yet.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="support.staff.kb.load.error">
-    Could not load articles.
-  </p>
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="support.staff.kb.list.heading">Articles</h3>
+        </header>
+        <div class="qt-card__body">
+          <div data-slot="articles" class="qt-table-wrap">
+            <table class="qt-table" data-variant="hoverable" data-state="list">
+              <thead>
+                <tr>
+                  <th scope="col" data-t="support.staff.kb.col.title">Title</th>
+                  <th scope="col" data-t="support.staff.kb.col.status">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template data-item="articles">
+                  <tr>
+                    <td><a data-link data-bind-href="path" data-field="title"></a></td>
+                    <td><span class="qt-badge" data-variant="neutral" data-field="status"></span></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <p class="qtiauth-empty" data-state="empty" data-t="support.staff.kb.empty">No articles yet.</p>
+            <p class="qtiauth-empty" data-state="error" data-t="support.staff.kb.load.error">
+              Could not load articles.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="support.staff.kb.new">Create an article</h3>
+        </header>
+        <div class="qt-card__body">
+          <form data-form="article" class="qt-form" novalidate>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-category-id" data-t="field.categoryId">Category ID</label>
+              <input id="qtiauth-f-category-id" name="category_id" type="text" autocomplete="off" required />
+            </p>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-slug" data-t="field.slug">Slug</label>
+              <input id="qtiauth-f-slug" name="slug" type="text" autocomplete="off" required />
+            </p>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-title" data-t="field.title">Title</label>
+              <input id="qtiauth-f-title" name="title" type="text" autocomplete="off" required />
+            </p>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-body" data-t="field.body">Body</label>
+              <textarea id="qtiauth-f-body" class="qt-textarea" name="body" autocomplete="off" required></textarea>
+            </p>
+            <p class="qtiauth-actions">
+              <button type="submit" data-t="support.staff.kb.submit">Create article</button>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="support.staff.kb.success">Article created.</p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </main>
+  </div>
 </div>
-
-<h3 data-t="support.staff.kb.new">Create an article</h3>
-<form data-form="article" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-category-id" data-t="field.categoryId">Category ID</label>
-    <input id="qtiauth-f-category-id" name="category_id" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-slug" data-t="field.slug">Slug</label>
-    <input id="qtiauth-f-slug" name="slug" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-title" data-t="field.title">Title</label>
-    <input id="qtiauth-f-title" name="title" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-body" data-t="field.body">Body</label>
-    <input id="qtiauth-f-body" name="body" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="support.staff.kb.submit">Create article</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="support.staff.kb.success">Article created.</p>
-  </template>
-</form>

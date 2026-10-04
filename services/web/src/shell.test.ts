@@ -8,7 +8,21 @@ const config = {
     company_name: 'Example Ltd',
     support_email: 'support@example.test',
     logo: null,
-    colors: { primary: '#3b82f6' },
+    colors: {
+      primary: '#3b82f6',
+      accent: '#BC6DE0',
+      success: '#80D35D',
+      warning: '#F7DA47',
+      danger: '#DD5F5F',
+      text: '#222034',
+      text_muted: '#666577',
+      bg: '#ffffff',
+      bg_secondary: '#f5f5f7',
+      border: '#d1d1d6',
+      gradient_from: '#5BB1EF',
+      gradient_to: '#BC6DE0',
+    },
+    backgrounds: { auth_light: null, auth_dark: null },
   },
   surfaces: {
     account: {
@@ -33,7 +47,17 @@ const config = {
       origins: null,
     },
   },
-};
+} as unknown as Parameters<typeof shellResponse>[0];
+
+const baseInput = {
+  product_name: 'Example',
+  locale: 'en-GB',
+  base_path: '/',
+  meta_origin: undefined,
+  nonce: 'n1',
+  content: '<p>Hello</p>',
+  theme: undefined,
+} as const;
 
 describe('newNonce', () => {
   it('returns a fresh base64 value each call', () => {
@@ -58,48 +82,52 @@ describe('contentSecurityPolicy', () => {
 
 describe('shellHtml', () => {
   it('sets the document language and skip link for accessibility', () => {
-    const html = shellHtml({
-      product_name: 'Example',
-      locale: 'en-GB',
-      base_path: '/',
-      meta_origin: undefined,
-      nonce: 'n1',
-    });
-    expect(html).toContain('<html lang="en-GB">');
+    const html = shellHtml({ ...baseInput });
+    expect(html).toContain('<html lang="en-GB"');
     expect(html).toContain('class="qtiauth-skip-link"');
     expect(html).toContain('id="qtiauth-main"');
     expect(html).toContain('aria-live="polite"');
   });
 
   it('threads the base path into asset links', () => {
-    const html = shellHtml({
-      product_name: 'Example',
-      locale: 'en-GB',
-      base_path: '/app',
-      meta_origin: undefined,
-      nonce: 'n1',
-    });
+    const html = shellHtml({ ...baseInput, base_path: '/app' });
     expect(html).toContain('href="/app/theme.css"');
     expect(html).toContain('src="/app/app.js"');
   });
 
   it('escapes the product name so control characters in branding cannot inject markup', () => {
-    const html = shellHtml({
-      product_name: 'Example <script>',
-      locale: 'en-GB',
-      base_path: '/',
-      meta_origin: undefined,
-      nonce: 'n1',
-    });
+    const html = shellHtml({ ...baseInput, product_name: 'Example <script>' });
     expect(html).not.toContain('<script>alert');
     expect(html).toContain('Example &lt;script&gt;');
+  });
+
+  it('injects the pre-rendered page content into the main region', () => {
+    const html = shellHtml({ ...baseInput, content: '<section id="probe">x</section>' });
+    expect(html).toContain('<section id="probe">x</section>');
+  });
+
+  it('sets data-theme on <html> when a theme cookie is pinned', () => {
+    expect(shellHtml({ ...baseInput, theme: 'dark' })).toContain('data-theme="dark"');
+    expect(shellHtml({ ...baseInput, theme: 'light' })).toContain('data-theme="light"');
+  });
+
+  it('omits data-theme when the theme is unset so prefers-color-scheme wins', () => {
+    expect(shellHtml({ ...baseInput, theme: undefined })).not.toContain('data-theme=');
   });
 });
 
 describe('shellResponse', () => {
+  const options = {
+    basePath: '/',
+    metaOrigin: undefined,
+    content: '<p>Hello</p>',
+    locale: 'en-GB',
+    theme: undefined,
+  } as const;
+
   it('sends no-store and a strict CSP with a fresh nonce every response', async () => {
-    const first = shellResponse(config, { basePath: '/', metaOrigin: undefined });
-    const second = shellResponse(config, { basePath: '/', metaOrigin: undefined });
+    const first = shellResponse(config, options);
+    const second = shellResponse(config, options);
     expect(first.headers.get('cache-control')).toBe('no-store');
     expect(first.headers.get('x-frame-options')).toBe('DENY');
     const csp1 = first.headers.get('content-security-policy') ?? '';

@@ -1,49 +1,157 @@
-<h2 data-t="routes.admin.webhook.title">Webhook</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Admin">
+    <a class="qt-brand qt-brand--compact" href="/admin" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Admin sections">
+      <a href="/admin" data-link data-t="admin.section.overview">Overview</a>
+      <a href="/admin/users" data-link data-t="admin.section.users">Users</a>
+      <a href="/admin/moderation" data-link data-t="admin.section.moderation">Moderation</a>
+      <a href="/admin/oauth" data-link data-t="admin.section.oauth">OAuth clients</a>
+      <a href="/admin/webhooks" data-link data-current="page" data-t="admin.section.webhooks">Webhooks</a>
+      <a href="/admin/games" data-link data-t="admin.section.games">Games</a>
+      <a href="/admin/audit" data-link data-t="admin.section.audit">Audit log</a>
+    </nav>
+  </aside>
 
-<div data-slot="webhook">
-  <p data-state="loading" role="status" data-t="admin.loading">Loading…</p>
-  <div data-state="ready">
-    <dl class="qtiauth-details">
-      <dt data-t="admin.webhook.url">URL</dt>
-      <dd data-field="url"></dd>
-      <dt data-t="admin.webhook.description">Description</dt>
-      <dd data-field="description"></dd>
-      <dt data-t="admin.webhook.events">Events</dt>
-      <dd data-field="events"></dd>
-      <dt data-t="admin.webhook.format">Format</dt>
-      <dd data-field="format"></dd>
-      <dt data-t="admin.webhook.status">Status</dt>
-      <dd data-field="status"></dd>
-      <dt data-t="admin.webhook.failures">Failures in a row</dt>
-      <dd data-field="failures"></dd>
-    </dl>
-    <p class="qtiauth-actions">
-      <button
-        type="button"
-        data-action="enable"
-        data-bind-hidden="enabled"
-        data-t="admin.webhook.enable"
-      >
-        Enable
-      </button>
-      <button
-        type="button"
-        class="qtiauth-button qtiauth-button-ghost"
-        data-action="disable"
-        data-bind-hidden="disabled"
-        data-t="admin.webhook.disable"
-      >
-        Disable
-      </button>
-      <button type="button" data-action="test" data-t="admin.webhook.test">Send a test</button>
-    </p>
-    <div class="qtiauth-feedback" aria-live="polite" data-part="webhook-feedback"></div>
-    <h3 data-t="admin.webhook.deliveries">Recent deliveries</h3>
-    <ul class="qtiauth-list">
-      <template data-item="deliveries">
-        <li data-field="label"></li>
-      </template>
-    </ul>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/admin" data-link data-t="admin.breadcrumb.root">Admin</a></li>
+          <li><a href="/admin/webhooks" data-link data-t="admin.section.webhooks">Webhooks</a></li>
+          <li aria-current="page" data-field="url" data-t="routes.admin.webhook.title">Webhook</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.admin.webhook.title">Webhook</h2>
+        <p class="qtiauth-lede" data-t="routes.admin.webhook.body">
+          Inspect this webhook's configuration, pause or resume deliveries, and review its recent delivery attempts.
+        </p>
+      </header>
+
+      <div data-slot="webhook" class="qt-stack qt-stack--lg">
+        <p class="qt-message qtiauth-status" data-variant="info" data-state="loading" role="status" data-t="admin.loading">Loading…</p>
+
+        <div data-state="ready" class="qt-stack qt-stack--lg">
+          <article class="qt-card">
+            <header class="qt-card__header qt-cluster">
+              <h3 data-field="url" data-t="admin.webhook.metadata.heading">Webhook configuration</h3>
+              <span class="qt-badge" data-variant="neutral" data-field="status"></span>
+            </header>
+            <div class="qt-card__body">
+              <dl class="qtiauth-details qt-stack qt-stack--sm">
+                <div>
+                  <dt class="qt-text-muted qt-text-small" data-t="admin.webhook.url">URL</dt>
+                  <dd><code class="qt-code" data-field="url"></code></dd>
+                </div>
+                <div>
+                  <dt class="qt-text-muted qt-text-small" data-t="admin.webhook.description">Description</dt>
+                  <dd data-field="description"></dd>
+                </div>
+                <div>
+                  <dt class="qt-text-muted qt-text-small" data-t="admin.webhook.events">Events</dt>
+                  <dd data-field="events"></dd>
+                </div>
+                <div>
+                  <dt class="qt-text-muted qt-text-small" data-t="admin.webhook.format">Format</dt>
+                  <dd data-field="format"></dd>
+                </div>
+                <div>
+                  <dt class="qt-text-muted qt-text-small" data-t="admin.webhook.status">Status</dt>
+                  <dd data-field="status"></dd>
+                </div>
+                <div>
+                  <dt class="qt-text-muted qt-text-small" data-t="admin.webhook.failures">Failures in a row</dt>
+                  <dd data-field="failures"></dd>
+                </div>
+              </dl>
+            </div>
+            <footer class="qt-card__footer">
+              <p class="qtiauth-actions qt-actions">
+                <button
+                  type="button"
+                  class="qt-button"
+                  data-variant="primary"
+                  data-action="enable"
+                  data-bind-hidden="enabled"
+                  data-t="admin.webhook.enable"
+                >
+                  Enable
+                </button>
+                <button
+                  type="button"
+                  class="qtiauth-button qtiauth-button-ghost qt-button"
+                  data-variant="ghost"
+                  data-action="disable"
+                  data-bind-hidden="disabled"
+                  data-t="admin.webhook.disable"
+                >
+                  Disable
+                </button>
+                <button
+                  type="button"
+                  class="qt-button"
+                  data-variant="secondary"
+                  data-action="test"
+                  data-t="admin.webhook.test"
+                >
+                  Send a test
+                </button>
+              </p>
+            </footer>
+          </article>
+
+          <div class="qtiauth-feedback qt-message" data-variant="info" aria-live="polite" data-part="webhook-feedback"></div>
+
+          <article class="qt-card">
+            <header class="qt-card__header">
+              <h3 data-t="admin.webhook.deliveries">Recent deliveries</h3>
+              <p class="qt-text-muted" data-t="admin.webhook.deliveries.body">
+                The last few delivery attempts, with response status and duration.
+              </p>
+            </header>
+            <div class="qt-card__body">
+              <div class="qt-table-wrap">
+                <table class="qt-table" data-variant="zebra" data-size="sm">
+                  <thead>
+                    <tr>
+                      <th scope="col" data-t="admin.webhook.delivery.event">Event</th>
+                      <th scope="col" data-t="admin.webhook.delivery.timestamp">Timestamp</th>
+                      <th scope="col" data-t="admin.webhook.delivery.status">Status</th>
+                      <th scope="col" data-t="admin.webhook.delivery.duration">Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody class="qtiauth-list">
+                    <template data-item="deliveries">
+                      <tr>
+                        <td>
+                          <span data-field="event"></span>
+                          <span class="qt-visually-hidden" data-field="label"></span>
+                        </td>
+                        <td><span class="qt-text-small qt-text-muted" data-field="timestamp"></span></td>
+                        <td><span class="qt-badge" data-variant="neutral" data-field="status_label"></span></td>
+                        <td><span data-field="duration"></span></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+              <p class="qtiauth-empty qt-text-muted" data-state="empty" data-t="admin.webhook.deliveries.empty">
+                No deliveries yet.
+              </p>
+            </div>
+          </article>
+        </div>
+
+        <p class="qt-message qtiauth-empty" data-variant="danger" data-state="error" role="alert" data-t="admin.load.error">Could not load data.</p>
+      </div>
+    </main>
   </div>
-  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
 </div>

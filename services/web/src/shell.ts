@@ -9,6 +9,8 @@ export interface ShellInput {
   base_path: string;
   meta_origin: string | undefined;
   nonce: string;
+  content: string;
+  theme: 'light' | 'dark' | 'system' | undefined;
 }
 
 export function newNonce(): string {
@@ -30,15 +32,16 @@ export function contentSecurityPolicy(nonce: string, metaOrigin: string | undefi
   ].join('; ');
 }
 
+function themeAttribute(theme: ShellInput['theme']): string {
+  if (theme === 'light') return ' data-theme="light"';
+  if (theme === 'dark') return ' data-theme="dark"';
+  return '';
+}
+
 export function shellHtml(input: ShellInput): string {
   const base = input.base_path === '/' ? '' : input.base_path;
-  const bootstrap = {
-    base_path: input.base_path,
-    locale: input.locale,
-    meta_origin: input.meta_origin ?? null,
-  };
   return `<!doctype html>
-<html lang="${escapeHtml(input.locale)}">
+<html lang="${escapeHtml(input.locale)}"${themeAttribute(input.theme)}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -50,13 +53,12 @@ export function shellHtml(input: ShellInput): string {
 </head>
 <body>
 <a class="qtiauth-skip-link" href="#qtiauth-main">Skip to main content</a>
-<div id="qtiauth-app" aria-busy="true">
+<div id="qtiauth-app">
 <main id="qtiauth-main" tabindex="-1">
-<p>Loading ${escapeHtml(input.product_name)}…</p>
+${input.content}
 </main>
 </div>
 <div id="qtiauth-live" role="status" aria-live="polite" aria-atomic="true"></div>
-<script type="application/json" id="qtiauth-bootstrap">${JSON.stringify(bootstrap).replaceAll('<', '\\u003c')}</script>
 <script type="module" nonce="${escapeHtml(input.nonce)}" src="${base}/app.js"></script>
 </body>
 </html>
@@ -65,17 +67,24 @@ export function shellHtml(input: ShellInput): string {
 
 export type ShellConfig = Pick<QtiauthConfig, 'branding' | 'surfaces'>;
 
-export function shellResponse(
-  config: ShellConfig,
-  options: { basePath: string; metaOrigin: string | undefined },
-): Response {
+export interface ShellOptions {
+  basePath: string;
+  metaOrigin: string | undefined;
+  content: string;
+  locale: string;
+  theme: ShellInput['theme'];
+}
+
+export function shellResponse(config: ShellConfig, options: ShellOptions): Response {
   const nonce = newNonce();
   const html = shellHtml({
     product_name: config.branding.product_name,
-    locale: 'en-GB',
+    locale: options.locale,
     base_path: options.basePath,
     meta_origin: options.metaOrigin,
     nonce,
+    content: options.content,
+    theme: options.theme,
   });
   return new Response(html, {
     status: 200,

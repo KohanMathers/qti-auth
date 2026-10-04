@@ -1,24 +1,84 @@
-<h2 data-t="routes.legal.title">Legal acceptance</h2>
-<p class="qtiauth-lede" data-t="legal.lede">Documents we need you to accept.</p>
+<div class="qt-kb-shell">
+  <header class="qt-kb-topbar qt-container">
+    <a class="qt-brand" href="/" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-app-nav__links" aria-label="Primary">
+      <a href="/account" data-link>Account</a>
+      <a href="/legal" data-link data-current="page">Legal</a>
+      <a href="/support" data-link>Support</a>
+    </nav>
+    <div class="qt-cluster">
+      <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+    </div>
+  </header>
 
-<div data-slot="documents">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="documents">
-      <li class="qtiauth-legal-item">
-        <a href="/legal" data-link data-bind-href="path" data-field="summary"></a>
-        <span class="qtiauth-muted" data-t="legal.effective">From {effective}</span>
-        <button type="button" data-action="accept" data-t="legal.accept">Accept</button>
-      </li>
+  <article class="qt-kb-article qt-prose qt-stack qt-stack--lg">
+    <header>
+      <h2 data-t="routes.legal.title">Legal acceptance</h2>
+      <p class="qtiauth-lede" data-t="legal.lede">Documents we need you to accept.</p>
+    </header>
+
+    <div data-slot="documents" class="qt-stack qt-stack--lg">
+      <ul class="qtiauth-list qt-stack" data-state="list">
+        <template data-item="documents">
+          <li class="qtiauth-legal-item qt-card">
+            <header class="qt-card__header">
+              <div class="qt-cluster">
+                <h3>
+                  <a href="/legal" data-link data-bind-href="path" data-field="summary"></a>
+                </h3>
+                <span class="qt-badge" data-variant="neutral">
+                  v<span data-field="version"></span>
+                </span>
+                <span class="qt-badge" data-variant="warning" data-field="status">
+                  <span data-t="legal.status.pending">Needs acceptance</span>
+                </span>
+              </div>
+              <p class="qt-text-muted qt-text-small">
+                <span data-t="legal.effective">From {effective}</span>
+              </p>
+            </header>
+            <footer class="qt-card__footer">
+              <a
+                class="qt-button"
+                data-variant="ghost"
+                href="/legal"
+                data-link
+                data-bind-href="path"
+                data-t="legal.read"
+              >Read document</a>
+              <button
+                type="button"
+                class="qt-button"
+                data-variant="primary"
+                data-action="accept"
+                data-t="legal.accept"
+              >Accept</button>
+            </footer>
+          </li>
+        </template>
+      </ul>
+
+      <div class="qt-empty-state qtiauth-empty" data-state="empty">
+        <h3 class="qt-empty-state__title" data-t="legal.empty">
+          No documents require acceptance.
+        </h3>
+      </div>
+
+      <p
+        class="qt-message qtiauth-empty"
+        data-variant="danger"
+        data-state="error"
+        role="alert"
+        data-t="legal.load.error"
+      >
+        Could not load documents.
+      </p>
+    </div>
+
+    <template data-message="accepted">
+      <p class="qt-message qtiauth-success" data-variant="success" role="status" data-t="legal.accepted">Accepted.</p>
     </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="legal.empty">
-    No documents require acceptance.
-  </p>
-  <p class="qtiauth-empty" data-state="error" data-t="legal.load.error">
-    Could not load documents.
-  </p>
+  </article>
 </div>
-
-<template data-message="accepted">
-  <p class="qtiauth-success" role="status" data-t="legal.accepted">Accepted.</p>
-</template>

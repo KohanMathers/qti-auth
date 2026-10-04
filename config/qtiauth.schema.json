@@ -46,9 +46,109 @@
           "properties": {
             "primary": {
               "default": "#3b82f6",
-              "description": "Primary brand colour.",
+              "description": "Primary brand colour used for calls to action and links.",
               "type": "string",
               "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "accent": {
+              "default": "#BC6DE0",
+              "description": "Secondary accent used for hero gradients and decorative highlights.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "success": {
+              "default": "#80D35D",
+              "description": "Success colour for confirmations and healthy state badges.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "warning": {
+              "default": "#F7DA47",
+              "description": "Warning colour for cautionary notices.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "danger": {
+              "default": "#DD5F5F",
+              "description": "Danger colour for destructive actions and error messages.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "text": {
+              "default": "#222034",
+              "description": "Primary text colour in light mode.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "text_muted": {
+              "default": "#666577",
+              "description": "Secondary text colour for hints, metadata and timestamps.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "bg": {
+              "default": "#ffffff",
+              "description": "Page background in light mode.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "bg_secondary": {
+              "default": "#f5f5f7",
+              "description": "Elevated surface background (cards, nav rails) in light mode.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "border": {
+              "default": "#d1d1d6",
+              "description": "Default border colour for inputs, cards and dividers.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "gradient_from": {
+              "default": "#5BB1EF",
+              "description": "Starting colour for the brand hero gradient.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "gradient_to": {
+              "default": "#BC6DE0",
+              "description": "Ending colour for the brand hero gradient.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "backgrounds": {
+          "description": "Background images used on specific page shells.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "auth_light": {
+              "default": null,
+              "description": "Full-bleed background image used on auth pages in light mode. null disables it.",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "auth_dark": {
+              "default": null,
+              "description": "Full-bleed background image used on auth pages in dark mode. null disables it.",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false

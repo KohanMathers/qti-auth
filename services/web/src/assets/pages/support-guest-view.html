@@ -1,28 +1,133 @@
-<h2 data-t="routes.guest.view.title">Follow a guest ticket</h2>
-<p class="qtiauth-lede" data-t="guest.view.lede">
-  Paste the link token from the email we sent you.
-</p>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-guest-view-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link>
+        <span class="qt-brand__name" data-field="product_name"></span>
+      </a>
+    </header>
 
-<form data-form="view" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-token" data-t="field.token">Code</label>
-    <input
-      id="qtiauth-f-token"
-      name="token"
-      type="text"
-      autocomplete="off"
-      data-bind-value="token"
-      required
-    />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="guest.view.submit">View ticket</button>
-  </p>
-</form>
+    <div class="qt-auth-card__body qt-stack qt-stack--lg">
+      <header>
+        <h2 id="qt-guest-view-title" data-t="routes.guest.view.title">Follow a guest ticket</h2>
+        <p class="qtiauth-lede" data-t="guest.view.lede">
+          Paste the link token from the email we sent you.
+        </p>
+      </header>
 
-<div data-slot="ticket">
-  <div data-state="ready">
-    <h3 data-t="guest.view.ticket">Ticket</h3>
-    <div data-part="ticket"></div>
-  </div>
+      <form data-form="view" class="qt-form" novalidate>
+        <p class="qtiauth-field qt-field">
+          <label for="qtiauth-f-token" class="qt-label" data-t="field.token">Code</label>
+          <input
+            id="qtiauth-f-token"
+            class="qt-input"
+            name="token"
+            type="text"
+            autocomplete="off"
+            data-bind-value="token"
+            required
+          />
+        </p>
+        <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="form-feedback"></div>
+        <p class="qtiauth-actions qt-actions">
+          <button type="submit" class="qt-button" data-variant="primary" data-t="guest.view.submit">View ticket</button>
+        </p>
+      </form>
+
+      <div data-slot="ticket">
+        <div data-state="ready" class="qt-stack qt-stack--lg">
+          <header class="qt-stack qt-stack--sm">
+            <h3 data-t="guest.view.ticket">Ticket</h3>
+            <div class="qt-cluster">
+              <span class="qt-badge" data-bind-variant="status_variant" data-field="status"></span>
+              <span class="qt-badge" data-bind-variant="priority_variant" data-field="priority"></span>
+              <span class="qt-text-muted qt-text-small" data-field="created_at"></span>
+            </div>
+          </header>
+
+          <div data-part="ticket" class="qt-stack qt-stack--lg">
+            <article class="qt-card">
+              <header class="qt-card__header">
+                <h4 data-t="tickets.thread.heading">Conversation</h4>
+                <p class="qt-text-muted">
+                  <span data-field="status"></span> &mdash; <span data-field="priority"></span> &mdash;
+                  <span data-field="created_at"></span>
+                </p>
+              </header>
+              <div class="qt-card__body">
+                <ol class="qtiauth-thread qt-stack qt-stack--lg">
+                  <template data-item="messages">
+                    <li data-bind-class="class" data-bind-variant="author_variant" class="qt-card qt-card--plain">
+                      <header class="qt-card__header">
+                        <p class="qt-cluster">
+                          <span class="qt-avatar" data-size="sm" data-field="initials"></span>
+                          <strong>
+                            <span data-show="staff" data-t="tickets.staff">Staff</span
+                            ><span data-show="!staff" data-t="tickets.you">You</span>
+                          </strong>
+                          <span class="qt-text-muted qt-text-small" data-field="created_at"></span>
+                        </p>
+                      </header>
+                      <div class="qt-card__body">
+                        <p data-field="body"></p>
+                      </div>
+                    </li>
+                  </template>
+                </ol>
+              </div>
+            </article>
+
+            <article class="qt-card" data-show="attachments">
+              <header class="qt-card__header">
+                <h4 data-t="tickets.attachments">Attachments</h4>
+              </header>
+              <div class="qt-card__body">
+                <ul class="qtiauth-list qt-stack qt-stack--sm">
+                  <template data-item="attachments">
+                    <li class="qt-cluster">
+                      <span><span data-field="filename"></span> (<span data-field="content_type"></span>)</span>
+                      <button type="button" class="qt-button" data-variant="ghost" data-size="sm" data-action="download" data-t="tickets.download">Download</button>
+                    </li>
+                  </template>
+                </ul>
+              </div>
+            </article>
+
+            <article class="qt-card" data-show="open">
+              <header class="qt-card__header">
+                <h4 data-t="tickets.reply.heading">Reply</h4>
+              </header>
+              <div class="qt-card__body">
+                <form data-form="reply" class="qt-form" novalidate>
+                  <p class="qtiauth-field qt-field">
+                    <label for="qtiauth-f-reply" class="qt-label" data-t="field.message">Message</label>
+                    <textarea
+                      id="qtiauth-f-reply"
+                      class="qt-textarea"
+                      name="body"
+                      rows="5"
+                      autocomplete="off"
+                      required
+                    ></textarea>
+                  </p>
+                  <p class="qtiauth-actions qt-actions">
+                    <button type="submit" class="qt-button" data-variant="primary" data-t="tickets.reply.submit">Send reply</button>
+                  </p>
+                  <template data-message="success">
+                    <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="tickets.reply.success">Reply sent.</p>
+                  </template>
+                </form>
+              </div>
+            </article>
+
+            <div class="qt-message" data-variant="danger" data-part="errors" role="alert"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>&copy; <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
 </div>

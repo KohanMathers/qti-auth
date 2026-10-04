@@ -12,6 +12,8 @@ function shell(): string {
     base_path: '/',
     meta_origin: undefined,
     nonce: 'n1',
+    content: '<p>Hello</p>',
+    theme: undefined,
   });
 }
 
@@ -40,12 +42,6 @@ describe('accessibility baseline', () => {
 
   it('declares a color-scheme meta so browsers can render the dark theme', () => {
     expect(shell()).toContain('name="color-scheme"');
-  });
-
-  it('has app.js provide a visible page title before finishing bootstrap', async () => {
-    const source = await readFile(join(import.meta.dirname, 'assets', 'app.js'), 'utf8');
-    expect(source).toContain('aria-busy');
-    expect(source).toContain('main.focus');
   });
 
   it('respects prefers-reduced-motion in the stylesheet (WCAG 2.3.3)', async () => {

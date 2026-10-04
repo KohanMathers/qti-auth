@@ -5,7 +5,7 @@ import { PAGES } from './assets/pages.js';
 import { router } from './service.ts';
 
 describe('web service', () => {
-  it('announces the shell on every page path, and the theme, script and locale routes, on the core module', () => {
+  it('announces a route for every page path plus the static assets and preference endpoints', () => {
     const { routes } = router.manifest();
     expect(routes.map((route) => `${route.method} ${route.path}`).sort()).toEqual(
       [
@@ -19,6 +19,8 @@ describe('web service', () => {
         'GET /templates.html',
         'GET /theme.css',
         'GET /view.js',
+        'POST /locale',
+        'POST /theme',
         ...Object.values(PAGES)
           .filter((page) => page.path !== '/')
           .map((page) => `GET ${page.path}`),
@@ -35,5 +37,6 @@ describe('web service', () => {
     expect(document.paths['/locales/{locale}']).toBeDefined();
     expect(document.paths['/sign-in']).toBeDefined();
     expect(document.paths['/family/{id}']).toBeDefined();
+    expect(document.paths['/theme']).toBeDefined();
   });
 });

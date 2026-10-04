@@ -1,21 +1,35 @@
-<h2 data-t="routes.revert.title">Revert email change</h2>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-revert-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+    </header>
+    <div class="qt-auth-card__body qt-stack qt-stack--lg">
+      <h1 id="qt-revert-title" data-t="routes.revert.title">Revert email change</h1>
 
-<form data-form="revert" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-token" data-t="field.token">Code</label>
-    <input
-      id="qtiauth-f-token"
-      name="token"
-      type="text"
-      autocomplete="off"
-      data-bind-value="token"
-      required
-    />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="revert.submit">Revert email</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="revert.success">Done.</p>
-  </template>
-</form>
+      <form data-form="revert" class="qt-form" novalidate>
+        <p class="qt-form-group">
+          <label class="qt-label" for="qtiauth-f-token" data-t="field.token">Code</label>
+          <input
+            class="qt-input"
+            id="qtiauth-f-token"
+            name="token"
+            type="text"
+            autocomplete="off"
+            data-bind-value="token"
+            required
+          />
+        </p>
+        <p class="qt-actions">
+          <button type="submit" class="qt-button" data-variant="primary" data-t="revert.submit">Revert email</button>
+        </p>
+        <template data-message="success">
+          <p class="qt-message" data-variant="success" role="status" data-t="revert.success">Done.</p>
+        </template>
+      </form>
+    </div>
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>&copy; <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
+</div>

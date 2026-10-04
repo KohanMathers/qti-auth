@@ -1,95 +1,4 @@
-import { apiClient, ProblemFetchError } from './client.js';
-import { availablePages, matchPage, PAGES } from './pages.js';
-import { messageFor } from './problems.js';
-import { mountPage, parseTemplates } from './view.js';
-
-const BOOTSTRAP_SELECTOR = '#qtiauth-bootstrap';
-const APP_SELECTOR = '#qtiauth-app';
-const MAIN_SELECTOR = '#qtiauth-main';
 const LIVE_SELECTOR = '#qtiauth-live';
-
-export { ProblemFetchError };
-
-function readBootstrap() {
-  const node = document.querySelector(BOOTSTRAP_SELECTOR);
-  if (node === null) throw new Error('Bootstrap script tag missing');
-  const parsed = JSON.parse(node.textContent ?? '{}');
-  return {
-    basePath: parsed.base_path ?? '/',
-    locale: parsed.locale ?? 'en-GB',
-    metaOrigin: parsed.meta_origin ?? null,
-  };
-}
-
-function joinBase(base, path) {
-  if (base === '/' || base === '') return path;
-  return `${base}${path}`;
-}
-
-let popstateHandler = null;
-
-function element(tag, props = {}, children = []) {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(props)) {
-    if (value === undefined || value === null) continue;
-    if (key === 'text') node.textContent = value;
-    else if (key === 'attrs') for (const [k, v] of Object.entries(value)) node.setAttribute(k, v);
-    else node[key] = value;
-  }
-  for (const child of children) if (child !== null) node.appendChild(child);
-  return node;
-}
-
-function clear(node) {
-  while (node.firstChild !== null) node.removeChild(node.firstChild);
-}
-
-async function fetchOk(url, init) {
-  const response = await fetch(url, { credentials: 'same-origin', ...init });
-  if (!response.ok) {
-    const contentType = response.headers.get('content-type') ?? '';
-    if (contentType.includes('application/problem+json')) {
-      const problem = await response.json();
-      throw new ProblemFetchError(problem);
-    }
-    throw new ProblemFetchError({
-      code: 'INTERNAL_ERROR',
-      status: response.status,
-      title: 'Something went wrong',
-    });
-  }
-  return response;
-}
-
-async function fetchJson(url, init) {
-  return (await fetchOk(url, init)).json();
-}
-
-async function fetchText(url) {
-  return (await fetchOk(url)).text();
-}
-
-function metaEndpoint(bootstrap, path) {
-  if (bootstrap.metaOrigin === null) return joinBase(bootstrap.basePath, path);
-  return new URL(path.replace(/^\//, ''), `${bootstrap.metaOrigin}/`).toString();
-}
-
-async function loadLocale(bootstrap) {
-  try {
-    return await fetchJson(joinBase(bootstrap.basePath, `/locales/${bootstrap.locale}`));
-  } catch {
-    return {};
-  }
-}
-
-async function loadTemplates(bootstrap, fetchTemplates) {
-  const html = await fetchTemplates(joinBase(bootstrap.basePath, '/templates.html'));
-  return parseTemplates(html);
-}
-
-export function translator(catalogue) {
-  return (key, fallback) => catalogue[key] ?? fallback ?? key;
-}
 
 function sameSitePair(pairs, from, to) {
   for (const pair of pairs) {
@@ -101,20 +10,6 @@ function sameSitePair(pairs, from, to) {
 
 function surfaceFor(features, name) {
   return features.surfaces.find((surface) => surface.name === name);
-}
-
-function underBase(base, path) {
-  return base === '/' || path === base || path.startsWith(`${base}/`);
-}
-
-export function currentSurface(features, location) {
-  let best;
-  for (const surface of features.surfaces) {
-    if (!surface.origins.includes(location.origin)) continue;
-    if (!underBase(surface.base_path, location.pathname)) continue;
-    if (best === undefined || surface.base_path.length > best.base_path.length) best = surface;
-  }
-  return best ?? { name: 'account', base_path: '/' };
 }
 
 export function surfaceHref(features, current, target, path) {
@@ -149,6 +44,10 @@ export function availableRoutes(features, current) {
   }));
 }
 
+export function translator(catalogue) {
+  return (key, fallback) => catalogue[key] ?? fallback ?? key;
+}
+
 function announce(text) {
   const live = document.querySelector(LIVE_SELECTOR);
   if (live === null) return;
@@ -158,144 +57,135 @@ function announce(text) {
   }, 50);
 }
 
-function renderNav(main, routes, t, onNavigate) {
-  const nav = element('nav', { attrs: { 'aria-label': t('nav.primary', 'Primary') } });
-  const list = element('ul');
-  for (const route of routes) {
-    const link = element('a', {
-      href: route.href,
-      text: t(`nav.${route.id}`, route.id),
-      attrs: route.cross_surface ? { rel: 'external', target: '_top' } : {},
+function postPreference(path, name, value) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = path;
+  form.hidden = true;
+  const field = document.createElement('input');
+  field.type = 'hidden';
+  field.name = name;
+  field.value = value;
+  const back = document.createElement('input');
+  back.type = 'hidden';
+  back.name = 'return_to';
+  back.value = window.location.pathname + window.location.search;
+  form.append(field, back);
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function wireThemeToggle(root) {
+  for (const button of root.querySelectorAll('[data-action="toggle-theme"]')) {
+    if (button.dataset.wired === 'yes') continue;
+    button.dataset.wired = 'yes';
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      const current =
+        document.documentElement.getAttribute('data-theme') ??
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      postPreference('/theme', 'theme', next);
     });
-    if (!route.cross_surface) {
-      link.addEventListener('click', (event) => {
-        event.preventDefault();
-        onNavigate(route);
-      });
-    }
-    const item = element('li');
-    item.appendChild(link);
-    list.appendChild(item);
   }
-  nav.appendChild(list);
-  main.appendChild(nav);
 }
 
-function renderHeading(main, t, productName) {
-  const heading = element('h1', { text: productName });
-  main.appendChild(heading);
-  const lede = element('p', {
-    text: t('shell.tagline', 'Sign in, manage your account and get support.'),
-  });
-  main.appendChild(lede);
-}
-
-function renderProblem(main, t, problem) {
-  const { title, detail } = messageFor(problem.code ?? 'INTERNAL_ERROR');
-  const alert = element('div', {
-    className: 'qtiauth-alert',
-    attrs: { role: 'alert' },
-  });
-  const heading = element('h2', { text: t(`problems.${problem.code}.title`, title) });
-  const body = element('p', {
-    text: problem.detail ?? t(`problems.${problem.code}.detail`, detail),
-  });
-  alert.append(heading, body);
-  main.appendChild(alert);
-  announce(heading.textContent);
-}
-
-function currentPath(basePath, location) {
-  const base = basePath === '/' ? '' : basePath;
-  if (base === '' || !location.pathname.startsWith(base)) return location.pathname;
-  return location.pathname.slice(base.length) || '/';
-}
-
-export async function bootstrap(config) {
-  const bootstrapData = config?.bootstrap ?? readBootstrap();
-  const fetcher = config?.fetch ?? fetchJson;
-  const fetchTemplates = config?.fetchText ?? fetchText;
-  const location = config?.location ?? window.location;
-  const history = config?.history ?? window.history;
-  const app = document.querySelector(APP_SELECTOR);
-  const main = document.querySelector(MAIN_SELECTOR);
-  if (app === null || main === null) return;
-  app.setAttribute('aria-busy', 'true');
-  let features;
-  let templates;
-  try {
-    [features, templates] = await Promise.all([
-      fetcher(metaEndpoint(bootstrapData, '/api/v1/meta/features')),
-      loadTemplates(bootstrapData, fetchTemplates),
-    ]);
-  } catch (error) {
-    clear(main);
-    const problem = error instanceof ProblemFetchError ? error.problem : { code: 'INTERNAL_ERROR' };
-    const t = translator({});
-    renderProblem(main, t, problem);
-    const retry = element('button', {
-      type: 'button',
-      text: t('shell.retry', 'Try again'),
+function wireDialogs(root) {
+  for (const trigger of root.querySelectorAll('[data-dialog-open]')) {
+    if (trigger.dataset.wired === 'yes') continue;
+    trigger.dataset.wired = 'yes';
+    trigger.addEventListener('click', (event) => {
+      event.preventDefault();
+      const target = document.getElementById(trigger.dataset.dialogOpen ?? '');
+      if (target instanceof HTMLDialogElement) target.showModal();
     });
-    retry.addEventListener('click', () => {
-      void bootstrap(config);
+  }
+  for (const closer of root.querySelectorAll('[data-dialog-close]')) {
+    if (closer.dataset.wired === 'yes') continue;
+    closer.dataset.wired = 'yes';
+    closer.addEventListener('click', (event) => {
+      event.preventDefault();
+      const target = closer.closest('dialog');
+      if (target instanceof HTMLDialogElement) target.close();
     });
-    main.appendChild(retry);
-    app.setAttribute('aria-busy', 'false');
-    return;
   }
-  const catalogue = await loadLocale(bootstrapData);
-  const t = translator(catalogue);
-  const surface = currentSurface(features, location);
-  const current = surface.name;
-  const routes = availableRoutes(features, current);
-  const pages = availablePages(features, current);
-  const api = apiClient(bootstrapData);
-  const ctx = {
-    features,
-    api,
-    apiBase: bootstrapData.metaOrigin ?? bootstrapData.basePath.replace(/\/$/, ''),
-    location,
-    bootstrap: bootstrapData,
-    surface: current,
-    href: (path) => joinBase(surface.base_path, path),
-    navigate: (path) => {
-      history.pushState({}, '', joinBase(surface.base_path, path));
-      renderCurrent(path);
-    },
-  };
-  const renderCurrent = (path) => {
-    clear(main);
-    renderHeading(main, t, features.branding.product_name);
-    renderNav(main, routes, t, (route) => ctx.navigate(route.path));
-    const match = matchPage(pages, path);
-    if (match !== null) {
-      try {
-        const view = mountPage(main, templates, match.page.id, t, ctx);
-        const title = view.nodes.find((node) => node.localName === 'h2')?.textContent;
-        match.page.render?.(view, t, ctx, match.params);
-        announce(title ?? match.page.id);
-      } catch (error) {
-        renderProblem(main, t, { code: 'INTERNAL_ERROR', detail: String(error?.message ?? error) });
-      }
-    }
-    main.focus();
-  };
-  if (popstateHandler !== null) {
-    window.removeEventListener('popstate', popstateHandler);
-  }
-  popstateHandler = () => renderCurrent(currentPath(surface.base_path, location));
-  window.addEventListener('popstate', popstateHandler);
-  renderCurrent(currentPath(surface.base_path, location));
-  app.setAttribute('aria-busy', 'false');
 }
 
-export { availablePages, matchPage, PAGES };
+function wireToastDismiss(root) {
+  for (const toast of root.querySelectorAll('[data-toast] [data-action="dismiss"]')) {
+    if (toast.dataset.wired === 'yes') continue;
+    toast.dataset.wired = 'yes';
+    toast.addEventListener('click', (event) => {
+      event.preventDefault();
+      const owner = toast.closest('[data-toast]');
+      if (owner !== null) owner.remove();
+    });
+  }
+}
 
-if (typeof window !== 'undefined' && document.readyState !== 'loading') {
-  bootstrap();
-} else if (typeof window !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', () => {
-    void bootstrap();
+function readFormValues(form) {
+  const values = {};
+  for (const input of form.elements) {
+    if (input.name === '' || input.type === 'submit' || input.type === 'button') continue;
+    values[input.name] = input.type === 'checkbox' ? input.checked : input.value;
+  }
+  return values;
+}
+
+async function submitForm(form) {
+  const action = form.getAttribute('action') ?? window.location.pathname;
+  const method = (form.getAttribute('method') ?? 'POST').toUpperCase();
+  const payload = readFormValues(form);
+  const response = await fetch(action, {
+    method,
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify(payload),
   });
+  return response;
+}
+
+function wireAsyncForms(root) {
+  for (const form of root.querySelectorAll('form[data-form]')) {
+    if (form.dataset.wired === 'yes') continue;
+    form.dataset.wired = 'yes';
+    form.addEventListener('submit', (event) => {
+      if (!form.hasAttribute('data-async')) return;
+      event.preventDefault();
+      form.setAttribute('aria-busy', 'true');
+      void submitForm(form)
+        .then((response) => {
+          form.setAttribute('aria-busy', 'false');
+          if (response.redirected) {
+            window.location.assign(response.url);
+            return;
+          }
+          announce(form.dataset.announceSubmit ?? 'Saved');
+        })
+        .catch(() => {
+          form.setAttribute('aria-busy', 'false');
+          announce(form.dataset.announceError ?? 'Something went wrong');
+        });
+    });
+  }
+}
+
+function focusMain() {
+  const main = document.getElementById('qtiauth-main');
+  if (main === null) return;
+  main.focus();
+}
+
+function enhance() {
+  wireThemeToggle(document);
+  wireDialogs(document);
+  wireToastDismiss(document);
+  wireAsyncForms(document);
+  focusMain();
+}
+
+if (typeof window !== 'undefined') {
+  if (document.readyState !== 'loading') enhance();
+  else document.addEventListener('DOMContentLoaded', enhance);
 }

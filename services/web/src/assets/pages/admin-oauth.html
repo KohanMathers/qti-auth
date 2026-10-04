@@ -1,41 +1,126 @@
-<h2 data-t="routes.admin.oauth.title">OAuth client verification</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Admin">
+    <a class="qt-brand qt-brand--compact" href="/admin" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Admin sections">
+      <a href="/admin" data-link data-t="admin.section.overview">Overview</a>
+      <a href="/admin/users" data-link data-t="admin.section.users">Users</a>
+      <a href="/admin/moderation" data-link data-t="admin.section.moderation">Moderation</a>
+      <a href="/admin/oauth" data-link data-current="page" data-t="admin.section.oauth">OAuth clients</a>
+      <a href="/admin/webhooks" data-link data-t="admin.section.webhooks">Webhooks</a>
+      <a href="/admin/games" data-link data-t="admin.section.games">Games</a>
+      <a href="/admin/audit" data-link data-t="admin.section.audit">Audit log</a>
+    </nav>
+  </aside>
 
-<div data-slot="rows">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="rows">
-      <li>
-        <a href="/admin/oauth" data-link data-bind-href="path" data-field="name"></a>
-        <span class="qtiauth-muted" data-field="client_id"></span>
-        <span data-field="status"></span>
-        <button
-          type="button"
-          data-action="verify"
-          data-bind-hidden="verified"
-          data-t="admin.oauth.verify"
-        >
-          Verify
-        </button>
-        <button
-          type="button"
-          class="qtiauth-button qtiauth-button-danger"
-          data-action="suspend"
-          data-bind-hidden="suspended"
-          data-t="admin.oauth.suspend"
-        >
-          Suspend
-        </button>
-        <button
-          type="button"
-          class="qtiauth-button qtiauth-button-ghost"
-          data-action="unsuspend"
-          data-bind-hidden="active"
-          data-t="admin.oauth.unsuspend"
-        >
-          Unsuspend
-        </button>
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/admin" data-link data-t="admin.breadcrumb.root">Admin</a></li>
+          <li aria-current="page" data-t="routes.admin.oauth.title">OAuth client verification</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.admin.oauth.title">OAuth client verification</h2>
+        <p class="qtiauth-lede" data-t="routes.admin.oauth.body">
+          Review registered OAuth clients. Verify legitimate apps and suspend abusive ones.
+        </p>
+      </header>
+
+      <form class="qt-form qt-cluster" data-form="filter" novalidate>
+        <p class="qt-field">
+          <label class="qt-visually-hidden" for="qt-f-oauth-search" data-t="admin.oauth.search">Search clients</label>
+          <input id="qt-f-oauth-search" class="qt-input" name="q" type="search" autocomplete="off" placeholder="Search by name or client ID" />
+        </p>
+        <p class="qt-field">
+          <label class="qt-visually-hidden" for="qt-f-oauth-status" data-t="admin.oauth.filter.status">Status</label>
+          <select id="qt-f-oauth-status" class="qt-select" name="status">
+            <option value="" data-t="admin.oauth.filter.all">All statuses</option>
+            <option value="pending" data-t="admin.oauth.filter.pending">Pending</option>
+            <option value="verified" data-t="admin.oauth.filter.verified">Verified</option>
+            <option value="suspended" data-t="admin.oauth.filter.suspended">Suspended</option>
+          </select>
+        </p>
+        <p class="qt-actions">
+          <button type="submit" class="qt-button" data-variant="secondary" data-t="admin.oauth.apply">Apply</button>
+        </p>
+      </form>
+
+      <div data-slot="rows" class="qt-stack">
+        <div class="qt-table-wrap">
+          <table class="qt-table" data-variant="hoverable" data-size="md" data-state="list">
+            <thead>
+              <tr>
+                <th scope="col" data-t="admin.oauth.col.name">Name</th>
+                <th scope="col" data-t="admin.oauth.col.clientId">Client ID</th>
+                <th scope="col" data-t="admin.oauth.col.status">Status</th>
+                <th scope="col" class="qt-table__actions" data-t="admin.oauth.col.actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template data-item="rows">
+                <tr>
+                  <td>
+                    <a href="/admin/oauth" class="qtiauth-list" data-link data-bind-href="path" data-field="name"></a>
+                  </td>
+                  <td><code class="qt-code qtiauth-muted" data-field="client_id"></code></td>
+                  <td>
+                    <span class="qt-badge" data-variant="neutral" data-field="status"></span>
+                  </td>
+                  <td class="qt-table__actions qt-cluster">
+                    <button
+                      type="button"
+                      class="qt-button"
+                      data-variant="primary"
+                      data-size="sm"
+                      data-action="verify"
+                      data-bind-hidden="verified"
+                      data-t="admin.oauth.verify"
+                    >
+                      Verify
+                    </button>
+                    <button
+                      type="button"
+                      class="qtiauth-button qtiauth-button-danger qt-button"
+                      data-variant="danger"
+                      data-size="sm"
+                      data-action="suspend"
+                      data-bind-hidden="suspended"
+                      data-t="admin.oauth.suspend"
+                    >
+                      Suspend
+                    </button>
+                    <button
+                      type="button"
+                      class="qtiauth-button qtiauth-button-ghost qt-button"
+                      data-variant="ghost"
+                      data-size="sm"
+                      data-action="unsuspend"
+                      data-bind-hidden="active"
+                      data-t="admin.oauth.unsuspend"
+                    >
+                      Unsuspend
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="qt-empty-state qtiauth-empty" data-state="empty">
+          <h3 class="qt-empty-state__title" data-t="admin.empty">Nothing to show.</h3>
+          <p class="qt-empty-state__desc" data-t="admin.oauth.empty.desc">No OAuth clients match the current filter.</p>
+        </div>
+        <p class="qt-message qtiauth-empty" data-variant="danger" data-state="error" role="alert" data-t="admin.load.error">Could not load data.</p>
+      </div>
+    </main>
+  </div>
 </div>

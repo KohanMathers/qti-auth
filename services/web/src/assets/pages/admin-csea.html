@@ -1,14 +1,101 @@
-<h2 data-t="routes.admin.csea.title">CSEA cases</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Admin">
+    <a class="qt-brand qt-brand--compact" href="/admin" data-link>
+      <span data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Admin sections">
+      <a href="/admin/users" data-link>Users</a>
+      <a href="/admin/moderation" data-link>Moderation</a>
+      <a href="/admin/appeals" data-link>Appeals</a>
+      <a href="/admin/csea" data-link data-current="page">CSEA</a>
+      <a href="/admin/audit" data-link>Audit</a>
+    </nav>
+  </aside>
 
-<div data-slot="rows">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="rows">
-      <li>
-        <a href="/admin/csea" data-link data-bind-href="path" data-field="opened_at"></a> —
-        <span data-field="status"></span>
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/admin" data-link>Admin</a></li>
+          <li aria-current="page">CSEA</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <p
+        class="qt-message qtiauth-alert"
+        data-variant="danger"
+        role="alert"
+        data-t="admin.csea.banner"
+      >
+        Sensitive child-safety data. Every view, open, and action on this surface is access-logged
+        and visible to the Safeguarding Lead. Do not share screenshots or exports. Access limited
+        to designated CSEA handlers.
+      </p>
+
+      <header class="qt-stack qt-stack--sm">
+        <h2 data-t="routes.admin.csea.title">CSEA cases</h2>
+        <p class="qtiauth-lede" data-t="admin.csea.lede">
+          Open cases pending NCA submission or closure. Order by deadline.
+        </p>
+      </header>
+
+      <div data-slot="rows">
+        <div class="qt-table-wrap" data-state="list">
+          <table class="qt-table" data-variant="hoverable" data-size="md">
+            <thead>
+              <tr>
+                <th scope="col" data-t="admin.csea.col.opened">Opened</th>
+                <th scope="col" data-t="admin.csea.col.priority">NCA priority</th>
+                <th scope="col" data-t="admin.csea.col.deadline">Submit by</th>
+                <th scope="col" data-t="admin.csea.col.status">Status</th>
+                <th scope="col" class="qt-table__actions" data-t="admin.csea.col.actions">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template data-item="rows">
+                <tr>
+                  <td>
+                    <a
+                      href="/admin/csea"
+                      data-link
+                      data-bind-href="path"
+                      data-field="opened_at"
+                    ></a>
+                  </td>
+                  <td><span class="qt-badge" data-variant="danger" data-field="nca_priority"></span></td>
+                  <td><span class="qt-text-muted" data-field="deadline"></span></td>
+                  <td><span class="qt-badge" data-variant="warning" data-field="status"></span></td>
+                  <td class="qt-table__actions">
+                    <a
+                      class="qt-button"
+                      data-variant="danger"
+                      data-size="sm"
+                      data-link
+                      data-bind-href="path"
+                      href="/admin/csea"
+                      data-t="admin.csea.open"
+                    >Open case</a>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="qt-empty-state" data-state="empty">
+          <h3 class="qt-empty-state__title" data-t="admin.empty">Nothing to show.</h3>
+          <p class="qt-empty-state__desc" data-t="admin.csea.empty.desc">
+            No open CSEA cases are assigned to you.
+          </p>
+        </div>
+        <p class="qt-message" data-variant="danger" data-state="error" role="alert" data-t="admin.load.error">
+          Could not load data.
+        </p>
+      </div>
+    </main>
+  </div>
 </div>

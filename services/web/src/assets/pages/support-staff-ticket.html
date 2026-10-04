@@ -1,67 +1,149 @@
-<h2 data-t="routes.support.staff.ticket.title">Ticket</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Support staff">
+    <a class="qt-brand qt-brand--compact" href="/staff" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Support staff">
+      <a href="/staff" data-link data-t="support.staff.section.overview">Support staff</a>
+      <a href="/staff/tickets" data-link data-current="page" data-t="support.staff.section.queue">Queue</a>
+      <a href="/staff/metrics" data-link data-t="support.staff.section.metrics">Metrics</a>
+      <a href="/staff/macros" data-link data-t="support.staff.section.macros">Canned responses</a>
+      <a href="/staff/kb" data-link data-t="support.staff.section.kb">Knowledge base</a>
+    </nav>
+  </aside>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/staff" data-link>Support staff</a></li>
+          <li><a href="/staff/tickets" data-link>Queue</a></li>
+          <li aria-current="page" data-t="routes.support.staff.ticket.title">Ticket</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.support.staff.ticket.title">Ticket</h2>
+      </header>
 
-<div data-slot="ticket">
-  <div data-state="ready">
-    <h3>#<span data-field="number"></span> — <span data-field="subject"></span></h3>
-    <p class="qtiauth-muted">
-      <span data-field="status"></span> — <span data-field="priority"></span> —
-      <span data-field="created_at"></span>
-    </p>
+      <div data-slot="ticket">
+        <div data-state="ready" class="qt-cluster qt-stack--lg">
+          <section class="qt-card">
+            <header class="qt-card__header">
+              <h3>#<span data-field="number"></span> — <span data-field="subject"></span></h3>
+              <p class="qtiauth-muted">
+                <span data-field="status"></span> — <span data-field="priority"></span> —
+                <span data-field="created_at"></span>
+              </p>
+            </header>
+            <div class="qt-card__body qt-stack qt-stack--lg">
+              <ol class="qtiauth-thread qt-stack">
+                <template data-item="messages">
+                  <li data-bind-class="class" class="qt-card qt-card--plain">
+                    <p class="qtiauth-muted">
+                      <span data-show="staff" data-t="tickets.staff">Staff</span
+                      ><span data-show="!staff" data-t="tickets.user">User</span> —
+                      <span data-field="created_at"></span>
+                    </p>
+                    <p data-field="body"></p>
+                  </li>
+                </template>
+              </ol>
 
-    <ol class="qtiauth-thread">
-      <template data-item="messages">
-        <li data-bind-class="class">
-          <p class="qtiauth-muted">
-            <span data-show="staff" data-t="tickets.staff">Staff</span
-            ><span data-show="!staff" data-t="tickets.user">User</span> —
-            <span data-field="created_at"></span>
-          </p>
-          <p data-field="body"></p>
-        </li>
-      </template>
-    </ol>
+              <section class="qt-stack">
+                <h3 data-t="support.staff.notes.heading">Internal notes</h3>
+                <ol class="qtiauth-thread qt-stack">
+                  <template data-item="notes">
+                    <li class="qtiauth-message qtiauth-message-note qt-message" data-variant="warning">
+                      <p class="qtiauth-muted" data-field="created_at"></p>
+                      <p data-field="body"></p>
+                    </li>
+                  </template>
+                </ol>
+                <form data-form="note" class="qt-form" novalidate>
+                  <p class="qtiauth-field">
+                    <label for="qtiauth-f-note" data-t="field.note">Note</label>
+                    <input id="qtiauth-f-note" name="body" type="text" autocomplete="off" required />
+                  </p>
+                  <p class="qtiauth-actions">
+                    <button type="submit" data-t="support.staff.notes.submit">Add note</button>
+                  </p>
+                  <template data-message="success">
+                    <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="support.staff.notes.success">
+                      Note added.
+                    </p>
+                  </template>
+                </form>
+              </section>
 
-    <h3 data-t="support.staff.notes.heading">Internal notes</h3>
-    <ol class="qtiauth-thread">
-      <template data-item="notes">
-        <li class="qtiauth-message qtiauth-message-note">
-          <p class="qtiauth-muted" data-field="created_at"></p>
-          <p data-field="body"></p>
-        </li>
-      </template>
-    </ol>
-    <form data-form="note" novalidate>
-      <p class="qtiauth-field">
-        <label for="qtiauth-f-note" data-t="field.note">Note</label>
-        <input id="qtiauth-f-note" name="body" type="text" autocomplete="off" required />
-      </p>
-      <p class="qtiauth-actions">
-        <button type="submit" data-t="support.staff.notes.submit">Add note</button>
-      </p>
-      <template data-message="success">
-        <p class="qtiauth-success" role="status" data-t="support.staff.notes.success">
-          Note added.
+              <section class="qt-stack">
+                <h3 data-t="support.staff.reply.heading">Reply as staff</h3>
+                <form data-form="reply" class="qt-form" novalidate>
+                  <p class="qtiauth-field">
+                    <label for="qtiauth-f-reply" data-t="field.message">Message</label>
+                    <input id="qtiauth-f-reply" name="body" type="text" autocomplete="off" required />
+                  </p>
+                  <p class="qtiauth-actions">
+                    <button type="submit" data-t="support.staff.reply.submit">Send staff reply</button>
+                  </p>
+                  <template data-message="success">
+                    <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="support.staff.reply.success">
+                      Reply sent.
+                    </p>
+                  </template>
+                </form>
+              </section>
+            </div>
+          </section>
+
+          <aside class="qt-card" aria-label="Staff actions">
+            <header class="qt-card__header">
+              <h3 data-t="support.staff.actions.heading">Staff actions</h3>
+            </header>
+            <div class="qt-card__body qt-stack">
+              <p class="qtiauth-field">
+                <label for="qtiauth-f-assign" data-t="support.staff.actions.assign">Assign</label>
+                <input id="qtiauth-f-assign" name="assignee" type="text" autocomplete="off" data-action="assign" />
+              </p>
+              <p class="qtiauth-field">
+                <label for="qtiauth-f-priority" data-t="support.staff.actions.priority">Priority</label>
+                <select id="qtiauth-f-priority" name="priority" class="qt-select" data-action="set-priority">
+                  <option value="low" data-t="support.staff.queue.filter.low">Low</option>
+                  <option value="normal" data-t="support.staff.queue.filter.normal">Normal</option>
+                  <option value="high" data-t="support.staff.queue.filter.high">High</option>
+                  <option value="urgent" data-t="support.staff.queue.filter.urgent">Urgent</option>
+                </select>
+              </p>
+              <p class="qtiauth-field">
+                <label for="qtiauth-f-status-set" data-t="support.staff.actions.status">Status</label>
+                <select id="qtiauth-f-status-set" name="status" class="qt-select" data-action="set-status">
+                  <option value="open" data-t="support.staff.queue.filter.open">Open</option>
+                  <option value="pending" data-t="support.staff.queue.filter.pending">Pending</option>
+                  <option value="resolved" data-t="support.staff.queue.filter.resolved">Resolved</option>
+                  <option value="closed" data-t="support.staff.queue.filter.closed">Closed</option>
+                </select>
+              </p>
+              <p class="qtiauth-field">
+                <label for="qtiauth-f-macro" data-t="support.staff.actions.macro">Insert macro</label>
+                <select id="qtiauth-f-macro" name="macro" class="qt-select" data-action="insert-macro">
+                  <template data-item="macros">
+                    <option data-bind-value="id" data-field="name"></option>
+                  </template>
+                </select>
+              </p>
+              <p class="qtiauth-actions">
+                <a class="qt-button" data-variant="ghost" href="#qtiauth-f-note" data-link data-t="support.staff.actions.jumpNote">Add internal note</a>
+              </p>
+            </div>
+          </aside>
+        </div>
+        <p class="qtiauth-empty" data-state="error" data-t="support.staff.ticket.load.error">
+          Could not load ticket.
         </p>
-      </template>
-    </form>
-
-    <h3 data-t="support.staff.reply.heading">Reply as staff</h3>
-    <form data-form="reply" novalidate>
-      <p class="qtiauth-field">
-        <label for="qtiauth-f-reply" data-t="field.message">Message</label>
-        <input id="qtiauth-f-reply" name="body" type="text" autocomplete="off" required />
-      </p>
-      <p class="qtiauth-actions">
-        <button type="submit" data-t="support.staff.reply.submit">Send staff reply</button>
-      </p>
-      <template data-message="success">
-        <p class="qtiauth-success" role="status" data-t="support.staff.reply.success">
-          Reply sent.
-        </p>
-      </template>
-    </form>
+      </div>
+    </main>
   </div>
-  <p class="qtiauth-empty" data-state="error" data-t="support.staff.ticket.load.error">
-    Could not load ticket.
-  </p>
 </div>

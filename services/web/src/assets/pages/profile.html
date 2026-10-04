@@ -1,33 +1,89 @@
-<h2 data-t="routes.profile.title">Profile</h2>
-<p class="qtiauth-lede" data-t="profile.lede">How your account looks to others.</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link data-current="page">Account</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<div data-slot="profile">
-  <dl class="qtiauth-details" data-state="ready">
-    <dt data-t="profile.field.username">Username</dt>
-    <dd data-field="username"></dd>
-    <dt data-t="profile.field.email">Email</dt>
-    <dd data-field="email"></dd>
-  </dl>
-  <p class="qtiauth-empty" data-state="error" data-t="profile.load.error">
-    Could not load profile.
-  </p>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Account sections">
+      <nav class="qt-nav-list" aria-label="Account sections">
+        <a href="/account" data-link>Overview</a>
+        <a href="/account/profile" data-link data-current="page">Profile</a>
+        <a href="/account/email" data-link>Change email</a>
+        <a href="/account/security" data-link>Security</a>
+        <a href="/account/sessions" data-link>Signed-in sessions</a>
+        <a href="/account/methods" data-link>Connected sign-in methods</a>
+        <a href="/account/notifications" data-link>Notification preferences</a>
+        <a href="/account/legal" data-link>Legal acceptance</a>
+        <a href="/account/data" data-link>Data export and deletion</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.profile.title">Profile</h2>
+        <p class="qtiauth-lede" data-t="profile.lede">How your account looks to others.</p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="profile.overview.heading">Overview</h3>
+          <p class="qt-text-muted" data-t="profile.overview.body">The details other people can see.</p>
+        </header>
+        <div class="qt-card__body">
+          <div data-slot="profile">
+            <dl class="qtiauth-details" data-state="ready">
+              <dt data-t="profile.field.username">Username</dt>
+              <dd data-field="username"></dd>
+              <dt data-t="profile.field.email">Email</dt>
+              <dd data-field="email"></dd>
+            </dl>
+            <p class="qt-message qtiauth-empty" data-variant="danger" role="alert" data-state="error" data-t="profile.load.error">
+              Could not load profile.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="profile.username.heading">Change username</h3>
+        </header>
+        <div class="qt-card__body">
+          <form class="qt-form" data-form="username" novalidate>
+            <p class="qtiauth-field qt-field">
+              <label class="qt-label" for="qtiauth-f-username" data-t="field.username">Username</label>
+              <input class="qt-input" id="qtiauth-f-username" name="username" type="text" autocomplete="username" required />
+            </p>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-t="profile.username.submit">Save username</button>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="profile.username.success">Username saved.</p>
+            </template>
+            <template data-message="pending">
+              <p class="qtiauth-success qt-message" data-variant="info" role="status" data-t="profile.username.pending">
+                We’ve asked your parent or guardian to approve your new username.
+              </p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </section>
+  </div>
 </div>
-
-<h3 data-t="profile.username.heading">Change username</h3>
-<form data-form="username" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-username" data-t="field.username">Username</label>
-    <input id="qtiauth-f-username" name="username" type="text" autocomplete="username" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="profile.username.submit">Save username</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="profile.username.success">Username saved.</p>
-  </template>
-  <template data-message="pending">
-    <p class="qtiauth-success" role="status" data-t="profile.username.pending">
-      We’ve asked your parent or guardian to approve your new username.
-    </p>
-  </template>
-</form>

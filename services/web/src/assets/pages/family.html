@@ -1,12 +1,58 @@
-<h2 data-t="routes.family.title">Family dashboard</h2>
-<p class="qtiauth-lede" data-t="family.lede">Manage children linked to your account.</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link>Account</a>
+        <a href="/family" data-link data-current="page">Family</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<div data-slot="children">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="children">
-      <li><a data-link data-bind-href="path" data-field="name"></a></li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="family.empty">No linked children.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="family.load.error">Could not load family.</p>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Family sections">
+      <nav class="qt-nav-list" aria-label="Family sections">
+        <a href="/family" data-link data-current="page">Overview</a>
+        <a href="/family/invite" data-link>Accept invite</a>
+        <a href="/family/session" data-link>Open dashboard</a>
+        <a href="/family/leave" data-link>Leave family</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.family.title">Family dashboard</h2>
+        <p class="qtiauth-lede" data-t="family.lede">Manage children linked to your account.</p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="family.children.heading">Linked children</h3>
+          <p class="qt-text-muted" data-t="family.children.body">Open a child dashboard to review controls, requests and signed-in devices.</p>
+        </header>
+        <div class="qt-card__body">
+          <div data-slot="children">
+            <ul class="qtiauth-list qt-nav-list" data-state="list">
+              <template data-item="children">
+                <li><a data-link data-bind-href="path" data-field="name"></a></li>
+              </template>
+            </ul>
+            <p class="qtiauth-empty" data-state="empty" data-t="family.empty">No linked children.</p>
+            <p class="qtiauth-empty" data-state="error" data-t="family.load.error">Could not load family.</p>
+          </div>
+        </div>
+      </article>
+    </section>
+  </div>
 </div>

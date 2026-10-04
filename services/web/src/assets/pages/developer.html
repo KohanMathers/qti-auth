@@ -1,61 +1,129 @@
-<h2 data-t="routes.developer.title">Developer portal</h2>
-<p class="qtiauth-lede" data-t="developer.lede">OAuth clients you have registered.</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/developer" data-link data-current="page">Developer</a>
+        <a href="/account" data-link>Account</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<div data-slot="clients">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="clients">
-      <li>
-        <span data-field="name"></span>
-        <span class="qtiauth-muted" data-field="client_id"></span>
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="developer.empty">No OAuth clients yet.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="developer.load.error">
-    Could not load clients.
-  </p>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Developer sections">
+      <nav class="qt-nav-list" aria-label="Developer sections">
+        <a href="/developer" data-link data-current="page">OAuth clients</a>
+        <a href="/developer/webhooks" data-link>Webhooks</a>
+        <a href="/developer/docs" data-link>Docs</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.developer.title">Developer portal</h2>
+        <p class="qtiauth-lede" data-t="developer.lede">OAuth clients you have registered.</p>
+      </header>
+
+      <div data-slot="clients" class="qt-stack qt-stack--lg">
+        <div data-state="list" class="qt-stack qt-stack--lg">
+          <template data-item="clients">
+            <article class="qt-card">
+              <header class="qt-card__header">
+                <h3 data-field="name"></h3>
+                <p class="qt-text-muted"><code class="qt-code" data-field="client_id"></code></p>
+              </header>
+              <div class="qt-card__body qt-stack">
+                <form data-form="redirects" novalidate>
+                  <p class="qtiauth-field">
+                    <label for="qtiauth-f-redirect-uris" data-t="field.redirectUris">Redirect URIs (whitespace separated)</label>
+                    <input id="qtiauth-f-redirect-uris" class="qt-input" name="redirect_uris" type="text" autocomplete="off" data-bind-value="redirect_uris" required />
+                  </p>
+                  <p class="qtiauth-actions qt-actions">
+                    <button type="submit" class="qt-button" data-variant="primary" data-t="developer.redirects.save">Save redirect URIs</button>
+                  </p>
+                  <template data-message="success">
+                    <p class="qt-message qtiauth-success" data-variant="success" role="status" data-t="developer.redirects.success">Redirect URIs updated.</p>
+                  </template>
+                </form>
+              </div>
+              <footer class="qt-card__footer">
+                <form data-form="rotate" novalidate>
+                  <button type="submit" class="qt-button qtiauth-button qtiauth-button-danger" data-variant="danger" data-action="rotate-secret" data-t="developer.rotate.submit">Rotate client secret</button>
+                  <template data-message="success">
+                    <p class="qt-message qtiauth-success" data-variant="success" role="status" data-t="developer.rotate.success">New secret: {secret}. Copy it now: it won't be shown again.</p>
+                  </template>
+                </form>
+              </footer>
+            </article>
+          </template>
+        </div>
+        <p class="qtiauth-empty qt-empty-state" data-state="empty" data-t="developer.empty">No OAuth clients yet.</p>
+        <p class="qtiauth-empty qt-message" data-variant="danger" data-state="error" role="alert" data-t="developer.load.error">
+          Could not load clients.
+        </p>
+      </div>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="developer.create.heading">Register a new client</h3>
+        </header>
+        <div class="qt-card__body">
+          <form data-form="create" class="qt-form" novalidate>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-name" data-t="field.clientName">Client name</label>
+              <input id="qtiauth-f-name" class="qt-input" name="name" type="text" autocomplete="off" required />
+            </p>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-redirect-uris" data-t="field.redirectUris"
+                >Redirect URIs (whitespace separated)</label
+              >
+              <input
+                id="qtiauth-f-redirect-uris"
+                class="qt-input"
+                name="redirect_uris"
+                type="text"
+                autocomplete="off"
+                required
+              />
+            </p>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-type" data-t="field.clientType">Client type</label>
+              <select id="qtiauth-f-type" class="qt-select" name="type">
+                <option value="confidential" data-t="developer.type.confidential">
+                  Confidential (runs on a server that can keep a secret)
+                </option>
+                <option value="public" data-t="developer.type.public">
+                  Public (runs on a device, such as a game or app)
+                </option>
+              </select>
+            </p>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-t="developer.create.submit">Create client</button>
+            </p>
+            <template data-message="success">
+              <p class="qt-message qtiauth-success" data-variant="success" role="status" data-t="developer.create.success">
+                Client {client_id} created.
+              </p>
+            </template>
+            <template data-message="success-secret">
+              <p class="qt-message qtiauth-success" data-variant="success" role="status" data-t="developer.create.successSecret">
+                Client {client_id} created. Its secret is {secret}. Copy it now: it won't be shown again.
+              </p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </section>
+  </div>
 </div>
-
-<h3 data-t="developer.create.heading">Register a new client</h3>
-<form data-form="create" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-name" data-t="field.clientName">Client name</label>
-    <input id="qtiauth-f-name" name="name" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-redirect-uris" data-t="field.redirectUris"
-      >Redirect URIs (whitespace separated)</label
-    >
-    <input
-      id="qtiauth-f-redirect-uris"
-      name="redirect_uris"
-      type="text"
-      autocomplete="off"
-      required
-    />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-type" data-t="field.clientType">Client type</label>
-    <select id="qtiauth-f-type" name="type">
-      <option value="confidential" data-t="developer.type.confidential">
-        Confidential (runs on a server that can keep a secret)
-      </option>
-      <option value="public" data-t="developer.type.public">
-        Public (runs on a device, such as a game or app)
-      </option>
-    </select>
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="developer.create.submit">Create client</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="developer.create.success">
-      Client {client_id} created.
-    </p>
-  </template>
-  <template data-message="success-secret">
-    <p class="qtiauth-success" role="status" data-t="developer.create.successSecret">
-      Client {client_id} created. Its secret is {secret}. Copy it now: it won’t be shown again.
-    </p>
-  </template>
-</form>

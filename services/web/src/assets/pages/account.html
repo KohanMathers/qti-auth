@@ -1,36 +1,76 @@
-<h2 data-t="routes.account.title">Your account</h2>
-<p class="qtiauth-lede" data-t="routes.account.body">
-  Manage your profile, sign-in methods and connected apps.
-</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link data-current="page">Account</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<ul class="qtiauth-list">
-  <li><a href="/account/profile" data-link data-t="account.section.profile">Profile</a></li>
-  <li><a href="/account/email" data-link data-t="account.section.email">Change email</a></li>
-  <li><a href="/account/security" data-link data-t="account.section.security">Security</a></li>
-  <li>
-    <a href="/account/sessions" data-link data-t="account.section.sessions">Signed-in sessions</a>
-  </li>
-  <li>
-    <a href="/account/methods" data-link data-t="account.section.methods"
-      >Connected sign-in methods</a
-    >
-  </li>
-  <li>
-    <a href="/account/notifications" data-link data-t="account.section.notifications"
-      >Notification preferences</a
-    >
-  </li>
-  <li><a href="/account/legal" data-link data-t="account.section.legal">Legal acceptance</a></li>
-  <li>
-    <a href="/account/data" data-link data-t="account.section.data">Data export and deletion</a>
-  </li>
-</ul>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Account sections">
+      <nav class="qt-nav-list" aria-label="Account sections">
+        <a href="/account" data-link data-current="page">Overview</a>
+        <a href="/account/profile" data-link data-t="account.section.profile">Profile</a>
+        <a href="/account/email" data-link data-t="account.section.email">Change email</a>
+        <a href="/account/security" data-link data-t="account.section.security">Security</a>
+        <a href="/account/sessions" data-link data-t="account.section.sessions">Signed-in sessions</a>
+        <a href="/account/methods" data-link data-t="account.section.methods">Connected sign-in methods</a>
+        <a href="/account/notifications" data-link data-t="account.section.notifications">Notification preferences</a>
+        <a href="/account/legal" data-link data-t="account.section.legal">Legal acceptance</a>
+        <a href="/account/data" data-link data-t="account.section.data">Data export and deletion</a>
+      </nav>
+    </aside>
 
-<button
-  type="button"
-  class="qtiauth-button qtiauth-button-ghost"
-  data-action="sign-out"
-  data-t="account.signOut"
->
-  Sign out
-</button>
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.account.title">Your account</h2>
+        <p class="qtiauth-lede" data-t="routes.account.body">
+          Manage your profile, sign-in methods and connected apps.
+        </p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="account.sections.heading">Account settings</h3>
+          <p class="qt-text-muted" data-t="account.sections.body">Jump into any section below.</p>
+        </header>
+        <div class="qt-card__body">
+          <ul class="qtiauth-list qt-nav-list">
+            <li><a href="/account/profile" data-link data-t="account.section.profile">Profile</a></li>
+            <li><a href="/account/email" data-link data-t="account.section.email">Change email</a></li>
+            <li><a href="/account/security" data-link data-t="account.section.security">Security</a></li>
+            <li><a href="/account/sessions" data-link data-t="account.section.sessions">Signed-in sessions</a></li>
+            <li><a href="/account/methods" data-link data-t="account.section.methods">Connected sign-in methods</a></li>
+            <li><a href="/account/notifications" data-link data-t="account.section.notifications">Notification preferences</a></li>
+            <li><a href="/account/legal" data-link data-t="account.section.legal">Legal acceptance</a></li>
+            <li><a href="/account/data" data-link data-t="account.section.data">Data export and deletion</a></li>
+          </ul>
+        </div>
+        <footer class="qt-card__footer">
+          <button
+            type="button"
+            class="qtiauth-button qtiauth-button-ghost qt-button"
+            data-variant="ghost"
+            data-action="sign-out"
+            data-t="account.signOut"
+          >
+            Sign out
+          </button>
+        </footer>
+      </article>
+    </section>
+  </div>
+</div>

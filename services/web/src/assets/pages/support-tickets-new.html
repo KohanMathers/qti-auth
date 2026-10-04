@@ -1,30 +1,90 @@
-<h2 data-t="routes.tickets.new.title">Open a support ticket</h2>
-<p class="qtiauth-lede" data-t="tickets.new.lede">
-  Choose a category and describe what you need help with.
-</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link>Account</a>
+        <a href="/support" data-link data-current="page">Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<form data-form="ticket" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-category" data-t="field.category">Category</label>
-    <select id="qtiauth-f-category" name="category_id" data-part="categories" required>
-      <option value="" data-t="tickets.new.pickCategory">Choose a category</option>
-      <template data-item="categories">
-        <option data-bind-value="id" data-field="name"></option>
-      </template>
-    </select>
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-subject" data-t="field.subject">Subject</label>
-    <input id="qtiauth-f-subject" name="subject" type="text" required />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-body" data-t="field.message">Message</label>
-    <textarea id="qtiauth-f-body" name="body" rows="6" required></textarea>
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="tickets.new.submit">Open ticket</button>
-  </p>
-</form>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Support sections">
+      <nav class="qt-nav-list" aria-label="Support sections">
+        <a href="/support" data-link>Overview</a>
+        <a href="/kb" data-link data-t="support.section.kb">Help centre</a>
+        <a href="/kb/search" data-link data-t="support.section.search">Search articles</a>
+        <a href="/tickets" data-link data-t="support.section.tickets">Your tickets</a>
+        <a href="/tickets/new" data-link data-current="page" data-t="support.section.newTicket">Open a ticket</a>
+        <a href="/appeals/new" data-link data-t="support.section.appeal">Appeal a decision</a>
+        <a href="/guest/start" data-link data-t="support.section.guest">Guest support</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.tickets.new.title">Open a support ticket</h2>
+        <p class="qtiauth-lede" data-t="tickets.new.lede">
+          Choose a category and describe what you need help with.
+        </p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="tickets.new.heading">New ticket</h3>
+          <p class="qt-text-muted" data-t="tickets.new.body">Give us as much detail as you can.</p>
+        </header>
+        <div class="qt-card__body">
+          <form data-form="ticket" class="qt-form" novalidate>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-category" class="qt-label" data-t="field.category">Category</label>
+              <select id="qtiauth-f-category" class="qt-select" name="category_id" data-part="categories" required>
+                <option value="" data-t="tickets.new.pickCategory">Choose a category</option>
+                <template data-item="categories">
+                  <option data-bind-value="id" data-field="name"></option>
+                </template>
+              </select>
+            </p>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-subject" class="qt-label" data-t="field.subject">Subject</label>
+              <input id="qtiauth-f-subject" class="qt-input" name="subject" type="text" autocomplete="off" required />
+            </p>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-body" class="qt-label" data-t="field.message">Message</label>
+              <textarea id="qtiauth-f-body" class="qt-textarea" name="body" rows="6" required></textarea>
+            </p>
+            <p class="qtiauth-field qt-field">
+              <label for="qtiauth-f-attachment" class="qt-label" data-t="field.attachment">Attachment (optional)</label>
+              <input id="qtiauth-f-attachment" class="qt-input" name="attachment" type="file" data-part="attachment" />
+              <small class="qt-help" data-t="tickets.new.attachmentHelp">Screenshots and logs help us resolve faster.</small>
+            </p>
+            <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="form-feedback"></div>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-t="tickets.new.submit">Open ticket</button>
+              <a class="qt-button" data-variant="ghost" href="/tickets" data-link data-t="tickets.new.cancel">Cancel</a>
+            </p>
+            <template data-message="success">
+              <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="tickets.new.success">
+                Ticket opened.
+              </p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </section>
+  </div>
+</div>
 
 <template data-message="categories-error">
   <option value="" disabled data-t="tickets.new.categoryLoadError">

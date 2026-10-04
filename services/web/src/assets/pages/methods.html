@@ -1,33 +1,44 @@
-<h2 data-t="routes.methods.title">Connected sign-in methods</h2>
-<p class="qtiauth-lede" data-t="methods.lede">Ways you can sign in.</p>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-methods-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+    </header>
+    <div class="qt-auth-card__body qt-stack qt-stack--lg">
+      <header>
+        <h1 id="qt-methods-title" data-t="routes.methods.title">Connected sign-in methods</h1>
+        <p class="qt-prose__lede" data-t="methods.lede">Ways you can sign in.</p>
+      </header>
 
-<ul class="qtiauth-list">
-  <li>
-    <span
-      ><span data-t="methods.password">Password</span> —
-      <span data-show="password" data-t="methods.on">on</span
-      ><span data-show="!password" data-t="methods.off">off</span></span
-    >
-  </li>
-  <li>
-    <span
-      ><span data-t="methods.magic_link">Magic link</span> —
-      <span data-show="magic_link" data-t="methods.on">on</span
-      ><span data-show="!magic_link" data-t="methods.off">off</span></span
-    >
-  </li>
-  <li>
-    <span
-      ><span data-t="methods.passkeys">Passkey</span> —
-      <span data-show="passkeys" data-t="methods.on">on</span
-      ><span data-show="!passkeys" data-t="methods.off">off</span></span
-    >
-  </li>
-  <li>
-    <span
-      ><span data-t="methods.totp">Authenticator app</span> —
-      <span data-show="totp" data-t="methods.on">on</span
-      ><span data-show="!totp" data-t="methods.off">off</span></span
-    >
-  </li>
-</ul>
+      <ul class="qt-nav-list">
+        <li>
+          <span>
+            <span data-t="methods.password">Password</span> &mdash;
+            <span class="qt-badge" data-variant="success" data-show="password" data-t="methods.on">on</span><span class="qt-badge" data-variant="neutral" data-show="!password" data-t="methods.off">off</span>
+          </span>
+        </li>
+        <li>
+          <span>
+            <span data-t="methods.magic_link">Magic link</span> &mdash;
+            <span class="qt-badge" data-variant="success" data-show="magic_link" data-t="methods.on">on</span><span class="qt-badge" data-variant="neutral" data-show="!magic_link" data-t="methods.off">off</span>
+          </span>
+        </li>
+        <li>
+          <span>
+            <span data-t="methods.passkeys">Passkey</span> &mdash;
+            <span class="qt-badge" data-variant="success" data-show="passkeys" data-t="methods.on">on</span><span class="qt-badge" data-variant="neutral" data-show="!passkeys" data-t="methods.off">off</span>
+          </span>
+        </li>
+        <li>
+          <span>
+            <span data-t="methods.totp">Authenticator app</span> &mdash;
+            <span class="qt-badge" data-variant="success" data-show="totp" data-t="methods.on">on</span><span class="qt-badge" data-variant="neutral" data-show="!totp" data-t="methods.off">off</span>
+          </span>
+        </li>
+      </ul>
+    </div>
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>&copy; <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
+</div>

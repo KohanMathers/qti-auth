@@ -1,17 +1,48 @@
-<h2 data-t="routes.guest.title">Contact support without signing in</h2>
-<p class="qtiauth-lede" data-t="guest.lede">Enter your email to receive a one-time code.</p>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-guest-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link>
+        <span class="qt-brand__name" data-field="product_name"></span>
+      </a>
+    </header>
 
-<form data-form="code" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-email" data-t="field.email">Email</label>
-    <input id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="guest.code.submit">Send code</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="guest.code.sent">
-      Check your email for the code.
-    </p>
-  </template>
-</form>
+    <div class="qt-auth-card__body qt-stack qt-stack--lg">
+      <header>
+        <h2 id="qt-guest-title" data-t="routes.guest.title">Contact support without signing in</h2>
+        <p class="qtiauth-lede" data-t="guest.lede">Enter your email to receive a one-time code.</p>
+      </header>
+
+      <form data-form="code" class="qt-form" novalidate>
+        <p class="qtiauth-field qt-field">
+          <label for="qtiauth-f-email" class="qt-label" data-t="field.email">Email</label>
+          <input
+            id="qtiauth-f-email"
+            class="qt-input"
+            name="email"
+            type="email"
+            autocomplete="email"
+            required
+          />
+        </p>
+        <div class="qtiauth-feedback qt-message" aria-live="polite" data-part="form-feedback"></div>
+        <p class="qtiauth-actions qt-actions">
+          <button type="submit" class="qt-button" data-variant="primary" data-t="guest.code.submit">Send code</button>
+        </p>
+        <template data-message="success">
+          <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="guest.code.sent">
+            Check your email for the code.
+          </p>
+        </template>
+      </form>
+
+      <p class="qt-text-small qt-text-muted">
+        <a href="/guest/view" data-link data-t="guest.haveLink">Already have a link?</a>
+      </p>
+    </div>
+
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>&copy; <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
+</div>

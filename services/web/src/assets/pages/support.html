@@ -1,23 +1,61 @@
-<h2 data-t="routes.support.title">Support</h2>
-<p class="qtiauth-lede" data-t="support.lede">
-  Browse the help centre, open a ticket or check on one you already opened.
-</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link>Account</a>
+        <a href="/support" data-link data-current="page">Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<ul class="qtiauth-list">
-  <li><a href="/kb" data-link data-t="support.section.kb">Help centre</a></li>
-  <li>
-    <a href="/kb/search" data-link data-t="support.section.search">Search articles</a>
-  </li>
-  <li><a href="/tickets" data-link data-t="support.section.tickets">Your tickets</a></li>
-  <li>
-    <a href="/tickets/new" data-link data-t="support.section.newTicket">Open a ticket</a>
-  </li>
-  <li>
-    <a href="/appeals/new" data-link data-t="support.section.appeal">Appeal a decision</a>
-  </li>
-  <li>
-    <a href="/guest/start" data-link data-t="support.section.guest"
-      >Contact support without signing in</a
-    >
-  </li>
-</ul>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Support sections">
+      <nav class="qt-nav-list" aria-label="Support sections">
+        <a href="/support" data-link data-current="page">Overview</a>
+        <a href="/kb" data-link data-t="support.section.kb">Help centre</a>
+        <a href="/kb/search" data-link data-t="support.section.search">Search articles</a>
+        <a href="/tickets" data-link data-t="support.section.tickets">Your tickets</a>
+        <a href="/tickets/new" data-link data-t="support.section.newTicket">Open a ticket</a>
+        <a href="/appeals/new" data-link data-t="support.section.appeal">Appeal a decision</a>
+        <a href="/guest/start" data-link data-t="support.section.guest">Guest support</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.support.title">Support</h2>
+        <p class="qtiauth-lede" data-t="support.lede">
+          Browse the help centre, open a ticket or check on one you already opened.
+        </p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="support.sections.heading">How can we help?</h3>
+          <p class="qt-text-muted" data-t="support.sections.body">Pick a destination to continue.</p>
+        </header>
+        <div class="qt-card__body">
+          <ul class="qtiauth-list qt-nav-list">
+            <li><a href="/kb" data-link data-t="support.section.kb">Help centre</a></li>
+            <li><a href="/kb/search" data-link data-t="support.section.search">Search articles</a></li>
+            <li><a href="/tickets" data-link data-t="support.section.tickets">Your tickets</a></li>
+            <li><a href="/tickets/new" data-link data-t="support.section.newTicket">Open a ticket</a></li>
+            <li><a href="/appeals/new" data-link data-t="support.section.appeal">Appeal a decision</a></li>
+            <li><a href="/guest/start" data-link data-t="support.section.guest">Contact support without signing in</a></li>
+          </ul>
+        </div>
+      </article>
+    </section>
+  </div>
+</div>

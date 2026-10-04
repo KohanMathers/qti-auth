@@ -1,15 +1,59 @@
-<h2 data-t="routes.redeem.title">Redeem a key</h2>
-<p class="qtiauth-lede" data-t="redeem.lede">Enter the key from your product.</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/games" data-link>Games</a>
+        <a href="/account" data-link>Account</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<form data-form="redeem" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-code" data-t="field.key">Product key</label>
-    <input id="qtiauth-f-code" name="code" type="text" autocomplete="off" required />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="redeem.submit">Redeem</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="redeem.success">Game added to your library.</p>
-  </template>
-</form>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Games sections">
+      <nav class="qt-nav-list" aria-label="Games sections">
+        <a href="/games" data-link>Library</a>
+        <a href="/games/redeem" data-link data-current="page" data-t="games.section.redeem">Redeem a key</a>
+        <a href="/games/achievements" data-link data-t="games.section.achievements">Achievements</a>
+        <a href="/games/stats" data-link data-t="games.section.stats">Stats</a>
+        <a href="/games/leaderboards" data-link data-t="games.section.leaderboards">Leaderboards</a>
+        <a href="/games/devices" data-link data-t="games.section.devices">Devices</a>
+      </nav>
+    </aside>
+
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.redeem.title">Redeem a key</h2>
+        <p class="qtiauth-lede" data-t="redeem.lede">Enter the key from your product.</p>
+      </header>
+
+      <article class="qt-card">
+        <div class="qt-card__body">
+          <form data-form="redeem" class="qt-form" novalidate>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-code" class="qt-label" data-t="field.key">Product key</label>
+              <input id="qtiauth-f-code" class="qt-input" data-size="lg" name="code" type="text" autocomplete="off" required />
+            </p>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-size="lg" data-t="redeem.submit">Redeem</button>
+            </p>
+            <template data-message="success">
+              <p class="qt-message qtiauth-success" data-variant="success" role="status" data-t="redeem.success">Game added to your library.</p>
+            </template>
+          </form>
+        </div>
+      </article>
+    </section>
+  </div>
+</div>

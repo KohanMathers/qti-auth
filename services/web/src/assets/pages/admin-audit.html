@@ -1,14 +1,141 @@
-<h2 data-t="routes.admin.audit.title">Audit log</h2>
+<div class="qt-admin-shell">
+  <aside class="qt-admin-sidebar" aria-label="Admin">
+    <a class="qt-brand qt-brand--compact" href="/admin" data-link>
+      <span class="qt-brand__name" data-field="product_name"></span>
+    </a>
+    <nav class="qt-nav-list" aria-label="Admin sections">
+      <a href="/admin" data-link data-t="admin.section.overview">Overview</a>
+      <a href="/admin/users" data-link data-t="admin.section.users">Users</a>
+      <a href="/admin/roles" data-link data-t="admin.section.roles">Roles</a>
+      <a href="/admin/audit" data-link data-current="page" data-t="admin.section.audit">Audit log</a>
+      <a href="/admin/webhooks" data-link data-t="admin.section.webhooks">Webhooks</a>
+      <a href="/admin/filter" data-link data-t="admin.section.filter">Text filter tuning</a>
+      <a href="/admin/moderation" data-link data-t="admin.section.moderation">Moderation queue</a>
+      <a href="/admin/appeals" data-link data-t="admin.section.appeals">Appeals</a>
+      <a href="/admin/csea" data-link data-t="admin.section.csea">CSEA cases</a>
+      <a href="/admin/oauth" data-link data-t="admin.section.oauth">OAuth client verification</a>
+      <a href="/admin/games" data-link data-t="admin.section.games">Games catalog</a>
+      <a href="/admin/health" data-link data-t="admin.section.health">Service health</a>
+    </nav>
+  </aside>
 
-<div data-slot="rows">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="rows">
-      <li>
-        <span data-field="at"></span> — <span data-field="action"></span> —
-        <span data-field="actor"></span>
-      </li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+  <div class="qt-admin-content">
+    <header class="qt-admin-topbar">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/admin" data-link data-t="routes.admin.title">Admin</a></li>
+          <li aria-current="page" data-t="routes.admin.audit.title">Audit log</li>
+        </ol>
+      </nav>
+      <div class="qt-admin-topbar__actions qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+      </div>
+    </header>
+
+    <main class="qt-admin-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.admin.audit.title">Audit log</h2>
+        <p class="qtiauth-lede" data-t="admin.audit.lede">
+          Every staff action across the admin surface, newest first.
+        </p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="admin.audit.filters.heading">Filters</h3>
+        </header>
+        <div class="qt-card__body">
+          <form class="qt-form" data-form="audit-filter" novalidate>
+            <div class="qt-cluster" role="group" aria-label="Filter chips">
+              <label class="qt-check qt-chip">
+                <input type="checkbox" name="chip" value="user" data-field="chip_user" />
+                <span data-t="admin.audit.chip.user">User actions</span>
+              </label>
+              <label class="qt-check qt-chip">
+                <input type="checkbox" name="chip" value="role" data-field="chip_role" />
+                <span data-t="admin.audit.chip.role">Role changes</span>
+              </label>
+              <label class="qt-check qt-chip">
+                <input type="checkbox" name="chip" value="moderation" data-field="chip_moderation" />
+                <span data-t="admin.audit.chip.moderation">Moderation</span>
+              </label>
+              <label class="qt-check qt-chip">
+                <input type="checkbox" name="chip" value="oauth" data-field="chip_oauth" />
+                <span data-t="admin.audit.chip.oauth">OAuth</span>
+              </label>
+              <label class="qt-check qt-chip">
+                <input type="checkbox" name="chip" value="filter" data-field="chip_filter" />
+                <span data-t="admin.audit.chip.filter">Text filter</span>
+              </label>
+            </div>
+
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-audit-actor" data-t="admin.audit.actor">Actor</label>
+              <input
+                id="qtiauth-f-audit-actor"
+                name="actor"
+                type="search"
+                autocomplete="off"
+                data-field="actor"
+              />
+            </p>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-audit-since" data-t="admin.audit.since">Since</label>
+              <input
+                id="qtiauth-f-audit-since"
+                name="since"
+                type="datetime-local"
+                data-field="since"
+              />
+            </p>
+            <p class="qtiauth-actions">
+              <button type="submit" data-action="filter" data-t="admin.audit.apply">Apply</button>
+              <button
+                type="reset"
+                class="qtiauth-button qtiauth-button-ghost"
+                data-variant="ghost"
+                data-action="clear"
+                data-t="admin.audit.clear"
+              >
+                Clear
+              </button>
+            </p>
+          </form>
+        </div>
+      </article>
+
+      <section aria-label="Audit entries">
+        <div data-slot="rows">
+          <div class="qt-table-wrap">
+            <table class="qt-table" data-variant="zebra" data-size="sm" data-state="list">
+              <thead>
+                <tr>
+                  <th scope="col" data-t="admin.audit.col.at">At</th>
+                  <th scope="col" data-t="admin.audit.col.actor">Actor</th>
+                  <th scope="col" data-t="admin.audit.col.action">Action</th>
+                  <th scope="col" data-t="admin.audit.col.target">Target</th>
+                  <th scope="col" data-t="admin.audit.col.reason">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template data-item="rows">
+                  <tr>
+                    <td><span data-field="at"></span></td>
+                    <td><span data-field="actor"></span></td>
+                    <td><span class="qt-badge" data-variant="neutral" data-field="action"></span></td>
+                    <td>
+                      <a href="/admin" data-link data-bind-href="target_path" data-field="target"></a>
+                    </td>
+                    <td><span class="qt-text-muted qt-text-small" data-field="reason"></span></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <p class="qtiauth-empty" data-state="empty" data-t="admin.empty">Nothing to show.</p>
+          <p class="qtiauth-empty" data-state="error" data-t="admin.load.error">Could not load data.</p>
+        </div>
+      </section>
+    </main>
+  </div>
 </div>

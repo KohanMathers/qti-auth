@@ -1,32 +1,86 @@
-<h2 data-t="routes.kb.article.title" data-field="title">Article</h2>
+<div class="qt-kb-shell">
+  <header class="qt-kb-topbar qt-container">
+    <a class="qt-brand" href="/support" data-link><span data-field="product_name"></span> Help</a>
+    <form class="qt-kb-search" data-form="kb-search" novalidate>
+      <input type="search" name="q" placeholder="Search help" aria-label="Search help" />
+    </form>
+    <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  </header>
 
-<div data-slot="article">
-  <div data-state="ready">
-    <p class="qtiauth-muted">
-      <span data-field="category"></span> — <span data-field="updated_at"></span>
-    </p>
-    <div class="qtiauth-article" data-part="body"></div>
-    <div class="qtiauth-status" data-part="feedback"></div>
-    <p class="qtiauth-actions">
-      <button type="button" data-action="helpful" data-t="kb.feedback.yes">Yes, this helped</button>
-      <button
-        type="button"
-        class="qtiauth-button qtiauth-button-ghost"
-        data-action="not-helpful"
-        data-t="kb.feedback.no"
-      >
-        No, this did not help
-      </button>
-    </p>
+  <div class="qt-kb-layout qt-container">
+    <article class="qt-kb-article qt-prose">
+      <nav class="qt-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/support" data-link>Home</a></li>
+          <li><a data-link data-bind-href="category_path"><span data-field="category"></span></a></li>
+          <li aria-current="page"><span data-field="title"></span></li>
+        </ol>
+      </nav>
+
+      <h2 data-t="routes.kb.article.title" data-field="title">Article</h2>
+
+      <div data-slot="article">
+        <div data-state="ready">
+          <p class="qtiauth-muted qt-kb-meta">
+            <span data-t="kb.article.author">By</span>
+            <span data-field="author"></span>
+            <span aria-hidden="true">—</span>
+            <span data-field="category"></span>
+            <span aria-hidden="true">—</span>
+            <span data-t="kb.article.updated">Updated</span>
+            <time data-field="updated_at"></time>
+          </p>
+
+          <div class="qtiauth-article qt-prose" data-part="body"></div>
+
+          <aside class="qt-card qt-kb-feedback" aria-labelledby="qt-kb-feedback-title">
+            <header class="qt-card__header">
+              <h3 id="qt-kb-feedback-title" data-t="kb.feedback.title">Was this article helpful?</h3>
+            </header>
+            <div class="qt-card__body">
+              <div class="qtiauth-status" data-part="feedback" aria-live="polite"></div>
+              <p class="qtiauth-actions qt-actions">
+                <button type="button" class="qt-button" data-variant="primary" data-action="helpful" data-t="kb.feedback.yes">Yes, this helped</button>
+                <button
+                  type="button"
+                  class="qtiauth-button qtiauth-button-ghost qt-button"
+                  data-variant="ghost"
+                  data-action="not-helpful"
+                  data-t="kb.feedback.no"
+                >
+                  No, this did not help
+                </button>
+              </p>
+            </div>
+          </aside>
+        </div>
+        <div class="qt-empty-state qtiauth-empty" data-state="missing">
+          <h3 class="qt-empty-state__title" data-t="kb.article.missing">That article is not available.</h3>
+        </div>
+        <p class="qt-message qtiauth-empty" data-variant="danger" data-state="error" role="alert" data-t="kb.article.load.error">
+          Could not load article.
+        </p>
+      </div>
+
+      <template data-message="thanks">
+        <p class="qt-message qtiauth-success" data-variant="success" role="status" data-t="kb.feedback.thanks">Thanks for the feedback.</p>
+      </template>
+    </article>
+
+    <aside class="qt-kb-sidebar" aria-label="Related articles">
+      <section class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="kb.related.title">Related articles</h3>
+        </header>
+        <div class="qt-card__body" data-slot="related">
+          <ul class="qtiauth-list qt-nav-list" data-state="list">
+            <template data-item="related">
+              <li><a data-link data-bind-href="path" data-field="title"></a></li>
+            </template>
+          </ul>
+          <p class="qtiauth-empty qt-text-muted" data-state="empty" data-t="kb.related.empty">No related articles.</p>
+        </div>
+      </section>
+    </aside>
   </div>
-  <p class="qtiauth-empty" data-state="missing" data-t="kb.article.missing">
-    That article is not available.
-  </p>
-  <p class="qtiauth-empty" data-state="error" data-t="kb.article.load.error">
-    Could not load article.
-  </p>
 </div>
-
-<template data-message="thanks">
-  <p class="qtiauth-success" role="status" data-t="kb.feedback.thanks">Thanks for the feedback.</p>
-</template>

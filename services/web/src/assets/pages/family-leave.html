@@ -1,26 +1,75 @@
-<h2 data-t="routes.family-leave.title">Leave your family account</h2>
-<p class="qtiauth-lede" data-t="familyLeave.lede">
-  Remove the link to your parent or guardian. Until you reach the age where you can decide this
-  yourself, they have to approve it.
-</p>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/account" data-link>Account</a>
+        <a href="/family" data-link data-current="page">Family</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<button type="button" data-action="leave" data-t="familyLeave.submit">Ask to leave</button>
-<button
-  type="button"
-  class="qtiauth-button qtiauth-button-ghost"
-  data-action="cancel"
-  data-t="familyLeave.cancel"
->
-  Cancel my request
-</button>
-<div class="qtiauth-status" aria-live="polite" data-part="status"></div>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Family sections">
+      <nav class="qt-nav-list" aria-label="Family sections">
+        <a href="/family" data-link>Overview</a>
+        <a href="/family/invite" data-link>Accept invite</a>
+        <a href="/family/session" data-link>Open dashboard</a>
+        <a href="/family/leave" data-link data-current="page">Leave family</a>
+      </nav>
+    </aside>
 
-<template data-message="left">
-  <p data-t="familyLeave.left">Done. Your account is no longer linked to a guardian.</p>
-</template>
-<template data-message="pending">
-  <p data-t="familyLeave.pending">We’ve asked your parent or guardian to approve it.</p>
-</template>
-<template data-message="cancelled">
-  <p data-t="familyLeave.cancelled">Request cancelled.</p>
-</template>
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.family-leave.title">Leave your family account</h2>
+        <p class="qtiauth-lede" data-t="familyLeave.lede">
+          Remove the link to your parent or guardian. Until you reach the age where you can decide this
+          yourself, they have to approve it.
+        </p>
+      </header>
+
+      <article class="qt-card">
+        <header class="qt-card__header">
+          <h3 data-t="familyLeave.card.heading">Request to leave</h3>
+          <p class="qt-text-muted" data-t="familyLeave.card.body">Send a request or cancel one you have already made.</p>
+        </header>
+        <div class="qt-card__body qt-stack">
+          <div class="qt-actions">
+            <button type="button" class="qt-button" data-variant="danger" data-action="leave" data-t="familyLeave.submit">Ask to leave</button>
+            <button
+              type="button"
+              class="qtiauth-button qtiauth-button-ghost qt-button"
+              data-variant="ghost"
+              data-action="cancel"
+              data-t="familyLeave.cancel"
+            >
+              Cancel my request
+            </button>
+          </div>
+          <div class="qtiauth-status qt-message" data-variant="info" aria-live="polite" data-part="status"></div>
+        </div>
+      </article>
+
+      <template data-message="left">
+        <p class="qt-message" data-variant="success" role="status" data-t="familyLeave.left">Done. Your account is no longer linked to a guardian.</p>
+      </template>
+      <template data-message="pending">
+        <p class="qt-message" data-variant="info" role="status" data-t="familyLeave.pending">We've asked your parent or guardian to approve it.</p>
+      </template>
+      <template data-message="cancelled">
+        <p class="qt-message" data-variant="warning" role="status" data-t="familyLeave.cancelled">Request cancelled.</p>
+      </template>
+    </section>
+  </div>
+</div>

@@ -1,27 +1,82 @@
-<h2 data-t="routes.achievements.title">Achievements</h2>
+<div class="qt-app-shell">
+  <header class="qt-app-nav" role="banner">
+    <div class="qt-app-nav__inner qt-container">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+      <nav class="qt-app-nav__links" aria-label="Primary">
+        <a href="/games" data-link>Games</a>
+        <a href="/account" data-link>Account</a>
+        <a href="/support" data-link>Support</a>
+      </nav>
+      <div class="qt-app-nav__user qt-cluster">
+        <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+        <details class="qt-user-menu">
+          <summary><span class="qt-avatar" data-field="initials"></span><span data-field="username"></span></summary>
+          <ul>
+            <li><a href="/account" data-link>Account</a></li>
+            <li><button type="button" data-action="sign-out" data-t="account.signOut">Sign out</button></li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </header>
 
-<form data-form="game" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-game" data-t="field.game">Game</label>
-    <select id="qtiauth-f-game" name="game" required>
-      <template data-item="games">
-        <option data-bind-value="slug" data-field="name"></option>
-      </template>
-    </select>
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="games.load">Load</button>
-  </p>
-</form>
+  <div class="qt-app-body qt-container">
+    <aside class="qt-app-sidebar" aria-label="Games sections">
+      <nav class="qt-nav-list" aria-label="Games sections">
+        <a href="/games" data-link>Library</a>
+        <a href="/games/redeem" data-link data-t="games.section.redeem">Redeem a key</a>
+        <a href="/games/achievements" data-link data-current="page" data-t="games.section.achievements">Achievements</a>
+        <a href="/games/stats" data-link data-t="games.section.stats">Stats</a>
+        <a href="/games/leaderboards" data-link data-t="games.section.leaderboards">Leaderboards</a>
+        <a href="/games/devices" data-link data-t="games.section.devices">Devices</a>
+      </nav>
+    </aside>
 
-<div class="qtiauth-status" data-slot="rows">
-  <ul class="qtiauth-list" data-state="list">
-    <template data-item="rows">
-      <li data-field="label"></li>
-    </template>
-  </ul>
-  <p class="qtiauth-empty" data-state="empty" data-t="games.section.empty">Nothing to show.</p>
-  <p class="qtiauth-empty" data-state="error" data-t="games.load.error">
-    Could not load your games.
-  </p>
+    <section class="qt-app-main qt-stack qt-stack--lg">
+      <header>
+        <h2 data-t="routes.achievements.title">Achievements</h2>
+      </header>
+
+      <article class="qt-card">
+        <div class="qt-card__body">
+          <form data-form="game" class="qt-form" novalidate>
+            <p class="qtiauth-field">
+              <label for="qtiauth-f-game" class="qt-label" data-t="field.game">Game</label>
+              <select id="qtiauth-f-game" class="qt-select" name="game" required>
+                <template data-item="games">
+                  <option data-bind-value="slug" data-field="name"></option>
+                </template>
+              </select>
+            </p>
+            <p class="qtiauth-actions qt-actions">
+              <button type="submit" class="qt-button" data-variant="primary" data-t="games.load">Load</button>
+            </p>
+          </form>
+        </div>
+      </article>
+
+      <div class="qtiauth-status" data-slot="rows">
+        <ul class="qtiauth-list qt-achievements-grid" data-state="list">
+          <template data-item="rows">
+            <li>
+              <article class="qt-card">
+                <div class="qt-card__body qt-cluster">
+                  <span class="qt-avatar" data-size="lg" data-slot="icon"><img data-bind-src="icon_url" alt="" /></span>
+                  <div class="qt-stack qt-stack--sm">
+                    <h3 data-field="label"></h3>
+                    <p class="qt-text-muted qt-text-small" data-field="description"></p>
+                    <span class="qt-badge" data-variant="success" data-field="unlocked_label"></span>
+                  </div>
+                </div>
+              </article>
+            </li>
+          </template>
+        </ul>
+        <p class="qtiauth-empty qt-empty-state" data-state="empty" data-t="games.section.empty">Nothing to show.</p>
+        <p class="qtiauth-empty qt-message" data-variant="danger" data-state="error" role="alert" data-t="games.load.error">
+          Could not load your games.
+        </p>
+      </div>
+    </section>
+  </div>
 </div>

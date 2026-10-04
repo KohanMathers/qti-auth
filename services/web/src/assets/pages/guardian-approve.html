@@ -1,31 +1,50 @@
-<h2 data-t="routes.guardian.approve.title">Approve this account</h2>
+<div class="qt-auth-shell">
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <section class="qt-auth-card" aria-labelledby="qt-guardian-approve-title">
+    <header class="qt-auth-card__header">
+      <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
+    </header>
 
-<form data-form="approve" novalidate>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-token" data-t="field.token">Code</label>
-    <input
-      id="qtiauth-f-token"
-      name="token"
-      type="text"
-      autocomplete="off"
-      data-bind-value="token"
-      required
-    />
-  </p>
-  <p class="qtiauth-field">
-    <label for="qtiauth-f-date-of-birth" data-t="field.dateOfBirth">Date of birth</label>
-    <input
-      id="qtiauth-f-date-of-birth"
-      name="date_of_birth"
-      type="date"
-      autocomplete="off"
-      required
-    />
-  </p>
-  <p class="qtiauth-actions">
-    <button type="submit" data-t="guardian.approve.submit">Approve</button>
-  </p>
-  <template data-message="success">
-    <p class="qtiauth-success" role="status" data-t="guardian.approve.success">Done.</p>
-  </template>
-</form>
+    <h2 id="qt-guardian-approve-title" data-t="routes.guardian.approve.title">Approve this account</h2>
+    <p class="qtiauth-lede" data-t="guardian.approve.lede">
+      Confirm the code and your date of birth to approve this child's account.
+    </p>
+
+    <form data-form="approve" class="qt-form" novalidate>
+      <p class="qtiauth-field qt-field">
+        <label class="qt-label" for="qtiauth-f-token" data-t="field.token">Code</label>
+        <input
+          id="qtiauth-f-token"
+          class="qt-input"
+          name="token"
+          type="text"
+          autocomplete="off"
+          data-bind-value="token"
+          required
+        />
+      </p>
+      <p class="qtiauth-field qt-field">
+        <label class="qt-label" for="qtiauth-f-date-of-birth" data-t="field.dateOfBirth">Date of birth</label>
+        <input
+          id="qtiauth-f-date-of-birth"
+          class="qt-input"
+          name="date_of_birth"
+          type="date"
+          autocomplete="off"
+          required
+        />
+      </p>
+      <p class="qtiauth-actions qt-actions">
+        <button type="submit" class="qt-button" data-variant="primary" data-t="guardian.approve.submit">Approve</button>
+        <a class="qt-button" data-variant="ghost" href="/guardian/decline" data-link data-t="guardian.approve.declineLink">Decline instead</a>
+      </p>
+      <template data-message="success">
+        <p class="qtiauth-success qt-message" data-variant="success" role="status" data-t="guardian.approve.success">Done.</p>
+      </template>
+    </form>
+
+    <footer class="qt-auth-card__footer qt-prose">
+      <p class="qt-text-muted"><small>(c) <span data-field="company_name"></span></small></p>
+    </footer>
+  </section>
+</div>
