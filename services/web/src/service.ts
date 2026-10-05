@@ -129,7 +129,7 @@ function rootPageIdFor(request: Request, ctx: Context): string {
   const host = requestHost(request);
   if (host !== null) {
     const support = ctx.config.surfaces.support;
-    if (support?.hosts.map((h) => h.toLowerCase()).includes(host)) return 'support';
+    if (support.hosts.map((h) => h.toLowerCase()).includes(host)) return 'support';
   }
   return 'account';
 }
@@ -192,7 +192,7 @@ for (const [id, page] of Object.entries(PAGES)) {
         }),
     responses: htmlOk,
     handler: ({ ctx, request, params }) => {
-      const resolved = (params ?? {}) as Record<string, string>;
+      const resolved = params as Record<string, string>;
       const url = new URL(request.url);
       return gateOrRender(ctx, request, id, resolved, `${url.pathname}${url.search}`);
     },

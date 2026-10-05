@@ -126,10 +126,16 @@ function findOpenTagWithAttr(html: string, attr: string): { index: number; open:
   return { index: match.index, open: match[0] };
 }
 
+function toText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
 function interpolate(source: string, values: PageData): string {
   return source.replace(/\{([a-z0-9_]+)\}/giu, (match, key: string) => {
     const value = values[key];
-    return value === undefined || value === null ? match : escapeHtml(String(value));
+    return value === undefined || value === null ? match : escapeHtml(toText(value));
   });
 }
 
@@ -145,7 +151,7 @@ function stripAttr(open: string, attr: string): string {
 
 function processDataShow(html: string, data: PageData): string {
   let out = html;
-  while (true) {
+  for (;;) {
     const found = findOpenTagWithAttr(out, 'data-show');
     if (found === null) break;
     const attrs = parseAttributes(found.open);
@@ -168,7 +174,7 @@ function processDataShow(html: string, data: PageData): string {
 function processDataBindText(html: string, data: PageData): string {
   let out = html;
   const seen = new Set<number>();
-  while (true) {
+  for (;;) {
     const found = findOpenTagWithAttr(out, 'data-bind-text');
     if (found === null) break;
     if (seen.has(found.index)) break;
@@ -177,7 +183,7 @@ function processDataBindText(html: string, data: PageData): string {
     const key = attrs['data-bind-text'] ?? '';
     const value = data[key];
     const slice = sliceElement(out, found.index, found.open);
-    const text = value === undefined || value === null ? slice.inner : escapeHtml(String(value));
+    const text = value === undefined || value === null ? slice.inner : escapeHtml(toText(value));
     const replacedOpen = found.open.replace(
       /\sdata-bind-text(?:="[^"]*"|='[^']*')?/u,
       ` data-bind-text-done="${escapeHtml(key)}"`,
@@ -189,14 +195,14 @@ function processDataBindText(html: string, data: PageData): string {
 
 function processDataField(html: string, data: PageData): string {
   let out = html;
-  while (true) {
+  for (;;) {
     const found = findOpenTagWithAttr(out, 'data-field');
     if (found === null) break;
     const attrs = parseAttributes(found.open);
     const key = attrs['data-field'] ?? '';
     const slice = sliceElement(out, found.index, found.open);
     const value = data[key];
-    const text = value === undefined || value === null ? slice.inner : escapeHtml(String(value));
+    const text = value === undefined || value === null ? slice.inner : escapeHtml(toText(value));
     const replacedOpen = found.open.replace(
       /\sdata-field(?:="[^"]*"|='[^']*')?/u,
       ` data-field-done="${escapeHtml(key)}"`,
@@ -219,13 +225,13 @@ function processDataBindAttr(html: string, data: PageData): string {
       if (attr === 'hidden') {
         if (value) injected = ' hidden';
       } else if (value === true) {
-        injected = ` ${attr}=""`;
+        injected = ` ${attr ?? ''}=""`;
       } else if (value === false || value === null) {
         injected = '';
       } else {
-        injected = ` ${attr}="${escapeHtml(String(value))}"`;
+        injected = ` ${attr ?? ''}="${escapeHtml(toText(value))}"`;
       }
-      next = next.replace(whole ?? '', `${whole}${injected}`);
+      next = next.replace(whole, `${whole}${injected}`);
     }
     return next;
   });
@@ -234,27 +240,26 @@ function processDataBindAttr(html: string, data: PageData): string {
 function processDataItem(html: string, data: PageData): string {
   let out = html;
   let cursor = 0;
-  while (true) {
+  for (;;) {
     const re = /<template\s[^>]*data-item="([^"]+)"[^>]*>([\s\S]*?)<\/template>/u;
     const slice = out.slice(cursor);
     const templateMatch = re.exec(slice);
     if (templateMatch === null) break;
     const absoluteIndex = cursor + templateMatch.index;
     const [whole, name, inner] = templateMatch;
-    if (whole === undefined || name === undefined) break;
-    const items = data[name];
+    if (name === undefined) break;
+    const rawItems = data[name];
+    const items: unknown[] = Array.isArray(rawItems) ? rawItems : [];
     const rows: string[] = [];
-    if (Array.isArray(items)) {
-      for (const item of items) {
-        const asRow = item === null || typeof item !== 'object' ? { value: item } : (item as PageData);
-        let row = (inner ?? '').trim();
-        row = interpolate(row, asRow);
-        row = processDataShow(row, asRow);
-        row = processDataBindAttr(row, asRow);
-        row = processDataBindText(row, asRow);
-        row = processDataField(row, asRow);
-        rows.push(row);
-      }
+    for (const item of items) {
+      const asRow = item === null || typeof item !== 'object' ? { value: item } : (item as PageData);
+      let row = (inner ?? '').trim();
+      row = interpolate(row, asRow);
+      row = processDataShow(row, asRow);
+      row = processDataBindAttr(row, asRow);
+      row = processDataBindText(row, asRow);
+      row = processDataField(row, asRow);
+      rows.push(row);
     }
     out = `${out.slice(0, absoluteIndex)}${whole}${rows.join('')}${out.slice(absoluteIndex + whole.length)}`;
     cursor = absoluteIndex + whole.length + rows.join('').length;
@@ -265,7 +270,7 @@ function processDataItem(html: string, data: PageData): string {
 function processDataSlot(html: string, data: PageData): string {
   let out = html;
   const processed = new Set<number>();
-  while (true) {
+  for (;;) {
     const found = findOpenTagWithAttr(out, 'data-slot');
     if (found === null) break;
     if (processed.has(found.index)) break;
@@ -273,7 +278,7 @@ function processDataSlot(html: string, data: PageData): string {
     const attrs = parseAttributes(found.open);
     const name = attrs['data-slot'] ?? '';
     const stateKey = `${name}_state`;
-    const state = typeof data[stateKey] === 'string' ? String(data[stateKey]) : undefined;
+    const state = typeof data[stateKey] === 'string' ? data[stateKey] : undefined;
     const replacedOpen = found.open.replace(
       /\sdata-slot(?:="[^"]*"|='[^']*')?/u,
       ` data-slot-done="${escapeHtml(name)}"`,
@@ -291,7 +296,7 @@ function processDataSlot(html: string, data: PageData): string {
 
 function applyStates(inner: string, activeState: string): string {
   let out = inner;
-  while (true) {
+  for (;;) {
     const found = findOpenTagWithAttr(out, 'data-state');
     if (found === null) break;
     const attrs = parseAttributes(found.open);
@@ -314,7 +319,7 @@ function applyStates(inner: string, activeState: string): string {
 
 function processDataT(html: string, t: Translator): string {
   let out = html;
-  while (true) {
+  for (;;) {
     const found = findOpenTagWithAttr(out, 'data-t');
     if (found === null) break;
     const attrs = parseAttributes(found.open);

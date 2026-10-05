@@ -26,7 +26,7 @@ function brandingConfig(overrides: Record<string, string> = {}): Parameters<type
       },
       backgrounds: { auth_light: null, auth_dark: null },
     },
-  } as unknown as Parameters<typeof themeCss>[0];
+  };
 }
 
 describe('themeCss', () => {

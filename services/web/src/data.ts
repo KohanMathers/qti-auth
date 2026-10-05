@@ -22,8 +22,9 @@ function get(obj: unknown, key: string): unknown {
 }
 
 function str(value: unknown, fallback = ''): string {
-  if (value === null || value === undefined) return fallback;
-  return String(value);
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
 }
 
 function itemsOf(data: unknown): unknown[] {
@@ -32,8 +33,8 @@ function itemsOf(data: unknown): unknown[] {
 }
 
 function localDate(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  const date = new Date(String(value));
+  if (typeof value !== 'string' && typeof value !== 'number') return '';
+  const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toISOString().slice(0, 10);
 }
 
