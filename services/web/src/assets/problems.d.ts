@@ -5,4 +5,7 @@ export interface ClientProblemMessage {
 
 export const CATALOGUE: Readonly<Record<string, ClientProblemMessage>>;
 
-export function messageFor(code: string): ClientProblemMessage;
+export function messageFor(
+  code: string,
+  problem?: { reason?: string },
+): ClientProblemMessage;

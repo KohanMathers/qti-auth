@@ -62,6 +62,20 @@ const FALLBACK = Object.freeze({
   detail: 'Try again in a moment.',
 });
 
-export function messageFor(code) {
-  return CATALOGUE[code] ?? FALLBACK;
+const PASSWORD_REASON_DETAIL = Object.freeze({
+  too_short: 'It is too short.',
+  too_long: 'It is too long.',
+  need_lower: 'It must include a lowercase letter.',
+  need_upper: 'It must include an uppercase letter.',
+  need_digit: 'It must include a number.',
+  need_symbol: 'It must include a symbol, such as ! or %.',
+  contains_identifier: 'It must not contain your email or username.',
+  breached: 'It has appeared in a known data breach. Choose a different one.',
+});
+
+export function messageFor(code, problem) {
+  const entry = CATALOGUE[code] ?? FALLBACK;
+  const reasonDetail =
+    code === 'PASSWORD_REJECTED' ? PASSWORD_REASON_DETAIL[problem?.reason] : undefined;
+  return reasonDetail === undefined ? entry : { ...entry, detail: reasonDetail };
 }

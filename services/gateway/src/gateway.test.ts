@@ -217,6 +217,7 @@ async function setup(options: SetupOptions = {}) {
             branding: sections.branding.parse({}),
             features: sections.features.parse({}),
             parental: sections.parental.parse({}),
+            password: sections.password.parse({}),
             geoip: sections.geoip.parse({}),
             storage: sections.storage.parse({
               enabled: true,
@@ -235,6 +236,7 @@ async function setup(options: SetupOptions = {}) {
             branding: sections.branding.parse({}),
             features: sections.features.parse({}),
             parental: sections.parental.parse({}),
+            password: sections.password.parse({}),
             geoip: sections.geoip.parse({}),
             storage: sections.storage.parse({
               enabled: true,

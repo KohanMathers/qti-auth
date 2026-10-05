@@ -603,6 +603,96 @@ button[type="submit"]:not([class]):hover:not(:disabled) {
   cursor: not-allowed;
 }
 
+/* === Password field === */
+.qt-password-field {
+  position: relative;
+  display: block;
+}
+
+.qt-password-field .qt-input {
+  padding-right: calc(var(--qt-space-xl) + var(--qt-space-sm));
+}
+
+.qt-password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: calc(var(--qt-space-xl) + var(--qt-space-sm));
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  border-radius: var(--qt-radius-md);
+  color: var(--qt-text-muted);
+  cursor: pointer;
+}
+
+.qt-password-toggle:hover {
+  color: var(--qt-text);
+}
+
+.qt-password-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--qt-focus-ring);
+}
+
+.qt-password-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.qt-password-toggle__eye-off {
+  display: none;
+}
+
+.qt-password-toggle[data-shown="true"] .qt-password-toggle__eye {
+  display: none;
+}
+
+.qt-password-toggle[data-shown="true"] .qt-password-toggle__eye-off {
+  display: inline;
+}
+
+.qt-password-requirements {
+  list-style: none;
+  margin: var(--qt-space-sm) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--qt-space-xs);
+}
+
+.qt-password-requirements:empty {
+  display: none;
+}
+
+.qt-password-requirements li {
+  display: flex;
+  align-items: center;
+  gap: var(--qt-space-sm);
+  font-size: var(--qt-font-size-sm);
+  color: var(--qt-text-muted);
+}
+
+.qt-password-requirements li::before {
+  content: '';
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--qt-radius-full);
+  border: 1.5px solid var(--qt-text-muted);
+}
+
+.qt-password-requirements li[data-met="true"] {
+  color: var(--qt-text);
+}
+
+.qt-password-requirements li[data-met="true"]::before {
+  border-color: var(--qt-color-success);
+  background: var(--qt-color-success);
+}
+
 /* === Select === */
 .qt-select,
 .qtiauth-field > select {

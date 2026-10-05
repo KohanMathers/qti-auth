@@ -123,6 +123,36 @@ function wireGuardianField(view, ctx) {
   update();
 }
 
+function passwordRequirementTests(policy) {
+  return {
+    min_length: (value) => value.length >= policy.min_length,
+    lower: (value) => /[a-z]/u.test(value),
+    upper: (value) => /[A-Z]/u.test(value),
+    digit: (value) => /\d/u.test(value),
+    symbol: (value) => /[^A-Za-z0-9]/u.test(value),
+  };
+}
+
+function wirePasswordRequirements(view, ctx, input) {
+  if (input === null) return;
+  const policy = ctx.features.auth.password_policy;
+  const list = view.part('password-requirements');
+  view
+    .show('password_lower', policy.require_lower)
+    .show('password_upper', policy.require_upper)
+    .show('password_digit', policy.require_digit)
+    .show('password_symbol', policy.require_symbol)
+    .fill({ min_length: policy.min_length });
+  input.setAttribute('minlength', String(policy.min_length));
+  const tests = passwordRequirementTests(policy);
+  const items = list.querySelectorAll('[data-requirement]');
+  const update = () => {
+    for (const item of items) item.dataset.met = String(tests[item.dataset.requirement](input.value));
+  };
+  input.addEventListener('input', update);
+  update();
+}
+
 function pageSignIn(view, t, ctx) {
   const a = auth(ctx.api);
   const { methods, social } = ctx.features.auth;
@@ -207,6 +237,7 @@ function pageSignUp(view, t, ctx) {
   view.show('password', methods.password).show('magic_only', magicOnly);
   if (methods.password) {
     wireGuardianField(view, ctx);
+    wirePasswordRequirements(view, ctx, view.el.querySelector('[name="password"]'));
     view.form('password', async (values, form) => {
       await withCaptcha(form, t, (captcha) =>
         a.signUpPassword({
@@ -364,6 +395,7 @@ function pageReset(view, t, ctx) {
     view.state('step', 'choose');
   };
   view.fill({ token: queryParam(ctx, 'token') }).state('step', 'form');
+  wirePasswordRequirements(view, ctx, view.el.querySelector('[name="password"]'));
   view.form('reset', async (values) => {
     submitted = values;
     next(
@@ -539,6 +571,7 @@ function pageSecurity(view, t, ctx) {
   };
   load();
 
+  wirePasswordRequirements(view, ctx, view.el.querySelector('[name="next"]'));
   view.form('password', async (values, form) => {
     await a.setPassword(values.next, values.current || undefined);
     form.say('success');

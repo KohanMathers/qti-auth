@@ -9,7 +9,7 @@ import { DEFAULT_MODULES, type Module, type Surface, surfacePairs } from './surf
 
 export type MetaConfig = Pick<
   QtiauthConfig,
-  'branding' | 'features' | 'parental' | 'geoip' | 'storage'
+  'branding' | 'features' | 'parental' | 'geoip' | 'storage' | 'password'
 >;
 
 export const CORE_SERVICES = ['identity', 'notifier', 'scheduler'] as const;
@@ -63,6 +63,14 @@ export const featuresSchema = z.object({
     social: z.array(z.object({ id: z.string(), name: z.string(), icon: z.string().nullable() })),
     session_security: z.boolean(),
     guardian_consent_age: z.int(),
+    password_policy: z.object({
+      min_length: z.int(),
+      max_length: z.int(),
+      require_lower: z.boolean(),
+      require_upper: z.boolean(),
+      require_digit: z.boolean(),
+      require_symbol: z.boolean(),
+    }),
   }),
   features: z.record(z.string(), toggles),
   surfaces: z.array(
@@ -207,7 +215,7 @@ export interface FeaturesInput {
 }
 
 export function featuresReport(input: FeaturesInput): Features {
-  const { branding, features, parental } = input.config;
+  const { branding, features, parental, password } = input.config;
   const { auth } = features;
   const identity = input.isRunning('identity');
   const toggleMap = (entries: Record<string, { enabled: boolean }>, running: boolean) =>
@@ -248,6 +256,14 @@ export function featuresReport(input: FeaturesInput): Features {
         : [],
       session_security: identity && features.session_security.enabled,
       guardian_consent_age: parental.consent_age,
+      password_policy: {
+        min_length: password.min_length,
+        max_length: password.max_length,
+        require_lower: password.composition.require_lower,
+        require_upper: password.composition.require_upper,
+        require_digit: password.composition.require_digit,
+        require_symbol: password.composition.require_symbol,
+      },
     },
     features: Object.fromEntries(
       OPTIONAL_FEATURE_SERVICES.map((service) => [

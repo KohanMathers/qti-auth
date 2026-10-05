@@ -19,6 +19,7 @@ function config(features: unknown = {}): MetaConfig {
     branding: sections.branding.parse({}),
     features: sections.features.parse(features),
     parental: sections.parental.parse({}),
+    password: sections.password.parse({}),
     geoip: sections.geoip.parse({ source: 'header', header: 'cf-ipcountry' }),
     storage: sections.storage.parse({
       enabled: true,

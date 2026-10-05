@@ -29,7 +29,7 @@ export function mountPage(main, templates, id, t, ctx) {
 }
 
 export function problemAlert(t, problem) {
-  const catalogueEntry = messageFor(problem.code ?? 'INTERNAL_ERROR');
+  const catalogueEntry = messageFor(problem.code ?? 'INTERNAL_ERROR', problem);
   const box = document.createElement('div');
   box.className = 'qtiauth-alert';
   box.setAttribute('role', 'alert');

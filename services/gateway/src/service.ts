@@ -31,6 +31,7 @@ export const definition = defineService({
     'network',
     'features',
     'parental',
+    'password',
     'geoip',
     'session_security',
     'valkey',

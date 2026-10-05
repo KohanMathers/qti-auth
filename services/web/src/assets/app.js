@@ -201,10 +201,27 @@ function wireToastDismiss(root) {
   }
 }
 
+function wirePasswordToggle(root) {
+  for (const button of root.querySelectorAll('[data-action="toggle-password"]')) {
+    if (button.dataset.wired === 'yes') continue;
+    button.dataset.wired = 'yes';
+    const input = button.closest('.qt-password-field')?.querySelector('input');
+    if (input === undefined || input === null) continue;
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      const shown = button.dataset.shown === 'true';
+      input.type = shown ? 'password' : 'text';
+      button.dataset.shown = String(!shown);
+      button.setAttribute('aria-label', shown ? 'Show password' : 'Hide password');
+    });
+  }
+}
+
 function wireChrome(root) {
   wireThemeToggle(root);
   wireDialogs(root);
   wireToastDismiss(root);
+  wirePasswordToggle(root);
 }
 
 let popstateHandler = null;
