@@ -34,7 +34,7 @@ export function problemAlert(t, problem) {
   box.className = 'qtiauth-alert';
   box.setAttribute('role', 'alert');
   const title = document.createElement('h2');
-  title.textContent = t(`problems.${problem.code}.title`, catalogueEntry.title);
+  title.textContent = problem.title ?? t(`problems.${problem.code}.title`, catalogueEntry.title);
   const detail = document.createElement('p');
   detail.textContent =
     problem.detail ?? t(`problems.${problem.code}.detail`, catalogueEntry.detail);

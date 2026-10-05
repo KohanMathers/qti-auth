@@ -43,9 +43,9 @@
             <label class="qt-label" for="qtiauth-f-dob" data-t="field.dateOfBirth">Date of birth</label>
             <input class="qt-input" id="qtiauth-f-dob" name="date_of_birth" type="date" autocomplete="bday" required />
           </p>
-          <p class="qt-form-group">
-            <label class="qt-label" for="qtiauth-f-guardian" data-t="field.guardianEmail.optional">
-              Parent or guardian email, if you need their permission
+          <p class="qt-form-group" data-part="guardian-group" hidden>
+            <label class="qt-label" for="qtiauth-f-guardian" data-t="field.guardianEmail">
+              Parent or guardian's email
             </label>
             <input class="qt-input" id="qtiauth-f-guardian" name="guardian_email" type="email" autocomplete="off" />
           </p>

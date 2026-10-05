@@ -18,6 +18,7 @@ function config(features: unknown = {}): MetaConfig {
   return {
     branding: sections.branding.parse({}),
     features: sections.features.parse(features),
+    parental: sections.parental.parse({}),
     geoip: sections.geoip.parse({ source: 'header', header: 'cf-ipcountry' }),
     storage: sections.storage.parse({
       enabled: true,
@@ -162,6 +163,7 @@ describe('featuresReport', () => {
       { id: 'corp', name: 'Corp', icon: null },
     ]);
     expect(report.auth.session_security).toBe(true);
+    expect(report.auth.guardian_consent_age).toBe(13);
     expect(report.features['games']?.['licensing']).toBe(true);
     expect(report.features['support']?.['tickets']).toBe(false);
     expect(report.surface_pairs).toEqual([

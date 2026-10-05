@@ -72,6 +72,33 @@ async function passkeyAssertion(a, secondFactor) {
   return a.passkeyFinish(started.challenge, credential.toJSON());
 }
 
+function ageOn(dateOfBirth, today) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(dateOfBirth ?? '');
+  if (match === null) return undefined;
+  const [, year = '', month = '', day = ''] = match;
+  const thisMonth = today.getUTCMonth() + 1;
+  const hadBirthday =
+    thisMonth > Number(month) || (thisMonth === Number(month) && today.getUTCDate() >= Number(day));
+  return today.getUTCFullYear() - Number(year) - (hadBirthday ? 0 : 1);
+}
+
+function wireGuardianField(view, ctx) {
+  const dob = view.el.querySelector('[name="date_of_birth"]');
+  if (dob === null) return;
+  const group = view.part('guardian-group');
+  const guardian = view.el.querySelector('[name="guardian_email"]');
+  const consentAge = ctx.features.auth.guardian_consent_age ?? 13;
+  const update = () => {
+    const age = ageOn(dob.value, new Date());
+    const needsGuardian = age !== undefined && age < consentAge;
+    group.hidden = !needsGuardian;
+    guardian.required = needsGuardian;
+    if (!needsGuardian) guardian.value = '';
+  };
+  dob.addEventListener('change', update);
+  update();
+}
+
 function pageSignIn(view, t, ctx) {
   const a = auth(ctx.api);
   const { methods, social } = ctx.features.auth;
@@ -151,6 +178,7 @@ function pageSignUp(view, t, ctx) {
   const magicOnly = methods.magic_link && !methods.password;
   view.show('password', methods.password).show('magic_only', magicOnly);
   if (methods.password) {
+    wireGuardianField(view, ctx);
     view.form('password', async (values, form) => {
       await a.signUpPassword({
         email: values.email,
@@ -208,6 +236,7 @@ function pageMagicLink(view, t, ctx) {
     }
   };
   view.fill({ token }).state('step', 'confirm');
+  wireGuardianField(view, ctx);
   view.form('confirm', async (values) => next(await a.magicLinkVerify(values.token)));
   view.form('signup', async (values) => {
     const created = await a.magicLinkSignup({
@@ -245,6 +274,7 @@ function pageSocialCallback(view, t, ctx, params) {
         .show('needs_email', result.needs_email)
         .show('needs_date_of_birth', result.needs_date_of_birth)
         .state('step', 'signup');
+      wireGuardianField(view, ctx);
     }
   };
   view.form('signup', async (values) => {

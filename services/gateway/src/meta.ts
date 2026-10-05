@@ -7,7 +7,10 @@ import type { RunningService } from './discovery.ts';
 import type { RouteProblem } from './routes.ts';
 import { DEFAULT_MODULES, type Module, type Surface, surfacePairs } from './surfaces.ts';
 
-export type MetaConfig = Pick<QtiauthConfig, 'branding' | 'features' | 'geoip' | 'storage'>;
+export type MetaConfig = Pick<
+  QtiauthConfig,
+  'branding' | 'features' | 'parental' | 'geoip' | 'storage'
+>;
 
 export const CORE_SERVICES = ['identity', 'notifier', 'scheduler'] as const;
 
@@ -59,6 +62,7 @@ export const featuresSchema = z.object({
     methods: toggles,
     social: z.array(z.object({ id: z.string(), name: z.string(), icon: z.string().nullable() })),
     session_security: z.boolean(),
+    guardian_consent_age: z.int(),
   }),
   features: z.record(z.string(), toggles),
   surfaces: z.array(
@@ -203,7 +207,7 @@ export interface FeaturesInput {
 }
 
 export function featuresReport(input: FeaturesInput): Features {
-  const { branding, features } = input.config;
+  const { branding, features, parental } = input.config;
   const { auth } = features;
   const identity = input.isRunning('identity');
   const toggleMap = (entries: Record<string, { enabled: boolean }>, running: boolean) =>
@@ -243,6 +247,7 @@ export function featuresReport(input: FeaturesInput): Features {
           ]
         : [],
       session_security: identity && features.session_security.enabled,
+      guardian_consent_age: parental.consent_age,
     },
     features: Object.fromEntries(
       OPTIONAL_FEATURE_SERVICES.map((service) => [

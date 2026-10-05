@@ -30,6 +30,7 @@ export const definition = defineService({
     'cors',
     'network',
     'features',
+    'parental',
     'geoip',
     'session_security',
     'valkey',
