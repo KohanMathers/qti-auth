@@ -291,9 +291,27 @@ function collect(form) {
   return values;
 }
 
+function clearFieldErrors(form) {
+  for (const el of form.querySelectorAll('[data-field-error]')) el.remove();
+  for (const el of form.querySelectorAll('[aria-invalid="true"]')) el.removeAttribute('aria-invalid');
+}
+
+function showFieldError(form, issue) {
+  const field = form.elements.namedItem(issue.path);
+  if (!(field instanceof HTMLElement)) return false;
+  field.setAttribute('aria-invalid', 'true');
+  const message = document.createElement('small');
+  message.className = 'qt-field-error';
+  message.dataset.fieldError = issue.path;
+  message.textContent = issue.message;
+  field.insertAdjacentElement('afterend', message);
+  return true;
+}
+
 async function runForm(form, feedback, t, action) {
   form.setAttribute('aria-busy', 'true');
   feedback.replaceChildren();
+  clearFieldErrors(form);
   try {
     const result = await action();
     form.setAttribute('aria-busy', 'false');
@@ -301,7 +319,12 @@ async function runForm(form, feedback, t, action) {
   } catch (error) {
     form.setAttribute('aria-busy', 'false');
     const problem = error instanceof ProblemFetchError ? error.problem : { code: 'INTERNAL_ERROR' };
-    feedback.appendChild(problemAlert(t, problem));
+    if (problem.code === 'VALIDATION_FAILED' && Array.isArray(problem.errors)) {
+      const unmatched = problem.errors.filter((issue) => !showFieldError(form, issue));
+      if (unmatched.length > 0) feedback.appendChild(problemAlert(t, { ...problem, errors: unmatched }));
+    } else {
+      feedback.appendChild(problemAlert(t, problem));
+    }
     return undefined;
   }
 }

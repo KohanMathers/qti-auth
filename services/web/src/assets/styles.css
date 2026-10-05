@@ -546,6 +546,13 @@ button[type="submit"]:not([class]):hover:not(:disabled) {
   color: var(--qt-text-muted);
 }
 
+.qt-field-error {
+  display: block;
+  margin-top: var(--qt-space-xs);
+  font-size: var(--qt-font-size-sm);
+  color: var(--qt-color-danger);
+}
+
 .qt-input,
 .qt-textarea,
 .qt-select,
@@ -812,9 +819,7 @@ button[type="submit"]:not([class]):hover:not(:disabled) {
 
 /* === Message === */
 .qt-message,
-.qtiauth-feedback,
-.qtiauth-success,
-.qtiauth-alert {
+.qtiauth-success {
   display: flex;
   align-items: flex-start;
   gap: var(--qt-space-sm);
@@ -837,14 +842,32 @@ button[type="submit"]:not([class]):hover:not(:disabled) {
   border-color: color-mix(in oklab, var(--qt-color-success) 40%, var(--qt-border));
   background: color-mix(in oklab, var(--qt-color-success) 10%, var(--qt-surface));
 }
-.qt-message[data-variant="warning"],
-.qtiauth-alert {
+.qt-message[data-variant="warning"] {
   border-color: color-mix(in oklab, var(--qt-color-warning) 50%, var(--qt-border));
   background: color-mix(in oklab, var(--qt-color-warning) 12%, var(--qt-surface));
 }
 .qt-message[data-variant="danger"] {
   border-color: color-mix(in oklab, var(--qt-color-danger) 40%, var(--qt-border));
   background: color-mix(in oklab, var(--qt-color-danger) 10%, var(--qt-surface));
+}
+
+.qtiauth-feedback {
+  display: block;
+}
+
+.qtiauth-alert {
+  color: var(--qt-color-danger);
+  font-size: var(--qt-font-size-sm);
+  line-height: var(--qt-line-sm);
+  margin-bottom: var(--qt-space-md);
+}
+.qtiauth-alert h2 {
+  font-size: inherit;
+  font-weight: var(--qt-weight-medium);
+  margin: 0;
+}
+.qtiauth-alert p {
+  margin: var(--qt-space-xs) 0 0;
 }
 
 .qtiauth-feedback:empty,

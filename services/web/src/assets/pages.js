@@ -1,3 +1,4 @@
+import { solveCaptcha } from './captcha.js';
 import {
   admin,
   auth,
@@ -44,6 +45,29 @@ function problemOf(error) {
 
 function showProblem(view, part, error) {
   view.part(part).replaceChildren(view.problem(problemOf(error)));
+}
+
+function captchaContainer(form) {
+  let container = form.el.querySelector('.qt-captcha');
+  if (container === null) {
+    container = document.createElement('div');
+    container.className = 'qt-captcha';
+    const actions = form.el.querySelector('.qt-actions');
+    if (actions === null) form.el.appendChild(container);
+    else actions.before(container);
+  }
+  return container;
+}
+
+async function withCaptcha(form, t, call) {
+  try {
+    return await call(undefined);
+  } catch (error) {
+    const problem = problemOf(error);
+    if (problem.code !== 'CAPTCHA_REQUIRED' && problem.code !== 'CAPTCHA_INVALID') throw error;
+    const token = await solveCaptcha(captchaContainer(form), t, problem);
+    return call(token);
+  }
 }
 
 function localDate(value) {
@@ -124,8 +148,12 @@ function pageSignIn(view, t, ctx) {
   view.on('choose-back', () => view.state('method', 'picker'));
   if (methods.password) {
     view.on('choose-password', () => view.state('method', 'password'));
-    view.form('password', async (values) => {
-      signedIn(await a.signInPassword(values.email, values.password));
+    view.form('password', async (values, form) => {
+      signedIn(
+        await withCaptcha(form, t, (captcha) =>
+          a.signInPassword(values.email, values.password, captcha),
+        ),
+      );
     });
     view.form('second', async (values) => {
       const code = values.code.replaceAll(/\s/gu, '');
@@ -145,7 +173,7 @@ function pageSignIn(view, t, ctx) {
   if (methods.magic_link) {
     view.on('choose-magic', () => view.state('method', 'magic'));
     view.form('magic', async (values, form) => {
-      await a.magicLinkStart(values.email, returnTo);
+      await withCaptcha(form, t, (captcha) => a.magicLinkStart(values.email, returnTo, captcha));
       form.say('success');
     });
   }
@@ -180,18 +208,21 @@ function pageSignUp(view, t, ctx) {
   if (methods.password) {
     wireGuardianField(view, ctx);
     view.form('password', async (values, form) => {
-      await a.signUpPassword({
-        email: values.email,
-        password: values.password,
-        date_of_birth: values.date_of_birth,
-        guardian_email: values.guardian_email || undefined,
-      });
+      await withCaptcha(form, t, (captcha) =>
+        a.signUpPassword({
+          email: values.email,
+          password: values.password,
+          date_of_birth: values.date_of_birth,
+          guardian_email: values.guardian_email || undefined,
+          captcha,
+        }),
+      );
       form.say('success');
     });
   }
   if (magicOnly) {
     view.form('magic', async (values, form) => {
-      await a.magicLinkStart(values.email);
+      await withCaptcha(form, t, (captcha) => a.magicLinkStart(values.email, undefined, captcha));
       form.say('success');
     });
   }

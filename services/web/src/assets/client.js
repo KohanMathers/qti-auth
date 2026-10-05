@@ -44,7 +44,8 @@ export function apiClient(bootstrap, fetcher = window.fetch.bind(window)) {
 
 export function auth(client) {
   return {
-    signInPassword: (email, password) => client.post('/auth/password/login', { email, password }),
+    signInPassword: (email, password, captcha) =>
+      client.post('/auth/password/login', { email, password, captcha }),
     secondFactor: (challenge, factor) => client.post('/auth/2fa', { challenge, ...factor }),
     passkeyStart: (second_factor) =>
       client.post('/auth/passkey/authenticate/start', { second_factor }),
@@ -52,8 +53,8 @@ export function auth(client) {
       client.post('/auth/passkey/authenticate', { challenge, response }),
     signUpPassword: (spec) => client.post('/auth/password/signup', spec),
     signOut: () => client.post('/auth/logout'),
-    magicLinkStart: (email, return_to) =>
-      client.post('/auth/magic-link/start', { email, return_to }),
+    magicLinkStart: (email, return_to, captcha) =>
+      client.post('/auth/magic-link/start', { email, return_to, captcha }),
     magicLinkVerify: (token, user_id) => client.post('/auth/magic-link/verify', { token, user_id }),
     magicLinkSignup: (spec) => client.post('/auth/magic-link/signup', spec),
     socialStart: (provider, return_to) =>
