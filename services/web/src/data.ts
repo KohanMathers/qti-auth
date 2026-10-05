@@ -48,6 +48,37 @@ function loadBranding(ctx: LoadContext): Promise<PageData> {
   return Promise.resolve(identityData(ctx));
 }
 
+function socialProviders(data: unknown): { id: string; name: string }[] {
+  const raw = get(get(data, 'auth'), 'social');
+  return Array.isArray(raw)
+    ? raw.map((provider: unknown) => ({ id: str(get(provider, 'id')), name: str(get(provider, 'name')) }))
+    : [];
+}
+
+async function loadAuthMethods(ctx: LoadContext): Promise<Record<string, unknown>> {
+  const data = await ctx.gateway.get<Record<string, unknown>>('/api/v1/meta/features');
+  const methods = get(get(data, 'auth'), 'methods');
+  return {
+    password: Boolean(get(methods, 'password')),
+    magic_link: Boolean(get(methods, 'magic_link')),
+    passkeys: Boolean(get(methods, 'passkeys')),
+    social: socialProviders(data),
+  };
+}
+
+async function loadSignIn(ctx: LoadContext): Promise<PageData> {
+  return { ...identityData(ctx), ...(await loadAuthMethods(ctx)) };
+}
+
+async function loadSignUp(ctx: LoadContext): Promise<PageData> {
+  const { password, magic_link } = await loadAuthMethods(ctx);
+  return {
+    ...identityData(ctx),
+    password,
+    magic_only: Boolean(magic_link) && !password,
+  };
+}
+
 async function loadAccount(ctx: LoadContext): Promise<PageData> {
   const me = await ctx.gateway.get<Record<string, unknown>>('/api/v1/me');
   const username = str(get(me, 'username'));
@@ -271,6 +302,8 @@ async function loadMyTickets(ctx: LoadContext): Promise<PageData> {
 }
 
 const LOADERS: Record<string, Loader> = {
+  'sign-in': loadSignIn,
+  'sign-up': loadSignUp,
   account: loadAccount,
   profile: loadProfile,
   email: loadBranding,

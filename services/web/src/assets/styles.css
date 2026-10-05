@@ -1096,6 +1096,11 @@ button[type="submit"]:not([class]):hover:not(:disabled) {
   object-fit: cover;
 }
 
+.qt-avatar img:not([src]),
+.qt-avatar img[src=""] {
+  display: none;
+}
+
 /* === Spinner === */
 .qt-spinner {
   display: inline-block;

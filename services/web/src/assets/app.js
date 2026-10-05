@@ -1,3 +1,12 @@
+import { apiClient } from './client.js';
+import { availablePages, matchPage, PAGES } from './pages.js';
+import { mountPage, parseTemplates, problemAlert } from './view.js';
+
+export { availablePages, matchPage, PAGES };
+
+const BOOTSTRAP_SELECTOR = '#qtiauth-bootstrap';
+const APP_SELECTOR = '#qtiauth-app';
+const MAIN_SELECTOR = '#qtiauth-main';
 const LIVE_SELECTOR = '#qtiauth-live';
 
 function sameSitePair(pairs, from, to) {
@@ -46,6 +55,74 @@ export function availableRoutes(features, current) {
 
 export function translator(catalogue) {
   return (key, fallback) => catalogue[key] ?? fallback ?? key;
+}
+
+function underBase(base, path) {
+  return base === '/' || path === base || path.startsWith(`${base}/`);
+}
+
+export function currentSurface(features, location) {
+  let best;
+  for (const surface of features.surfaces) {
+    if (!surface.origins.includes(location.origin)) continue;
+    if (!underBase(surface.base_path, location.pathname)) continue;
+    if (best === undefined || surface.base_path.length > best.base_path.length) best = surface;
+  }
+  return best ?? { name: 'account', base_path: '/' };
+}
+
+function currentPath(basePath, location) {
+  const base = basePath === '/' ? '' : basePath;
+  if (base === '' || !location.pathname.startsWith(base)) return location.pathname;
+  return location.pathname.slice(base.length) || '/';
+}
+
+function joinBase(base, path) {
+  if (base === '/' || base === '') return path;
+  return `${base}${path}`;
+}
+
+function readBootstrap() {
+  const node = document.querySelector(BOOTSTRAP_SELECTOR);
+  if (node === null) return null;
+  const parsed = JSON.parse(node.textContent ?? '{}');
+  return {
+    basePath: parsed.base_path ?? '/',
+    locale: parsed.locale ?? 'en-GB',
+    metaOrigin: parsed.meta_origin ?? null,
+  };
+}
+
+async function fetchOk(url) {
+  const response = await fetch(url, { credentials: 'same-origin' });
+  if (!response.ok) throw new Error(`Request to ${url} failed with ${String(response.status)}`);
+  return response;
+}
+
+async function fetchJson(url) {
+  return (await fetchOk(url)).json();
+}
+
+async function fetchText(url) {
+  return (await fetchOk(url)).text();
+}
+
+function metaEndpoint(bootstrapData, path) {
+  if (bootstrapData.metaOrigin === null) return joinBase(bootstrapData.basePath, path);
+  return new URL(path.replace(/^\//, ''), `${bootstrapData.metaOrigin}/`).toString();
+}
+
+async function loadLocale(bootstrapData) {
+  try {
+    return await fetchJson(joinBase(bootstrapData.basePath, `/locales/${bootstrapData.locale}`));
+  } catch {
+    return {};
+  }
+}
+
+async function loadTemplates(bootstrapData) {
+  const html = await fetchText(joinBase(bootstrapData.basePath, '/templates.html'));
+  return parseTemplates(html);
 }
 
 function announce(text) {
@@ -124,68 +201,81 @@ function wireToastDismiss(root) {
   }
 }
 
-function readFormValues(form) {
-  const values = {};
-  for (const input of form.elements) {
-    if (input.name === '' || input.type === 'submit' || input.type === 'button') continue;
-    values[input.name] = input.type === 'checkbox' ? input.checked : input.value;
+function wireChrome(root) {
+  wireThemeToggle(root);
+  wireDialogs(root);
+  wireToastDismiss(root);
+}
+
+let popstateHandler = null;
+
+export async function bootstrap(config = {}) {
+  const bootstrapData = config.bootstrap ?? readBootstrap();
+  if (bootstrapData === null) return;
+  const location = config.location ?? window.location;
+  const history = config.history ?? window.history;
+  const app = document.querySelector(APP_SELECTOR);
+  const main = document.querySelector(MAIN_SELECTOR);
+  if (app === null || main === null) return;
+
+  let features;
+  let templates;
+  try {
+    [features, templates] = await Promise.all([
+      (config.fetchFeatures ?? fetchJson)(metaEndpoint(bootstrapData, '/api/v1/meta/features')),
+      (config.loadTemplates ?? loadTemplates)(bootstrapData),
+    ]);
+  } catch {
+    return;
   }
-  return values;
-}
+  const catalogue = await loadLocale(bootstrapData);
+  const t = translator(catalogue);
+  const surface = currentSurface(features, location);
+  const current = surface.name;
+  const pages = availablePages(features, current);
+  const api = apiClient(bootstrapData);
 
-async function submitForm(form) {
-  const action = form.getAttribute('action') ?? window.location.pathname;
-  const method = (form.getAttribute('method') ?? 'POST').toUpperCase();
-  const payload = readFormValues(form);
-  const response = await fetch(action, {
-    method,
-    credentials: 'same-origin',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return response;
-}
+  const renderCurrent = (path) => {
+    const match = matchPage(pages, path);
+    if (match === null) return;
+    app.setAttribute('aria-busy', 'true');
+    while (main.firstChild !== null) main.removeChild(main.firstChild);
+    try {
+      const view = mountPage(main, templates, match.page.id, t, ctx);
+      match.page.render?.(view, t, ctx, match.params);
+      announce(t(`routes.${match.page.id}.title`, match.page.id));
+    } catch (error) {
+      while (main.firstChild !== null) main.removeChild(main.firstChild);
+      main.appendChild(
+        problemAlert(t, { code: 'INTERNAL_ERROR', detail: String(error?.message ?? error) }),
+      );
+    }
+    wireChrome(main);
+    app.setAttribute('aria-busy', 'false');
+    main.focus();
+  };
 
-function wireAsyncForms(root) {
-  for (const form of root.querySelectorAll('form[data-form]')) {
-    if (form.dataset.wired === 'yes') continue;
-    form.dataset.wired = 'yes';
-    form.addEventListener('submit', (event) => {
-      if (!form.hasAttribute('data-async')) return;
-      event.preventDefault();
-      form.setAttribute('aria-busy', 'true');
-      void submitForm(form)
-        .then((response) => {
-          form.setAttribute('aria-busy', 'false');
-          if (response.redirected) {
-            window.location.assign(response.url);
-            return;
-          }
-          announce(form.dataset.announceSubmit ?? 'Saved');
-        })
-        .catch(() => {
-          form.setAttribute('aria-busy', 'false');
-          announce(form.dataset.announceError ?? 'Something went wrong');
-        });
-    });
-  }
-}
+  const ctx = {
+    features,
+    api,
+    location,
+    bootstrap: bootstrapData,
+    surface: current,
+    href: (path) => joinBase(surface.base_path, path),
+    navigate: (path) => {
+      history.pushState({}, '', joinBase(surface.base_path, path));
+      renderCurrent(path);
+    },
+  };
 
-function focusMain() {
-  const main = document.getElementById('qtiauth-main');
-  if (main === null) return;
-  main.focus();
-}
-
-function enhance() {
-  wireThemeToggle(document);
-  wireDialogs(document);
-  wireToastDismiss(document);
-  wireAsyncForms(document);
-  focusMain();
+  if (popstateHandler !== null) window.removeEventListener('popstate', popstateHandler);
+  popstateHandler = () => renderCurrent(currentPath(surface.base_path, location));
+  window.addEventListener('popstate', popstateHandler);
+  renderCurrent(currentPath(surface.base_path, location));
 }
 
 if (typeof window !== 'undefined') {
-  if (document.readyState !== 'loading') enhance();
-  else document.addEventListener('DOMContentLoaded', enhance);
+  wireChrome(document);
+  if (document.readyState !== 'loading') void bootstrap();
+  else document.addEventListener('DOMContentLoaded', () => void bootstrap());
 }

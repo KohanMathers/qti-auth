@@ -40,6 +40,11 @@ function themeAttribute(theme: ShellInput['theme']): string {
 
 export function shellHtml(input: ShellInput): string {
   const base = input.base_path === '/' ? '' : input.base_path;
+  const bootstrap = {
+    base_path: input.base_path,
+    locale: input.locale,
+    meta_origin: input.meta_origin ?? null,
+  };
   return `<!doctype html>
 <html lang="${escapeHtml(input.locale)}"${themeAttribute(input.theme)}>
 <head>
@@ -59,6 +64,7 @@ ${input.content}
 </main>
 </div>
 <div id="qtiauth-live" role="status" aria-live="polite" aria-atomic="true"></div>
+<script type="application/json" id="qtiauth-bootstrap">${JSON.stringify(bootstrap).replaceAll('<', '\\u003c')}</script>
 <script type="module" nonce="${escapeHtml(input.nonce)}" src="${base}/app.js"></script>
 </body>
 </html>

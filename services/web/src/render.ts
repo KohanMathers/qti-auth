@@ -153,7 +153,7 @@ function processDataShow(html: string, data: PageData): string {
     const negated = expr.startsWith('!');
     const key = negated ? expr.slice(1) : expr;
     const raw = data[key];
-    const truthy = Boolean(raw) && raw !== 0 && raw !== '';
+    const truthy = Array.isArray(raw) ? raw.length > 0 : Boolean(raw) && raw !== 0 && raw !== '';
     const keep = negated ? !truthy : truthy;
     if (keep) {
       const replaced = stripAttr(found.open, 'data-show');
