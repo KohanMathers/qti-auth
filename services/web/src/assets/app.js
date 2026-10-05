@@ -242,6 +242,10 @@ export async function bootstrap(config = {}) {
     while (main.firstChild !== null) main.removeChild(main.firstChild);
     try {
       const view = mountPage(main, templates, match.page.id, t, ctx);
+      view.fill({
+        product_name: features.branding.product_name,
+        company_name: features.branding.company_name,
+      });
       match.page.render?.(view, t, ctx, match.params);
       announce(t(`routes.${match.page.id}.title`, match.page.id));
     } catch (error) {

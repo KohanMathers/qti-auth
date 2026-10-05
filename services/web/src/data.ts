@@ -67,7 +67,7 @@ async function loadAuthMethods(ctx: LoadContext): Promise<Record<string, unknown
 }
 
 async function loadSignIn(ctx: LoadContext): Promise<PageData> {
-  return { ...identityData(ctx), ...(await loadAuthMethods(ctx)) };
+  return { ...identityData(ctx), ...(await loadAuthMethods(ctx)), method_state: 'picker' };
 }
 
 async function loadSignUp(ctx: LoadContext): Promise<PageData> {

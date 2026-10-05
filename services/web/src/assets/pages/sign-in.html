@@ -1,5 +1,8 @@
 <div class="qt-auth-shell">
-  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme"></button>
+  <button class="qt-theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle theme">
+    <svg class="qt-theme-toggle__sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>
+    <svg class="qt-theme-toggle__moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+  </button>
   <section class="qt-auth-card" aria-labelledby="qt-signin-title">
     <header class="qt-auth-card__header">
       <a class="qt-brand" href="/" data-link><span class="qt-brand__name" data-field="product_name"></span></a>
@@ -11,84 +14,102 @@
         <div data-state="methods" class="qt-stack qt-stack--lg">
           <p class="qt-prose__lede" data-t="signIn.lede">Choose a way to sign in.</p>
 
-          <section data-show="password" class="qt-stack">
-            <h2 data-t="signIn.password.heading">Sign in with password</h2>
-            <form data-form="password" class="qt-form" novalidate>
-              <p class="qt-form-group">
-                <label class="qt-label" for="qtiauth-f-email" data-t="field.email">Email</label>
-                <input class="qt-input" id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
-              </p>
-              <p class="qt-form-group">
-                <label class="qt-label" for="qtiauth-f-password" data-t="field.password">Password</label>
-                <input
-                  class="qt-input"
-                  id="qtiauth-f-password"
-                  name="password"
-                  type="password"
-                  autocomplete="current-password"
-                  required
-                />
-              </p>
-              <p class="qt-actions">
-                <button type="submit" class="qt-button" data-variant="primary" data-t="signIn.submit">Sign in</button>
-              </p>
-            </form>
-            <p><a href="/forgot" data-link data-t="signIn.forgot">Forgot your password?</a></p>
-          </section>
+          <div data-slot="method">
+            <div data-state="picker" class="qt-stack qt-stack--lg">
+              <div class="qt-method-list">
+                <button type="button" class="qt-button" data-variant="secondary" data-show="password" data-action="choose-password" data-t="signIn.password.choose">Continue with password</button>
+                <button type="button" class="qt-button" data-variant="secondary" data-show="magic_link" data-action="choose-magic" data-t="signIn.magic.choose">Email me a sign-in link</button>
+                <button type="button" class="qt-button" data-variant="secondary" data-show="passkeys" data-action="passkey" data-t="signIn.passkey.submit">Use a passkey</button>
+              </div>
 
-          <section data-show="magic_link" class="qt-stack">
-            <h2 data-t="signIn.magic.heading">Sign in with a link</h2>
-            <form data-form="magic" class="qt-form" novalidate>
-              <p class="qt-form-group">
-                <label class="qt-label" for="qtiauth-f-magic-email" data-t="field.email">Email</label>
-                <input
-                  class="qt-input"
-                  id="qtiauth-f-magic-email"
-                  name="email"
-                  type="email"
-                  autocomplete="email"
-                  required
-                />
-              </p>
-              <p class="qt-actions">
-                <button type="submit" class="qt-button" data-variant="primary" data-t="signIn.magic.submit">Send me a link</button>
-              </p>
-              <template data-message="success">
-                <p class="qt-message" data-variant="success" role="status" data-t="signIn.magic.success">
-                  Check your email for a sign-in link.
+              <section class="qt-stack" data-show="social">
+                <h2 data-t="signIn.social">Continue with</h2>
+                <ul class="qt-social-list">
+                  <template data-item="social">
+                    <li>
+                      <button
+                        type="button"
+                        class="qt-button"
+                        data-variant="secondary"
+                        data-action="social"
+                        data-field="name"
+                      ></button>
+                    </li>
+                  </template>
+                </ul>
+              </section>
+            </div>
+
+            <div data-state="password" class="qt-stack qt-stack--lg">
+              <h2 data-t="signIn.password.heading">Sign in with password</h2>
+              <form data-form="password" class="qt-form" novalidate>
+                <p class="qt-form-group">
+                  <label class="qt-label" for="qtiauth-f-email" data-t="field.email">Email</label>
+                  <input class="qt-input" id="qtiauth-f-email" name="email" type="email" autocomplete="email" required />
                 </p>
-              </template>
-            </form>
-          </section>
+                <p class="qt-form-group">
+                  <label class="qt-label" for="qtiauth-f-password" data-t="field.password">Password</label>
+                  <input
+                    class="qt-input"
+                    id="qtiauth-f-password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                  />
+                </p>
+                <p class="qt-actions">
+                  <button type="submit" class="qt-button" data-variant="primary" data-t="signIn.submit">Sign in</button>
+                </p>
+              </form>
+              <p><a href="/forgot" data-link data-t="signIn.forgot">Forgot your password?</a></p>
+              <p>
+                <button type="button" class="qt-button" data-variant="ghost" data-action="choose-back" data-t="signIn.chooseAnother">
+                  Choose another way to sign in
+                </button>
+              </p>
+            </div>
 
-          <section data-show="passkeys" class="qt-stack">
-            <h2 data-t="signIn.passkey.heading">Sign in with a passkey</h2>
-            <p data-t="signIn.passkey.body">Your device will prompt you to choose a passkey.</p>
-            <p class="qt-actions">
-              <button type="button" class="qt-button" data-variant="secondary" data-action="passkey" data-t="signIn.passkey.submit">
-                Use a passkey
-              </button>
-            </p>
-            <div class="qt-message" aria-live="polite" data-part="passkey-feedback"></div>
-          </section>
+            <div data-state="magic" class="qt-stack qt-stack--lg">
+              <h2 data-t="signIn.magic.heading">Sign in with a link</h2>
+              <form data-form="magic" class="qt-form" novalidate>
+                <p class="qt-form-group">
+                  <label class="qt-label" for="qtiauth-f-magic-email" data-t="field.email">Email</label>
+                  <input
+                    class="qt-input"
+                    id="qtiauth-f-magic-email"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    required
+                  />
+                </p>
+                <p class="qt-actions">
+                  <button type="submit" class="qt-button" data-variant="primary" data-t="signIn.magic.submit">Send me a link</button>
+                </p>
+                <template data-message="success">
+                  <p class="qt-message" data-variant="success" role="status" data-t="signIn.magic.success">
+                    Check your email for a sign-in link.
+                  </p>
+                </template>
+              </form>
+              <p>
+                <button type="button" class="qt-button" data-variant="ghost" data-action="choose-back" data-t="signIn.chooseAnother">
+                  Choose another way to sign in
+                </button>
+              </p>
+            </div>
 
-          <section class="qt-stack" data-show="social">
-            <h2 data-t="signIn.social">Continue with</h2>
-            <ul class="qt-social-list">
-              <template data-item="social">
-                <li>
-                  <button
-                    type="button"
-                    class="qt-button"
-                    data-variant="secondary"
-                    data-action="social"
-                    data-field="name"
-                  ></button>
-                </li>
-              </template>
-            </ul>
-            <div class="qt-message" aria-live="polite" data-part="social-feedback"></div>
-          </section>
+            <div data-state="pending" class="qt-stack qt-stack--lg">
+              <p class="qt-prose__lede" data-t="signIn.pending.lede">Continuing sign-in…</p>
+              <div class="qt-message" aria-live="polite" data-part="pending-feedback"></div>
+              <p>
+                <button type="button" class="qt-button" data-variant="ghost" data-action="choose-back" data-t="signIn.chooseAnother">
+                  Choose another way to sign in
+                </button>
+              </p>
+            </div>
+          </div>
 
           <p><a href="/sign-up" data-link data-t="signIn.newHere">Create an account</a></p>
         </div>

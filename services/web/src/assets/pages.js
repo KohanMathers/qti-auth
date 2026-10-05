@@ -93,8 +93,10 @@ function pageSignIn(view, t, ctx) {
     }
     finishSignIn(ctx, returnTo);
   };
-  view.state('step', 'methods');
+  view.state('step', 'methods').state('method', 'picker');
+  view.on('choose-back', () => view.state('method', 'picker'));
   if (methods.password) {
+    view.on('choose-password', () => view.state('method', 'password'));
     view.form('password', async (values) => {
       signedIn(await a.signInPassword(values.email, values.password));
     });
@@ -114,6 +116,7 @@ function pageSignIn(view, t, ctx) {
     });
   }
   if (methods.magic_link) {
+    view.on('choose-magic', () => view.state('method', 'magic'));
     view.form('magic', async (values, form) => {
       await a.magicLinkStart(values.email, returnTo);
       form.say('success');
@@ -121,21 +124,23 @@ function pageSignIn(view, t, ctx) {
   }
   if (methods.passkeys && passkeysSupported()) {
     view.on('passkey', () => {
-      view.part('passkey-feedback').replaceChildren();
+      view.state('method', 'pending');
+      view.part('pending-feedback').replaceChildren();
       void passkeyAssertion(a)
         .then(() => finishSignIn(ctx, returnTo))
-        .catch((error) => showProblem(view, 'passkey-feedback', error));
+        .catch((error) => showProblem(view, 'pending-feedback', error));
     });
   }
   if (social.length === 0) return;
   view.list('social', social, (provider, row) => {
     row.fill({ name: provider.name });
     row.on('social', () => {
-      view.part('social-feedback').replaceChildren();
+      view.state('method', 'pending');
+      view.part('pending-feedback').replaceChildren();
       void a
         .socialStart(provider.id, returnTo)
         .then((started) => ctx.location.assign(started.url))
-        .catch((error) => showProblem(view, 'social-feedback', error));
+        .catch((error) => showProblem(view, 'pending-feedback', error));
     });
   });
 }

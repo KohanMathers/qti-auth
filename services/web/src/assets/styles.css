@@ -843,7 +843,8 @@ button[type="submit"]:not([class]):hover:not(:disabled) {
   background: color-mix(in oklab, var(--qt-color-danger) 10%, var(--qt-surface));
 }
 
-.qtiauth-feedback:empty {
+.qtiauth-feedback:empty,
+.qt-message:empty {
   display: none;
 }
 
@@ -1231,6 +1232,11 @@ button[type="submit"]:not([class]):hover:not(:disabled) {
   box-shadow: var(--qt-focus-ring);
 }
 
+.qt-theme-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
 .qt-theme-toggle__moon {
   display: none;
 }
@@ -1433,6 +1439,17 @@ button[type="submit"]:not([class]):hover:not(:disabled) {
   list-style: none;
   padding: 0;
   margin: 0;
+}
+
+.qt-method-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qt-space-sm);
+}
+
+.qt-method-list .qt-button,
+.qt-social-list .qt-button {
+  width: 100%;
 }
 
 /* === Prose lede === */
