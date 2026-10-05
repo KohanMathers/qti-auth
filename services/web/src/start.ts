@@ -9,6 +9,7 @@ import { attachWebState } from './web-state.ts';
 
 export const REQUIRED_ASSETS = [
   'app.js',
+  'captcha.js',
   'client.js',
   'pages.js',
   'problems.js',

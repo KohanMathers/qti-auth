@@ -297,6 +297,20 @@ router.route({
 
 router.route({
   method: 'GET',
+  path: '/captcha.js',
+  operation_id: 'captchaScript',
+  summary: 'Client-side CAPTCHA widget and proof-of-work solver',
+  tags: ['web'],
+  auth: 'none',
+  rate_limit: 'global',
+  responses: jsOk,
+  errors: ['ASSET_NOT_FOUND'],
+  handler: ({ ctx, request }) =>
+    Promise.resolve(serveAsset(requireWebState(ctx), request, 'captcha.js')),
+});
+
+router.route({
+  method: 'GET',
   path: '/templates.html',
   operation_id: 'pageTemplates',
   summary: 'Every page template, bundled from assets/pages',

@@ -11,6 +11,7 @@ describe('web service', () => {
       [
         'GET /',
         'GET /app.js',
+        'GET /captcha.js',
         'GET /client.js',
         'GET /locales/:locale',
         'GET /pages.js',
